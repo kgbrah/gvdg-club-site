@@ -58,9 +58,17 @@ CREATE TABLE pdga_rated_rounds (
   ratings_status  TEXT NOT NULL CHECK (ratings_status IN ('official', 'unconfirmed')),
   rated_players   INTEGER NOT NULL DEFAULT 0,
   fetched_at      TEXT NOT NULL,
+  -- Wind for normalising the SSA: Open-Meteo archive, max hourly gust 09:00-17:00 local (mph) at the
+  -- matched course (weather_course_id) on round_date. 'unavailable' rounds are used as played.
+  wind_gust_mph     REAL,
+  weather_status    TEXT NOT NULL DEFAULT 'pending' CHECK (weather_status IN ('pending', 'ok', 'unavailable')),
+  weather_course_id INTEGER,
+  weather_attempts  INTEGER NOT NULL DEFAULT 0,
+  weather_next_at   TEXT,
   PRIMARY KEY (tourn_id, round_number, pdga_layout_id)
 );
 CREATE INDEX idx_pdga_rounds_layout ON pdga_rated_rounds(pdga_layout_id, round_date);
+CREATE INDEX idx_pdga_rounds_weather ON pdga_rated_rounds(weather_status, weather_next_at);
 
 -- Anonymous (score, round rating) pairs, one row per division so each fetch is an idempotent upsert.
 CREATE TABLE pdga_round_scores (

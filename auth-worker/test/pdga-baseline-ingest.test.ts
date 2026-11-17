@@ -11,11 +11,21 @@ const SECRET = "x".repeat(40);
 type Member = { memberId: string; name: string; pdgaNo?: string; isAdmin?: boolean };
 
 /** Serves the saved PDGA responses; other division/round pairs return the same layouts without scores. */
-function pdgaServer(options: { fail?: (url: URL) => boolean; incomplete?: boolean } = {}) {
+/** Open-Meteo archive: hourly gusts for the day; the 20:00 gust is outside play hours and ignored. */
+export function archiveBody(day: string, peak = 24, empty = false) {
+  const time = Array.from({ length: 24 }, (_, hour) => day + "T" + String(hour).padStart(2, "0") + ":00");
+  const gusts = time.map((_, hour) => empty ? null : hour === 20 ? 45 : hour === 14 ? peak : hour >= 9 && hour <= 17 ? 10 : 5);
+  return { latitude: 35.5, longitude: -77.4, timezone: "America/New_York", hourly_units: { wind_gusts_10m: "mp/h" }, hourly: { time, wind_gusts_10m: gusts } };
+}
+
+function pdgaServer(options: { fail?: (url: URL) => boolean; incomplete?: boolean; weather?: (url: URL) => Response } = {}) {
   const calls: string[] = [];
   const doFetch = (async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
     calls.push(url.pathname.split("/").at(-1) + url.search);
+    if (url.hostname === "archive-api.open-meteo.com") {
+      return options.weather?.(url) ?? Response.json(archiveBody(url.searchParams.get("start_date")!));
+    }
     if (options.fail?.(url)) return new Response("unavailable", { status: 503 });
     if (url.pathname.endsWith("/rating-detail")) return Response.json(fixtureJson("rating-detail-sample.json"));
     if (url.pathname.endsWith("live_results_fetch_event")) {
@@ -42,6 +52,7 @@ async function setup(members: Member[] = []) {
         .run(layout.id, course.id, layout.name, JSON.stringify(layout.holes));
     }
   }
+  sqlite.exec("UPDATE courses SET lat = 35.489203, lng = -77.426836 WHERE id IN (7, 12); UPDATE courses SET lat = 35.6274, lng = -77.3747 WHERE id = 2");
   const records = new Map(members.map((member) => ["member:" + member.memberId, JSON.stringify({ pinHash: "", ...member })]));
   const env = {
     DB: db, JWT_SECRET: SECRET,
@@ -149,6 +160,67 @@ describe("PDGA event ingestion", () => {
   });
 });
 
+describe("PDGA round wind", () => {
+  async function ingested(at = NOW) {
+    const context = await setup();
+    await enqueuePdgaEvent(context.env.DB, { tournId: 104547, source: "member-history", official: true }, at);
+    return context;
+  }
+
+  it("fetches the 09:00-17:00 max gust for matched rounds once per course and day, from the cron's own budget", async () => {
+    const { sqlite, env } = await ingested();
+    const server = pdgaServer();
+    const summary = await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: NOW, fetchBudget: 30 });
+    expect(summary).toMatchObject({ eventsCompleted: 1, weatherFetches: 1, weatherRounds: 1 });
+    const archive = server.calls.filter((call) => call.startsWith("archive"));
+    expect(archive).toHaveLength(1);
+    expect(new URLSearchParams(archive[0]!.split("?")[1])).toMatchObject(new URLSearchParams({
+      latitude: "35.4892", longitude: "-77.4268", start_date: "2026-07-11", end_date: "2026-07-11", hourly: "wind_gusts_10m",
+      wind_speed_unit: "mph", timezone: "America/New_York",
+    }));
+    // Only the matched Ayden round gets wind; the unmatched Meadow round is never looked up.
+    expect(sqlite.prepare("SELECT pdga_layout_id, wind_gust_mph, weather_status, weather_course_id FROM pdga_rated_rounds ORDER BY pdga_layout_id").all())
+      .toEqual([
+        { pdga_layout_id: 761495, wind_gust_mph: null, weather_status: "pending", weather_course_id: null },
+        { pdga_layout_id: 761497, wind_gust_mph: 24, weather_status: "ok", weather_course_id: 7 },
+      ]);
+    expect(sqlite.prepare("SELECT stream, source_id FROM rating_repair_issues").all()).toEqual([]);
+    expect((await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: NOW })).weatherFetches).toBe(0);
+  });
+
+  it("retries a recent day with no archive data, gives up on an old one, and backs off on failures", async () => {
+    const recent = "2026-07-14T12:00:00.000Z";
+    const { sqlite, env } = await ingested(recent);
+    let mode: "empty" | "fail" = "empty";
+    const server = pdgaServer({ weather: (url) => mode === "fail" ? new Response("busy", { status: 429 })
+      : Response.json(archiveBody(url.searchParams.get("start_date")!, 0, true)) });
+    await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: recent, fetchBudget: 30 });
+    expect(sqlite.prepare("SELECT weather_status, weather_attempts, weather_next_at FROM pdga_rated_rounds WHERE pdga_layout_id = 761497").get())
+      .toEqual({ weather_status: "pending", weather_attempts: 0, weather_next_at: "2026-07-15T12:00:00.000Z" });
+    mode = "fail";
+    const failed = await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: "2026-07-15T12:00:00.000Z" });
+    expect(failed.errors).toEqual(["weather 2026-07-11 http-429"]);
+    expect(sqlite.prepare("SELECT weather_status, weather_attempts, weather_next_at FROM pdga_rated_rounds WHERE pdga_layout_id = 761497").get())
+      .toEqual({ weather_status: "pending", weather_attempts: 1, weather_next_at: "2026-07-15T13:00:00.000Z" });
+    mode = "empty";
+    const stale = await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: NOW });
+    expect(stale.weatherUnavailable).toBe(1);
+    expect(sqlite.prepare("SELECT weather_status, wind_gust_mph, weather_course_id, weather_next_at FROM pdga_rated_rounds WHERE pdga_layout_id = 761497").get())
+      .toEqual({ weather_status: "unavailable", wind_gust_mph: null, weather_course_id: 7, weather_next_at: null });
+    expect((await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: NOW })).weatherFetches).toBe(0);
+  });
+
+  it("refetches wind when an admin moves the match to another course", async () => {
+    const { sqlite, env } = await ingested();
+    const server = pdgaServer();
+    await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: NOW, fetchBudget: 30 });
+    sqlite.exec("UPDATE pdga_layout_matches SET course_id = 12, review_status = 'confirmed' WHERE pdga_layout_id = 761497");
+    const summary = await runPdgaBaselineTick(env, { doFetch: server.doFetch, now: NOW });
+    expect(summary.weatherFetches).toBe(1);
+    expect(sqlite.prepare("SELECT weather_course_id FROM pdga_rated_rounds WHERE pdga_layout_id = 761497").get()).toEqual({ weather_course_id: 12 });
+  });
+});
+
 describe("PDGA event discovery", () => {
   it("queues local events from members' public rating history and rests after a full roster pass", async () => {
     const { sqlite, env } = await setup([
@@ -210,9 +282,10 @@ describe("admin PDGA baseline routes", () => {
     expect(overview.review[0]!.candidates.length).toBeGreaterThan(0);
 
     const ayden = await (await call("/courses/7")).json() as { layouts: { id: number; baseline: { provenance: string } | null; rounds: unknown[] }[] };
+    // The admin "Read now" also fetched the round's wind (24 mph peak gust 09:00-17:00 -> +0.21 strokes).
     expect(ayden.layouts.find((layout) => layout.id === 9)).toMatchObject({
-      baseline: { ssa: 49.565, rounds: 1, provenance: "1 PDGA rated round, 2026, median SSA 49.6" },
-      rounds: [{ tournId: 104547, round: 1, ssa: 49.565, ratedPlayers: 9, ratingsStatus: "unconfirmed", reviewStatus: "auto" }],
+      baseline: { ssa: 49.355, rounds: 1, windRounds: 1, provenance: "The most recent PDGA round (2026), no-wind SSA 49.4" },
+      rounds: [{ tournId: 104547, round: 1, ssa: 49.565, ratedPlayers: 9, ratingsStatus: "unconfirmed", reviewStatus: "auto", gustMph: 24, weatherStatus: "ok" }],
     });
     expect((await call("/courses/999")).status).toBe(404);
 
@@ -224,7 +297,7 @@ describe("admin PDGA baseline routes", () => {
     expect(sqlite.prepare("SELECT layout_id, quality, review_status, reviewed_by FROM pdga_layout_matches WHERE pdga_layout_id = 761495").get())
       .toEqual({ layout_id: 1, quality: "none", review_status: "confirmed", reviewed_by: "m_admin" });
     expect(((await (await call("/courses/2")).json()) as { layouts: { id: number; baseline: { rounds: number } | null }[] })
-      .layouts.find((layout) => layout.id === 1)?.baseline).toMatchObject({ rounds: 1, ssa: 55.742 });
+      .layouts.find((layout) => layout.id === 1)?.baseline).toMatchObject({ rounds: 1, ssa: 55.742, noWindDataRounds: 1 });
     expect((await call("/matches/761497", "POST", { action: "reject" })).status).toBe(200);
     expect((await call("/matches/1", "POST", { action: "confirm" })).status).toBe(404);
     // Automatic re-matching never overrides an admin decision.

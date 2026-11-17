@@ -19,23 +19,30 @@ An edited result or scoring configuration changes the event's source revision. T
 
 ## PDGA layout baselines
 
-Club rounds on a layout that matches a PDGA tournament layout can be rated from PDGA's own SSAs. The baseline for a round is the median SSA of matched PDGA rounds played on an earlier calendar day (US Eastern) than the round, so there is no look-ahead. When PDGA does not publish a round's day (`ShowDate` false on multi-day events), the event's last day is used. A matched PDGA round counts only when its holes still fit the layout as played:
+Club rounds on a layout that matches a PDGA tournament layout can be rated from PDGA's own SSAs. Which PDGA rounds count:
 
-- the same hole count, with par equal on at least 90% of holes;
-- for automatic matches, each hole within max(25 ft, 8%) on at least 80% of holes, and the compared total within 5%.
+- Only matched rounds from an earlier calendar day (US Eastern) than the round being rated, so there is no look-ahead. When PDGA does not publish a round's day (`ShowDate` false on multi-day events), the event's last day is used.
+- Only the 6 most recent such rounds from the 3 years before the round being rated (ties on a day break by event, round and layout ID).
+- Only rounds whose holes still fit the layout as played:
+  - the same hole count, with par equal on at least 90% of holes;
+  - for automatic matches, each hole within max(25 ft, 8%) on at least 80% of holes, and the compared total within 5%.
 
 An admin-confirmed match may differ in hole lengths, never in hole count or par. Our lengths are straight tee-to-basket lines, while PDGA's often follow the fairway, so doglegs make ours shorter.
 
-How each kind of round uses it (`rating_method = 'pdga'`):
+The baseline is the median of those rounds' SSAs after each is normalised to no wind: the round's own `weatherSsaAdjustment(gust)` is subtracted. A rating then adds the rated round's own gust adjustment, as the club layout baseline already does. How each kind of round uses it (`rating_method = 'pdga'`):
 
 - Casual rounds use the PDGA baseline before an earlier club field.
-- Competition fields that cannot solve their own SSA (fewer than two rated players) fall back to it.
-- Fields that can solve keep their own day-of SSA, with the PDGA baseline stored beside it in `round_ratings.pdga_baseline_ssa` for comparison.
-- The round's own wind-gust adjustment is added on top, as for the club layout baseline.
+- Small competition fields use it: a provisional two-player solve, or no solve at all (fewer than two rated players).
+- Fields with a stable solve of their own (three or more rated players) keep their day-of SSA, with the PDGA baseline stored beside it in `round_ratings.pdga_baseline_ssa` for comparison.
+
+Wind for each matched PDGA round comes from Open-Meteo's historical archive (`archive-api.open-meteo.com/v1/archive`, no key) at the matched course's latitude and longitude. It uses the same measure and unit the club's live weather feeds the engine: `wind_gusts_10m` in mph. PDGA does not publish when a round was played, so we take the **maximum hourly gust from 09:00 to 17:00 America/New_York** on the round's day. That is an assumption about the hours of play: a morning round on a day that turned windy in the afternoon is treated as windy.
+
+- The hourly cron fetches a few course-days per tick (one request covers every round at that course that day), backing off on failure.
+- A recent day with no archive data yet is retried daily. After 14 days, or six failures, the round is marked unavailable.
+- A round without wind is used as played, and the provenance says so, e.g. "Median of the 6 most recent PDGA rounds (2025–2026), no-wind SSA 49.6; 1 round has no wind data and is used as played".
+- Wind measured at a course the layout is no longer matched to is ignored and fetched again.
 
 The SSA taken from each PDGA round is the one its published ratings imply. PDGA rates the rounds of one event on one layout from a shared SSA, so the live API's per-round `SSARdN` can be off by up to 0.8 strokes. One example is the Down East Players Cup 2025 on Farmville Hybrid: SSARd 53.42 and 52.07, with both rounds' published ratings implying 52.83. The implied SSA, the median over players, is stored in `ratings_ssa` when it differs from SSARdN by more than 0.1 strokes. Otherwise SSARdN is kept, because integer ratings only pin the SSA to a few hundredths of a stroke.
-
-PDGA rounds are not normalized for their own weather. We have no wind record for them, and Open-Meteo's historical archive would add another provider and more subrequests per event. The median damps a single windy event, and the gust model only applies above 18 mph gusts.
 
 Data comes only from the public PDGA JSON endpoints:
 
@@ -48,14 +55,14 @@ Course candidates are our courses in the event's state that share a distinctive 
 
 ### Validation against PDGA's own ratings
 
-`GET /admin/pdga-baselines/validation` (Course health → PDGA rated rounds → Prediction check) walks forward through matched PDGA rounds layout by layout. It predicts each round from the baseline of matched rounds from earlier events. Every published (score, round rating) pair in that round is rated with that baseline and compared with the rating PDGA published. Same-event rounds are excluded, because a round played the day before in the same event would flatter the result. The report gives mean absolute error and signed bias in rating points, the SSA error in strokes, and the counts behind them. Below 30 pairs or three predicted rounds it is labelled a small sample. It also reports:
+`GET /admin/pdga-baselines/validation` (Course health → PDGA rated rounds → Prediction check) walks forward through matched PDGA rounds layout by layout. It predicts each round from the baseline of matched rounds from earlier events. Every published (score, round rating) pair in that round is rated as the engine would rate it, from that no-wind baseline plus the round's own gust adjustment, and compared with the rating PDGA published. Same-event rounds are excluded, because a round played the day before in the same event would flatter the result. The report gives mean absolute error and signed bias in rating points, the SSA error in strokes, and the counts behind them. Below 30 pairs or three predicted rounds it is labelled a small sample. It also reports:
 
 - Formula check: each pair is rated from the round's published SSARdN.
 - Club comparison: stored club layout baselines next to the PDGA baseline available on the same date.
 
 Measured on 2026-11-17 by a dry run against real public data (an in-memory database, not the live D1):
 
-- Input: 17 local events from one member's public rating history, 2024-01 to 2026-07 (Greenville, Ayden, Winterville and Farmville). This was 292 PDGA requests, 41 PDGA rounds and 25 PDGA layouts.
+- Input: 17 local events from one member's public rating history, 2024-01 to 2026-07 (Greenville, Ayden, Winterville and Farmville). This was 292 PDGA requests at 1.5 s spacing, cached for reruns, giving 41 PDGA rounds and 25 PDGA layouts.
 - Matching: 11 layouts matched automatically (1 exact, 10 close) on six of our layouts:
   - Ayden Park Main;
   - Covenant Church Covey;
@@ -63,7 +70,17 @@ Measured on 2026-11-17 by a dry run against real public data (an in-memory datab
   - West Meadowbrook Purple and Gold;
   - Oakwood Eagles' Nest.
 - Review: one layout was left ambiguous (Ayden Park Main vs Alternate Pad) and 13 were left for review (tournament layouts whose pars or lengths differ).
-- Prediction: 7 rounds on 4 layouts could be predicted from earlier events, covering 199 published ratings. The mean absolute error was 18.1 rating points and the bias +18.1: every predicted round played easier than the earlier events on its layout. The SSA error was 1.25 strokes, all in the same direction. This is a small, real sample, not a general accuracy figure.
+- Wind: all 20 matched PDGA rounds got a gust from 9 archive requests. Gusts ranged from 13.6 to 35.3 mph, and 16 rounds were above the model's 18 mph threshold.
+- Prediction: 7 rounds on 4 layouts could be predicted from earlier events, covering 199 published ratings.
+
+| Baseline | Mean abs. error (rating pts) | Bias (pts) | SSA error (strokes) |
+|---|---|---|---|
+| All earlier rounds, as played | 18.1 | +18.1 | 1.25 (bias +1.25) |
+| 6 most recent within 3 years, as played | 18.1 | +18.1 | 1.25 (bias +1.25) |
+| 6 most recent within 3 years, wind-normalised | 14.7 | +13.9 | 1.06 (bias +1.01) |
+
+The recency window changed nothing here because no layout had more than six matched rounds in three years. Wind normalisation removed about a fifth of the error. Most predicted rounds still played easier than earlier events on their layout. This is a small, real sample, not a general accuracy figure.
+
 - Formula check: from SSARdN the engine reproduced 797 published ratings within 2.1 points on average, with a largest gap of 10 from shared-SSA rounds. On layouts an event played only once, it matched 312 of 445 exactly, was one point high on 113, one low on 17 and two high on 3. PDGA published 974 where `1000 + (SSA − score) × ppt` gives 974.6.
 - Club comparison: there were no club layout baselines in this dry run.
 

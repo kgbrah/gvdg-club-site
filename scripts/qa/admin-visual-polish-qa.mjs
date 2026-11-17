@@ -67,9 +67,14 @@ const pdgaOverview = {
 const pdgaCourse = { course: { ...course, state: "NC" }, layouts: [
   { id: 9, name: "Blue tees", holes: 18,
     baseline: { ssa: 49.565, ppt: 10.43, rounds: 6, officialRounds: 6, minSsa: 48.2, maxSsa: 51.0, firstDate: "2023-12-02", lastDate: "2026-07-11",
-      provenance: "6 PDGA rated rounds, 2023–2026, median SSA 49.6" },
+      windRounds: 5, noWindDataRounds: 1,
+      provenance: "Median of the 6 most recent PDGA rounds (2023–2026), no-wind SSA 49.6; 1 round has no wind data and is used as played" },
     rounds: [{ tournId: 104547, round: 1, pdgaLayoutId: 761497, date: "2026-07-11", eventName: "Yard Gnomes Open presented by Play it Again Sports",
-      pdgaLayoutName: "Ayden YGO", ssa: 49.565, ratingsStatus: "official", ratedPlayers: 41, quality: "close", reviewStatus: "auto", fitsCurrentLayout: "close" }] },
+      pdgaLayoutName: "Ayden YGO", ssa: 49.565, ratingsStatus: "official", ratedPlayers: 41, quality: "close", reviewStatus: "auto", fitsCurrentLayout: "close",
+      gustMph: 23.9, weatherStatus: "ok" },
+    { tournId: 99178, round: 2, pdgaLayoutId: 740572, date: "2026-02-22", eventName: "2026 Ayden Founders' Day Classic (CEP Charity - Rated)",
+      pdgaLayoutName: "Ayden Founders' Day 2026", ssa: 51.254, ratingsStatus: "official", ratedPlayers: 29, quality: "exact", reviewStatus: "auto",
+      fitsCurrentLayout: "exact", gustMph: null, weatherStatus: "unavailable" }] },
   { id: 10, name: "Short tees", holes: 18, baseline: null, rounds: [] },
 ] };
 const pdgaValidation = { status: "small-sample", matchedRounds: 9, matchedLayouts: 3, predictedRounds: 5, roundsWithoutPriorBaseline: 4, ratingPairs: 47,
@@ -397,10 +402,24 @@ async function verifyRoutes(variant) {
     // PDGA layout baselines: the course's matched rounds with provenance, then the club-wide tools.
     const pdgaCourse = pane.locator("[data-admin-pdga-course='ready']");
     await pdgaCourse.locator("summary", { hasText: /Blue tees · SSA\s49\.6/ }).click();
-    await pdgaCourse.getByText(/6 PDGA rated rounds, 2023–2026, median SSA 49\.6/).waitFor();
+    await pdgaCourse.getByText(/Median of the 6 most recent PDGA rounds \(2023–2026\), no-wind SSA 49\.6; 1 round has no wind data/).waitFor();
+    await pdgaCourse.getByText(/gust 23\.9 mph/).waitFor();
+    await pdgaCourse.getByText(/no wind data · official ratings/).waitFor();
     await pdgaCourse.getByText("No PDGA rounds: Short tees").waitFor();
     const pdgaTools = pane.locator("[data-admin-pdga-tools]");
     await pdgaTools.locator("[data-admin-pdga-validation='ready']").getByText("14.2 pts", { exact: true }).waitFor();
+    // The four counts: 2×2 on phones, one row on wide screens; each label stays inside its tile.
+    const tiles = await pdgaTools.locator(".pdga-stat-grid > div").evaluateAll((nodes) => nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      const label = node.querySelector("dt");
+      return { top: Math.round(box.top), left: Math.round(box.left), spill: label.scrollWidth > label.clientWidth + 1 || box.right > document.documentElement.clientWidth };
+    }));
+    assert.equal(tiles.length, 4);
+    assert.deepEqual(tiles.filter((tile) => tile.spill), [], variant.name + " PDGA stat labels fit their tiles");
+    if (variant.width < 720) {
+      assert.ok(tiles[0].top === tiles[1].top && tiles[2].top === tiles[3].top && tiles[2].top > tiles[0].top && tiles[0].left === tiles[2].left,
+        variant.name + " PDGA stats are 2×2: " + JSON.stringify(tiles));
+    } else assert.ok(tiles.every((tile) => tile.top === tiles[0].top), variant.name + " PDGA stats share one row");
     await pdgaTools.getByLabel("PDGA event number").fill("104547");
     const pdgaAdded = page.waitForResponse((response) => response.url().endsWith("/admin/pdga-baselines/events") && response.request().method() === "POST");
     await pdgaTools.getByRole("button", { name: "Add PDGA event" }).click();

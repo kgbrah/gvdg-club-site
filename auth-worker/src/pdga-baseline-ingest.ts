@@ -2,7 +2,8 @@
 // request path. Each tick makes a small, bounded number of pdga.com JSON requests:
 //   1. discovery: a few members' public /rating-detail -> local events go on the queue;
 //   2. ingest:    queued events, one [division, round] fetch at a time, resumable across ticks;
-//   3. re-match:  a few stale automatic/pending layout matches against our current layouts.
+//   3. re-match:  a few stale automatic/pending layout matches against our current layouts;
+//   4. weather:   historical wind for matched rounds from Open-Meteo's archive (pdga-baseline-weather.ts).
 // pdga.com HTML is behind a Cloudflare challenge, so only the JSON endpoints are used.
 
 import type { D1Like, D1StatementLike } from "./db-types.js";
@@ -12,6 +13,7 @@ import {
   PDGA_LIVE_API, PDGA_MEMBER_API, type PdgaEventSummary,
 } from "./pdga-baselines.js";
 import { matchPdgaLayouts, refreshRatingsSsa } from "./pdga-baseline-store.js";
+import { runPdgaWeatherTick, WEATHER_FETCHES_PER_TICK } from "./pdga-baseline-weather.js";
 import { getMember } from "./roster.js";
 
 const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
@@ -39,6 +41,9 @@ export type PdgaTickSummary = {
   roundsStored: number;
   layoutsMatched: number;
   layoutsPending: number;
+  weatherFetches: number;
+  weatherRounds: number;
+  weatherUnavailable: number;
   errors: string[];
 };
 
@@ -278,14 +283,14 @@ async function rematchStale(db: D1Like, now: string, all: boolean, summary: Pdga
 
 /** One bounded unit of PDGA baseline work (hourly cron, or an admin's "Ingest now"). */
 export async function runPdgaBaselineTick(env: Env, options: {
-  doFetch?: typeof fetch; now?: string; fetchBudget?: number; rematchAll?: boolean;
+  doFetch?: typeof fetch; now?: string; fetchBudget?: number; weatherBudget?: number; rematchAll?: boolean;
 } = {}): Promise<PdgaTickSummary> {
   const doFetch = options.doFetch ?? fetch;
   const now = options.now ?? new Date().toISOString();
   const budget = options.fetchBudget ?? PDGA_FETCHES_PER_TICK;
   const summary: PdgaTickSummary = {
     fetches: 0, membersChecked: 0, eventsQueued: 0, eventsTouched: 0, eventsCompleted: 0, eventsFailed: 0,
-    roundsStored: 0, layoutsMatched: 0, layoutsPending: 0, errors: [],
+    roundsStored: 0, layoutsMatched: 0, layoutsPending: 0, weatherFetches: 0, weatherRounds: 0, weatherUnavailable: 0, errors: [],
   };
   try {
     await discoverFromMembers(env, doFetch, now, Math.min(DISCOVERY_MEMBERS_PER_TICK, budget), summary);
@@ -294,5 +299,15 @@ export async function runPdgaBaselineTick(env: Env, options: {
   }
   await ingestDue(env.DB, doFetch, now, budget, summary);
   await rematchStale(env.DB, now, options.rematchAll === true, summary);
+  // Wind for matched rounds comes from a different host (Open-Meteo archive) with its own small budget.
+  try {
+    const weather = await runPdgaWeatherTick(env.DB, doFetch, now, options.weatherBudget ?? WEATHER_FETCHES_PER_TICK);
+    summary.weatherFetches = weather.weatherFetches;
+    summary.weatherRounds = weather.weatherRounds;
+    summary.weatherUnavailable = weather.weatherUnavailable;
+    summary.errors.push(...weather.errors);
+  } catch (error) {
+    summary.errors.push("weather " + (error instanceof Error ? error.message : String(error)));
+  }
   return summary;
 }

@@ -2,9 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   baselineProvenance, clubCalendarDay, clubPlaces, compareLayoutGeometry, discoverableEvent, evaluatePdgaBaselines, impliedRatingsSsa, matchPdgaLayout,
-  median, ourLayoutHoles, parsePdgaEvent, publishedRatingsSsa, parsePdgaRound, parseRatingDetailEvents, pdgaBaselineFor, pdgaEventComplete, pdgaRoundTasks,
+  median, noWindSsa, ourLayoutHoles, parsePdgaEvent, publishedRatingsSsa, parsePdgaRound, parseRatingDetailEvents, pdgaBaselineFor, pdgaEventComplete, pdgaRoundTasks,
   type BaselineRound, type OurCourse, type PdgaHole, type ValidationPdgaRound,
 } from "../src/pdga-baselines.js";
+import { archiveGustUrl, parseArchiveMaxGust } from "../src/pdga-baseline-weather.js";
 import { pointsPerThrow, roundRatingForScore } from "../src/rating-engine.js";
 
 // Real PDGA live-results responses (event 104547, the 2026 Yard Gnomes Open) with player names,
@@ -207,7 +208,9 @@ describe("chronological PDGA baselines", () => {
     const baseline = pdgaBaselineFor(rounds, ours(lengths), "2026-04-02")!;
     expect(baseline).toMatchObject({ ssa: 49.85, rounds: 4, officialRounds: 3, minSsa: 48.2, maxSsa: 51, firstDate: "2024-03-01", lastDate: "2026-04-01" });
     expect(baseline.ppt).toBeCloseTo(pointsPerThrow(49.85), 10);
-    expect(baselineProvenance(baseline)).toBe("4 PDGA rated rounds, 2024–2026, median SSA 49.9");
+    expect(baseline).toMatchObject({ windRounds: 0, noWindDataRounds: 4 });
+    expect(baselineProvenance(baseline))
+      .toBe("Median of the 4 most recent PDGA rounds (2024–2026), no-wind SSA 49.9; 4 rounds have no wind data and are used as played");
     expect(median([3, 1, 2])).toBe(2);
     expect(median([])).toBeNull();
   });
@@ -215,8 +218,38 @@ describe("chronological PDGA baselines", () => {
   it("never looks ahead: a PDGA round on the same day or later is excluded", () => {
     expect(pdgaBaselineFor(rounds, ours(lengths), "2026-04-01")).toMatchObject({ ssa: 49.6, rounds: 3 });
     expect(pdgaBaselineFor(rounds, ours(lengths), "2025-03-01")).toMatchObject({ ssa: 48.2, rounds: 1 });
-    expect(baselineProvenance(pdgaBaselineFor(rounds, ours(lengths), "2025-03-01")!)).toBe("1 PDGA rated round, 2024, median SSA 48.2");
+    expect(baselineProvenance(pdgaBaselineFor(rounds, ours(lengths), "2025-03-01")!))
+      .toBe("The most recent PDGA round (2024), no-wind SSA 48.2; 1 round has no wind data and is used as played");
     expect(pdgaBaselineFor(rounds, ours(lengths), "2024-03-01")).toBeNull();
+  });
+
+  it("uses only the 6 most recent rounds within 3 years before the rated round", () => {
+    const many = [
+      round(10, "2022-05-01", 40), round(11, "2023-05-01", 60), // older than 3 years before 2026-06-01: excluded
+      round(12, "2023-06-02", 48), round(13, "2024-01-01", 49), round(14, "2024-06-01", 50), round(15, "2025-01-01", 51),
+      round(16, "2025-06-01", 52), round(17, "2026-01-01", 53), round(18, "2026-05-01", 54),
+      round(19, "2026-07-01", 99), // after the rated round
+    ];
+    const baseline = pdgaBaselineFor(many, ours(lengths), "2026-06-01")!;
+    // The 6 most recent before 2026-06-01: 49..54 (2024-01-01 .. 2026-05-01); 48 (2023-06-02) is the 7th.
+    expect(baseline).toMatchObject({ rounds: 6, ssa: 51.5, minSsa: 49, maxSsa: 54, firstDate: "2024-01-01", lastDate: "2026-05-01" });
+    // Before 2024-01-01 the window reaches back to 2021-01-01: 40, 60 and 48.
+    expect(pdgaBaselineFor(many, ours(lengths), "2024-01-01")).toMatchObject({ rounds: 3, ssa: 48, firstDate: "2022-05-01" });
+    expect(pdgaBaselineFor(many, ours(lengths), "2026-05-02")).toMatchObject({ rounds: 6, firstDate: "2024-01-01" });
+    expect(baselineProvenance({ ...baseline, noWindDataRounds: 0 })).toBe("Median of the 6 most recent PDGA rounds (2024–2026), no-wind SSA 51.5");
+    // Same-day ties break deterministically, whatever the input order.
+    const tied = [round(30, "2026-05-01", 50), round(31, "2026-05-01", 52), ...[1, 2, 3, 4, 5].map((n) => round(20 + n, "2026-04-0" + n, 40))];
+    expect(pdgaBaselineFor(tied, ours(lengths), "2026-06-01")).toEqual(pdgaBaselineFor([...tied].reverse(), ours(lengths), "2026-06-01"));
+  });
+
+  it("normalises each PDGA round's SSA to no wind using that day's gust", () => {
+    const windy = [round(1, "2025-03-01", 50.7, { gustMph: 38 }), round(2, "2025-04-01", 50.0, { gustMph: 12 }), round(3, "2025-05-01", 50.2)];
+    expect(noWindSsa(windy[0]!)).toBeCloseTo(50.0, 6); // 38 mph gust = +0.7 strokes
+    expect(noWindSsa(windy[1]!)).toBe(50.0); // below the 18 mph threshold
+    const baseline = pdgaBaselineFor(windy, ours(lengths), "2025-06-01")!;
+    expect(baseline).toMatchObject({ ssa: 50, rounds: 3, windRounds: 2, noWindDataRounds: 1, maxSsa: 50.2 });
+    expect(baselineProvenance(baseline))
+      .toBe("Median of the 3 most recent PDGA rounds (2025), no-wind SSA 50.0; 1 round has no wind data and is used as played");
   });
 
   it("uses only rounds whose layout fits the as-played geometry; admins may vouch past lengths, not pars", () => {
@@ -234,6 +267,17 @@ describe("chronological PDGA baselines", () => {
     expect(clubCalendarDay("2026-07-11")).toBe("2026-07-11");
     expect(clubCalendarDay("2026-07-11T00:00:00.000Z")).toBe("2026-07-11");
     expect(clubCalendarDay("nope")).toBeNull();
+  });
+});
+
+describe("historical wind for PDGA rounds", () => {
+  it("takes the max hourly gust from 09:00 to 17:00 local, in mph", () => {
+    const time = ["2025-03-01T08:00", "2025-03-01T09:00", "2025-03-01T13:00", "2025-03-01T17:00", "2025-03-01T18:00", "2025-03-02T12:00"];
+    expect(parseArchiveMaxGust({ hourly: { time, wind_gusts_10m: [50, 12.04, null, 21.26, 60, 70] } }, "2025-03-01")).toBe(21.3);
+    expect(parseArchiveMaxGust({ hourly: { time, wind_gusts_10m: [50, null, null, null, 60, 70] } }, "2025-03-01")).toBeNull();
+    expect(parseArchiveMaxGust({ error: true, reason: "x" }, "2025-03-01")).toBeNull();
+    expect(archiveGustUrl(35.48920, -77.42684, "2025-03-01")).toBe("https://archive-api.open-meteo.com/v1/archive?latitude=35.4892&longitude=-77.4268" +
+      "&start_date=2025-03-01&end_date=2025-03-01&hourly=wind_gusts_10m&wind_speed_unit=mph&timezone=America%2FNew_York");
   });
 });
 
@@ -276,6 +320,16 @@ describe("PDGA validation maths", () => {
     });
     expect(report.biasRating).toBeCloseTo((r2a + r2b + r3) / 3, 1);
     expect(report.maeRating).toBeCloseTo((Math.abs(r2a) + Math.abs(r2b) + Math.abs(r3)) / 3, 1);
+  });
+
+  it("predicts a windy round from the no-wind baseline plus that round's own gust", () => {
+    const calm = vround(1, "2025-01-01", 50, [[50, rate(50, 50)]]);
+    const windy = { ...vround(2, "2025-02-01", 50.7, [[50, rate(50, 50.7)]]), gustMph: 38 };
+    const report = evaluatePdgaBaselines([calm, windy]);
+    expect(report).toMatchObject({ predictedRounds: 1, ratingPairs: 1, maeSsaStrokes: 0 });
+    expect(report.maeRating).toBeLessThanOrEqual(1);
+    const unadjusted = evaluatePdgaBaselines([calm, { ...windy, gustMph: null }]);
+    expect(unadjusted.maeSsaStrokes).toBe(0.7);
   });
 
   it("predicts only from earlier events and checks the formula against the published per-round SSA", () => {

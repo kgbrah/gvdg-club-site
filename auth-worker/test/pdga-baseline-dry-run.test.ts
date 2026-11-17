@@ -84,9 +84,9 @@ it.skipIf(!env.GVDG_PDGA_DRY_RUN)("dry-runs PDGA layout baselines on real data",
   for (const tournId of ids) await enqueuePdgaEvent(db, { tournId, source: official.has(tournId) ? "member-history" : "admin", official: official.has(tournId) }, now);
   const runEnv = { DB: db, ROSTER: { list: async () => ({ keys: [], list_complete: true }), get: async () => null } } as unknown as Env;
   for (let tick = 0; tick < 200; tick += 1) {
-    const summary = await runPdgaBaselineTick(runEnv, { doFetch: politeFetch, now, fetchBudget: 40, rematchAll: tick === 0 });
+    const summary = await runPdgaBaselineTick(runEnv, { doFetch: politeFetch, now, fetchBudget: 40, weatherBudget: 20, rematchAll: tick === 0 });
     if (summary.errors.length) console.log("tick " + tick + " errors " + summary.errors.join("; "));
-    if (!summary.eventsTouched) break;
+    if (!summary.eventsTouched && !summary.weatherFetches) break;
   }
 
   const queue = sqlite.prepare("SELECT tourn_id, status, attempts, last_error, event_name, event_city, event_state, event_date FROM pdga_ingest_queue ORDER BY event_date").all();
@@ -115,10 +115,21 @@ it.skipIf(!env.GVDG_PDGA_DRY_RUN)("dry-runs PDGA layout baselines on real data",
   const loadedLayouts = sqlite.prepare(`SELECT c.id AS course_id, c.name AS course, c.location, l.id, l.name, json_array_length(l.holes) AS holes,
       (SELECT SUM(json_extract(h.value, '$.par')) FROM json_each(l.holes) h) AS par
     FROM course_layouts l JOIN courses c ON c.id = l.course_id ORDER BY c.id, l.id`).all();
+  const weather = sqlite.prepare(`SELECT r.weather_status, COUNT(*) AS rounds, MIN(r.wind_gust_mph) AS min_gust, MAX(r.wind_gust_mph) AS max_gust,
+      SUM(CASE WHEN r.wind_gust_mph > 18 THEN 1 ELSE 0 END) AS above_threshold
+    FROM pdga_rated_rounds r JOIN pdga_layout_matches m ON m.pdga_layout_id = r.pdga_layout_id
+    WHERE m.review_status IN ('auto', 'confirmed') GROUP BY r.weather_status`).all();
+  const gusts = sqlite.prepare(`SELECT r.tourn_id, r.round_number, r.round_date, r.wind_gust_mph, m.layout_id FROM pdga_rated_rounds r
+    JOIN pdga_layout_matches m ON m.pdga_layout_id = r.pdga_layout_id WHERE m.review_status IN ('auto', 'confirmed') ORDER BY r.round_date`).all();
+  const validation = await pdgaValidationReport(db);
+  // The same validation with recency but without wind normalisation, to separate the two effects.
+  sqlite.exec("UPDATE pdga_rated_rounds SET weather_status = 'pending'");
+  const validationWithoutWind = await pdgaValidationReport(db);
   const report = {
+    weather, gusts, validationWithoutWind,
     loadedLayouts,
     formulaByRound,
-    requests, cachedResponses: cached, queue, rounds, matches, perCourse, overview: await pdgaBaselineOverview(db), validation: await pdgaValidationReport(db),
+    requests, cachedResponses: cached, queue, rounds, matches, perCourse, overview: await pdgaBaselineOverview(db), validation,
     courses: courses.length, nearbyCourses: nearby.length,
   };
   if (env.GVDG_PDGA_DRY_RUN_OUT) writeFileSync(env.GVDG_PDGA_DRY_RUN_OUT, JSON.stringify(report, null, 2));

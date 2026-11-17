@@ -50,7 +50,7 @@ export async function handlePdgaBaselines(request: Request, env: Env, origin: st
     return reply({ ok: true, tournId });
   }
   if (parts.length === 1 && parts[0] === "ingest" && method === "POST") {
-    const summary = await runPdgaBaselineTick(env, { doFetch, now, fetchBudget: PDGA_ADMIN_FETCHES, rematchAll: true });
+    const summary = await runPdgaBaselineTick(env, { doFetch, now, fetchBudget: PDGA_ADMIN_FETCHES, weatherBudget: 12, rematchAll: true });
     return reply({ ok: true, summary });
   }
   if (parts.length === 2 && parts[0] === "matches" && method === "POST") {

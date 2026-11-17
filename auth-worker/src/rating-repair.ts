@@ -68,11 +68,13 @@ export async function repairRatingSource(db: D1Like, stream: RatingStream, sourc
 
     const anchors = await priorRatingAnchors(db, group.map((row) => row.memberId), earliest, guards);
     const { solved, anchorCount } = calibrateRatingField(group, anchors);
-    // A field that can solve its own SSA keeps it, exactly as PDGA does; the PDGA baseline is kept
-    // beside it for comparison. Too few rated players to solve: fall back to the PDGA baseline.
-    const context: GroupContext | null = solved ? {
+    // A field with a stable solve of its own (3+ rated players) keeps its day-of SSA, exactly as PDGA
+    // does, with the PDGA baseline kept beside it for comparison. A small field (a provisional 2-player
+    // solve, or none) uses the PDGA baseline when one exists.
+    const ownSolve: GroupContext | null = solved ? {
       ...solved, count: solved.propagatorCount, anchors: anchorCount, method: solved.status, baselineEventId: null,
-    } : pdga ? pdgaContext(pdga, anchorCount) : null;
+    } : null;
+    const context: GroupContext | null = solved?.status === "stable" ? ownSolve : pdga ? pdgaContext(pdga, anchorCount) : ownSolve;
     const reason = context ? null : RATING_EVIDENCE.anchors;
     waiting ||= reason != null;
     for (const row of group) ratings.push(computeRating(row, context, anchorCount, reason, pdga));

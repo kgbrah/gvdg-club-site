@@ -140,15 +140,42 @@ describe("PDGA layout baselines in the rating engine", () => {
       .toEqual({ rating_method: "unrated", round_rating: null, pdga_baseline_ssa: null });
   });
 
-  it("keeps a competition field's own day-of SSA and records the PDGA baseline beside it", async () => {
+  it("keeps a stable field's own day-of SSA and records the PDGA baseline beside it", async () => {
     const { db, sqlite } = await fixture();
+    sqlite.exec("INSERT INTO rating_anchor_snapshots (member_id,observed_at,effective_at,rating) VALUES ('m_gamma','2026-05-08T00:00:00.000Z','2026-05-06T00:00:00.000Z',970)");
     await repairRatingSource(db, "competition", 1);
     const rows = sqlite.prepare("SELECT member_id, rating_method, round_rating, pdga_baseline_ssa, pdga_baseline_rounds FROM round_ratings WHERE event_id = 1 ORDER BY member_id").all();
     expect(rows).toEqual([
-      { member_id: ALPHA, rating_method: "provisional", round_rating: 1000, pdga_baseline_ssa: 9.5, pdga_baseline_rounds: 2 },
-      { member_id: BETA, rating_method: "provisional", round_rating: 1000, pdga_baseline_ssa: 9.5, pdga_baseline_rounds: 2 },
-      { member_id: "m_gamma", rating_method: "provisional", round_rating: expect.any(Number), pdga_baseline_ssa: 9.5, pdga_baseline_rounds: 2 },
+      { member_id: ALPHA, rating_method: "stable", round_rating: expect.any(Number), pdga_baseline_ssa: 9.5, pdga_baseline_rounds: 2 },
+      { member_id: BETA, rating_method: "stable", round_rating: expect.any(Number), pdga_baseline_ssa: 9.5, pdga_baseline_rounds: 2 },
+      { member_id: "m_gamma", rating_method: "stable", round_rating: expect.any(Number), pdga_baseline_ssa: 9.5, pdga_baseline_rounds: 2 },
     ]);
+    expect(sqlite.prepare("SELECT ssa FROM round_ratings WHERE event_id = 1 LIMIT 1").get()).not.toEqual({ ssa: 9.5 });
+  });
+
+  it("rates a small field (a provisional two-player solve) from the PDGA baseline", async () => {
+    const { db, sqlite } = await fixture();
+    await repairRatingSource(db, "competition", 1);
+    expect(sqlite.prepare("SELECT DISTINCT rating_method, ssa, pdga_baseline_rounds, anchor_count FROM round_ratings WHERE event_id = 1").all())
+      .toEqual([{ rating_method: "pdga", ssa: 9.5, pdga_baseline_rounds: 2, anchor_count: 2 }]);
+    // Its own (provisional) solve still feeds the club layout baseline evidence.
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM layout_rating_baselines").get()).toEqual({ count: 1 });
+    // Without PDGA evidence the field keeps its provisional solve.
+    sqlite.exec("DELETE FROM pdga_layout_matches");
+    await repairRatingSource(db, "competition", 1);
+    expect(sqlite.prepare("SELECT DISTINCT rating_method FROM round_ratings WHERE event_id = 1").all()).toEqual([{ rating_method: "provisional" }]);
+  });
+
+  it("normalises PDGA SSAs with each round's measured gust before the median", async () => {
+    const { db, sqlite } = await fixture();
+    sqlite.exec("UPDATE pdga_rated_rounds SET wind_gust_mph = 38, weather_status = 'ok', weather_course_id = 1 WHERE tourn_id = 101");
+    // A gust measured at another course does not count.
+    sqlite.exec("UPDATE pdga_rated_rounds SET wind_gust_mph = 38, weather_status = 'ok', weather_course_id = 99 WHERE tourn_id = 102");
+    await repairRatingSource(db, "casual", 1, 38);
+    // 9.2 - 0.7 = 8.5 and 9.8 as played: median 9.15. The casual round then adds its own 0.7.
+    const row = sqlite.prepare("SELECT rating_method, pdga_baseline_ssa, ssa, round_rating FROM round_ratings WHERE casual_round_code = 'CASUAL'").get();
+    expect(row).toEqual({ rating_method: "pdga", pdga_baseline_ssa: 9.15, ssa: 9.85, round_rating: roundRatingForScore(10, 9.85, pointsPerThrow(9.15)) });
+    expect((await getMemberRatings(db, ALPHA)).casual.rounds.find((round) => round.round_code === "CASUAL")).toMatchObject({ rating: row && (row as { round_rating: number }).round_rating });
   });
 
   it("uses the PDGA baseline for a field with too few rated players to solve its own SSA", async () => {

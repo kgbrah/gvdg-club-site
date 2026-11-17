@@ -3,7 +3,7 @@
 
 import type { D1Like, D1StatementLike } from "./db-types.js";
 import {
-  baselineProvenance, candidateCourses, clubCalendarDay, publishedRatingsSsa, compareLayoutGeometry, evaluatePdgaBaselines, matchPdgaLayout, ourLayoutHoles,
+  BASELINE_WINDOW_YEARS, baselineProvenance, candidateCourses, clubCalendarDay, publishedRatingsSsa, compareLayoutGeometry, evaluatePdgaBaselines, matchPdgaLayout, ourLayoutHoles,
   pdgaBaselineFor, type BaselineRound, type LayoutMatch, type MatchCandidate, type OurCourse, type OurHole,
   type PdgaBaseline, type PdgaHole, type ScorePair, type ValidationPdgaRound,
 } from "./pdga-baselines.js";
@@ -13,7 +13,7 @@ import { readArchivedRatingHoles, ratingLayoutRevision } from "./rating-layout.j
 import { getLayoutRatingBaseline, ratingReadGuards } from "./rating-store.js";
 
 type Row = Record<string, unknown>;
-const MAX_BASELINE_ROUNDS = 500;
+const MAX_BASELINE_ROUNDS = 120;
 const MAX_REPAIR_SOURCES = 200;
 export const PDGA_REPAIR_CODE = "pdga-baseline-changed";
 
@@ -35,11 +35,15 @@ function holesFrom(raw: unknown): PdgaHole[] {
 // The SSA PDGA's published ratings imply when known, else the live per-round SSARdN.
 const EFFECTIVE_SSA = "COALESCE(r.ratings_ssa, r.official_ssa)";
 
+// Wind counts only when it was measured at the course the PDGA layout is matched to now.
+const ROUND_GUST = "CASE WHEN r.weather_status = 'ok' AND r.weather_course_id = m.course_id THEN r.wind_gust_mph END";
+
 const BASELINE_ROUNDS_SQL = `SELECT r.tourn_id, r.round_number, r.pdga_layout_id, r.round_date, ${EFFECTIVE_SSA} AS ssa, r.ratings_status,
-    r.holes_json, m.review_status
+    r.holes_json, m.review_status, ${ROUND_GUST} AS gust_mph
   FROM pdga_rated_rounds r JOIN pdga_layout_matches m ON m.pdga_layout_id = r.pdga_layout_id
-  WHERE m.layout_id = ? AND m.review_status IN ('auto', 'confirmed') AND ${EFFECTIVE_SSA} IS NOT NULL AND r.round_date < ?
-  ORDER BY r.round_date, r.tourn_id, r.round_number, r.pdga_layout_id LIMIT ${MAX_BASELINE_ROUNDS}`;
+  WHERE m.layout_id = ? AND m.review_status IN ('auto', 'confirmed') AND ${EFFECTIVE_SSA} IS NOT NULL
+    AND r.round_date >= ? AND r.round_date < ?
+  ORDER BY r.round_date DESC, r.tourn_id DESC, r.round_number DESC, r.pdga_layout_id DESC LIMIT ${MAX_BASELINE_ROUNDS}`;
 
 function baselineRound(row: Row): BaselineRound {
   return {
@@ -47,12 +51,19 @@ function baselineRound(row: Row): BaselineRound {
     roundDate: String(row.round_date), ssa: row.ssa == null ? null : Number(row.ssa),
     ratingsStatus: row.ratings_status === "official" ? "official" : "unconfirmed",
     reviewStatus: row.review_status === "confirmed" ? "confirmed" : "auto", holes: holesFrom(row.holes_json),
+    gustMph: row.gust_mph == null ? null : Number(row.gust_mph),
   };
 }
 
-/** Matched PDGA rounds on one of our layouts played before `beforeDay` (YYYY-MM-DD, club calendar). */
+function windowStart(beforeDay: string): string {
+  const date = new Date(beforeDay + "T00:00:00Z");
+  date.setUTCFullYear(date.getUTCFullYear() - BASELINE_WINDOW_YEARS);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Matched PDGA rounds on one of our layouts played before `beforeDay` (YYYY-MM-DD, club calendar), within the window. */
 export async function loadMatchedPdgaRounds(db: D1Like, layoutId: number, beforeDay: string, guards?: D1StatementLike[]): Promise<BaselineRound[]> {
-  const args = [layoutId, beforeDay];
+  const args = [layoutId, windowStart(beforeDay), beforeDay];
   const result = await db.prepare(BASELINE_ROUNDS_SQL).bind(...args).all<Row>();
   if (!result.success) throw new Error("PDGA baseline rounds unavailable");
   if (guards) guards.push(...ratingReadGuards(db, BASELINE_ROUNDS_SQL, args, result.results));
@@ -321,7 +332,8 @@ export async function pdgaCourseBaselines(db: D1Like, courseId: number, now: str
   const layouts = await db.prepare("SELECT id, name, holes FROM course_layouts WHERE course_id = ? ORDER BY id").bind(courseId)
     .all<{ id: number; name: string; holes: string }>();
   const rounds = await db.prepare(`SELECT r.tourn_id, r.round_number, r.pdga_layout_id, r.round_date, r.event_name, r.layout_name,
-      ${EFFECTIVE_SSA} AS ssa, r.official_ssa, r.ratings_status, r.rated_players, r.holes_json, m.layout_id, m.quality, m.review_status
+      ${EFFECTIVE_SSA} AS ssa, r.official_ssa, r.ratings_status, r.rated_players, r.holes_json, m.layout_id, m.quality, m.review_status,
+      ${ROUND_GUST} AS gust_mph, r.weather_status
     FROM pdga_rated_rounds r JOIN pdga_layout_matches m ON m.pdga_layout_id = r.pdga_layout_id
     WHERE m.layout_id IN (SELECT id FROM course_layouts WHERE course_id = ?) AND m.review_status IN ('auto', 'confirmed')
     ORDER BY r.round_date DESC, r.tourn_id DESC, r.round_number DESC LIMIT 300`).bind(courseId).all<Row>();
@@ -339,7 +351,8 @@ export async function pdgaCourseBaselines(db: D1Like, courseId: number, now: str
           tournId: Number(row.tourn_id), round: Number(row.round_number), pdgaLayoutId: Number(row.pdga_layout_id),
           date: row.round_date, eventName: row.event_name, pdgaLayoutName: row.layout_name,
           ssa: row.ssa == null ? null : Number(row.ssa), officialSsa: row.official_ssa == null ? null : Number(row.official_ssa),
-          ratingsStatus: row.ratings_status,
+          ratingsStatus: row.ratings_status, gustMph: row.gust_mph == null ? null : Number(row.gust_mph),
+          weatherStatus: row.gust_mph != null ? "ok" : row.weather_status === "pending" ? "pending" : "unavailable",
           ratedPlayers: Number(row.rated_players), quality: row.quality, reviewStatus: row.review_status,
           fitsCurrentLayout: played ? compareLayoutGeometry(holesFrom(row.holes_json), played).grade : null,
         })),
@@ -351,7 +364,7 @@ export async function pdgaCourseBaselines(db: D1Like, courseId: number, now: str
 /** Ground-truth check: PDGA rounds predicted from earlier PDGA rounds; club baselines beside PDGA. */
 export async function pdgaValidationReport(db: D1Like) {
   const rounds = await db.prepare(`SELECT r.tourn_id, r.round_number, r.pdga_layout_id, r.round_date, ${EFFECTIVE_SSA} AS ssa,
-      r.official_ssa, r.ratings_status, r.holes_json, m.review_status, m.layout_id,
+      r.official_ssa, r.ratings_status, r.holes_json, m.review_status, m.layout_id, ${ROUND_GUST} AS gust_mph,
       (SELECT json_group_array(s.pairs_json) FROM pdga_round_scores s WHERE s.tourn_id = r.tourn_id
         AND s.round_number = r.round_number AND s.pdga_layout_id = r.pdga_layout_id) AS pairs
     FROM pdga_rated_rounds r JOIN pdga_layout_matches m ON m.pdga_layout_id = r.pdga_layout_id

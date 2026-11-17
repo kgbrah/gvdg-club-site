@@ -6,7 +6,7 @@
 // player ratings in the PDGA payload are never returned.
 
 import { cityState, courseNameTokens, normalizePlaceText } from "./pdga-events.js";
-import { pointsPerThrow, roundRatingForScore } from "./rating-engine.js";
+import { pointsPerThrow, roundRatingForScore, weatherSsaAdjustment } from "./rating-engine.js";
 
 export const PDGA_LIVE_API = "https://www.pdga.com/apps/tournament/live-api";
 export const PDGA_MEMBER_API = "https://www.pdga.com/api/v1/feat/members";
@@ -544,8 +544,15 @@ export type BaselineRound = {
   ratingsStatus: "official" | "unconfirmed";
   reviewStatus: "auto" | "confirmed";
   holes: PdgaHole[];
+  /** Max hourly gust 09:00–17:00 at the matched course on the round's day; null when unknown. */
+  gustMph?: number | null;
 };
+/** A layout's baseline uses at most this many of the most recent matched rounds ... */
+export const BASELINE_MAX_ROUNDS = 6;
+/** ... played within this many years before the round being rated. */
+export const BASELINE_WINDOW_YEARS = 3;
 export type PdgaBaseline = {
+  /** Median SSA normalised to no wind (each round's gust adjustment removed where its gust is known). */
   ssa: number;
   ppt: number;
   rounds: number;
@@ -554,6 +561,9 @@ export type PdgaBaseline = {
   maxSsa: number;
   firstDate: string;
   lastDate: string;
+  /** Rounds normalised with their own wind, and rounds used as played because no wind is known. */
+  windRounds: number;
+  noWindDataRounds: number;
 };
 
 /**
@@ -589,36 +599,59 @@ export function roundFitsPlayedLayout(round: Pick<BaselineRound, "holes" | "revi
   return check.grade === "exact" || check.grade === "close" || (round.reviewStatus === "confirmed" && check.parOk);
 }
 
+/** The SSA a PDGA round would have had with no wind: its own gust adjustment removed when known. */
+export function noWindSsa(round: Pick<BaselineRound, "ssa" | "gustMph">): number | null {
+  if (round.ssa == null || !Number.isFinite(round.ssa)) return null;
+  return round.gustMph == null ? round.ssa : round.ssa - weatherSsaAdjustment({ windGustMph: round.gustMph });
+}
+
+function yearsBefore(day: string, years: number): string {
+  const date = new Date(day + "T00:00:00Z");
+  date.setUTCFullYear(date.getUTCFullYear() - years);
+  return date.toISOString().slice(0, 10);
+}
+
 /**
- * The PDGA baseline for one of our rounds: the median of the official SSAs of matched PDGA rounds
- * played on an EARLIER calendar day (no look-ahead) on a layout that fits the as-played geometry.
+ * The PDGA baseline for one of our rounds: the median no-wind SSA of the 6 most recent matched PDGA
+ * rounds played on an EARLIER calendar day (no look-ahead), within 3 years, on a layout that fits the
+ * as-played geometry. Rating a round then adds that round's own gust adjustment.
  */
 export function pdgaBaselineFor(rounds: readonly BaselineRound[], played: readonly OurHole[] | null, beforeDay: string): PdgaBaseline | null {
+  const earliest = yearsBefore(beforeDay, BASELINE_WINDOW_YEARS);
   const usable = rounds.filter((round) => round.ssa != null && Number.isFinite(round.ssa) && round.roundDate < beforeDay &&
-    roundFitsPlayedLayout(round, played));
-  const ssa = median(usable.map((round) => round.ssa!));
+    round.roundDate >= earliest && roundFitsPlayedLayout(round, played))
+    .sort((a, b) => b.roundDate.localeCompare(a.roundDate) || b.tournId - a.tournId || b.roundNumber - a.roundNumber || b.pdgaLayoutId - a.pdgaLayoutId)
+    .slice(0, BASELINE_MAX_ROUNDS);
+  const values = usable.map((round) => noWindSsa(round)!);
+  const ssa = median(values);
   if (ssa == null) return null;
   const rounded = Math.round(ssa * 1000) / 1000;
-  const values = usable.map((round) => round.ssa!);
   const dates = usable.map((round) => round.roundDate).sort();
+  const windRounds = usable.filter((round) => round.gustMph != null).length;
   return {
     ssa: rounded,
     ppt: pointsPerThrow(rounded),
     rounds: usable.length,
     officialRounds: usable.filter((round) => round.ratingsStatus === "official").length,
-    minSsa: Math.min(...values),
-    maxSsa: Math.max(...values),
+    minSsa: Math.round(Math.min(...values) * 1000) / 1000,
+    maxSsa: Math.round(Math.max(...values) * 1000) / 1000,
     firstDate: dates[0]!,
     lastDate: dates.at(-1)!,
+    windRounds,
+    noWindDataRounds: usable.length - windRounds,
   };
 }
 
-/** "6 PDGA rated rounds, 2023–2026, median SSA 49.6" */
-export function baselineProvenance(baseline: Pick<PdgaBaseline, "rounds" | "firstDate" | "lastDate" | "ssa">): string {
+/** "Median of the 6 most recent PDGA rounds (2025–2026), no-wind SSA 49.6" (+ rounds lacking wind data). */
+export function baselineProvenance(baseline: Pick<PdgaBaseline, "rounds" | "firstDate" | "lastDate" | "ssa" | "noWindDataRounds">): string {
   const first = baseline.firstDate.slice(0, 4);
   const last = baseline.lastDate.slice(0, 4);
-  return plural(baseline.rounds, "PDGA rated round", "PDGA rated rounds") + ", " + (first === last ? first : first + "–" + last) +
-    ", median SSA " + baseline.ssa.toFixed(1);
+  const years = first === last ? first : first + "–" + last;
+  const basis = baseline.rounds === 1 ? "The most recent PDGA round (" + years + ")"
+    : "Median of the " + baseline.rounds + " most recent PDGA rounds (" + years + ")";
+  const missing = baseline.noWindDataRounds;
+  return basis + ", no-wind SSA " + baseline.ssa.toFixed(1) +
+    (missing ? "; " + plural(missing, "round has", "rounds have") + " no wind data and " + (missing === 1 ? "is" : "are") + " used as played" : "");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -674,9 +707,11 @@ export function evaluatePdgaBaselines(rounds: readonly ValidationPdgaRound[], cl
       }
       predictedRounds += 1;
       layoutPredicted += 1;
-      ssaErrors.push(baseline.ssa - round.ssa!);
+      // As the engine rates a round: the no-wind baseline plus this round's own gust adjustment.
+      const predictedSsa = baseline.ssa + weatherSsaAdjustment({ windGustMph: round.gustMph ?? null });
+      ssaErrors.push(predictedSsa - round.ssa!);
       for (const [score, rating] of round.pairs) {
-        const error = roundRatingForScore(score, baseline.ssa, baseline.ppt) - rating;
+        const error = roundRatingForScore(score, predictedSsa, baseline.ppt) - rating;
         ratingErrors.push(error);
         layoutErrors.push(error);
       }

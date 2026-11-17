@@ -44,8 +44,8 @@ function signed(value) {
   return typeof value === "number" ? (value > 0 ? "+" : "") + value : "–";
 }
 
-function Metrics({ rows }) {
-  return h("dl", { className: "course-operator-metrics" }, rows.map(([label, value]) =>
+function Metrics({ rows, className = "" }) {
+  return h("dl", { className: "course-operator-metrics" + (className ? " " + className : "") }, rows.map(([label, value]) =>
     h("div", { key: label }, h("dt", null, label), h("dd", null, value))));
 }
 
@@ -53,11 +53,12 @@ function LayoutRounds({ layout }) {
   const baseline = layout.baseline;
   return h("details", { className: "course-operator-detail", "data-admin-pdga-layout": layout.id }, [
     h("summary", { key: "name" }, layout.name + " · " + (baseline ? "SSA\u00a0" + ssaLabel(baseline.ssa) : "No usable PDGA rounds")),
-    baseline ? h("p", { className: "al-note", key: "provenance" }, baseline.provenance + " · range " + ssaLabel(baseline.minSsa) +
-      "–" + ssaLabel(baseline.maxSsa) + " · " + count(baseline.officialRounds, "official", "official")) : null,
+    baseline ? h("p", { className: "al-note", key: "provenance" }, baseline.provenance + ". No-wind range " + ssaLabel(baseline.minSsa) +
+      "–" + ssaLabel(baseline.maxSsa) + " · " + count(baseline.officialRounds, "official", "official") + ".") : null,
     h("ul", { key: "rounds" }, layout.rounds.map((round) => h("li", { key: round.tournId + ":" + round.round + ":" + round.pdgaLayoutId }, [
       dateLabel(round.date), round.eventName + " round " + round.round, round.pdgaLayoutName, "SSA\u00a0" + ssaLabel(round.ssa),
       count(round.ratedPlayers, "rated player", "rated players"),
+      round.gustMph != null ? "gust " + round.gustMph + " mph" : round.weatherStatus === "pending" ? "wind pending" : "no wind data",
       round.ratingsStatus === "official" ? "official ratings" : "ratings unconfirmed",
       round.reviewStatus === "confirmed" ? "confirmed by an admin" : QUALITY[round.quality],
       round.fitsCurrentLayout === "none" && round.reviewStatus !== "confirmed" ? "no longer fits this layout" : "",
@@ -73,7 +74,7 @@ export function CoursePdgaBaselines({ courseId, token, revision }) {
   const without = layouts.filter((layout) => !layout.rounds.length);
   return h("section", { className: "al-section course-operator-section", "data-admin-pdga-course": result.status, "aria-labelledby": "admin-pdga-course-title" }, [
     h("h2", { className: "al-h", id: "admin-pdga-course-title", key: "title" }, "PDGA rating baselines"),
-    h("p", { className: "al-note", key: "about" }, "Official SSAs from PDGA rated rounds on layouts that match this course. Casual rounds, and events with too few rated players to set their own SSA, use the median of rounds played before them."),
+    h("p", { className: "al-note", key: "about" }, "Official SSAs from PDGA rated rounds on layouts that match this course, adjusted to no wind. Casual rounds and small events (fewer than three rated players) use the median of the six most recent rounds from the three years before them, plus their own wind."),
     result.status === "loading" && !result.data ? h("p", { className: "al-note", role: "status", key: "loading" }, "Loading PDGA rounds…") : null,
     result.status === "error" ? h("p", { className: "al-note", role: "alert", key: "error" }, "Could not load PDGA rounds for this course.") : null,
     ...withRounds.map((layout) => h(LayoutRounds, { layout, key: layout.id })),
@@ -196,9 +197,9 @@ export function PdgaBaselineTools({ token, revision, onChanged }) {
 
   return h("section", { className: "al-section course-operator-section", "data-admin-pdga-tools": overview.status, "aria-labelledby": "admin-pdga-tools-title" }, [
     h("h2", { className: "al-h", id: "admin-pdga-tools-title", key: "title" }, "PDGA rated rounds"),
-    h("p", { className: "al-note", key: "about" }, "Events come from members' public PDGA rating history (the last three years, in towns with our courses) and are read a few at a time each hour. Layouts must match ours on par and hole lengths before their SSAs are used."),
+    h("p", { className: "al-note", key: "about" }, "Events come from members' public PDGA rating history (the last three years, in towns with our courses) and are read a few at a time each hour. Layouts must match ours on par and hole lengths before their SSAs are used, and each matched round's wind comes from Open-Meteo's historical archive."),
     overview.status === "error" ? h("p", { className: "al-note", role: "alert", key: "error" }, "Could not load PDGA rounds.") : null,
-    data ? h(Metrics, { key: "metrics", rows: [
+    data ? h(Metrics, { key: "metrics", className: "pdga-stat-grid", rows: [
       ["Events waiting", (counts.pending ?? 0) + (counts.in_progress ?? 0)],
       ["Events read", counts.done ?? 0],
       ["Matched layouts", matched],
