@@ -4,7 +4,7 @@ import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { discCatalog, discChoices, unfilledDiscDetails } from "./bag-disc-catalog.js";
 import { BagDiscChoice, BagDiscVoice, BagDiscWeight } from "./bag-disc-inputs.js";
 
-import { MoreLink } from "./more-page.js";
+import { MoreLink } from "./more-link.js";
 import { memberConfirm } from "./member-dialogs.js";
 import {
   distanceBetween, distanceFromMeters, localDate, metersFromDistance, practicePercent,

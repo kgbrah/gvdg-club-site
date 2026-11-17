@@ -339,22 +339,16 @@ async function captureState(browser, origin, viewport, slug) {
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { state: "attached", timeout: 10_000 });
   await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactPlayPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactSeasonPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactClubPanel:not(:empty)", { state: "attached", timeout: 10_000 });
-  await page.waitForSelector("#membersReactMorePanel:not(:empty)", { state: "attached", timeout: 10_000 });
   await expectNoReadinessClasses(page);
   await expectReactTab(page, "Home");
   await page.waitForSelector('[data-react-overview-dashboard="ready"]', { timeout: 10_000 });
-  await page.waitForSelector('[data-react-board-panel="ready"]', { state: "attached", timeout: 10_000 });
-  await page.waitForSelector('[data-react-tee-signs-panel="ready"]', { state: "attached", timeout: 10_000 });
-  await page.waitForSelector('[data-react-club-panel="ready"]', { state: "attached", timeout: 10_000 });
-  await page.waitForSelector('[data-react-member-directory="ready"]', { state: "attached", timeout: 10_000 });
-  await page.waitForSelector('[data-react-meeting-minutes="ready"]', { state: "attached", timeout: 10_000 });
   await page.waitForSelector('[data-react-live-scoring="ready"]', { timeout: 10_000 });
+  // Home loads only Home. Every other screen's code and data load the first time it is opened.
+  const mountedAtHome = await page.evaluate(() => [
+    "#membersReactPlayPanel", "#membersReactSeasonPanel", "#membersReactRegistrationPanel", "#membersReactMorePanel",
+    "#membersReactBoardPanel", "#membersReactTeeSignsPanel", "#membersReactClubPanel",
+  ].filter((selector) => document.querySelector(selector)?.childElementCount));
+  if (mountedAtHome.length) throw new Error(`Hidden screens rendered on Home: ${mountedAtHome.join(", ")}`);
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-home-jobs="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-home-hero]", "941", "React live rating");
@@ -542,6 +536,8 @@ async function captureState(browser, origin, viewport, slug) {
   await expectReactTab(page, "Club");
   await expectDashboardPanel(page, "club", "#membersReactClubPanel", "Club tab");
   await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "visible", timeout: 10_000 });
+  await page.waitForSelector('[data-react-member-directory="ready"]', { state: "attached", timeout: 10_000 });
+  await page.waitForSelector('[data-react-meeting-minutes="ready"]', { state: "attached", timeout: 10_000 });
   const clubPanel = page.locator('[data-react-club-panel]');
   const doublesPanel = clubPanel.locator('[data-react-doubles-league="ready"]');
   await doublesPanel.waitFor({ state: "visible", timeout: 10_000 });

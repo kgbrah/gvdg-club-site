@@ -19,11 +19,13 @@ import {
   selectPlayStatsView,
 } from "../shared/play-stats.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
-import { PersonalPlayHistory } from "./personal-play-history.js";
+import { lazyPanel } from "./lazy-panel.js";
 import { MetricBar, ScoreDistribution } from "./season-charts.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 
 const h = React.createElement;
+// The full history list shows only on Stats, so Home does not carry its code.
+export const PersonalPlayHistory = lazyPanel(() => import("./personal-play-history.js"), "PersonalPlayHistory");
 
 export function usePlayStats() {
   const token = storageGet(TOKEN_KEY);

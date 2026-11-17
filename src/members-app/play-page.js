@@ -1,6 +1,6 @@
 import React from "react";
 import { ArrowRight, ChevronRight, MapPin } from "lucide-react";
-import { MoreLink } from "./more-page.js";
+import { MoreLink } from "./more-link.js";
 
 import { TOKEN_KEY, request, requestJson, storageGet } from "./api.js";
 import { LiveScoringPanel } from "./activity-panels.js";

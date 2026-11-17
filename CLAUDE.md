@@ -261,7 +261,13 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`.
+to `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
+(`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
+open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to
+precache every chunk (kept in `gvdg-member-chunks` for the current and previous release). Chunks import the entry
+with the same `?v=` as `gvdg-members.html`, so **bump `?v` in the HTML (script + modulepreload) before `npm run build`**,
+never after; `tests/service-worker-chunks.test.mjs` fails if they drift. `scripts/qa/member-load-perf.mjs` measures
+first load on a throttled phone profile.
 
 ## Security & correctness invariants (uphold in any change)
 

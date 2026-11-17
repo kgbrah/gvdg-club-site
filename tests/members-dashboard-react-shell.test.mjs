@@ -70,6 +70,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   const ratings = readFileSync('src/members-app/club-ratings.js', 'utf8');
   const udiscExport = readFileSync('src/shared/udisc-export.js', 'utf8');
   const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
+  const standings = readFileSync('src/members-app/active-standings-panel.js', 'utf8');
   const registration = readFileSync('src/members-app/registration-panel.js', 'utf8');
   const registrationEvents = readFileSync('src/members-app/registration-events.js', 'utf8');
   const registrationCasual = readFileSync('src/members-app/registration-casual.js', 'utf8');
@@ -147,7 +148,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
-  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=196"><\/script>/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=197"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(profileKey.*h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
@@ -439,14 +440,16 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(ratings, /appendChild\(node\)/);
   assert.match(activity, /\/my-live-rounds/);
   assert.match(activity, /\/shop\/wallet/);
-  assert.match(activity, /\/leagues\/active/);
-  assert.match(activity, /fetchMergedRyderData/);
-  assert.match(activity, /applyOfficialRyderTally/);
-  assert.match(activity, /Official tally/);
-  assert.match(activity, /Loading official tally/);
-  assert.match(activity, /Official points come from the club scoreboard sheet/);
-  assert.match(activity, /href: "ryder-cup.html"/);
-  assert.doesNotMatch(activity, /from "\.\.\/public-app\/ryder-cup-app\.js"/);
+  assert.match(standings, /\/leagues\/active/);
+  assert.match(standings, /fetchMergedRyderData/);
+  assert.match(standings, /applyOfficialRyderTally/);
+  assert.match(standings, /Official tally/);
+  assert.match(standings, /Loading official tally/);
+  assert.match(standings, /Official points come from the club scoreboard sheet/);
+  assert.match(standings, /href: "ryder-cup.html"/);
+  assert.doesNotMatch(`${activity}\n${standings}`, /from "\.\.\/public-app\/ryder-cup-app\.js"/);
+  // Home's live-round and wallet cards do not pull the standings screen (and its Ryder Cup sheet code) into the entry.
+  assert.doesNotMatch(activity, /fetchMergedRyderData|applyOfficialRyderTally/);
   assert.match(activity, /data-react-live-scoring/);
   assert.match(activity, /data-react-wallet/);
   assert.match(registration, /data-react-registration-panel/);

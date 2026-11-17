@@ -352,18 +352,11 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
     await page.goto(`${siteUrl}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
     await page.waitForSelector("#membersReactDashboardShell:not(:empty)", { state: "attached", timeout: 15_000 });
     await page.waitForSelector("#membersReactOverviewPanel:not(:empty)", { state: "attached", timeout: 15_000 });
-    await page.waitForSelector("#membersReactRegistrationPanel:not(:empty)", { state: "attached", timeout: 15_000 });
-    await page.waitForSelector("#membersReactBoardPanel:not(:empty)", { state: "attached", timeout: 15_000 });
-    await page.waitForSelector("#membersReactTeeSignsPanel:not(:empty)", { state: "attached", timeout: 15_000 });
-    await page.waitForSelector("#membersReactClubPanel:not(:empty)", { state: "attached", timeout: 15_000 });
-    await page.waitForSelector("#membersReactMorePanel:not(:empty)", { state: "attached", timeout: 15_000 });
+    // Screens other than Home mount (and load their code) when they are first opened; each is checked below.
     await expectNoReadinessClasses(page);
     await waitForText(page, "#membersReactDashboardShell", "Home", "React dashboard title");
     await expectReactTab(page, "Home");
     await page.locator('[data-react-overview-dashboard="ready"]').waitFor({ state: "visible", timeout: 15_000 });
-    await page.locator('[data-react-board-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
-    await page.locator('[data-react-tee-signs-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
-    await page.locator('[data-react-club-panel="ready"]').waitFor({ state: "attached", timeout: 15_000 });
     await page.locator('[data-react-member-banner="ready"]').waitFor({ state: "visible", timeout: 15_000 });
     await waitForText(page, "[data-react-home-hero]", memberName, "React home name");
     await page.locator('[data-react-home-jobs="ready"]').waitFor({ state: "visible", timeout: 15_000 });

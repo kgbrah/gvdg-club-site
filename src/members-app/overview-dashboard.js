@@ -11,7 +11,7 @@ import { useMemberContext } from "./member-context.js";
 import { membershipHomeHint } from "../shared/membership-status.js";
 import { usePdgaStats, pdgaEventTitle } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
-import { useRegistrationData } from "./registration-panel.js";
+import { useRegistrationData } from "./registration-data.js";
 import { eventMeta, pickUpNext } from "./registration-utils.js";
 import { latestHomeRound } from "./play-page-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
@@ -19,7 +19,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
-import { InboxHomeAlert } from "./messages-panel.js";
+import { InboxHomeAlert } from "./inbox-home-alert.js";
 import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
 
 const h = React.createElement;

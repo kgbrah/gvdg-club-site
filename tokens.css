@@ -445,6 +445,18 @@ input, select, textarea {
   font-stretch: 62% 125%;
   font-display: swap;
   src: url("img/fonts/archivo.woff2") format("woff2");
+  unicode-range: U+0100-0130, U+0132-0151, U+0154-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB, U+02DD-0303, U+0305-0307, U+0309-0328, U+032A-1FFF, U+2070-20AB, U+20AD-2121, U+2123-2190, U+2192, U+2194-2211, U+2213-2214, U+2216-FEFE, U+FF00-FFFC, U+FFFE-10FFFF;
+}
+/* The same Archivo glyphs for basic Latin, in a file half the size. The complete font above is the same file
+   as before and covers every other character; it loads only when a page uses one. */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("img/fonts/archivo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
   font-family: "Bebas Neue";

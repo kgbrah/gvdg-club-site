@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { chromium } from "playwright";
 
+import { startMemberChunkFixture } from "./member-chunk-fixture.mjs";
+
 const registrar = await readFile(new URL("../../pwa.js", import.meta.url));
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -92,9 +94,60 @@ try {
     navigator.serviceWorker.controller.postMessage({ type: "QA_BUILD" }, [channel.port2]);
   }));
   assert.equal(controllerBuild, B);
-  console.log("Chromium waiting-worker QA passed lagging release marker, score dock protection and one explicit reload after control transfers.");
+  await lazyScreensWhileWaiting();
+  console.log("Chromium waiting-worker QA passed lagging release marker, score dock protection, one explicit reload after control transfers, and lazily loaded member screens while an update waits.");
 } finally {
   await browser?.close();
   server.closeAllConnections();
   await new Promise((resolve) => server.close(resolve));
+}
+
+// The real sw.js with a member-app release whose screens load on demand. A new release's worker precaches
+// its own chunks and then waits for the member to tap Refresh. Until then the running release must still
+// open its screens offline; after the refresh, the new release's screens open offline too.
+async function lazyScreensWhileWaiting() {
+  const fixture = await startMemberChunkFixture({ holdInstall: true });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
+  context.setDefaultTimeout(15_000);
+  try {
+    const app = await context.newPage();
+    await app.goto(fixture.origin + "/gvdg-members.html", { waitUntil: "load" });
+    await app.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+    assert.equal(await app.evaluate(() => window.openScreen("stats")), "stats A");
+
+    fixture.deploy("B");
+    await app.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      await registration.update();
+      const worker = registration.installing || registration.waiting;
+      if (!worker) throw new Error("No new worker after the deploy");
+      // The new release precaches its chunks, then waits for the member's Refresh.
+      await new Promise((resolve) => {
+        const check = () => { if (worker.state !== "installing") { worker.removeEventListener("statechange", check); resolve(); } };
+        worker.addEventListener("statechange", check);
+        check();
+      });
+      if (registration.waiting !== worker) throw new Error("The new worker is not waiting: " + worker.state);
+    });
+    const refresh = app.getByRole("button", { name: "Refresh", exact: true });
+    await refresh.waitFor();
+    await context.setOffline(true);
+    assert.equal(await app.evaluate(() => window.openScreen("club")), "club A", "the running release opens a screen it had not loaded");
+    await context.setOffline(false);
+    await app.waitForFunction(() => navigator.onLine);
+    await app.evaluate(() => window.dispatchEvent(new Event("online")));
+    await refresh.waitFor();
+
+    const reloaded = app.waitForEvent("framenavigated", { predicate: (frame) => frame === app.mainFrame() });
+    await refresh.click();
+    await reloaded;
+    await app.waitForLoadState("load");
+    assert.equal(await app.locator("h1").innerText(), "Member app B");
+    await context.setOffline(true);
+    assert.equal(await app.evaluate(() => window.openScreen("stats")), "stats B");
+    assert.equal(await app.evaluate(() => window.openScreen("club")), "club B");
+  } finally {
+    await context.close();
+    await fixture.close();
+  }
 }
