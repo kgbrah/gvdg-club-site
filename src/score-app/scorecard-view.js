@@ -1009,7 +1009,7 @@ function HoleGrid(props) {
     }
   }, [current && current.hole]);
   if (!holes.length) return null;
-  return h(
+  return h("div", { className: "score-holestrip", key: "strip" }, h(
     "div",
     { className: "holegrid", key: "grid", ref: scroller },
     holes.map((hole) => {
@@ -1048,7 +1048,7 @@ function HoleGrid(props) {
         ],
       );
     }),
-  );
+  ));
 }
 
 function CtpClaim(props) {

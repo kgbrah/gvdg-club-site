@@ -223,6 +223,13 @@ async function verifyRoutes(variant) {
   try {
     await page.goto(origin + "/admin-preview.html#today", { waitUntil: "commit", timeout: 60_000 });
     await page.getByRole("heading", { name: "Today", level: 1 }).waitFor({ timeout: 60_000 });
+    const finderBox = page.locator(".app-tool-finder").first();
+    if (await finderBox.isVisible()) {
+      const field = await finderBox.locator("input").boundingBox();
+      assert.ok(field.height >= 43.5 && field.height <= 56, variant.name + " Find a tool is one normal search field: " + field.height);
+      assert.equal(await finderBox.locator("input").getAttribute("placeholder"), "Find a tool");
+      await shot(finderBox, "admin-finder-" + variant.name);
+    }
     for (const item of ADMIN_DESTINATIONS) {
       try {
         const activePane = await route(page, item.key);

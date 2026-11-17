@@ -127,11 +127,11 @@ try {
           const el = document.querySelector(selector);
           if (!el) return null;
           const s = getComputedStyle(el);
-          return { filter: s.backdropFilter || s.webkitBackdropFilter, bg: s.backgroundColor, top: Math.round(el.getBoundingClientRect().top), height: Math.round(el.getBoundingClientRect().height) };
+          return { filter: s.backdropFilter || s.webkitBackdropFilter, bg: s.backgroundColor, radius: s.borderTopLeftRadius, padL: parseFloat(s.paddingLeft), top: Math.round(el.getBoundingClientRect().top), height: Math.round(el.getBoundingClientRect().height) };
         };
         return {
           header: style("#scoreRoot .topbar"), weather: style(".scorecard-weather"), stats: style(".score-advanced"),
-          holes: style(".score-glove-stage .holegrid"), dock: style(".score-glove-dock"),
+          holes: style(".score-glove-stage .score-holestrip"), strip: style(".score-glove-stage .holegrid"), dock: style(".score-glove-dock"),
           minus: style(".score-glove-dock .stepper .minus"), plus: style(".score-glove-dock .stepper .plus"),
           nav: style(".score-glove-dock .navbtn"),
         };
@@ -142,7 +142,14 @@ try {
           assert.match(read[key].filter, /blur\(/, key + " blurs (" + glass + " " + mode + "): " + read[key].filter);
         }
         const dockAlpha = alpha(read.dock.bg);
-        assert.ok(dockAlpha >= 0.849, "dock stays >= 85% opaque at " + glass + ": " + read.dock.bg);
+        assert.ok(dockAlpha >= 0.699, "dock is at most 30% see-through at " + glass + ": " + read.dock.bg);
+        const dockBlur = Number(/blur\(([\d.]+)px\)/.exec(read.dock.filter)?.[1]);
+        const panelBlur = Number(/blur\(([\d.]+)px\)/.exec(read.stats.filter)?.[1]);
+        assert.ok(dockBlur >= panelBlur && dockBlur >= 16, "dock blur is strong at " + glass + ": " + read.dock.filter);
+        assert.ok(alpha(read.header.bg) < 0.99, "top bar is glass at " + glass + " " + mode + ": " + read.header.bg);
+        assert.ok(Math.abs(parseFloat(read.weather.radius) - parseFloat(read.stats.radius)) < 0.5 && parseFloat(read.weather.radius) >= 12, "weather, stats and hole strip share the panel radius: " + [read.weather.radius, read.stats.radius, read.holes.radius]);
+        assert.equal(read.holes.radius, read.stats.radius, "hole strip radius");
+        assert.ok(read.stats.padL >= 6 && read.strip.padL >= 6, "stats row and hole strip keep inner padding: " + [read.stats.padL, read.holes.padL]);
         for (const key of ["minus", "plus", "nav"]) assert.ok(alpha(read[key].bg) >= 0.99, key + " stays solid: " + read[key].bg);
         const weatherAlpha = alpha(read.weather.bg);
         assert.ok(weatherAlpha < 0.99, "weather strip is translucent: " + read.weather.bg);

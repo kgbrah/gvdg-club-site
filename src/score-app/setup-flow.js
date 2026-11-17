@@ -294,6 +294,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
         ])),
       ])
       : null,
+    h("div", { className: "course-filters", key: "filters" }, [
     h("label", { className: "lbl", htmlFor: "courseSearch", key: "searchLabel" }, "Search"),
     h("div", { className: "course-search", key: "search" }, [
       icon(Search, { size: 16, key: "icon" }),
@@ -343,6 +344,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
           h("option", { key: option.value, value: option.value }, option.label),
         ),
       ),
+    ]),
     ]),
     h("p", { className: "muted", key: "count" }, !online && !filtered.length ? "The course catalog needs a connection. You can open your saved layouts." :
       filtered.length ? filtered.length + " course" + (filtered.length === 1 ? "" : "s") +
