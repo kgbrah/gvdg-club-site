@@ -12,6 +12,7 @@ export const MEMBER_DESTINATIONS = [
   entry("more", "Club", "more", { hash: "club-hub" }),
   entry("club", "Club directory", "more", { hash: "directory", terms: "members roster courses club conditions meeting minutes" }),
   entry("board", "Message board", "more", { terms: "chat post discussion member board" }),
+  entry("messages", "Messages", "more", { hash: "messages", terms: "direct message inbox dm text notification alert unread" }),
   entry("tee", "Tee signs", "more", { terms: "course photo capture contribution" }),
   entry("tags", "Bag tags", "more", { terms: "challenge claim ladder" }),
   entry("standings", "Club standings", "more", { terms: "leaderboard league results" }),

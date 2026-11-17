@@ -32,6 +32,8 @@ export { LiveEventDO } from "./live.js";
 import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
+import { handleMemberPush } from "./member-push.js";
+import { handleMemberMessages } from "./member-messages.js";
 import { isUdiscLeagueRefreshCron, refreshImportedUdiscLeagues } from "./udisc-league-refresh.js";
 import { handleUdiscHistory } from "./udisc-history-routes.js";
 import { handleMyPlayHistory, handleMyPlayExport } from "./play-history-routes.js";
@@ -43,6 +45,7 @@ import { handleCommunityRoute } from "./community-routes.js";
 import { handleOfflineRoundRoute } from "./offline-round-routes.js";
 import { handlePhoneActivityRoute } from "./phone-activity-routes.js";
 import { handleMemberArchiveRoute } from "./member-archive-routes.js";
+import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -91,6 +94,11 @@ export default {
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/me/welcome-seen" && method === "POST") return await handleWelcomeSeen(request, env, origin);
+      if (pathname === "/me/push-subscription" && (method === "GET" || method === "PUT" || method === "DELETE")) {
+        return await handleMemberPush(request, env, origin, method);
+      }
+      const messages = await handleMemberMessages(request, env, origin, pathname, method, ctx);
+      if (messages) return messages;
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);
       if (pathname === "/me/udisc-history" && (method === "GET" || method === "POST" || method === "DELETE")) {
         return await handleUdiscHistory(request, env, origin, method);
@@ -159,6 +167,16 @@ export default {
             const result = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
             console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...result }));
             return;
+          }
+          const renewal = await sendMembershipRenewalReminders(env, new Date(controller.scheduledTime)).catch((error) => {
+            console.error(JSON.stringify({
+              message: "membership_renewal_reminder_failed",
+              error: error instanceof Error ? error.stack : String(error),
+            }));
+            return null;
+          });
+          if (renewal && !renewal.skipped) {
+            console.log(JSON.stringify({ message: "membership_renewal_reminder", ...renewal }));
           }
           const result = await runRatingsRecompute(env);
           console.log(JSON.stringify({ message: "ratings_recompute_complete", cron: controller.cron, ...result }));

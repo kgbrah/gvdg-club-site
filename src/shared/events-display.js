@@ -1,5 +1,5 @@
 // Presentation-only helpers for the public events pages (pure, unit-tested).
-import { clubCalendarDay, clubToday, eventClubCalendarDay, formatClubClock } from "./events-model.js";
+import { clubCalendarDay, clubToday, eventClubCalendarDay, formatClubClock, parseClubInstant } from "./events-model.js";
 
 const DAY_MS = 86400000;
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -11,8 +11,8 @@ function civilMs(day) {
 
 function clubClock(raw) {
   if (!raw || /^\d{4}-\d{2}-\d{2}$/.test(String(raw).trim())) return "";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = parseClubInstant(raw);
+  if (!date) return "";
   const text = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
   return text.replace(":00", "");
 }
@@ -37,7 +37,7 @@ export function relativeEventWhen(event, now = new Date()) {
 /** Countdown parts to the event start (or noon of its club day). Null when past/unknown. */
 export function countdownParts(event, now = new Date()) {
   const raw = event && event.starts_at;
-  let target = raw ? new Date(raw).getTime() : NaN;
+  let target = raw ? (parseClubInstant(raw)?.getTime() ?? NaN) : NaN;
   if (Number.isNaN(target)) {
     const day = civilMs(eventClubCalendarDay(event));
     if (day == null) return null;

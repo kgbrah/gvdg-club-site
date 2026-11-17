@@ -8,6 +8,7 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { HomeJobs } from "./home-jobs.js";
 import { useMemberContext } from "./member-context.js";
+import { membershipHomeHint } from "../shared/membership-status.js";
 import { usePdgaStats, pdgaEventTitle } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
 import { useRegistrationData } from "./registration-panel.js";
@@ -18,6 +19,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
+import { InboxHomeAlert } from "./messages-panel.js";
 import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
 
 const h = React.createElement;
@@ -267,6 +269,7 @@ export function MemberOverviewDashboard() {
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(WelcomeCard, { key: "welcome" }),
+    h(InboxHomeAlert, { key: "inbox" }),
     h(HomeHero, { context, pdgaState, key: "hero" }),
     h("div", { className: "member-home-feature", key: "feature" }, [
       h("div", { className: "member-home-play", key: "play" }, [
@@ -285,7 +288,7 @@ export function MemberOverviewDashboard() {
           h(ShieldCheck, { className: "member-account-icon", size: 20, "aria-hidden": true, key: "icon" }),
           h("span", { className: "member-account-copy", key: "copy" }, [
             h("strong", { key: "label" }, "Membership and profile"),
-            h("small", { key: "hint" }, "Profile, sign-in and settings"),
+            h("small", { key: "hint" }, membershipHomeHint(context.membership) || "Profile, sign-in and settings"),
           ]),
           h(ChevronRight, { className: "member-account-chevron", size: 18, "aria-hidden": true, key: "arrow" }),
         ]),

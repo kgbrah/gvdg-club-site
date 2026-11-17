@@ -58,9 +58,41 @@ function response(path, query, tagState, request) {
     events: [{ tournament: "Greenville Open", date: "Oct 21, 2026", division: "MA2", rounds: [{ rating: 919, score: 55 }] }] };
   if (path === "/shop/wallet") return { balance_cents: 3250,
     transactions: [{ id: 1, amount_cents: 3250, source: "event_payout", created_at: "2026-11-13T19:30:00Z" }] };
+  if (path === "/bag-tags/challenges" && request.method === "POST" && tagState.lastBody?.leagueId) {
+    tagState.leagueChallengeSent = true;
+    return { challenge: { id: 31, leagueId: tagState.lastBody.leagueId } };
+  }
   if (path === "/bag-tags/request" && request.method === "POST") { tagState.requested = true; return { ok: true }; }
   if (path === "/bag-tags/challenges" && request.method === "POST") { tagState.challengeSent = true; return { ok: true }; }
+  if (/^\/bag-tags\/challenges\/21\/(confirm|decline)$/.test(path)) { tagState.leagueAnswered = true; return { ok: true }; }
   if (/^\/bag-tags\/challenges\/\d+\/(confirm|decline)$/.test(path)) { tagState.answered = true; return { ok: true }; }
+  if (path === "/bag-tags/mine" && ["league", "expired", "leagueonly", "notag"].includes(query.tags)) {
+    const series = query.tags === "notag" ? { id: 1, name: "Greenville 2026" } : { id: 1, name: "Greenville 2026" };
+    if (query.tags === "notag") return { series, mine: null, holders: [], challenges: [], leagues: [] };
+    const league = { id: 4, name: "Sunday Baggers" };
+    const holders = [
+      { tagNumber: 1, name: "Michael Fazzini", memberId: "m_mf", linked: true },
+      { tagNumber: 2, name: "Pat Guest", linked: false },
+      { tagNumber: 5, name: "Jordan Ellis", memberId: "m_je", linked: true },
+      { tagNumber: 9, name: member.name, memberId: member.sub, linked: true },
+      { tagNumber: 11, name: "Riley Park", memberId: "m_rp", linked: true },
+    ];
+    const incoming = query.tags === "league" && !tagState.leagueAnswered
+      ? [{ id: 21, leagueId: 4, defenderId: member.sub, defenderName: member.name, challengerId: "m_rp", challengerName: "Riley Park",
+        defenderTag: 9, challengerTag: 11, challengerScore: 51, defenderScore: 53, status: "pending" }] : [];
+    const closed = query.tags === "expired"
+      ? [{ id: 22, leagueId: 4, challengerId: member.sub, challengerName: member.name, defenderId: "m_je", defenderName: "Jordan Ellis",
+        challengerTag: 9, defenderTag: 5, status: "expired", closedNote: "expired: ladder refreshed from UDisc" }] : [];
+    const moves = [
+      { id: 5, kind: "import", summary: "Ladder reset to UDisc's order (5 players)", appOnly: false },
+      { id: 4, kind: "challenge", summary: "Challenge: Riley Park #8 \u2192 #7, Jordan Ellis #7 \u2192 #8", appOnly: true },
+    ];
+    const clubSeries = query.tags === "leagueonly" ? { series: null, mine: null }
+      : { series, mine: { memberId: member.sub, tagNumber: 12, name: member.name },
+        holders: [{ memberId: "tagmate", tagNumber: 7, name: "Jordan" }], challenges: [] };
+    return { ...clubSeries, leagues: [{ league, holders, mine: { memberId: member.sub, name: member.name, tagNumber: 9 },
+      challenges: incoming, closed, moves }] };
+  }
   if (path === "/bag-tags/mine") {
     const series = { id: 1, name: "Greenville 2026" };
     if (query.mode === "holder") {
@@ -108,8 +140,13 @@ const vite = await createServer({
           const path = url.pathname.slice(apiRoot.length);
           const ref = request.headers.referer ? new URL(request.headers.referer) : null;
           const mode = ref?.searchParams.get("mode") || "blue";
+          if (request.method === "POST") {
+            const chunks = [];
+            for await (const chunk of request) chunks.push(chunk);
+            try { tagState.lastBody = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); } catch { tagState.lastBody = {}; }
+          }
           res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(response(path, { mode, admin: ref?.searchParams.has("admin") === true }, tagState, request)));
+          res.end(JSON.stringify(response(path, { mode, tags: ref?.searchParams.get("tags") || "", admin: ref?.searchParams.has("admin") === true }, tagState, request)));
         } else next();
       });
     },
@@ -224,6 +261,65 @@ try {
   await page.getByText("Challenge sent. They confirm the scores.").waitFor();
   assert.equal(tagState.challengeSent, true);
   console.log("Request, answer and create bag tag challenge verified");
+
+  const leagueShots = process.env.GVDG_LEAGUE_IMAGES || images;
+  await mkdir(leagueShots, { recursive: true });
+  for (const theme of ["light", "dark"]) {
+    tagState.leagueAnswered = false;
+    const bag = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+    try {
+      const bagErrors = [];
+      bag.on("pageerror", (error) => bagErrors.push(error.message));
+      // Home: club row, league row, and the incoming league challenge names the league.
+      await bag.goto(origin + pageName + "?mode=" + theme + "&tags=league#home", { waitUntil: "commit" });
+      await bag.getByRole("heading", { name: "Sunday Baggers" }).waitFor();
+      const incoming = bag.locator(".tag-incoming");
+      await incoming.getByText("Sunday Baggers: Riley Park called out your #9. They shot 51, you shot 53.").waitFor();
+      await bag.screenshot({ path: join(leagueShots, "home-incoming-league-" + theme + ".png"), animations: "disabled" });
+      if (theme === "dark") {
+        await incoming.getByRole("button", { name: "Confirm", exact: true }).click();
+        await bag.getByText("Tags updated.", { exact: true }).waitFor();
+        assert.equal(tagState.leagueAnswered, true);
+      }
+      // Bag tags screen: the club series and the league ladder, each with its own flags and form.
+      await bag.goto(origin + pageName + "?mode=" + theme + "&tags=league#tags", { waitUntil: "commit" });
+      const league = bag.locator("[data-bag-tag-league='4']");
+      await league.getByText("Imported from UDisc. The ladder resets to UDisc's order at each import (Sundays 3pm). Record challenge results in UDisc to keep them.").waitFor();
+      assert.deepEqual(await league.locator(".tag-ladder-row").evaluateAll((rows) => rows.map((row) => row.textContent)), ["#1Michael FazziniCan challenge", "#2Pat Guest", "#5Jordan EllisCan challenge", "#9Taylor MorganYou", "#11Riley Park"]);
+      assert.equal(await league.getByText("Pat Guest").locator("xpath=..").getByText("Can challenge").count(), 0);
+      assert.equal(await bag.locator("[data-react-bag-tags='ready']").first().getByText("Bag tag #12").count(), 1);
+      assert.equal(await bag.locator(".tag-challenge-form:visible").count(), 2);
+      await league.getByText("App challenge (not in UDisc): Challenge: Riley Park #8").waitFor();
+      await bag.screenshot({ path: join(leagueShots, "bag-tags-club-and-league-" + theme + ".png"), fullPage: true, animations: "disabled" });
+      if (theme === "dark") {
+        const form = league.locator(".tag-challenge-form");
+        await form.getByRole("combobox", { name: "Challenge" }).selectOption("m_je");
+        await form.getByLabel("Your score").fill("50");
+        await form.getByLabel("Their score").fill("52");
+        await form.scrollIntoViewIfNeeded();
+        await bag.screenshot({ path: join(leagueShots, "league-challenge-form-" + theme + ".png"), animations: "disabled" });
+        await form.getByRole("button", { name: "Send challenge" }).click();
+        await league.getByText("Challenge sent. They confirm the scores.").waitFor();
+        assert.equal(tagState.leagueChallengeSent, true);
+        assert.equal(tagState.lastBody.leagueId, 4);
+      }
+      assert.deepEqual(bagErrors, []);
+    } finally { await bag.close(); }
+  }
+  const expired = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  await expired.goto(origin + pageName + "?mode=dark&tags=expired#tags", { waitUntil: "commit" });
+  const expiredNote = expired.locator("p.tag-closed:visible", { hasText: "Your challenge to Jordan Ellis (#5) ended (expired: ladder refreshed from UDisc)." });
+  await expiredNote.waitFor();
+  await expired.screenshot({ path: join(leagueShots, "league-challenge-expired-dark.png"), fullPage: true, animations: "disabled" });
+  await expired.goto(origin + pageName + "?mode=dark&tags=expired#home", { waitUntil: "commit" });
+  await expired.locator("p.tag-closed:visible", { hasText: "Sunday Baggers: Your challenge to Jordan Ellis (#5) ended (expired: ladder refreshed from UDisc)." }).waitFor();
+  await expired.close();
+  const noTag = await browser.newPage({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+  await noTag.goto(origin + pageName + "?mode=dark&tags=notag#tags", { waitUntil: "commit" });
+  await noTag.locator("[data-bag-tag-hint]:visible", { hasText: "Challenges unlock once you hold a tag. Request a club tag, or join a bag-tag league." }).waitFor();
+  await noTag.screenshot({ path: join(leagueShots, "no-tag-hint-dark.png"), animations: "disabled" });
+  await noTag.close();
+  console.log("League bag tags verified: Home card, ladder, form, expired notice and no-tag hint");
   const navigation = page.getByRole("navigation", { name: "Member app" });
   for (const label of ["Play", "Events", "Stats", "Club", "Home"]) {
     const button = navigation.getByRole("button", { name: label, exact: true });

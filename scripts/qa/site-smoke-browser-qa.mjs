@@ -118,7 +118,7 @@ const pages = [
     path: "/ryder-cup.html",
     text: ["Ryder Cup"],
   },
-  { name: "scoring-app", path: "/scoring-app.html", text: ["Your game.", "GVDG vs UDisc Pro.", "Watch live."] },
+  { name: "scoring-app", path: "/scoring-app.html", text: ["Your game.", "Wallpaper. Color. Glass.", "Watch live."] },
   { name: "archive-redirect", path: "/archive.html", text: ["Club events"], redirect: "/events.html#previousResultsSection" },
   { name: "design-chooser", path: "/design.html", text: ["Direction 01", "Direction 02"] },
   { name: "design-field", path: "/design-field.html", text: ["Where to play", "One card for the year."] },

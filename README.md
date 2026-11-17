@@ -2,7 +2,7 @@
 
 The app behind [gvdgclub.com](https://gvdgclub.com) for the **Greenville Disc Golf Club** (Greenville, North Carolina).
 
-It is the public club site, a signed-in player dashboard, and a phone scorecard other people can watch. A round is a satellite hole map, a live scoring mix, and a leaderboard that opens into each player's holes. Members see their PDGA rating and what's next. Anyone can start a casual card or follow one that is already going.
+It is the public club site, a signed-in player dashboard, and a phone scorecard other people can watch. A round is a satellite hole map, a live scoring mix, and a leaderboard that opens into each player's holes. Members see their PDGA rating, their theme, their messages, and what's next. Anyone can start a casual card or follow one that is already going. Club membership is a calendar year: people apply, pay dues, and an admin renews them for the next January 1.
 
 It is two things in one repository, deployed together:
 
@@ -39,7 +39,7 @@ There are **two separate environments**, and it is important not to confuse them
 | | Static site | Worker (API) | Notes |
 |---|---|---|---|
 | **Production** | `www.greenvillediscgolf.com` (GitHub Pages) | `auth.greenvillediscgolf.com` | The public club site. Hands-off; **not** touched by any dev-deploy command. Pinned by the `CNAME` file. |
-| **Shared dev** | `gvdgclub.com` (Cloudflare Pages project `gvdg-club-site`, branch `main`) | `auth.gvdgclub.com` | The single shared live-test slot for active development. Deployed via `./scripts/gvdg-deploy.sh`. |
+| **Shared dev** | `gvdgclub.com` (Cloudflare Pages project `gvdg-club-site`, branch `main`) | `auth.gvdgclub.com` | The live club app while it is in active development. Published by the **Deploy to staging (gvdgclub.com)** GitHub Action, or by `./scripts/gvdg-deploy.sh`. |
 
 The Cloudflare Worker for the dev environment is named `gvdg-member-auth-staging` — despite the "staging" name, **it is the live dev Worker** attached to `auth.gvdgclub.com`. The `staging` and `gvdgclub` config environments are aliases to the same Worker and share one D1 database, KV, and R2 bucket.
 
@@ -52,6 +52,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 ### Public (no login required)
 - **Home page** (`index.html`) — club identity, upcoming tournaments (auto-loaded from a published Google Sheet CSV and Disc Golf Scene), a course browser with a details modal (UDisc, directions, course-preview video), membership call-to-action, and contact info.
 - **Keep score** from the home page and nav. Park players start or join a casual card with a name. No club login.
+- **Scoring app** (`scoring-app.html`) — what the phone app actually does: wallpaper, color, and glass themes (shots of the real member Home), saved throw clips, live watch links, and the shot stats behind a score.
 - **Events hub** (`events.html`) — live / upcoming / past events, event detail pages (roster, multi-course / multi-layout venue summaries, live-scoring banner, results, CTPs, ace pots), leagues & standings. The member Events tab also lists PDGA events within 100 miles, closest first, with Disc Golf Scene registration links.
 - **Ryder Cup** (`ryder-cup.html`) — Red vs. Blue team match-play standings and weekly results.
 - **Blog** (`gvdg-blog.html`) and **Results archive** (`archive.html`).
@@ -60,14 +61,19 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 
 ### Members (PDGA # or UDisc username + PIN)
 - **Login** with PDGA number **or** UDisc username + a 4-digit PIN; **forced PIN change** on first login; optional **passkeys / WebAuthn** for passwordless login afterward.
-- **Member dashboard** (`gvdg-members.html`) with tabs: **Overview**, **Events** (register), **Board** (message board), **Tee Signs**, **Club**.
-- **Home story** — rating move since the last PDGA update, the last club round, and what is coming up, in one block.
-- **Player profile** — add/confirm PDGA #, UDisc handle, and a profile photo (auto-pulled from PDGA or uploaded).
-- **PDGA ratings & stats** — official rating, rating history, events, and hole stats, synced from PDGA. A separate club rating uses the PDGA scratch-score engine and recomputes on a daily cron.
-- **Event registration** — register/withdraw, choose a division, add CTP / ace-pot entries, check in. Club rounds you are already in sit above open club events.
-- **Payments** — pay entry fees via **PayPal** (when enabled) or a manual "pay at the event" flow; spend **store credit** from the member wallet.
-- **Message board** — members-only posts with threaded replies.
-- **Tee signs** — submit a photo of a course tee sign; OCR suggests hole data for an admin to confirm. Unmapped courses in the picker deep-link here.
+- **Apply** from the login page. An admin approves the application and the chosen PIN becomes the login. Annual dues are $15 (PayPal when it is configured, or cash/other that an admin marks paid).
+- **Membership year.** A membership covers January 1 through December 31, Eastern. The roster that existed when this started stays current through 2026. After dues are in, an admin marks **Renew for** the next year. On January 1, anyone not renewed lapses: they can still sign in, but they cannot register for a new event until renewed. Removing a member drops the login and leaves past scores.
+- **December 1 reminder.** Members who are not yet renewed for the coming year get a push that morning if notifications are on. A missed December 1 still sends on the next morning through December 7. Account shows the same reminder all December.
+- **Member dashboard** (`gvdg-members.html`). The phone bar is **Home, Play, Events, Stats, Club**. Header icons, when signed in: theme, Help, Account, mail, bell. Mail is unread direct messages. The bell is other unseen notices. Both open Messages.
+- **Home** — rating, the last round, what is next, bag tags, and a membership line.
+- **Play** — start or join a card, watch, replay, film a throw, practice, my bag, and course discovery.
+- **Events** — register, withdraw, pick a division, add CTP / ace-pot entries, check in. Club rounds you are already in sit above open club events. Pay entry with PayPal (when enabled) or store credit, or pay at the event.
+- **Stats** — season numbers, and a separate UDisc CSV import that does not mix into club ranks.
+- **Club** — directory, message board, bag tags and challenges, standings, tee-sign photos, and meeting minutes.
+- **Messages** — one-to-one member messages. No group chat and no admin moderation queue.
+- **Account** — profile (PDGA #, UDisc, photo), wallet, Appearance, install, and notification prefs.
+- **Appearance** — drop a wallpaper, pick a color preset or tune a palette, set glass to Off, Frosted, Clear, or custom, and choose the disc color on the scoring map. Light and dark do not wipe a custom theme.
+- **Notifications** — Web Push for bag-tag challenges and direct messages, plus the annual renewal reminder. Times in the app are Eastern.
 - **Pro shop** (`pro-shop.html`) — browse products, buy with PayPal or store credit; a **member wallet** (append-only store-credit ledger).
 
 ### Live scoring (`score.html`)
@@ -76,21 +82,32 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Hole rail.** All 18 holes sit on one sideways-scrolling row. Group cards stack every player (room for four) instead of hiding them on a rail.
 - **Leaderboard.** Tap a name to open that player's hole card. Tap a hole to jump the scorer's map to it. On the watch page every card starts open, and a hole tap follows that player.
 - **Playing rating.** Once the layout has a scratch score, the stats strip shows what this round is playing like, and how far that is from the player's official PDGA rating when the account has a PDGA number.
+- **Throw clips.** Film up to 15 seconds and attach it to a player and hole. It stays private until it is shared with round viewers.
+- **Watch link.** Casual rounds start as card-only. The round creator can share a watch link for scores, maps, marked positions, and shared clips. The same link opens the replay after the round.
 - **Share card.** When the card locks, one image carries the hole scores, to-par, and the scoring mix. Watch links copy in one tap.
 - **Course pick.** GPS, nearest mapped layouts first, search across the North Carolina catalog and nearby courses, directions, and a path to photograph a tee sign when a course is still unmapped. A Worker cron fills unmapped layouts from UDisc.
+- **Offline.** Prepare a course pack, then score a saved layout without a connection. Joining a live card still needs one.
+- **Wrist layout.** A large-target layout for a watch or a small screen, with the screen kept awake. Native watch apps are in device testing and are not in the stores yet.
 - **Casual rounds and event cards**, one card or many. **Any cardmate keeps score**; members may only score **their own card**; admins can score anyone.
 - **Consensus scoring** — a hole's official score is set only when the active scorers agree; disagreement blanks the hole and blocks finishing until resolved.
 - **Singles, doubles, and match play**, including Ryder Cup coloring. Add guests, manage the card, and finish the round from the phone.
 
-### Admin / club operations (`admin.html`, 16 tabs)
-**Events**, **New Event** (including multiple course/layout assignments), **Import** (Disc Golf Scene / CSV / UDisc), **Registration** (fees, divisions, CTPs, ace pots, team & starting-hole assignment, roster & check-in), **Live Scoring**, **Courses**, **Layouts** (with a "SAFARI" hole builder + distance estimation), **Tee Signs** (review/approve OCR suggestions), **Leagues**, **Fundraisers**, **Meetings** (minutes), **Pro Shop** (products), **Orders**, **Wallets** (credit members), **Members** (create members, issue/reset PINs, **promote/demote admins**), and **Data archive** (export).
+### Admin (`admin.html`)
+Five groups, not a long tab strip: **Today**, **Events**, **Members**, **Money**, **Tools**.
+
+- **Today** — what needs a person right now.
+- **Events** — list, new event (including multiple course/layout assignments), import (Disc Golf Scene / CSV / UDisc), league seasons, registration (fees, divisions, CTPs, ace pots, teams, roster and check-in), and live scoring.
+- **Members** — pending applications (approve, reject, mark dues paid), create a login and issue a temporary PIN, reset a PIN, promote or demote admins (the last admin cannot be removed), **renew** a membership year, and **remove** a member.
+- **Money** — pro shop inventory, orders, wallets, and fundraiser campaigns.
+- **Tools** — courses, course health, layouts (including the SAFARI hole builder), tee-sign review, bag tags, meeting minutes, the community review queue, and the data archive.
 
 ### Integrations
 - **Crotts AI** — provider chain OpenRouter → Cloudflare Workers AI → dev stub.
 - **Tee-sign OCR (vision)** — Gemini → OpenRouter → Workers AI.
-- **Weather** — Open-Meteo, with National Weather Service observations as fallback when the free quota trips (feeds both the app and the rating engine).
-- **Email** — Resend (order/registration notifications), best-effort.
-- **PayPal** — Orders v2 auto-capture + `paypal.me` fallback.
+- **Weather** — Open-Meteo, with National Weather Service observations as fallback when the free quota trips (feeds both the app and the rating engine). Course observation clocks are Eastern.
+- **Email** — Resend (order/registration/application mail), best-effort.
+- **PayPal** — Orders v2 auto-capture for dues, event entry, and the shop, plus a `paypal.me` fallback.
+- **Web Push** — VAPID. Member devices opt in from Account. Admin devices have a separate subscription for club alerts.
 - **Ratings** — PDGA official stats on the member dashboard, a live "playing" rating during a round when the layout has a scratch score, and a full PDGA-SSA engine recomputed by a daily cron.
 
 ---
@@ -108,12 +125,16 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
   ├─ KV  ROSTER      members (source of truth incl. PIN hashes) + login indexes + passkey creds
   ├─ KV  RATELIMIT   login lockout + counters + one-time WebAuthn challenges
   ├─ D1  DB          club data: events, courses/layouts, registration, results, board,
-  │                  pro-shop/wallet, ratings, casual rounds  (all queries parameterized)
+  │                  messages, push subscriptions, bag tags, membership dues,
+  │                  pro-shop/wallet, ratings, casual rounds, throw clips
+  │                  (all queries parameterized)
   ├─ DO  LIVE        LiveEventDO — live scorecard state + WebSocket; writes to D1 only on finalize
   ├─ R2  PHOTOS      tee-sign images
   └─ AI  + OpenRouter/Gemini  Crotts assistant + tee-sign OCR
-  scheduled()  cron "17 8 * * *"  → daily ratings recompute (never on the request path)
+  scheduled()  cron "17 8 * * *"   → daily ratings recompute, and the Dec 1 membership reminder
                cron "*/15 * * * *" → UDisc layout import (similar names + city, unmapped only)
+               cron "7 * * * *"    → hourly PDGA events within 100 miles; Sunday 3pm Eastern
+                                     UDisc league standings ride this tick
 ```
 
 ### The split router
@@ -133,7 +154,7 @@ One Durable Object class, `LiveEventDO`, serves both event live-scoring and casu
 
 ### Data layer
 
-All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0025`; the `0007` gap is intentional and must not be back-filled). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table.
+All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0061`; the `0007` gap is intentional and must not be back-filled). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, and membership dues. Do not reuse a number.
 
 ---
 
@@ -151,9 +172,10 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
 /                         static frontend (served as-is)
   index.html              home page
   gvdg-members.html       member dashboard + directory + login
-  admin.html              admin control panel (16 tabs)
+  admin.html              admin control panel
   events.html             public events hub + detail
   score.html              live scoring HTML shell
+  scoring-app.html        public description of the scoring app
   src/score-app/          React shell + live-scoring app entry
   vite.score.config.mjs   Vite build for the generated score-app/ bundle
   score-app/              generated score bundle (created by npm run build, git-ignored)
@@ -165,17 +187,17 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
   *-app/                  generated route bundles (created by npm run build; checked in where needed for static hosting)
   *.js                    small static helpers that remain page-owned (pwa.js, ryder-cup.js, ...)
   tokens.css              design tokens (single source of colour truth)
-  sw.js                   service worker (manually versioned cache)
+  sw.js                   service worker (manually versioned cache; bump it when a precached page changes)
   site.webmanifest        PWA manifest
 
 auth-worker/              the Cloudflare Worker (server-side)
-  src/                    ~82 TypeScript modules (index.ts, authz.ts, live.ts, db*.ts, club-*.ts, …)
-  migrations/             append-only D1 migrations (0001–0025; 0007 gap is intentional)
+  src/                    TypeScript modules (index.ts, authz.ts, live.ts, db*.ts, club-*.ts, …)
+  migrations/             append-only D1 migrations (0001–0061; 0007 gap is intentional)
   test/                   vitest suites
   scripts/                provision.mjs, dev-seed.mjs, validate-wrangler-config.mjs
   wrangler.toml           bindings, environments, vars
 
-scripts/                  gvdg-deploy.sh (the ONLY sanctioned deploy path) + watchdog
+scripts/                  gvdg-deploy.sh (locked local deploy; see Deployment) + watchdog
 tests/                    frontend helper tests (node --test)
 docs/                     design specs & implementation plans
 ```
@@ -264,36 +286,38 @@ npm run qa:staging-member-dashboard # live gvdgclub.com member dashboard E2E; re
 
 ## Deployment
 
-> **Deploy safety is the one rule that overrides everything.** `gvdgclub.com` is a **single shared dev environment** that multiple contributors deploy to; every raw `wrangler deploy` is last-write-wins.
+> **Do not `wrangler deploy` or `wrangler pages deploy` by hand.** `gvdgclub.com` is one shared environment. A raw deploy is last-write-wins.
 
-- **Deploy only through** `./scripts/gvdg-deploy.sh` — it takes a machine-wide lock, runs a **forward-only freshness gate** (aborts unless your committed `HEAD` contains the currently-live commit), runs the test/typecheck/config gates, deploys Pages + Worker, and stamps `version.json`.
-- **`main` is the single integration branch** and the only line that should be live on `gvdgclub.com`.
-- A **plain push to `main` does not auto-deploy.**
+- **A push to `main` does not deploy.**
+- **The live publish is the GitHub Actions workflow** [Deploy to staging (gvdgclub.com)](.github/workflows/deploy-staging.yml). It is `workflow_dispatch` only. On `main` it runs the static and Worker tests, applies remote D1 migrations, deploys the Worker `--env gvdgclub` (`auth.gvdgclub.com`), deploys Cloudflare Pages project `gvdg-club-site`, then runs the post-deploy browser checks.
+- **`./scripts/gvdg-deploy.sh`** is the lock-protected local path in [AGENTS.md](AGENTS.md). It refuses a dirty tree and refuses a HEAD that does not contain the commit already live on `gvdgclub.com`.
+- **`main` is the only line that should be live** on `gvdgclub.com`.
 
 ```bash
-GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh    # full deploy (also --pages-only / --worker-only)
+gh workflow run "Deploy to staging (gvdgclub.com)" --ref main
+curl -s https://gvdgclub.com/version.json          # {commit, branch, deployedAt, deployer}
+
+GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh    # local locked deploy, if you are not using Actions
 ./scripts/gvdg-deploy.sh --status                  # what's live vs your HEAD (read-only)
 ./scripts/gvdg-deploy.sh --dry-run                 # run every gate, deploy nothing
-curl -s https://gvdgclub.com/version.json          # check what's live
 ```
 
-The deploy wrapper runs the live scoring staging E2E after deploy when a private QA credential is configured:
-set `GVDG_STAGING_QA_TOKEN`, or set `GVDG_STAGING_QA_IDENTIFIER` plus `GVDG_STAGING_QA_PIN`. The QA member must
-be an admin so the test can cancel the temporary round it creates. Use `GVDG_SKIP_STAGING_QA=1` only when the
-staging QA account is unavailable and the rest of the deploy gate still needs to run.
+The deploy runs the live scoring and member-dashboard staging checks when a private QA credential is configured (`GVDG_STAGING_QA_TOKEN`, or `GVDG_STAGING_QA_IDENTIFIER` plus `GVDG_STAGING_QA_PIN`). The QA member must be an admin so the scoring check can cancel the temporary round it creates.
 
-Production (`www.greenvillediscgolf.com`, GitHub Pages, pinned by `CNAME`) is **separate** and is not touched by any dev-deploy command.
+Production (`www.greenvillediscgolf.com`, GitHub Pages, pinned by `CNAME`) is **separate** and is not touched by this workflow or by the dev-deploy script.
 
 ---
 
 ## Configuration & secrets
 
-Worker bindings (per environment in `auth-worker/wrangler.toml`): `ROSTER` + `RATELIMIT` (KV), `DB` (D1), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable Object `LiveEventDO`), `ASSISTANT_RL` (unsafe rate-limit), daily ratings cron, and a 15-minute UDisc layout-import cron.
+Worker bindings (per environment in `auth-worker/wrangler.toml`): `ROSTER` + `RATELIMIT` (KV), `DB` (D1), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable Object `LiveEventDO`), `ASSISTANT_RL` (unsafe rate-limit). Crons: daily ratings (`17 8 * * *`), a UDisc layout import every 15 minutes, and an hourly PDGA refresh (`7 * * * *`). The Sunday league refresh and the December 1 membership reminder ride those existing ticks. Cloudflare has rejected extra cron triggers.
 
 **Secrets** (never committed; set via `wrangler secret put` or synced by CI):
-`JWT_SECRET`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`.
+`JWT_SECRET`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`.
 
-**Feature-gating is by credential presence and fails _soft_:** PayPal auto-checkout needs both PayPal secrets (else it falls back to the manual "paid" flag); Crotts and OCR degrade down their provider chains; email is a no-op without `RESEND_API_KEY`. A missing credential looks like "nothing happened," not an error.
+Optional vars: `MEMBERSHIP_DUES_CENTS` (default 1500) and `MEMBERSHIP_DUES_ONLINE=off` to force dues checkout off.
+
+**Feature-gating is by credential presence and fails _soft_:** PayPal auto-checkout needs both PayPal secrets (else dues and entry fall back to an admin "marked paid" / pay-at-the-event flag); Web Push is a no-op without VAPID keys; Crotts and OCR degrade down their provider chains; email is a no-op without `RESEND_API_KEY`. A missing credential looks like "nothing happened," not an error.
 
 `validate-wrangler-config.mjs` gates every deploy and aborts on any `REPLACE_WITH_*` placeholder in the targeted environment.
 
@@ -304,16 +328,16 @@ Worker bindings (per environment in `auth-worker/wrangler.toml`): `ROSTER` + `RA
 All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgclub.com` / `auth.greenvillediscgolf.com` / `http://127.0.0.1:8788`).
 
 ### Public (no auth)
-`POST /login` · `POST /assistant` · `POST /webauthn/auth/{options,verify}` · `GET /pdga-stats` · `GET /courses` · `GET /leagues[/:id]` · `GET /events[/:id]` · `GET /events/:id/{results,ctps,ace-pot}` · `GET /fundraisers[/:id]` · `GET /meetings[/:id]` · `GET /registration/open` · `GET /payments/config` · live snapshots + `/ws`.
+`POST /login` · `POST /membership/apply` · `GET /membership/config` · `POST /assistant` · `POST /webauthn/auth/{options,verify}` · `GET /pdga-stats` · `GET /courses` · `GET /leagues[/:id]` · `GET /events[/:id]` · `GET /events/:id/{results,ctps,ace-pot}` · `GET /fundraisers[/:id]` · `GET /meetings[/:id]` · `GET /registration/open` · `GET /payments/config` · live snapshots + `/ws`.
 
 ### Member-authenticated (Bearer JWT)
-`GET /me` · `POST /set-pin` · `POST /profile` · `GET /my-results` (club events + `casual` history) · `GET /my-ratings` · `GET /my-live-rounds` · `GET /my-registrations` · `GET|POST /board[/…]` · `POST /webauthn/register/{options,verify}` · `POST /tee-signs` · `GET /my-tee-signs` · live score/card writes (own card only).
+`GET /me` · `POST /set-pin` · `POST /profile` · `GET /my-results` (club events + `casual` history) · `GET /my-ratings` · `GET /my-live-rounds` · `GET /my-registrations` · `GET|POST /board[/…]` · `GET|POST /me/messages` · `GET|PUT|DELETE /me/push-subscription` · `GET /me/notices` · `POST /webauthn/register/{options,verify}` · `POST /tee-signs` · `GET /my-tee-signs` · live score/card writes (own card only).
 
 ### Registration & shop (member, some guest-optional)
-`GET /events/:id/registration` · `POST /events/:id/{register,checkin}` · `POST /events/:id/pay/{create-order,capture}` · `GET /shop/products` · `POST /shop/pay/{create-order,capture}` · `GET /shop/wallet` · `GET /shop/orders`.
+`GET /events/:id/registration` · `POST /events/:id/{register,checkin}` · `POST /events/:id/pay/{create-order,capture}` · `GET /shop/products` · `POST /shop/pay/{create-order,capture}` · `GET /shop/wallet` · `GET /shop/orders`. A lapsed member gets `membership_lapsed` on a **new** event registration. Guests and admins are not blocked that way.
 
 ### Admin-gated and admin-only
-`/admin/events`, `/admin/courses`, `/admin/layouts`, `/admin/leagues`, `/admin/fundraisers`, `/admin/meetings`, `/admin/import`, `/admin/tee-signs`, `/admin/shop`, `/admin/wallets`, `/admin/orders`, `/admin/export`, and **`/admin/members`** (list / create / `reset-pin` / **`set-role`** — promote/demote admins, with last-admin protection) + event live-scoring lifecycle (`start` / `finalize`) and admin-only casual round cancel (`POST /rounds/:code/cancel`).
+`/admin/events`, `/admin/courses`, `/admin/layouts`, `/admin/leagues`, `/admin/fundraisers`, `/admin/meetings`, `/admin/import`, `/admin/tee-signs`, `/admin/shop`, `/admin/wallets`, `/admin/orders`, `/admin/export`, `/admin/bag-tags`, and **`/admin/members`** (list / create / `reset-pin` / **`set-role`** / **`renew`** / **`remove`**, plus `/admin/members/applications` approve, reject, and mark-paid). Last-admin protection applies to demote and remove. An admin cannot remove their own login. Event live-scoring lifecycle is `start` / `finalize`. Admin-only casual round cancel is `POST /rounds/:code/cancel`.
 
 ---
 
@@ -323,7 +347,8 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 - **CORS is an exact-match allowlist** (no wildcard/subdomain matching).
 - **`adminGate` is the only admin authority** — server-side `isAdmin` from KV, never the JWT.
 - **Anti-enumeration** — unknown login identifiers still run a real PBKDF2 against a dummy hash; lockout is keyed by a canonicalized identifier.
-- **Closed enrollment** — no self-signup; members come only from `provision.mjs` bulk-seed or the admin-gated create endpoint, both forcing a PIN change.
+- **Enrollment is an application, not an open signup.** `POST /membership/apply` stores a pending application. A member login exists only after an admin approves it, or after `provision.mjs` / the admin create endpoint. New logins start with a forced PIN change.
+- **Membership year is not a login gate.** A lapsed member can still authenticate. New event registration is what refuses them.
 - **WebAuthn challenges are single-use**; the stored credential counter advances each authentication.
 - **Imports are SSRF-guarded** — an https-only, public-host allowlist with redirect re-validation and byte/time caps.
 - **XSS-safe by construction** — live/API data is rendered with `createElement` / `textContent`, external hrefs pass a URL sanitizer.

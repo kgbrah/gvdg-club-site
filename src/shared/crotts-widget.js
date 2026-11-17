@@ -13,9 +13,10 @@ export const CROTTS_HELP_EVENT = "gvdg:help-request";
 
 const CROTTS_CSS = `
 .crotts-overlay {
-  position: fixed; inset: 0; z-index: 12000;
-  display: grid; place-items: center;
-  box-sizing: border-box; height: 100vh; height: 100dvh;
+  position: fixed; z-index: 12000; left: 0; right: 0;
+  top: var(--crotts-vv-top, 0px); bottom: var(--crotts-keyboard, 0px);
+  display: grid; grid-template-rows: minmax(0, 1fr); justify-items: center; align-items: center;
+  box-sizing: border-box;
   padding: max(.8rem, var(--safe-top)) .8rem max(.8rem, var(--safe-bottom));
   background: color-mix(in srgb, var(--member-chrome-bg) 66%, transparent);
   overscroll-behavior: contain;
@@ -110,8 +111,69 @@ body .crotts-overlay > #crotts-panel {
 @media (max-width: 600px) {
   .crotts-overlay { align-items: end; padding-inline: .45rem; padding-bottom: max(.45rem, var(--safe-bottom)); }
 }
+.crotts-overlay.crotts-keyboard {
+  align-items: stretch; padding-top: .4rem; padding-bottom: .4rem;
+}
+.crotts-overlay.crotts-keyboard > #crotts-panel {
+  width: min(100%, 28rem); height: 100%; max-height: 100%; min-height: 0;
+}
 @media (max-width: 360px) { #crotts-send svg { display: none; } }
 `;
+
+/** Covered strip when the keyboard overlays the layout instead of resizing it. */
+export function visibleKeyboardInset(innerHeight, offsetTop, viewportHeight) {
+  const inner = Number(innerHeight);
+  const top = Number(offsetTop);
+  const height = Number(viewportHeight);
+  if (!Number.isFinite(inner) || !Number.isFinite(top) || !Number.isFinite(height)) return { top: 0, bottom: 0 };
+  return {
+    top: Math.max(0, Math.round(top)),
+    bottom: Math.max(0, Math.round(inner - top - height)),
+  };
+}
+
+function useKeyboardViewport(open, threadRef) {
+  const [box, setBox] = React.useState({ top: 0, bottom: 0 });
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const viewport = window.visualViewport;
+    let frame = 0;
+    const timers = [];
+    const apply = () => {
+      const next = viewport
+        ? visibleKeyboardInset(window.innerHeight, viewport.offsetTop, viewport.height)
+        : { top: 0, bottom: 0 };
+      setBox((current) => current.top === next.top && current.bottom === next.bottom ? current : next);
+      const thread = threadRef.current;
+      if (next.bottom > 72 && thread) thread.scrollTop = thread.scrollHeight;
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(apply);
+    };
+    const burst = () => {
+      schedule();
+      timers.push(window.setTimeout(schedule, 60), window.setTimeout(schedule, 280));
+    };
+    const onFocus = (event) => {
+      if (event.target?.id === "crotts-input") burst();
+    };
+    apply();
+    window.addEventListener("resize", schedule);
+    viewport?.addEventListener("resize", schedule);
+    viewport?.addEventListener("scroll", schedule);
+    document.addEventListener("focusin", onFocus);
+    return () => {
+      cancelAnimationFrame(frame);
+      timers.forEach((id) => window.clearTimeout(id));
+      window.removeEventListener("resize", schedule);
+      viewport?.removeEventListener("resize", schedule);
+      viewport?.removeEventListener("scroll", schedule);
+      document.removeEventListener("focusin", onFocus);
+    };
+  }, [open, threadRef]);
+  return box;
+}
 
 function apiBase() {
   return resolveApiBase({ datasetKeys: ["apiBase", "authBase"] });
@@ -198,6 +260,7 @@ export function CrottsWidget() {
   const busy = operation != null;
   const dialog = useAccessibleDialog({ open, onClose: closeHelp, labelledBy: titleId,
     label: "Crotts assistant", returnFocus: () => restoreFocus.current?.() });
+  const keyboard = useKeyboardViewport(open, threadRef);
 
   React.useEffect(() => {
     function openHelp(event) {
@@ -320,9 +383,10 @@ export function CrottsWidget() {
 
   return createPortal(h("div", {
     "data-a11y-overlay": "true",
-    className: "crotts-overlay",
+    className: "crotts-overlay" + (keyboard.bottom > 72 ? " crotts-keyboard" : ""),
     ref: dialog.overlayRef,
     role: "presentation",
+    style: { "--crotts-vv-top": keyboard.top + "px", "--crotts-keyboard": keyboard.bottom + "px" },
   }, [
     h("style", { key: "style" }, CROTTS_CSS),
     h("div", {

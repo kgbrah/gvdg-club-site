@@ -19,6 +19,7 @@ import { resolveApiBase } from "../shared/api-base.js";
 import { courseTrafficMatch, trafficHoleLine, trafficSummary } from "../shared/course-traffic.js";
 import { COVERAGE_LABELS, courseCoverage, layoutQuality, mapCoordinates } from "../shared/course-quality.js";
 import { coursePackKey } from "../shared/course-packs.js";
+import { ApplyForClubLogin } from "./auth-flow.js";
 import { useCourseFavorites } from "./course-favorites.js";
 import { coursePackDate, PackLayoutActions, SavedCoursesView, SavedLayoutPreview, useCoursePacks } from "./saved-courses-view.js";
 
@@ -118,6 +119,7 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
           ? "Start a casual round and share the code with your card, or join a round someone already started."
           : "No club login needed. Start a card, share the code, or join one already going.",
       ),
+      signedIn ? null : h(ApplyForClubLogin, { className: "btn secondary", key: "apply" }),
       playerName && !signedIn
         ? h("p", { className: "muted", key: "who" }, "Playing as " + playerName + ".")
         : null,

@@ -254,6 +254,8 @@ test('score auth screens are React-owned without legacy DOM fallbacks', () => {
   assert.match(main, /ScoreAuthFlow/);
   assert.match(auth, /function OpenPlayView\(props\)/);
   assert.match(auth, /Play without an account/);
+  assert.match(auth, /Apply for a club login/);
+  assert.match(auth, /gvdg-members\.html#apply/);
   assert.match(auth, /mode === "openPlay"/);
   assert.match(controller, /\/rounds\/open-play/);
   assert.match(controller, /openPlayAvailable: MODE !== 'event'/);
@@ -278,6 +280,7 @@ test('open play session is stored off the member token', () => {
   assert.doesNotMatch(session, /gvdg_member_token/);
   assert.match(setup, /No club login needed/);
   assert.match(setup, /Sign in with a club account/);
+  assert.match(setup, /signedIn \? null : h\(ApplyForClubLogin/);
   assert.match(setup, /signedIn/);
 });
 

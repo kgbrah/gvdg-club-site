@@ -95,6 +95,7 @@ function LoginView(props) {
     props.openPlayAvailable
       ? h("button", { className: "btn ghost", key: "open", type: "button", onClick: props.onOpenPlay }, "Play without an account")
       : null,
+    h(ApplyForClubLogin, { key: "apply" }),
     h("p", { className: "muted center return-members", key: "members" },
       h("a", { className: "link", href: props.membersHref || "gvdg-members.html" }, "Return to members"),
     ),
@@ -142,6 +143,7 @@ function OpenPlayView(props) {
     props.onSignIn
       ? h("button", { className: "btn ghost", disabled: pending, key: "signin", type: "button", onClick: props.onSignIn }, "Sign in with a club account")
       : null,
+    h(ApplyForClubLogin, { key: "apply" }),
   ]);
 }
 
@@ -205,6 +207,12 @@ function SetPinView(props) {
     h("p", { className: "muted auth-error", key: "error", role: "alert" }, error),
     h("button", { className: "btn", disabled: pending, key: "submit", type: "submit" }, pending ? "Saving..." : "Save PIN & continue"),
   ]);
+}
+
+export const CLUB_LOGIN_APPLY_HREF = "gvdg-members.html#apply";
+
+export function ApplyForClubLogin({ className = "btn ghost" }) {
+  return h("a", { className, href: CLUB_LOGIN_APPLY_HREF }, "Apply for a club login");
 }
 
 export function ScoreAuthFlow(props) {

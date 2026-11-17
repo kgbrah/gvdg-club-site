@@ -1,5 +1,7 @@
 "use strict";
 
+import { CLUB_TIME_ZONE, clubWallClockToIso } from "./events-model.js";
+
 const CODES = {
     0: "Clear",
     1: "Mainly clear",
@@ -260,9 +262,18 @@ function precipLabel(current) {
 
 function timeLabel(value) {
     if (!value) return null;
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    let date = null;
+    if (value instanceof Date) date = value;
+    else {
+        const raw = String(value).trim();
+        if (/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(raw)) date = new Date(raw);
+        else {
+            const iso = clubWallClockToIso(raw);
+            date = iso ? new Date(iso) : null;
+        }
+    }
+    if (!date || Number.isNaN(date.getTime())) return null;
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
 }
 
 function previousSample(weather, current) {

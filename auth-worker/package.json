@@ -23,16 +23,16 @@
     "jose": "^5.9.6"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260626.1",
+    "@cloudflare/workers-types": "^5.20261116.1",
     "@types/node": "^26.0.1",
     "typescript": "^5.6.3",
-    "vitest": "^4.1.11",
-    "wrangler": "^4.105.0"
+    "vitest": "^4.1.12",
+    "wrangler": "^4.163.0"
   },
   "overrides": {
     "nanoid": "3.3.18",
     "postcss": "8.5.28",
     "sharp": "0.35.5",
-    "undici": "7.29.1"
+    "undici": "7.30.2"
   }
 }

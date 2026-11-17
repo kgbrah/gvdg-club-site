@@ -17,6 +17,8 @@ import {
   formatEventDate,
   formatClubDateTime,
   formatClubClock,
+  formatClubListTime,
+  parseClubInstant,
   clubCivilInstant,
   isoToClubWallClock,
   clubWallClockToIso,
@@ -140,6 +142,18 @@ test('formatClubDateTime renders a timestamp in Eastern time', () => {
   const out = formatClubDateTime('2026-07-04T12:00:00.000Z');
   assert.ok(/Jul 4/.test(out), `expected Jul 4 in "${out}"`);
   assert.ok(/8:00/.test(out) && /EDT/.test(out), `expected 8:00 AM EDT in "${out}"`);
+  // SQLite datetime('now') has no zone. The month hyphen must not be treated as an offset.
+  const naive = formatClubDateTime('2026-11-16 14:58:00');
+  assert.ok(/9:58/.test(naive) && /AM/.test(naive) && /EST/.test(naive), `expected 9:58 AM EST in "${naive}"`);
+  assert.equal(parseClubInstant('2026-11-16'), null);
+});
+
+test('formatClubListTime shows an Eastern clock the same day and a date otherwise', () => {
+  const now = new Date('2026-11-16T15:10:00.000Z');
+  assert.equal(formatClubListTime('2026-11-16 14:58:00', now), '9:58 AM');
+  assert.equal(formatClubListTime('2026-11-16T14:58:00Z', now), '9:58 AM');
+  assert.equal(formatClubListTime('2026-11-15 14:58:00', now), 'Nov 15');
+  assert.equal(formatClubListTime('not a time', now), '');
 });
 
 test('eventScheduleFacts shows clock-only times on the event day and full datetimes otherwise', () => {

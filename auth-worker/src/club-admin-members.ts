@@ -2,8 +2,9 @@ import type { Env } from "./env.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
-import { createMember, listMembers, resetMemberPin, getMember, setMemberAdmin, countAdmins, type AdminMember, type KVListLike, type Member } from "./roster.js";
+import { createMember, listMembers, resetMemberPin, getMember, setMemberAdmin, countAdmins, deleteMember, setMemberThroughYear, putMember, type AdminMember, type KVListLike, type Member } from "./roster.js";
 import { handleAdminMembershipApplications } from "./membership-apply.js";
+import { membershipStatus } from "./membership-year.js";
 
 // Admin member onboarding: create a member (or reissue) and return a one-time TEMPORARY PIN for the
 // admin to hand off. The member logs in with PDGA#/UDisc + temp PIN, then is forced to set their own
@@ -14,7 +15,18 @@ const PDGA_RE = /^\d{1,12}$/;
 const UDISC_RE = /^[A-Za-z0-9._-]{1,50}$/;
 
 function pub(m: Member | AdminMember) {
-  return { memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin };
+  const status = membershipStatus(m);
+  return {
+    memberId: m.memberId,
+    name: m.name,
+    pdgaNo: m.pdgaNo ?? null,
+    udisc: m.udisc ?? null,
+    isAdmin: m.isAdmin === true,
+    mustChangePin: m.mustChangePin,
+    memberThroughYear: status.throughYear,
+    membershipCurrent: status.current,
+    renewalYear: status.renewalYear,
+  };
 }
 
 export async function handleAdminMembers(
@@ -31,7 +43,8 @@ export async function handleAdminMembers(
 
   // GET /admin/members — list members (public-safe fields, never the PIN hash)
   if (method === "GET" && seg.length === 2) {
-    return json({ members: await listMembers(env.ROSTER as unknown as KVListLike) }, 200, origin);
+    const members = await listMembers(env.ROSTER as unknown as KVListLike);
+    return json({ members: members.map(pub) }, 200, origin);
   }
 
   // POST /admin/members — create a NEW member and issue a temporary PIN
@@ -102,6 +115,49 @@ export async function handleAdminMembers(
 
     console.log(JSON.stringify({ evt: "role_change", actor: adminId, target: memberId, from: was, to: isAdmin, at: Date.now() }));
     return json({ member: pub(updated) }, 200, origin);
+  }
+
+  // POST /admin/members/renew — mark one more calendar year paid. One year at a time, never past next year.
+  if (method === "POST" && seg.length === 3 && seg[2] === "renew") {
+    const b = (await readJson(request)) ?? {};
+    const memberId = asStr(b.memberId, 80);
+    if (!memberId) return json({ error: "member_required" }, 400, origin);
+    const target = await getMember(env.ROSTER, memberId);
+    if (!target) return json({ error: "not_found" }, 404, origin);
+    const status = membershipStatus(target);
+    if (status.renewalYear == null) return json({ error: "already_renewed" }, 409, origin);
+    const updated = await setMemberThroughYear(env.ROSTER, memberId, status.renewalYear);
+    if (!updated) return json({ error: "not_found" }, 404, origin);
+    console.log(JSON.stringify({ evt: "member_renewed", actor: adminId, target: memberId, throughYear: status.renewalYear, at: Date.now() }));
+    return json({ member: pub(updated) }, 200, origin);
+  }
+
+  // POST /admin/members/remove — drop a login. Not yourself, and never the last admin.
+  if (method === "POST" && seg.length === 3 && seg[2] === "remove") {
+    const b = (await readJson(request)) ?? {};
+    const memberId = asStr(b.memberId, 80);
+    if (!memberId) return json({ error: "member_required" }, 400, origin);
+    const target = await getMember(env.ROSTER, memberId);
+    if (!target) return json({ error: "not_found" }, 404, origin);
+    if (target.isAdmin === true) {
+      const admins = await countAdmins(env.ROSTER as unknown as KVListLike);
+      if (admins <= 1) return json({ error: "last_admin" }, 409, origin);
+    }
+    if (memberId === adminId) return json({ error: "self" }, 409, origin);
+    const removed = await deleteMember(env.ROSTER, memberId);
+    if (!removed) return json({ error: "not_found" }, 404, origin);
+    if (removed.isAdmin === true) {
+      const remaining = await countAdmins(env.ROSTER as unknown as KVListLike);
+      if (remaining === 0) {
+        await putMember(env.ROSTER, removed);
+        return json({ error: "last_admin" }, 409, origin);
+      }
+    }
+    try {
+      await env.DB.prepare("DELETE FROM member_push_subscriptions WHERE member_id = ?").bind(memberId).run();
+    } catch { /* push rows are optional */ }
+    console.log(JSON.stringify({ evt: "member_removed", actor: adminId, target: memberId, at: Date.now() }));
+    return json({ ok: true, memberId }, 200, origin);
   }
 
   return null;

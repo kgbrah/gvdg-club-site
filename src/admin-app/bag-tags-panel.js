@@ -13,7 +13,81 @@ const ERRORS = {
   invalid_player: "Scores have to be whole numbers.",
   stale_tags: "Those tags changed before this challenge was confirmed.",
   name_required: "Name the series.",
+  member_already_linked: "That member is already linked to another player in this league.",
+  league_challenge: "Only the two members can answer a league challenge. You can cancel it.",
+  no_league: "That league ladder is not available.",
 };
+
+function challengeLine(challenge) {
+  return `${challenge.challengerName} #${challenge.challengerTag} (${challenge.challengerScore}) called out ${challenge.defenderName} #${challenge.defenderTag} (${challenge.defenderScore})`;
+}
+
+function LeagueAdminSection({ entry, members, busy, run }) {
+  const [picked, setPicked] = React.useState({});
+  const league = entry.league || {};
+  const challenges = Array.isArray(entry.challenges) ? entry.challenges : [];
+  const closed = Array.isArray(entry.closed) ? entry.closed : [];
+  const holders = Array.isArray(entry.holders) ? entry.holders : [];
+  const unlinked = holders.filter((holder) => !holder.linked);
+  return h("div", { "data-admin-bag-league": league.id, id: "admin-bag-league-" + league.id, tabIndex: -1 }, [
+    h("h3", { className: "al-h", key: "head" }, `${league.name} (UDisc league)`),
+    h("p", { className: "al-note", key: "note" },
+      "Imported from UDisc. Each import resets this ladder to UDisc's order and closes open challenges. Members answer their own challenges; you can cancel one."),
+    challenges.length
+      ? h("div", { key: "open" }, challenges.map((challenge) => h("div", { className: "sc-hole-pager-row", key: challenge.id }, [
+        h("div", { key: "text" }, challengeLine(challenge)),
+        h("button", {
+          className: "admin-btn",
+          disabled: busy,
+          key: "cancel",
+          onClick: () => run(() => adminSend(`/admin/bag-tags/challenges/${challenge.id}/cancel`, "POST", {})),
+          type: "button",
+        }, "Cancel"),
+      ])))
+      : h("p", { className: "al-note", key: "none" }, "No open challenges."),
+    closed.length
+      ? h("div", { key: "closed" }, [
+        h("h4", { className: "al-h", key: "head" }, "Recently closed"),
+        ...closed.map((challenge) => h("div", { className: "sc-hole-pager-row", key: challenge.id },
+          h("div", null, `${challengeLine(challenge)} · ${challenge.closedNote || challenge.status}`))),
+      ])
+      : null,
+    holders.length
+      ? h("div", { key: "ladder" }, [
+        h("h4", { className: "al-h", key: "head" }, "Current ladder"),
+        ...holders.map((holder) => h("div", { className: "sc-hole-pager-row", key: holder.tagNumber },
+          h("div", null, `#${holder.tagNumber} ${holder.name}${holder.linked ? "" : " (no member account linked)"}`))),
+      ])
+      : null,
+    unlinked.length
+      ? h("div", { key: "unlinked" }, [
+        h("h4", { className: "al-h", key: "head" }, "Link players to members"),
+        ...unlinked.map((holder) => h("div", { className: "sc-hole-pager-row", key: holder.tagNumber }, [
+          h("div", { key: "who" }, `#${holder.tagNumber} ${holder.name}`),
+          h("select", {
+            "aria-label": `Member for ${holder.name}`,
+            key: "pick",
+            onChange: (event) => setPicked((current) => ({ ...current, [holder.name]: event.target.value })),
+            value: picked[holder.name] || "",
+          }, [
+            h("option", { key: "blank", value: "" }, "Choose a member"),
+            ...members.map((member) => h("option", { key: member.memberId, value: member.memberId }, member.name || member.memberId)),
+          ]),
+          h("button", {
+            className: "admin-btn",
+            disabled: busy || !picked[holder.name],
+            key: "link",
+            onClick: () => run(() => adminSend(`/admin/bag-tags/leagues/${league.id}/link`, "POST", {
+              playerName: holder.name,
+              memberId: picked[holder.name],
+            })),
+            type: "button",
+          }, "Link"),
+        ])),
+      ])
+      : null,
+  ]);
+}
 
 async function adminSend(path, method, body) {
   const response = await adminRequest(path, { method, body });
@@ -33,6 +107,7 @@ export function AdminBagTagsPanel() {
   const [scores, setScores] = React.useState({});
   const [message, setMessage] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [seriesFilter, setSeriesFilter] = React.useState("all");
 
   const load = React.useCallback(async () => {
     if (document.body.dataset.adminPanel !== "visible") return;
@@ -92,6 +167,8 @@ export function AdminBagTagsPanel() {
   const challenges = board && Array.isArray(board.challenges) ? board.challenges : [];
   const requests = board && Array.isArray(board.requests) ? board.requests : [];
   const series = board && board.series;
+  const leagues = board && Array.isArray(board.leagues) ? board.leagues : [];
+  const showClub = seriesFilter === "all" || seriesFilter === "club";
   const nextTag = holders.reduce((max, holder) => Math.max(max, Number(holder.tagNumber) || 0), 0) + 1;
   const tagValue = assign.tagNumber === "" ? String(nextTag) : assign.tagNumber;
 
@@ -222,7 +299,22 @@ export function AdminBagTagsPanel() {
         }, "Settle this card"),
       ])
       : null,
-    challenges.length
+    leagues.length
+      ? h("label", { className: "al-note", key: "filter" }, [
+        "Series ",
+        h("select", {
+          key: "select",
+          "aria-label": "Filter by series",
+          onChange: (event) => setSeriesFilter(event.target.value),
+          value: seriesFilter,
+        }, [
+          h("option", { key: "all", value: "all" }, "All series"),
+          h("option", { key: "club", value: "club" }, series ? `Club: ${series.name}` : "Club series"),
+          ...leagues.map((entry) => h("option", { key: entry.league.id, value: "league-" + entry.league.id }, entry.league.name)),
+        ]),
+      ])
+      : null,
+    showClub && challenges.length
       ? h("div", { key: "challenges", id: "admin-bag-challenges", tabIndex: -1 }, [
         h("h3", { className: "al-h", key: "head" }, "Challenges waiting"),
         ...challenges.map((challenge) => h("div", { className: "sc-hole-pager-row", key: challenge.id }, [
@@ -238,6 +330,9 @@ export function AdminBagTagsPanel() {
         ])),
       ])
       : null,
+    ...leagues
+      .filter((entry) => seriesFilter === "all" || seriesFilter === "league-" + entry.league.id)
+      .map((entry) => h(LeagueAdminSection, { busy, entry, key: "league-" + entry.league.id, members, run })),
     message ? h("p", { className: "al-note", key: "message" }, message) : null,
   ]);
 }

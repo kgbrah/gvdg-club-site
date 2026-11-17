@@ -48,7 +48,7 @@ export function formatConditionWhen(createdAt, now = Date.now()) {
   const days = Math.round(hours / 24);
   if (days < 7) return days + "d ago";
   const date = new Date(parseCreatedAt(createdAt));
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 }
 
 export function normalizeCondition(raw, now = Date.now()) {

@@ -2,6 +2,7 @@ import React from "react";
 
 import { adminConfirm } from "./admin-dialogs.js";
 import { useSettledWhileLoading } from "../shared/settled-state.js";
+import { parseClubInstant } from "../shared/events-model.js";
 
 const h = React.createElement;
 
@@ -29,6 +30,9 @@ function normalizeMember(member) {
     memberId,
     mustChangePin: source.mustChangePin === true,
     name: normalizeText(source.name, "Unnamed member"),
+    renewalYear: Number.isInteger(source.renewalYear) ? source.renewalYear : null,
+    throughYear: Number.isInteger(source.memberThroughYear) ? source.memberThroughYear : null,
+    lapsed: source.membershipCurrent === false,
   };
 }
 
@@ -55,6 +59,7 @@ function memberSummary(member) {
   const badges = [
     member.identifier || member.memberId || "no id",
     member.isAdmin ? "admin" : "",
+    member.lapsed ? "lapsed" : member.throughYear ? `through ${member.throughYear}` : "",
     member.mustChangePin ? "PIN not set" : "",
   ].filter(Boolean);
   return `${member.name} - ${badges.join(" - ")}`;
@@ -70,8 +75,12 @@ function memberPinLabel(member) {
 function AdminMemberRow({ adminCount, currentMemberId, member }) {
   const isLastAdmin = member.isAdmin && adminCount <= 1;
   const isSelf = currentMemberId && currentMemberId === member.memberId;
-  const roleLabel = member.isAdmin ? "Remove admin" : "Make admin";
-  const roleTitle = isLastAdmin ? "Can't remove the last admin" : undefined;
+  const removeBlocked = isSelf || isLastAdmin;
+  const removeTitle = isLastAdmin
+    ? "Can't remove the last admin"
+    : isSelf
+      ? "You can't remove your own login"
+      : undefined;
 
   async function requestPinReset() {
     const confirmed = await adminConfirm({
@@ -101,7 +110,32 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
     dispatchRequest("gvdg:admin-member-role-request", { isAdmin: promoting, member: member.source });
   }
 
-  return h("div", { className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier }, [
+  async function requestRenew() {
+    const year = member.renewalYear;
+    const confirmed = await adminConfirm({
+      title: `Renew for ${year}`,
+      message: `Mark ${member.name} renewed through December 31, ${year}? Membership renews every January 1.`,
+      confirmText: `Renew for ${year}`,
+    });
+    if (!confirmed) return;
+    dispatchRequest("gvdg:admin-member-renew-request", { member: member.source });
+  }
+
+  async function requestRemove() {
+    const confirmed = await adminConfirm({
+      title: "Remove member",
+      message: `Remove ${member.name} from the club? They will not be able to sign in. Past scores stay.`,
+      confirmText: "Remove member",
+      danger: true,
+    });
+    if (!confirmed) return;
+    dispatchRequest("gvdg:admin-member-remove-request", { member: member.source });
+  }
+
+  const roleLabel = member.isAdmin ? "Remove admin" : "Make admin";
+  const roleTitle = isLastAdmin ? "Can't remove the last admin" : undefined;
+
+  return h("div", { className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier, "data-member-lapsed": member.lapsed ? "true" : "false" }, [
     h("span", { className: "ev-name", key: "name" }, memberSummary(member)),
     h("button", {
       className: "admin-btn secondary", disabled: !member.identifier, key: "wallet", type: "button",
@@ -122,6 +156,20 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
       title: roleTitle,
       type: "button",
     }, roleLabel),
+    member.renewalYear ? h("button", {
+      className: "admin-btn",
+      key: "renew",
+      onClick: requestRenew,
+      type: "button",
+    }, `Renew for ${member.renewalYear}`) : null,
+    h("button", {
+      className: "admin-btn danger",
+      disabled: removeBlocked || !member.memberId,
+      key: "remove",
+      onClick: requestRemove,
+      title: removeTitle,
+      type: "button",
+    }, "Remove member"),
   ]);
 }
 
@@ -223,9 +271,9 @@ function normalizeApplication(row) {
 }
 
 function shortDate(iso) {
-  const time = Date.parse(iso);
-  if (!Number.isFinite(time)) return "";
-  return new Date(time).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const date = parseClubInstant(iso);
+  if (!date) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 }
 
 function money(cents) {

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { formatPct, playKindLabel } from "../shared/play-stats.js";
+import { CLUB_TIME_ZONE, clubCivilInstant, parseClubInstant } from "../shared/events-model.js";
 
 const h = React.createElement;
 
@@ -27,10 +28,9 @@ export function ratingSeries(ratings, kind = "competitive") {
 }
 
 function parseRoundDate(value) {
-  const raw = String(value || "");
-  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (dateOnly) return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 12).getTime();
-  return Date.parse(raw);
+  const civil = clubCivilInstant(value);
+  if (civil) return civil.getTime();
+  return parseClubInstant(value)?.getTime() ?? NaN;
 }
 
 function niceTicks(min, max) {
@@ -44,9 +44,9 @@ function niceTicks(min, max) {
 }
 
 export function chartDate(t, withYear) {
-  return new Date(t).toLocaleDateString(undefined, withYear
-    ? { month: "short", day: "numeric", year: "numeric" }
-    : { month: "short", day: "numeric" });
+  return new Date(t).toLocaleDateString("en-US", withYear
+    ? { month: "short", day: "numeric", year: "numeric", timeZone: CLUB_TIME_ZONE }
+    : { month: "short", day: "numeric", timeZone: CLUB_TIME_ZONE });
 }
 
 function SkeletonBlocks({ heights, label }) {

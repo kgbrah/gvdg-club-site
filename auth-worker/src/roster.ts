@@ -6,6 +6,7 @@
 //   idx:udisc:<lowercase>  -> memberId  (login-by-UDisc-username index)
 
 import type { KVLike } from "./ratelimit.js";
+import { easternCalendarYear } from "./membership-year.js";
 
 export interface Member {
   memberId: string;
@@ -23,6 +24,8 @@ export interface Member {
   pinVer?: number;
   /** Set when an admin approves a membership application; cleared once the one-time welcome card is seen. */
   welcomePending?: boolean;
+  /** Last calendar year (America/New_York) this membership covers. Absent = paid through 2026. */
+  memberThroughYear?: number;
 }
 
 export type ProfilePatch = { pdgaNo?: string | null; udisc?: string | null; photo?: string | null };
@@ -188,7 +191,7 @@ export function memberIdFor(input: { pdgaNo?: string | null; udisc?: string | nu
 
 export type CreateMemberInput = { name: string; pdgaNo?: string | null; udisc?: string | null; isAdmin?: boolean };
 export type CreateResult = { ok: true; member: Member } | { ok: false; reason: "exists" | "conflict" | "invalid" };
-export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin">;
+export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear">;
 
 /** Create a NEW member with an admin-issued temporary PIN (mustChangePin: true). Fails with `exists`
  *  if the member id is taken, or `conflict` if a PDGA#/UDisc index already points at someone else —
@@ -209,6 +212,7 @@ export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash
     ...(input.isAdmin ? { isAdmin: true } : {}),
     pinHash,
     mustChangePin: true,
+    memberThroughYear: easternCalendarYear(),
   };
   await putMember(kv, m);
   return { ok: true, member: m };
@@ -234,7 +238,7 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
     const page = await kv.list({ prefix: "member:", cursor });
     for (const k of page.keys) {
       const m = await getMember(kv, k.name.slice("member:".length));
-      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin });
+      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
@@ -245,6 +249,26 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
 /** Count current admins — used for last-admin protection so the club can't lock itself out. */
 export async function countAdmins(kv: KVListLike): Promise<number> {
   return (await listMembers(kv)).filter((m) => m.isAdmin).length;
+}
+
+/** Drop a member and their login indexes. Past scores stay. Returns the removed record so a
+ *  last-admin race can put it back. Index keys are deleted only when they still point here. */
+export async function deleteMember(kv: KVLike, memberId: string): Promise<Member | null> {
+  const m = await getMember(kv, memberId);
+  if (!m) return null;
+  await kv.delete(RECORD(m.memberId));
+  if (m.pdgaNo && (await kv.get(IDX_PDGA(m.pdgaNo))) === m.memberId) await kv.delete(IDX_PDGA(m.pdgaNo));
+  if (m.udisc && (await kv.get(IDX_UDISC(m.udisc))) === m.memberId) await kv.delete(IDX_UDISC(m.udisc));
+  return m;
+}
+
+/** Mark a member paid through a calendar year. Other fields stay put. */
+export async function setMemberThroughYear(kv: KVLike, memberId: string, year: number): Promise<Member | null> {
+  const m = await getMember(kv, memberId);
+  if (!m) return null;
+  m.memberThroughYear = year;
+  await kv.put(RECORD(m.memberId), JSON.stringify(m));
+  return m;
 }
 
 /** Resolve a member for admin tools by ANY of: internal memberId (`m_…`), PDGA# (digits), UDisc

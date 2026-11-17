@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useState } from "react";
 
+import { formatClubDateTime } from "../shared/events-model.js";
+
 const h = React.createElement;
 
 function pairingError(result) {
@@ -99,7 +101,7 @@ function PairingForm({ api, round, query }) {
       ),
       h("p", { role: "status", id: `${inputId}-notice` }, notice),
       devices.length > 0 && h("ul", null, devices.map((device, index) => {
-        const paired = new Date(device.approvedAt).toLocaleString();
+        const paired = formatClubDateTime(device.approvedAt) || "";
         return h("li", { key: device.deviceId },
           h("span", null, "Paired " + paired),
           h("button", {

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import worker from "../src/index.js";
@@ -31,8 +31,9 @@ async function sqliteDb() {
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
-  db.exec(readFileSync(new URL("../migrations/0042_bag_tags.sql", import.meta.url), "utf8"));
-  db.exec(readFileSync(new URL("../migrations/0043_bag_tag_requests.sql", import.meta.url), "utf8"));
+  for (const file of readdirSync(new URL("../migrations/", import.meta.url)).sort()) {
+    db.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), "utf8"));
+  }
   return {
     prepare(sql: string) {
       let bound: unknown[] = [];

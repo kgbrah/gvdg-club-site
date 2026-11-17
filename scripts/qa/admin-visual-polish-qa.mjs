@@ -73,6 +73,7 @@ const requested = [];
 let fixtureMode = "";
 let orderStatus = "submitted";
 let checkedIn = false;
+let leagueChallengeOpen = true;
 let reviewPending = true;
 const errors = [];
 const warnings = [];
@@ -111,7 +112,22 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/community/courses") return { courses: [{ ...course, difficulty: "beginner", amenities: {}, notes: "", revision: 1 }] };
   if (path === "/admin/export" && method === "POST") return { mode: "download", exportData: { exportedAt: date, counts: { events: 3 } } };
   if (path === "/admin/export/endpoints") return { destinations: [{ id: 1, name: "Club archive", url: "https://archive.invalid/upload", is_active: true }] };
-  if (path === "/admin/bag-tags") return { series: { id: 1, name: "Club bag tags", season: "2026" }, requests: [{ id: 1, memberId: "m_avery", name: "Avery Brooks" }], challenges: [], holders: [] };
+  if (path === "/admin/bag-tags/challenges/41/cancel" && method === "POST") { leagueChallengeOpen = false; return { ok: true }; }
+  if (path === "/admin/bag-tags/leagues/4/link" && method === "POST") return { ok: true };
+  if (path === "/admin/bag-tags") return { leagues: [{
+    league: { id: 4, name: "Sunday Baggers" },
+    holders: [
+      { tagNumber: 1, name: "Michael Fazzini", memberId: "m_mf", linked: true },
+      { tagNumber: 2, name: "Pat Guest", linked: false },
+      { tagNumber: 5, name: "Jordan Reyes", memberId: "m_jordan", linked: true },
+      { tagNumber: 9, name: "Taylor Morgan", memberId: "m_taylor", linked: true },
+    ],
+    challenges: leagueChallengeOpen ? [{ id: 41, leagueId: 4, challengerName: "Taylor Morgan", challengerTag: 9, challengerScore: 51,
+      defenderName: "Jordan Reyes", defenderTag: 5, defenderScore: 53, status: "pending" }] : [],
+    closed: [{ id: 40, leagueId: 4, challengerName: "Avery Brooks", challengerTag: 7, challengerScore: 50, defenderName: "Michael Fazzini",
+      defenderTag: 1, defenderScore: 52, status: "expired", closedNote: "expired: ladder refreshed from UDisc" }],
+    unlinked: ["Pat Guest"], moves: [],
+  }], series: { id: 1, name: "Club bag tags", season: "2026" }, requests: [{ id: 1, memberId: "m_avery", name: "Avery Brooks" }], challenges: [], holders: [] };
   if (path === "/leagues") return { leagues: [{ id: 1, name: "Wednesday Doubles", season: "2026" }] };
   if (path === "/fundraisers") return { fundraisers: fixtureMode === "empty" ? [] : [{ id: 1, title: "Course bench fund", status: "active" }] };
   if (path === "/meetings") return { meetings: fixtureMode === "empty" ? [] : [{ id: 1, title: "November minutes", date }] };
@@ -374,8 +390,35 @@ async function verifyRoutes(variant) {
   } finally { await context.close(); }
 }
 
+async function verifyLeagueBagTags() {
+  for (const variant of [variants[2], variants[0]]) {
+    leagueChallengeOpen = true;
+    const { page, context } = await newPage(variant);
+    await page.goto(origin + "/admin-preview.html#today", { waitUntil: "commit", timeout: 60_000 });
+    await page.getByRole("heading", { name: "Today", level: 1, exact: true }).waitFor();
+    const pane = await route(page, "bag-tags");
+    const section = pane.locator("[data-admin-bag-league='4']");
+    await section.getByRole("heading", { name: "Sunday Baggers (UDisc league)" }).waitFor();
+    await section.getByText("Taylor Morgan #9 (51) called out Jordan Reyes #5 (53)").waitFor();
+    await section.getByText(/expired: ladder refreshed from UDisc/).waitFor();
+    assert.equal(await section.getByRole("button", { name: "Confirm" }).count(), 0, "admin cannot confirm a league challenge");
+    await pane.getByLabel("Filter by series").selectOption("club");
+    assert.equal(await pane.locator("[data-admin-bag-league]").count(), 0);
+    await pane.getByLabel("Filter by series").selectOption("league-4");
+    await fit(page, variant.name + " league bag tags");
+    if (photos) await page.screenshot({ path: join(photos, "bag-tags-league-" + variant.name + ".png"), fullPage: true, animations: "disabled", timeout: 20_000 });
+    const cancelled = page.waitForResponse((response) => response.url().endsWith("/admin/bag-tags/challenges/41/cancel"));
+    await section.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert.equal((await cancelled).status(), 200);
+    await section.getByText("No open challenges.").waitFor();
+    await context.close();
+  }
+  console.log("League bag tag challenges verified in admin (filter, cancel, no admin confirm)");
+}
+
 try {
   for (const variant of variants) await verifyRoutes(variant);
+  await verifyLeagueBagTags();
   for (const mode of ["error", "empty", "loading"]) {
     fixtureMode = mode;
     const { page, context } = await newPage(variants[0]);

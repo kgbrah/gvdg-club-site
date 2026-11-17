@@ -4,6 +4,7 @@ import { writeMemberSessionValue } from "../shared/member-session.js";
 
 let memberProfile = {
   isAdmin: false,
+  membership: null,
   name: null,
   pdgaNo: null,
   photo: null,
@@ -15,6 +16,7 @@ let memberProfile = {
 export function memberDashboardContext() {
   return {
     isAdmin: memberProfile.isAdmin === true,
+    membership: memberProfile.membership,
     name: memberProfile.name || storageGet(NAME_KEY) || null,
     pdgaNo: memberProfile.pdgaNo || storageGet(PDGA_KEY) || null,
     photo: memberProfile.photo || null,
@@ -35,6 +37,7 @@ export function publishMemberProfile(detail = memberDashboardContext()) {
 export function applyProfile(data = {}) {
   memberProfile = {
     isAdmin: data.isAdmin === true,
+    membership: data.membership ? data.membership : memberProfile.membership,
     name: data.name || memberProfile.name || null,
     pdgaNo: data.pdgaNo || null,
     photo: data.photo || null,
@@ -53,6 +56,7 @@ export function applyProfile(data = {}) {
 export function resetMemberProfile() {
   memberProfile = {
     isAdmin: false,
+    membership: null,
     name: null,
     pdgaNo: null,
     photo: null,

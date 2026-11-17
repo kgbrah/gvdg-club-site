@@ -4,9 +4,22 @@ import { NAME_KEY, PDGA_KEY, TOKEN_KEY, requestJson, storageGet } from "./api.js
 
 let memberContext = {};
 
+function membershipFrom(value) {
+  if (!value || typeof value !== "object" || !Number.isInteger(value.throughYear)) return null;
+  return {
+    current: value.current !== false,
+    currentYear: Number.isInteger(value.currentYear) ? value.currentYear : null,
+    lapsed: value.lapsed === true || value.current === false,
+    remind: value.remind === true,
+    renewalYear: Number.isInteger(value.renewalYear) ? value.renewalYear : null,
+    throughYear: value.throughYear,
+  };
+}
+
 export function setMemberContext(detail = {}) {
   memberContext = {
     isAdmin: detail.isAdmin === true,
+    membership: membershipFrom(detail.membership),
     name: detail.name || null,
     pdgaNo: detail.pdgaNo || null,
     photo: detail.photo || null,
@@ -24,6 +37,7 @@ export function readMemberContext(detail = null) {
     pdgaNo: source.pdgaNo || stored.pdgaNo || storageGet(PDGA_KEY) || null,
     photo: source.photo || stored.photo || null,
     isAdmin: source.isAdmin === true || stored.isAdmin === true,
+    membership: membershipFrom(source.membership) || membershipFrom(stored.membership),
     sub: source.sub || stored.sub || null,
     welcome: source.welcome === true,
   };
@@ -58,6 +72,7 @@ export function useMemberContext() {
           pdgaNo: profile.pdgaNo || storageGet(PDGA_KEY) || null,
           photo: profile.photo || null,
           isAdmin: profile.isAdmin === true,
+          membership: profile.membership || null,
           sub: profile.sub || null,
           welcome: profile.welcome === true,
         });

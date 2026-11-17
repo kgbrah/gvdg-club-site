@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, ChevronRight, CircleHelp, ExternalLink, Globe, KeyRound, MessageSquare, Palette,
+import { Camera, ChevronRight, CircleHelp, ExternalLink, Globe, KeyRound, Mail, MessageSquare, Palette,
   ShieldCheck, Smartphone, Tag, Trophy, UserRound, Users, Wallet } from "lucide-react";
 
 import { destination } from "../shared/app-navigation.js";
@@ -11,9 +11,11 @@ import { WalletPanel } from "./activity-panels.js";
 import { TOKEN_KEY, storageGet } from "./api.js";
 import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
 import { useMemberContext } from "./member-context.js";
+import { membershipAccountLine } from "../shared/membership-status.js";
 import { DiscColorPicker } from "./disc-color-picker.js";
 import { DashboardThemeBuilder } from "./dashboard-theme.js";
 import { MemberPhoneActivityPanel } from "./phone-activity-panel.js";
+import { MemberNotificationsPanel } from "./notifications-panel.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -94,6 +96,7 @@ export function MemberMorePage() {
       h(MemberLinkSection, { title: "Members and club activity", key: "people" }, [
         h(MemberLinkRow, { tab: "club", title: "Club directory", detail: "Members, course conditions and minutes", icon: Users, key: "club" }),
         h(MemberLinkRow, { tab: "community", title: "Community", detail: "Your profile and friends", icon: UserRound, key: "community" }),
+        h(MemberLinkRow, { tab: "messages", title: "Messages", detail: "Direct messages and club updates", icon: Mail, key: "messages" }),
         h(MemberLinkRow, { tab: "board", title: "Message board", icon: MessageSquare, key: "board" }),
       ]),
       h(MemberLinkSection, { title: "On the course", key: "play" }, [
@@ -134,6 +137,9 @@ export function MemberAccountPage() {
         h("div", { key: "body" }, [
           h("h2", { key: "name" }, context.name || "Club membership"),
           h("p", { className: "player-card-meta", key: "meta" }, context.pdgaNo ? "PDGA #" + context.pdgaNo : "Greenville DGC member"),
+          membershipAccountLine(context.membership)
+            ? h("p", { className: "player-card-meta", key: "dues" }, membershipAccountLine(context.membership))
+            : null,
         ]),
       ]),
       h(AccountTools, { key: "account-tools" }),
@@ -145,6 +151,7 @@ export function MemberAccountPage() {
       ]),
       h(MemberLinkSection, { title: "Devices", "data-member-account-devices": "ready", key: "devices" }, [
         h(MemberLinkRow, { tab: "install", title: "Install app", detail: "Add GVDG to your home screen", icon: Smartphone, key: "install" }),
+        h(MemberNotificationsPanel, { key: "notifications" }),
         h(MemberPhoneActivityPanel, { key: "phone-activity" }),
       ]),
       h(MemberLinkSection, { title: "Support", key: "support" }, [

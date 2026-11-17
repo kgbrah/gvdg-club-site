@@ -351,8 +351,8 @@ async function checkOtherPublicControls(page, profile) {
   await page.getByRole("link", { name: /watch a round/i }).click();
   assert.equal(new URL(page.url()).hash, "#watch-live");
   await page.locator("#watch-live").getByText(/new casual rounds start as/i).waitFor();
-  await page.locator("#compare .metric-note summary").press("Enter");
-  assert.equal(await page.locator(".metric-note").getAttribute("open"), "");
+  await page.locator("#themes").getByRole("heading", { name: "Wallpaper. Color. Glass." }).waitFor();
+  assert.equal(await page.locator(".theme-shot").count(), 3);
   const closedFaq = page.locator(".app-faq details:not([open])").first().locator("summary");
   await closedFaq.click();
   assert.equal(await page.locator(".app-faq details[open]").count(), 2);

@@ -1,6 +1,7 @@
 import React from "react";
 import { remainingFt } from "../shared/hole-map-model.js";
 import { describeShot, MAX_LEDGER_STROKES, SHOT_ATTEMPTS, SHOT_LABELS, SHOT_LIES, SHOT_OUTCOMES, shotLedgerQuality, shotPoint } from "../shared/shot-ledger.js";
+import { formatClubListTime } from "../shared/events-model.js";
 
 const h = React.createElement;
 const listStyle = { paddingInlineStart: "1.25rem" };
@@ -20,7 +21,7 @@ function qualityLabel(rows, score) {
 function describedPoint(point) {
   if (!point) return "GPS position unknown";
   const accuracy = point.accuracyM == null ? "" : ` · ±${point.accuracyM} m`;
-  const time = point.observedAt == null ? "" : " · " + new Date(point.observedAt).toLocaleTimeString();
+  const time = point.observedAt == null ? "" : " · " + (formatClubListTime(point.observedAt) || "");
   return "GPS captured" + accuracy + time;
 }
 

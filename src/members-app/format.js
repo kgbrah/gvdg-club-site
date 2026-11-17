@@ -1,4 +1,4 @@
-import { CLUB_TIME_ZONE, clubCivilInstant, parseEventDate } from "../shared/events-model.js";
+import { CLUB_TIME_ZONE, clubCivilInstant, parseClubInstant, parseEventDate } from "../shared/events-model.js";
 
 export function dollars(cents) {
   const value = Number(cents || 0);
@@ -20,24 +20,24 @@ export function formatEventDay(value) {
 }
 
 export function formatRatingDate(value) {
-  const raw = String(value || "");
-  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const date = dateOnly
-    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
-    : new Date(raw);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const date = clubCivilInstant(raw) || parseClubInstant(raw);
+  return date
+    ? date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: CLUB_TIME_ZONE })
+    : "";
 }
 
 export function shortDateTime(value) {
   if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString(undefined, {
+  const date = parseClubInstant(value);
+  if (!date) return String(value);
+  return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/New_York",
+    timeZone: CLUB_TIME_ZONE,
     timeZoneName: "short",
   });
 }
