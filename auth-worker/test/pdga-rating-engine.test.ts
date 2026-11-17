@@ -6,7 +6,8 @@ import { repairRatingSource } from "../src/rating-repair.js";
 import { RATING_METHODS, pointsPerThrow, roundRatingForScore } from "../src/rating-engine.js";
 import { runRatingRepairCycle } from "../src/ratings-recompute.js";
 import { getMemberRatings } from "../src/ratings.js";
-import { pdgaTestDb } from "./pdga-test-db.js";
+import { readFileSync } from "node:fs";
+import { PDGA_TEST_MIGRATIONS, pdgaTestDb } from "./pdga-test-db.js";
 
 const TEE = { lat: 35.60, lng: -77.37 };
 const PIN = { lat: 35.601, lng: -77.37 };
@@ -71,6 +72,39 @@ async function fixture() {
 const ratingRows = (sqlite: Awaited<ReturnType<typeof fixture>>["sqlite"]) => sqlite.prepare(`SELECT member_id, stream, event_id,
   casual_round_code, round_rating, ssa, ppt, rating_method, propagator_count, anchor_count, unrated_reason, weather_adjustment,
   pdga_baseline_ssa, pdga_baseline_rounds, source_fingerprint FROM round_ratings ORDER BY stream, event_id, casual_round_code, member_id`).all();
+
+describe("migration 0062", () => {
+  it("rebuilds round_ratings with the pdga method while keeping every row, id, key and cascade", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec("PRAGMA foreign_keys = ON");
+    const migrations = PDGA_TEST_MIGRATIONS.filter((file) => !file.startsWith("0062"));
+    for (const file of migrations) sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
+    sqlite.exec(`INSERT INTO courses (id, name) VALUES (1, 'Park');
+      INSERT INTO course_layouts (id, course_id, name) VALUES (4, 1, 'Main');
+      INSERT INTO events (id, name, type, status, date) VALUES (1, 'Night', 'league_round', 'final', '2026-06-10');
+      INSERT INTO round_ratings (id, member_id, player_name, stream, event_id, course_id, layout_id, round_date, total, to_par,
+        round_rating, rating_method, source_result_id, anchor_count, source_fingerprint)
+        VALUES (7, 'm_a', 'A', 'competition', 1, 1, 4, '2026-06-10', 54, 0, 950, 'stable', 3, 2, 'fp');
+      INSERT INTO round_ratings (id, member_id, player_name, stream, casual_round_code, round_date, total, round_rating, rating_method)
+        VALUES (9, 'm_a', 'A', 'casual', 'ABC123', '2026-06-11', 55, 940, 'layout');`);
+    sqlite.exec(readFileSync(new URL("../migrations/0062_pdga_layout_baselines.sql", import.meta.url), "utf8"));
+    expect(sqlite.prepare("SELECT id, rating_method, source_result_id, anchor_count, source_fingerprint, pdga_baseline_ssa FROM round_ratings ORDER BY id").all())
+      .toEqual([
+        { id: 7, rating_method: "stable", source_result_id: 3, anchor_count: 2, source_fingerprint: "fp", pdga_baseline_ssa: null },
+        { id: 9, rating_method: "layout", source_result_id: null, anchor_count: 0, source_fingerprint: null, pdga_baseline_ssa: null },
+      ]);
+    sqlite.exec(`INSERT INTO round_ratings (member_id, player_name, stream, casual_round_code, round_date, total, rating_method)
+      VALUES ('m_b', 'B', 'casual', 'ABC123', '2026-06-11', 56, 'pdga')`);
+    expect(sqlite.prepare("SELECT MAX(id) AS id FROM round_ratings").get()).toEqual({ id: 10 });
+    expect(() => sqlite.exec(`INSERT INTO round_ratings (member_id, player_name, stream, casual_round_code, round_date, total, rating_method)
+      VALUES ('m_b', 'B', 'casual', 'ABC123', '2026-06-11', 56, 'pdga')`)).toThrow(/UNIQUE/);
+    expect(() => sqlite.exec(`INSERT INTO round_ratings (member_id, player_name, stream, casual_round_code, round_date, total, rating_method)
+      VALUES ('m_c', 'C', 'casual', 'ABC123', '2026-06-11', 56, 'guess')`)).toThrow(/CHECK/);
+    sqlite.exec("DELETE FROM events WHERE id = 1");
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM round_ratings WHERE event_id = 1").get()).toEqual({ count: 0 });
+  });
+});
 
 describe("PDGA layout baselines in the rating engine", () => {
   it("lists pdga among the rating methods and accepts it in storage", () => {
