@@ -80,7 +80,7 @@ export function MarketWantedList({ route }) {
       h("input", { id: "wantedSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value), placeholder: "Search WANTED", type: "search", value: q }),
       h("label", { className: "public-sr-only", htmlFor: "wantedType", key: "type-label" }, "Disc type"),
       h("select", { id: "wantedType", key: "type", onChange: (event) => setType(event.target.value), value: type }, [
-        h("option", { key: "any", value: "" }, "Any disc type"),
+        h("option", { key: "any", value: "" }, "All types"),
         ...DISC_TYPES.map(([value, text]) => h("option", { key: value, value }, text)),
       ]),
     ])),

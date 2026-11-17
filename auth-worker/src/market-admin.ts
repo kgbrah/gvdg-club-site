@@ -4,7 +4,7 @@
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
 import { getMember } from "./roster.js";
-import { cleanLine, listingTitle, wantedTitle } from "./market-input.js";
+import { cleanLine, dollars, listingTitle, wantedTitle } from "./market-input.js";
 import {
   LISTING_COLUMNS, WANTED_COLUMNS, isSuspended, listingCards, liteOf, logModeration, num, ownerByKey, str, tradersByOwner,
   wantedViews, type Row,
@@ -30,10 +30,15 @@ async function reportTargets(c: MarketCtx, rows: Row[]) {
     let target: { title: string; status: string; hidden: boolean; text: string; ownerId: string } | null = null;
     if (kind === "listing") {
       const l = await c.env.DB.prepare(
-        "SELECT seller_id, brand, plastic, mold, status, hidden, condition_notes, location FROM market_listings WHERE id = ?",
+        "SELECT seller_id, brand, plastic, mold, status, hidden, condition, condition_notes, price_cents, open_to_trade, location FROM market_listings WHERE id = ?",
       ).bind(id).first<Row>();
-      if (l) target = { title: listingTitle({ brand: str(l, "brand"), plastic: str(l, "plastic"), mold: str(l, "mold") }), status: str(l, "status"),
-        hidden: num(l, "hidden") === 1, text: [str(l, "condition_notes"), str(l, "location")].filter(Boolean).join(" · "), ownerId: str(l, "seller_id") };
+      if (l) {
+        const price = l.price_cents != null ? "$" + dollars(num(l, "price_cents")) : "Trade only";
+        const text = [price + (l.price_cents != null && num(l, "open_to_trade") === 1 ? " or trade" : ""), `Condition ${num(l, "condition")}/10`,
+          str(l, "condition_notes"), str(l, "location") ? "Pickup: " + str(l, "location") : ""].filter(Boolean).join(" · ");
+        target = { title: listingTitle({ brand: str(l, "brand"), plastic: str(l, "plastic"), mold: str(l, "mold") }), status: str(l, "status"),
+          hidden: num(l, "hidden") === 1, text, ownerId: str(l, "seller_id") };
+      }
     } else if (kind === "wanted") {
       const w = await c.env.DB.prepare("SELECT poster_id, brand, plastic, mold, disc_type, status, hidden, notes FROM market_wanted WHERE id = ?")
         .bind(id).first<Row>();

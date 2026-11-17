@@ -676,6 +676,7 @@ describe("reports and moderation", () => {
     expect(overview.reports).toHaveLength(2);
     expect(overview.reports[0].target.title).toBe("Innova Star Destroyer");
     expect(overview.reports[0].target.owner.name).toBe("Ada Lovelace");
+    expect(overview.reports[0].target.text).toBe("$18.00 or trade · Condition 8/10 · Light ink on the rim · Pickup: At Sunday Baggers");
 
     expect((await call(`/admin/market/listings/${listing.id}/hide`, "POST", admin, {})).data.error).toBe("reason_required");
     expect((await call(`/admin/market/listings/${listing.id}/hide`, "POST", admin, { reason: "Misleading plastic" })).status).toBe(200);
