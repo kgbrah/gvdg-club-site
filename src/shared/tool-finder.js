@@ -29,12 +29,15 @@ export function ToolFinder({ role = "member", isAdmin, onNavigate }) {
       role: "search", "aria-label": role === "admin" ? "Admin tools" : "Member tools", key: "form",
       onSubmit: (event) => { event.preventDefault(); choose(results[0]); },
     }, [
-      h("label", { htmlFor: id, key: "label" }, [h(Search, { "aria-hidden": true, size: 16, key: "icon" }), "Find a tool"]),
-      h("input", {
-        ref: input, id, value: query, type: "search", autoComplete: "off", key: "input",
-        onChange: (event) => { setQuery(event.target.value); setOpen(true); },
-        onFocus: () => setOpen(true),
-      }),
+      h("label", { htmlFor: id, key: "label", className: "app-tool-label" }, "Find a tool"),
+      h("div", { className: "app-tool-field", key: "field" }, [
+        h(Search, { "aria-hidden": true, size: 18, className: "app-tool-icon", key: "icon" }),
+        h("input", {
+          ref: input, id, value: query, type: "search", autoComplete: "off", placeholder: "Find a tool", key: "input",
+          onChange: (event) => { setQuery(event.target.value); setOpen(true); },
+          onFocus: () => setOpen(true),
+        }),
+      ]),
     ]),
     showing ? h("div", { className: "app-tool-results", key: "results" }, results.length
       ? h("ul", { "aria-label": "Matching tools" }, results.map((item) => h("li", { key: item.key || item.label },

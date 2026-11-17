@@ -461,17 +461,18 @@ input, select, textarea {
    dark and white in light, never the theme's surface colour, so the wallpaper shows through blurred in its own
    true colours. The theme still colours text and accents. Readability comes from the fill alpha and blur, not
    from darkening. Containers (cards, panels, header, docks, sheets) are glass; rows and controls never get
-   their own backdrop-filter. Score entry, totals and hole navigation stay >= 85% opaque. Fallbacks at the end.
+   their own backdrop-filter. The scoring dock (score entry, totals, hole navigation) is at most 30% see-through (fill alpha >= 0.70) with a stronger blur; its buttons stay solid. Fallbacks at the end.
    ========================================================================== */
 body.player-theme-glass {
   --glass-tint: #fff;
   --glass-fill: color-mix(in srgb, var(--glass-tint) calc(100% - var(--glass-alpha, 0%)), transparent);
   --glass-fill-sheet: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 45%)), transparent);
-  --glass-fill-safe: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 15%)), transparent);
+  --glass-fill-safe: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 40%)), transparent);
   --glass-fill-chrome: var(--glass-fill);
   --glass-chip: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 20%)), transparent);
   --glass-tone: brightness(1.05);
   --glass-filter: blur(var(--glass-blur, 0px)) saturate(110%) var(--glass-tone);
+  --glass-filter-strong: blur(max(var(--glass-blur, 0px), 16px)) saturate(110%) var(--glass-tone);
   --glass-line: color-mix(in srgb, #0a0c12 10%, transparent);
   --glass-edge: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent);
   --glass-drop: 0 8px 24px color-mix(in srgb, #0a0c12 12%, transparent);
@@ -561,7 +562,8 @@ body.player-theme-glass :is(.admin-dialog, .member-dialog, .score-dialog, .playe
 }
 
 /* Scorecard: header, weather strip, stats strip, hole strip, tools dock */
-body.score-glove.player-theme-glass #scoreRoot .topbar {
+body.score-glove.player-theme-glass #scoreRoot .topbar,
+body.score-glove.player-theme-glass.player-theme-page:has(.score-bottom-layout) #scoreRoot .topbar {
   background: var(--glass-fill-chrome);
   border-bottom-color: var(--glass-line);
   -webkit-backdrop-filter: var(--glass-filter);
@@ -570,31 +572,189 @@ body.score-glove.player-theme-glass #scoreRoot .topbar {
 }
 body.score-glove.player-theme-glass #scoreRoot .scorecard-weather {
   background: var(--glass-fill);
-  border-block-color: var(--glass-line);
+  border-color: var(--glass-line);
   box-shadow: var(--glass-edge);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
 }
 /* Stats strip and hole strip: one blurred container each; the chips inside only tint. */
-body.score-glove.player-theme-glass #scoreRoot :is(.score-advanced, .score-glove-stage .holegrid) {
+body.score-glove.player-theme-glass #scoreRoot :is(.score-advanced, .score-glove-stage .score-holestrip) {
   background: var(--glass-fill);
+  border-color: var(--glass-line);
+  box-shadow: var(--glass-edge);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
-  border-radius: 10px;
 }
 body.score-glove.player-theme-glass #scoreRoot .score-advanced-toggle,
 body.score-glove.player-theme-glass #scoreRoot .holegrid button:not(.cur):not([class*="tier-"]) {
   background: var(--glass-chip);
 }
-/* The dock carries score entry, totals and hole navigation: at most 15% see-through, whatever the setting. */
+/* The dock carries score entry, totals and hole navigation: at most 40% see-through, whatever the setting, with a stronger blur. */
 body.score-glove.player-theme-glass .score-glove-layout .score-glove-dock,
 body.score-glove.player-theme-glass.player-theme-page .score-glove-dock,
 body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .score-glove-dock {
   background: var(--glass-fill-safe);
   border-color: var(--glass-line);
   box-shadow: var(--glass-edge);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter-strong);
+  backdrop-filter: var(--glass-filter-strong);
+}
+
+/* Shared "Find a tool" search (member Club page, admin): one normal search field, magnifier inside on the left. */
+.app-tool-finder .app-tool-label {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.app-tool-finder .app-tool-field { position: relative; display: block; }
+.app-tool-finder .app-tool-field > .app-tool-icon {
+  position: absolute; inset-block: 0; inset-inline-start: .8rem; margin-block: auto; pointer-events: none;
+  color: var(--text-muted); z-index: 1;
+}
+.app-tool-finder .app-tool-field > input { box-sizing: border-box; padding-inline-start: 2.5rem; padding-block: .45rem; }
+.app-tool-finder .app-tool-field > input::placeholder { color: var(--text-muted); opacity: 1; }
+
+/* ---- Sitewide glass: public pages (home, events, pro shop, blog, Ryder Cup) and the scorecard's setup / browse
+   screens. Same neutral recipe as above; containers only (header, cards, panels, section boxes, filter panels).
+   Inputs, selects and buttons keep their solid fills. Cards nested inside a glass section only tint (chip fill,
+   no blur of their own). Only when glass really applies: reduced transparency / no backdrop-filter leave every
+   page exactly as it is today. The live scorecard (body.score-glove) has its own rules above and is not touched. */
+@media not (prefers-reduced-transparency: reduce) {
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    /* Public header: the glass lives on a pseudo-element so the header itself is not a backdrop root
+       (the open mobile menu below it blurs the wallpaper too). */
+    body.player-theme-glass[data-public-polish] :is(#homeReactPageChromeApp, #publicReactPageChrome) > header,
+    body.player-theme-glass[data-public-polish] :is(#homeReactPageChromeApp, #publicReactPageChrome) > header.scrolled {
+      background: transparent;
+      color: var(--text-primary);
+      border-bottom-color: var(--glass-line);
+      box-shadow: var(--glass-edge);
+      isolation: isolate;
+    }
+    body.player-theme-glass[data-public-polish] :is(#homeReactPageChromeApp, #publicReactPageChrome) > header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: var(--glass-fill-chrome);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+    body.player-theme-glass[data-public-polish] header :is(.logo, .logo-wordmark, .nav-links a:not(.nav-donate), .nav-more-btn, .theme-toggle, .menu-toggle) {
+      color: var(--text-primary);
+      text-shadow: var(--glass-halo);
+    }
+    body.player-theme-glass[data-public-polish] header :is(.nav-more-menu, .nav-links) a:not(.nav-donate) { text-shadow: none; }
+    body.player-theme-glass[data-public-polish] header .nav-more-menu {
+      background: var(--glass-fill-sheet);
+      border-color: var(--glass-line);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+    @media (max-width: 768px) {
+      body.player-theme-glass[data-public-polish] :is(#homeReactPageChromeApp, #publicReactPageChrome) header .nav-links {
+        background: var(--glass-fill-sheet) !important;
+        border-top-color: var(--glass-line);
+        -webkit-backdrop-filter: var(--glass-filter);
+        backdrop-filter: var(--glass-filter);
+      }
+      body.player-theme-glass[data-public-polish] header .nav-links a:not(.nav-donate) { color: var(--text-primary) !important; }
+    }
+
+    /* Public pages: standalone cards and panels (events, pro shop, blog, Ryder Cup) */
+    body.player-theme-glass[data-public-polish] :is(
+      .events-intro, .ryder-intro, .shop-head > :first-child, .construction-card, .page-hero,
+      .event-card, .detail-card, .status-box, .register-card, .league-card, .fundraiser-card, .live-chat,
+      .wallet-panel, .cart, .product-card, .my-orders-panel, .shop-filters
+    ) {
+      background: var(--glass-fill);
+      border-color: var(--glass-line);
+      box-shadow: var(--glass-edge), var(--glass-drop);
+      text-shadow: var(--glass-halo);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+    /* Intro bands are dark blocks with fixed light text on the club default: over glass they follow the theme ink. */
+    body.player-theme-glass[data-public-polish] :is(.events-intro, .ryder-intro, .shop-head > :first-child, .page-hero) {
+      color: var(--text-primary);
+    }
+    body.player-theme-glass[data-public-polish] :is(.events-intro, .ryder-intro, .shop-head > :first-child, .page-hero) :is(h1, h2, .page-title, .back-link) { color: var(--text-primary); }
+    body.player-theme-glass[data-public-polish] :is(.events-intro, .ryder-intro, .shop-head > :first-child, .page-hero) :is(p, .page-subtitle) { color: var(--text-secondary); }
+    body.player-theme-glass[data-public-polish] header .menu-toggle { color: var(--text-primary) !important; }
+    /* Home: each section box is one glass container; the cards inside only tint. */
+    body.player-theme-glass[data-public-polish] :is(#scoring-app-teaser, #membership, #courses, #events, #area-tournaments, #about, #contact) {
+      background: var(--glass-fill);
+      border-color: var(--glass-line);
+      box-shadow: var(--glass-edge), var(--glass-drop);
+      text-shadow: var(--glass-halo);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+    body.player-theme-glass[data-public-polish] :is(.course-card, .event-item, .tournament-item, .stat-card, .board-member-card, .contact-box, .membership-step, .no-events, .scoring-teaser-score) {
+      background: var(--glass-chip);
+      border-color: var(--glass-line);
+      text-shadow: none;
+    }
+    /* The membership band is a dark block with fixed light text on the club default: over glass it follows the theme ink. */
+    body.player-theme-glass[data-public-polish] #membership :is(.section-title, .membership-subtitle, .membership-step-title, .membership-step-description, .perk-title, .perk p, .price, .membership-next) {
+      color: var(--text-primary);
+    }
+    body.player-theme-glass[data-public-polish] #membership :is(.membership-step-label, .perk-icon) { color: var(--secondary-text, var(--primary)); }
+    body.player-theme-glass[data-public-polish] #membership .membership-step-secondary { color: var(--text-primary); border-color: var(--glass-line); }
+    body.player-theme-glass[data-public-polish] #membership::before { display: none; }
+    /* Forms and controls inside glass stay solid and crisp (no halo on their text). */
+    body.player-theme-glass[data-public-polish] :is(input, select, textarea, button:not(.menu-toggle):not(.theme-toggle), summary, .btn, .cta-button, .scoring-teaser-explore, .scoring-teaser-score, .event-cta, .reg-btn, .shop-btn) {
+      text-shadow: none;
+    }
+
+    /* Section heads and notes that sit on the bare wallpaper get a light plate so small text keeps AA over a bright photo. */
+    body.player-theme-glass[data-public-polish] :is(.events-section-head, .events-group-head) {
+      background: var(--glass-chip);
+      border-radius: 10px;
+      padding-inline: .75rem;
+      padding-block: .4rem;
+      text-shadow: none;
+    }
+    /* Scorecard setup / browse screens (not the live scorecard): cards, course rows, install prompt, header */
+    body.player-theme-glass:not(.score-glove) #scoreRoot :is(.card, .install-coach, .weather-strip, .pots-strip, .course-filters),
+    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > .tap-row,
+    body.player-theme-glass:not(.score-glove) #scoreRoot > main > .tap-row {
+      background: var(--glass-fill);
+      border-color: var(--glass-line);
+      box-shadow: var(--glass-edge), var(--glass-drop);
+      text-shadow: var(--glass-halo);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > p.muted:not(.card p),
+    body.player-theme-glass:not(.score-glove) #scoreRoot > main > .btn.ghost,
+    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > .btn.ghost {
+      background: var(--glass-chip);
+      border-radius: 10px;
+      text-shadow: none;
+    }
+    /* Plates and panels never move layout: the note's plate is an outline (takes no space); the filter
+       panel's padding is cancelled by an equal negative margin. */
+    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > p.muted:not(.card p) {
+      border-radius: 6px;
+      outline: .4rem solid var(--glass-chip);
+    }
+    body.player-theme-glass:not(.score-glove) #scoreRoot .course-filters {
+      border: 1px solid var(--glass-line);
+      border-radius: 14px;
+      padding: calc(.5rem - 1px);
+      margin: -.5rem;
+    }
+    body.player-theme-glass:not(.score-glove) #scoreRoot .card .tap-row { background: var(--glass-chip); border-color: var(--glass-line); text-shadow: none; }
+    body.player-theme-glass:not(.score-glove) #scoreRoot :is(.card, .course-filters, .tap-row) :is(input, select, textarea, button, .btn) { text-shadow: none; }
+    body.player-theme-glass:not(.score-glove) #scoreRoot .topbar {
+      background: var(--glass-fill-chrome);
+      border-bottom-color: var(--glass-line);
+      box-shadow: var(--glass-edge);
+      -webkit-backdrop-filter: var(--glass-filter);
+      backdrop-filter: var(--glass-filter);
+    }
+  }
 }
 
 /* Solid fallbacks: reduced transparency, or no backdrop-filter support. */
@@ -606,6 +766,7 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
     --glass-fill-chrome: var(--member-chrome-bg);
     --glass-chip: var(--bg-tertiary);
     --glass-filter: none;
+    --glass-filter-strong: none;
     --glass-line: var(--border-color);
     --glass-edge: none;
     --glass-drop: none;
@@ -622,6 +783,7 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
     --glass-fill-chrome: var(--member-chrome-bg);
     --glass-chip: var(--bg-tertiary);
     --glass-filter: none;
+    --glass-filter-strong: none;
     --glass-line: var(--border-color);
     --glass-edge: none;
     --glass-drop: none;

@@ -77,6 +77,7 @@ body.admin-page #adminPanel { padding: 0; border: 0; background: transparent; bo
 }
 .admin-page .app-tool-finder form { gap: .3rem; }
 .admin-page .app-tool-finder label { font-size: .84rem; gap: .4rem; }
+.admin-page #adminNavigationReactApp .app-tool-finder .app-tool-field > input { padding-inline-start: 2.5rem; }
 .admin-page .app-tool-results { border-radius: .65rem; max-height: min(19rem, 46dvh); }
 .admin-page .admin-sidebar { position: static; padding: .25rem; gap: .14rem; border: 1px solid var(--admin-hairline); border-radius: var(--admin-radius); background: var(--admin-paper); }
 .admin-page .admin-sidebar .admin-tab {
@@ -422,7 +423,7 @@ body.admin-page #adminPanel { padding: 0; border: 0; background: transparent; bo
 .admin-page .admin-more-account .admin-more-link { text-align: start; }
 @media (max-width: 768px) {
   .admin-page #adminNavigationReactApp .app-tool-finder { padding: .42rem .5rem; }
-  .admin-page #adminNavigationReactApp .app-tool-finder form { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+  .admin-page #adminNavigationReactApp .app-tool-finder form { grid-template-columns: minmax(0, 1fr); align-items: center; }
   .admin-page #adminNavigationReactApp .app-tool-finder input { min-height: 44px; }
 }
 

@@ -363,3 +363,10 @@ try {
   await browser.close();
   await vite.close();
 }
+
+// 6. Sitewide glass (public pages + scorecard setup / course pick): its own script, run against the built site.
+if (!process.env.GVDG_GLASS_SERVE && !process.env.GVDG_GLASS_SKIP_SITEWIDE) {
+  const { spawnSync } = await import("node:child_process");
+  const run = spawnSync(process.execPath, ["scripts/qa/theme-glass-sitewide-qa.mjs"], { stdio: "inherit", env: process.env });
+  if (run.status !== 0) process.exit(run.status || 1);
+}
