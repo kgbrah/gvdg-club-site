@@ -1184,3 +1184,8 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
 #members .react-tee-signs-panel .ts-capture-card > .my-dashboard-title { margin-top: 0; }
 #members .react-tee-signs-panel .ts-mylist-card .ts-mylist-title { margin-top: 0; }
 #members .react-tee-signs-panel .ts-status:empty { min-height: 0; margin: 0; padding: 0; }
+/* Course discovery difficulty chips in dark themes: the raw level colour measured 2.4:1 on the card (fails AA
+   for 12px text). Blend it with the text colour so the tint stays but the label reads (~8:1). */
+[data-theme="dark"] #members .course-chip.level-beginner { color: color-mix(in srgb, var(--under) 45%, var(--text-primary)); }
+[data-theme="dark"] #members .course-chip.level-intermediate { color: color-mix(in srgb, var(--accent) 45%, var(--text-primary)); }
+[data-theme="dark"] #members .course-chip.level-advanced { color: color-mix(in srgb, var(--over) 45%, var(--text-primary)); }
