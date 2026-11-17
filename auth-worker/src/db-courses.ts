@@ -1,6 +1,7 @@
 import type { D1Like } from "./db-types.js";
 import { fallbackCourse, fallbackCourses, fallbackLayout, fallbackLayoutNames, fallbackLayouts } from "./course-catalog-fallback.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { bustCourseCatalogCache } from "./course-catalog-cache.js";
 import { COVERAGE_ORDER, layoutQuality, layoutRevision, layoutRows, mapCoordinates, type Coverage, type Quality } from "../../src/shared/course-quality.js";
 
 export interface CourseInput {
@@ -17,13 +18,24 @@ export interface CourseInput {
 async function listed<T>(
   operation: () => Promise<{ results: T[] }>,
   fallback: () => T[],
+  timeoutMs?: number,
 ): Promise<{ results: T[]; cacheable: boolean }> {
   let cacheable = true;
   const results = (await readD1OrFallback(operation, () => {
     cacheable = false;
     return { results: fallback(), success: true };
-  })).results;
+  }, timeoutMs)).results;
   return { results, cacheable };
+}
+
+/** The whole catalog is three bulk reads; give them more room than a single-row read before falling back. */
+const CATALOG_READ_TIMEOUT_MS = 4_000;
+
+/** Course, layout and published-map writes change GET /courses: drop the edge copy (best effort). */
+async function afterCatalogWrite<T>(write: Promise<T>): Promise<T> {
+  const result = await write;
+  try { await bustCourseCatalogCache(); } catch { /* the 60s freshness window still bounds staleness */ }
+  return result;
 }
 
 type DirectoryCourse = Record<string, unknown> & { id: number; name: string };
@@ -32,12 +44,20 @@ export async function listCoursesCatalog(db: D1Like) {
   const catalog = await listed(
     () => db.prepare("SELECT * FROM courses ORDER BY is_default DESC, name").all<DirectoryCourse>(),
     fallbackCourses,
+    CATALOG_READ_TIMEOUT_MS,
   );
+  // A catalog is only cacheable when every read was real: a layouts or map-marks fallback used to be cached
+  // (every course with empty layouts / looking unmapped) and then served as if it were good.
+  let complete = catalog.cacheable;
   const layouts = (await readD1OrFallback(
     () => db.prepare("SELECT * FROM course_layouts").all(),
-    () => ({ results: catalog.results.flatMap((course) => fallbackLayouts(Number(course.id))), success: true }),
+    () => {
+      complete = false;
+      return { results: catalog.results.flatMap((course) => fallbackLayouts(Number(course.id))), success: true };
+    },
+    CATALOG_READ_TIMEOUT_MS,
   )).results;
-  const consensus = await publishedCatalogMapMarks(db);
+  const consensus = await publishedCatalogMapMarks(db, undefined, () => { complete = false; }, CATALOG_READ_TIMEOUT_MS);
   const summaries = courseCoverageSummaries(layouts, consensus);
   return {
     results: catalog.results.map((course) => {
@@ -50,20 +70,24 @@ export async function listCoursesCatalog(db: D1Like) {
         layouts: summary?.layouts ?? [],
       };
     }),
-    cacheable: catalog.cacheable,
+    cacheable: complete,
   };
 }
 
 type CatalogRow = Record<string, unknown>;
 type PublicCatalogLayout = CatalogRow & { quality: Quality; revision: string; map_updated_at: string | null; map_holes?: unknown[] };
 
-async function publishedCatalogMapMarks(db: D1Like, courseId?: number): Promise<CatalogRow[]> {
+async function publishedCatalogMapMarks(db: D1Like, courseId?: number, onFallback?: () => void, timeoutMs?: number): Promise<CatalogRow[]> {
   const sql = `SELECT cm.layout_id, cm.hole, cm.kind, cm.lat, cm.lng, cm.updated_at
       FROM course_map_consensus cm JOIN course_layouts l ON l.id = cm.layout_id
       WHERE cm.published = 1` + (courseId == null ? "" : " AND l.course_id = ?");
   return (await readD1OrFallback(
     () => db.prepare(sql).bind(...(courseId == null ? [] : [courseId])).all(),
-    () => ({ results: [], success: true }),
+    () => {
+      onFallback?.();
+      return { results: [], success: true };
+    },
+    timeoutMs,
   )).results;
 }
 
@@ -142,7 +166,7 @@ export async function getCourse(db: D1Like, id: number) {
 }
 
 export async function createCourse(db: D1Like, c: CourseInput) {
-  return db
+  return afterCatalogWrite(db
     .prepare(
       "INSERT INTO courses (name, location, udisc_url, udisc_course_id, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
@@ -156,11 +180,11 @@ export async function createCourse(db: D1Like, c: CourseInput) {
       c.is_default ? 1 : 0,
       c.created_by ?? null,
     )
-    .first();
+    .first());
 }
 
 export async function createCourseIfNew(db: D1Like, c: CourseInput) {
-  return db
+  return afterCatalogWrite(db
     .prepare(
       "INSERT OR IGNORE INTO courses (name, location, udisc_url, udisc_course_id, lat, lng, is_default, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
     )
@@ -174,22 +198,22 @@ export async function createCourseIfNew(db: D1Like, c: CourseInput) {
       c.is_default ? 1 : 0,
       c.created_by ?? null,
     )
-    .first();
+    .first());
 }
 
 export type CoursePatch = { name?: string | null; location?: string | null; udisc_url?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null };
 
 export async function updateCourse(db: D1Like, id: number, c: CoursePatch) {
-  return db
+  return afterCatalogWrite(db
     .prepare(
       "UPDATE courses SET name=COALESCE(?,name), location=COALESCE(?,location), udisc_url=COALESCE(?,udisc_url), udisc_course_id=COALESCE(?,udisc_course_id), lat=COALESCE(?,lat), lng=COALESCE(?,lng) WHERE id=? RETURNING *",
     )
     .bind(c.name ?? null, c.location ?? null, c.udisc_url ?? null, c.udisc_course_id ?? null, c.lat ?? null, c.lng ?? null, id)
-    .first();
+    .first());
 }
 
 export async function deleteCourse(db: D1Like, id: number) {
-  await db.prepare("DELETE FROM courses WHERE id = ?").bind(id).run();
+  await afterCatalogWrite(db.prepare("DELETE FROM courses WHERE id = ?").bind(id).run());
 }
 
 export async function listLayoutsCatalog(db: D1Like, courseId: number) {
@@ -209,14 +233,14 @@ export async function createLayout(
 ) {
   const holesJson = JSON.stringify(l.holes ?? []);
   if (l.expected_holes != null) {
-    return db.prepare("INSERT INTO course_layouts (course_id, name, holes, total_par, expected_holes) VALUES (?, ?, ?, ?, ?) RETURNING *")
+    return afterCatalogWrite(db.prepare("INSERT INTO course_layouts (course_id, name, holes, total_par, expected_holes) VALUES (?, ?, ?, ?, ?) RETURNING *")
       .bind(l.course_id, l.name ?? "Main", holesJson, l.total_par ?? null, l.expected_holes)
-      .first();
+      .first());
   }
-  return db
+  return afterCatalogWrite(db
     .prepare("INSERT INTO course_layouts (course_id, name, holes, total_par) VALUES (?, ?, ?, ?) RETURNING *")
     .bind(l.course_id, l.name ?? "Main", holesJson, l.total_par ?? null)
-    .first();
+    .first());
 }
 
 export async function getLayout(db: D1Like, id: number) {
@@ -354,20 +378,20 @@ export async function updateLayout(
 ) {
   const holesJson = l.holes === undefined ? null : JSON.stringify(l.holes ?? []);
   if (l.expected_holes !== undefined) {
-    return db.prepare(
+    return afterCatalogWrite(db.prepare(
       "UPDATE course_layouts SET name=COALESCE(?,name), holes=COALESCE(?,holes), total_par=COALESCE(?,total_par), expected_holes=? WHERE id=? RETURNING *",
-    ).bind(l.name ?? null, holesJson, l.total_par ?? null, l.expected_holes, id).first();
+    ).bind(l.name ?? null, holesJson, l.total_par ?? null, l.expected_holes, id).first());
   }
-  return db
+  return afterCatalogWrite(db
     .prepare(
       "UPDATE course_layouts SET name=COALESCE(?,name), holes=COALESCE(?,holes), total_par=COALESCE(?,total_par) WHERE id=? RETURNING *",
     )
     .bind(l.name ?? null, holesJson, l.total_par ?? null, id)
-    .first();
+    .first());
 }
 
 export async function deleteLayout(db: D1Like, id: number) {
-  await db.prepare("DELETE FROM course_layouts WHERE id = ?").bind(id).run();
+  await afterCatalogWrite(db.prepare("DELETE FROM course_layouts WHERE id = ?").bind(id).run());
 }
 
 export const POSITION_KINDS = ["tee", "target"] as const;

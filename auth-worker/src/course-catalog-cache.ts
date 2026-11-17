@@ -1,4 +1,5 @@
-export const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v8";
+// v9: copies cached before the layouts/map-marks fallback became non-cacheable may hold empty layouts.
+export const COURSE_CATALOG_CACHE_VERSION = "course-catalog-v9";
 export const COURSE_CATALOG_CACHE_NAME = "gvdg-course-catalog";
 
 export function courseCatalogCacheKey(request: Request): Request {

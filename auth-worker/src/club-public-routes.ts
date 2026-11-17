@@ -19,27 +19,47 @@ const CATALOG_CORS = {
   Vary: "Accept-Encoding",
 } as const;
 
+/** A good catalog is reused for this long before D1 is read again (admin course/map writes drop it sooner). */
+const CATALOG_FRESH_MS = 60_000;
+const CATALOG_STAMP = "X-Gvdg-Catalog-At";
+/** How long the edge keeps a good catalog as the last-good fallback for D1 outages. */
+const CATALOG_KEEP_S = 86_400;
+
 async function cachedCourseCatalogJson(
   request: Request,
   origin: string | null,
   load: () => Promise<{ payload: unknown; cacheable: boolean }>,
 ): Promise<Response> {
-  const loaded = await load();
   const cache = typeof caches === "undefined" ? null : await caches.open(COURSE_CATALOG_CACHE_NAME);
   const cacheKey = cache ? courseCatalogCacheKey(request) : null;
+  // Serve a recent good copy without touching D1: the full catalog is three bulk reads (~1-3s), and reading
+  // it on every request is what pushed those reads toward their timeout and into the fallback.
+  const cached = cache && cacheKey ? await cache.match(cacheKey) : undefined;
+  const cachedAt = Number(cached?.headers.get(CATALOG_STAMP));
+  if (cached && Number.isFinite(cachedAt) && cachedAt > 0 && Date.now() - cachedAt < CATALOG_FRESH_MS) return forClient(cached);
+  const loaded = await load();
   if (loaded.cacheable) {
-    const response = json(loaded.payload, 200, origin, {
-      ...CATALOG_CORS,
-      "Cache-Control": "private, no-store",
-    });
-    if (cache && cacheKey) await cache.put(cacheKey, response.clone());
+    const stamp = String(Date.now());
+    const response = json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": "private, no-store", [CATALOG_STAMP]: stamp });
+    // The edge copy must itself be cacheable: Cloudflare's Cache API silently refuses responses marked
+    // private/no-store, which is why this cache never held anything before. It is kept a day as the
+    // last-good fallback; freshness is decided by the stamp above, and clients always get no-store.
+    if (cache && cacheKey) {
+      const edgeCopy = json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": `public, max-age=${CATALOG_KEEP_S}`, [CATALOG_STAMP]: stamp });
+      await cache.put(cacheKey, edgeCopy);
+    }
     return response;
   }
-  if (cache && cacheKey) {
-    const cached = await cache.match(cacheKey);
-    if (cached) return cached;
-  }
+  // D1 is degraded: a previous good catalog (even an older one) beats the built-in fallback.
+  if (cached) return forClient(cached);
   return json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": "no-store" });
+}
+
+/** A cached edge copy goes back to the browser as no-store, like a freshly built catalog. */
+function forClient(cached: Response): Response {
+  const response = new Response(cached.body, cached);
+  response.headers.set("Cache-Control", "private, no-store");
+  return response;
 }
 
 export async function handleClubPublic(
