@@ -81,7 +81,8 @@ const warnings = [];
 function fixture(path, method, query, authorization, body) {
   if (path === "/me") return { sub: "m_taylor", name: people[0].name, pdgaNo: "123456", isAdmin: authorization === "Bearer " + token };
   if (path === "/events") return { events: fixtureMode === "empty" ? [] : events };
-  if (path === "/courses") return { courses: [course] };
+  // A real long live name: course pickers size to their longest option and overflowed phones (live drive, 2026-11-17).
+  if (path === "/courses") return { courses: [course, { id: 8, name: "All-Terrain Disc Golf Course at Carolina Adventure World", location: "Winnsboro, SC", udisc_course_id: "24" }] };
   if (/^\/events\/\d+$/.test(path)) return { event: events.find((event) => path.endsWith("/" + event.id)) };
   if (path.endsWith("/live")) return { status: path.includes("/40/") ? "final" : "live", holes, players: eventPlayers, standings, conflicts: [], missing: [], courseName: course.name, rev: 1 };
   if (path.endsWith("/registration")) return { config: { play_format: "singles", entry_fee_cents: 2500, registration_open: true, divisions: ["MA1", "MA2"] } };

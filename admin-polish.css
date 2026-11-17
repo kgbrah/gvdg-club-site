@@ -909,3 +909,9 @@ body.admin-page.player-theme-active {
 /* Bag tags: the Tag requests section sat flush against the Assign tag button above it. */
 .admin-page [data-react-admin-bag-tags] #admin-bag-requests { margin-top: 1rem; }
 .admin-page [data-react-admin-bag-tags] > .al-note + * > .al-h:first-child { margin-top: .75rem; }
+
+/* Course / event pickers in the tool header: a <select> is as wide as its longest option, and flex/grid items
+   default to min-width:auto, so a long live course name ("All-Terrain Disc Golf Course at Carolina Adventure
+   World") pushed Courses / Tee signs ~110px past a phone screen. Let the picker and its containers shrink. */
+.admin-page :is(.admin-workspace-context, .admin-context, .admin-context-caption) { min-width: 0; max-width: 100%; }
+.admin-page .admin-context-caption select { min-width: 0; text-overflow: ellipsis; }
