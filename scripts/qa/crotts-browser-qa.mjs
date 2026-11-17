@@ -50,7 +50,7 @@ const success = {
 const testPhoto = { name: "test-lie.jpg", mimeType: "image/jpeg", buffer: await readFile("img/crotts.jpg") };
 const answer = (reply, status = 200) => ({ status, json: reply });
 
-async function openPage(path, width, { mode = "light", scale = 1, isAdmin = false } = {}) {
+async function openPage(path, width, { mode = "light", scale = 1, isAdmin = false, virtualKeyboard = false } = {}) {
   const context = await browser.newContext({ viewport: { width, height: width > 600 ? 900 : 720 }, colorScheme: mode, serviceWorkers: "block" });
   const requests = [];
   const errors = [];
@@ -81,6 +81,19 @@ async function openPage(path, width, { mode = "light", scale = 1, isAdmin = fals
     localStorage.setItem("theme", mode);
     if (scale !== 1) document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = `${scale * 100}%`; });
   }, { mode, scale });
+  if (virtualKeyboard) {
+    // Android Chrome with interactive-widget=overlays-content: the keyboard covers the page, the visual
+    // viewport keeps its full height, and only the VirtualKeyboard API reports the keyboard's geometry.
+    await context.addInitScript(() => {
+      const keyboard = new EventTarget();
+      let height = 0;
+      let overlays = false;
+      Object.defineProperty(keyboard, "overlaysContent", { get: () => overlays, set: (value) => { overlays = Boolean(value); } });
+      Object.defineProperty(keyboard, "boundingRect", { get: () => new DOMRect(0, innerHeight - height, innerWidth, height) });
+      Object.defineProperty(navigator, "virtualKeyboard", { value: keyboard, configurable: true });
+      window.__qaKeyboard = (next) => { height = next; keyboard.dispatchEvent(new Event("geometrychange")); };
+    });
+  }
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => errors.push(error.message));
@@ -316,9 +329,57 @@ async function verifyOpeners() {
   }
 }
 
+async function verifyAndroidKeyboard() {
+  const KEYBOARD = 300;
+  for (const [path, caption] of [["/gvdg-members.html#home", "member"], ["/events.html", "public"],
+    ["/score.html?round=QA44", "score"], ["/admin.html#today", "admin"]]) {
+    const view = await openPage(path, 390, { mode: "dark", isAdmin: path.startsWith("/admin"), virtualKeyboard: true });
+    const { page, context, input, send } = view;
+    try {
+      if (caption === "public") await page.getByRole("button", { name: "Open menu", exact: true }).click();
+      if (caption === "score") await page.getByRole("button", { name: "Round tools" }).waitFor();
+      const opener = caption === "score" ? page.getByRole("button", { name: "Help", exact: true }) : page.getByRole("link", { name: "Help", exact: true });
+      await opener.click();
+      await view.finishOpen();
+      assert.equal(await page.evaluate(() => navigator.virtualKeyboard.overlaysContent), true, caption + ": keyboard geometry requested");
+      await input.focus();
+      await page.evaluate((height) => window.__qaKeyboard(height), KEYBOARD);
+      const limit = 720 - KEYBOARD;
+      await page.waitForFunction((max) => {
+        const form = document.querySelector("#crotts-form")?.getBoundingClientRect();
+        return form && form.bottom <= max + 1;
+      }, limit);
+      const boxes = await page.evaluate(() => ({
+        input: document.querySelector("#crotts-input").getBoundingClientRect().toJSON(),
+        head: document.querySelector("#crotts-head").getBoundingClientRect().toJSON(),
+      }));
+      const sendBox = await send.boundingBox();
+      assert.ok(boxes.input.bottom <= limit + 1 && boxes.input.top >= 0, caption + ": message box above the keyboard " + JSON.stringify(boxes.input));
+      assert.ok(sendBox.y + sendBox.height <= limit + 1, caption + ": Send above the keyboard");
+      assert.ok(boxes.head.top >= 0, caption + ": header still on screen");
+      await page.evaluate((height) => {
+        const shade = document.createElement("div");
+        shade.id = "qa-keyboard";
+        shade.textContent = "keyboard";
+        shade.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:${height}px;z-index:2147483647;background:rgba(120,120,120,.85);color:#fff;font:600 20px system-ui;display:grid;place-items:center`;
+        document.body.append(shade);
+      }, KEYBOARD);
+      await view.screenshot("android-keyboard-" + caption);
+      await page.evaluate(() => document.querySelector("#qa-keyboard")?.remove());
+      await page.evaluate(() => window.__qaKeyboard(0));
+      await page.keyboard.press("Escape");
+      await view.help.waitFor({ state: "detached" });
+      assert.equal(await page.evaluate(() => navigator.virtualKeyboard.overlaysContent), false, caption + ": keyboard setting restored");
+      assert.deepEqual(view.errors, []);
+    } finally { await context.close(); }
+  }
+  console.log("Android overlay keyboard: Crotts composer stays above the keyboard on member, public, score and admin.");
+}
+
 try {
   await verifyMembers();
   await verifyOpeners();
+  await verifyAndroidKeyboard();
   console.log("Crotts Help verified across public, member, admin and scoring entry points.");
   console.log("Screenshots " + screenshots);
 } finally {
