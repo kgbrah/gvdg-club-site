@@ -194,6 +194,14 @@ async function serveFixture(path, query, request, ref, reply) {
   else if (path === "/community/courses") reply({ courses: empty || (query.has("favorites") && !fixture.favorite) ? [] : [course], more: false });
   else if (path === "/community/courses/7/reviews") reply({ course, mine: null, more: false,
     reviews: [{ id: 31, rating: 4, text: "Good practice basket by the parking lot.", publishedAt: now, own: false, reported: false }] });
+  else if (path === "/market/me") reply(empty ? { waiting: 0, listings: [], selling: [], buying: [], offersIn: [], offersOut: [], wanted: [], feedbackToLeave: [], recentDeals: [], settings: null } : {
+    waiting: 2, listings: [], offersOut: [], wanted: [], recentDeals: [], settings: { paypalMe: "TaylorDiscs", cashtag: "", zelle: "", notifyEmail: "" },
+    selling: [{ id: 6, listingId: 7, listingTitle: "MVP Neutron Tesla", kind: "buy", status: "pending", priceCents: 1600, role: "seller",
+      buyer: { key: "t_g", name: "Casey Guest", kind: "guest" }, seller: { key: "t_me", name: member.name, kind: "member" } }],
+    offersIn: [{ id: 4, listingId: 7, listingTitle: "MVP Neutron Tesla", status: "open", text: "My Thunderbird plus $5", offered: [],
+      buyer: { key: "t_x", name: "Jordan Parker", kind: "member" }, createdAt: now }],
+    buying: [], feedbackToLeave: [],
+  });
   else if (path === "/assistant") { fixture.asks += 1; reply({ reply: "Check the club schedule for the next round." }); }
   else reply({});
 }
@@ -288,6 +296,7 @@ const readiness = {
   standings: "[data-react-active-standings='empty']",
   tags: "[data-react-bag-tags]", account: "[data-member-account-devices]", appearance: ".member-appearance", wallet: "[data-react-wallet='ready']",
   imports: "[data-react-udisc-history='ready']", practice: "[data-member-practice]", "my-bag": "[data-member-bag]",
+  marketplace: "[data-member-marketplace='ready']",
 };
 
 async function verifyDestinations(width, mode) {

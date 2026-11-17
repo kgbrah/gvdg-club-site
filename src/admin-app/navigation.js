@@ -18,7 +18,7 @@ export function requestAdminTab(tab, context = {}) {
 
 function itemBadge(key) {
   if (key === "orders") return h(AdminOrdersBadge, { key: "badge" });
-  if (key === "applications" || key === "bag-tags" || key === "tee-signs") {
+  if (key === "applications" || key === "bag-tags" || key === "tee-signs" || key === "marketplace") {
     return h(AdminNeedsBadge, { key: "badge", tab: key === "applications" ? "members" : key });
   }
   return null;

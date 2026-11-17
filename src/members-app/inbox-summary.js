@@ -3,7 +3,7 @@ import React from "react";
 import { requestJson } from "./api.js";
 
 const listeners = new Set();
-let cache = { token: "", at: 0, unread: 0, unseen: 0, pending: null };
+let cache = { token: "", at: 0, unread: 0, unseen: 0, market: 0, pending: null };
 
 function publish(next) {
   cache = { ...next, pending: null };
@@ -29,6 +29,7 @@ export function refreshInbox(token, force = false) {
       at: Date.now(),
       unread: Number(data?.unread) || 0,
       unseen: Number(data?.unseen) || 0,
+      market: Number(data?.market) || 0,
     });
   }).catch(() => {
     cache = { ...cache, pending: null };
@@ -37,14 +38,14 @@ export function refreshInbox(token, force = false) {
 
 export function useInboxSummary(token) {
   const [summary, setSummary] = React.useState(() => (
-    cache.token === token ? { unread: cache.unread, unseen: cache.unseen } : { unread: 0, unseen: 0 }
+    cache.token === token ? { unread: cache.unread, unseen: cache.unseen, market: cache.market } : { unread: 0, unseen: 0, market: 0 }
   ));
 
   React.useEffect(() => {
     if (!token) return undefined;
     let live = true;
     const apply = (next) => {
-      if (live && next.token === token) setSummary({ unread: next.unread, unseen: next.unseen });
+      if (live && next.token === token) setSummary({ unread: next.unread, unseen: next.unseen, market: next.market || 0 });
     };
     listeners.add(apply);
     refreshInbox(token);
@@ -61,5 +62,5 @@ export function useInboxSummary(token) {
     };
   }, [token]);
 
-  return { unread: summary.unread, unseen: summary.unseen, total: summary.unread + summary.unseen };
+  return { unread: summary.unread, unseen: summary.unseen, market: summary.market || 0, total: summary.unread + summary.unseen };
 }
