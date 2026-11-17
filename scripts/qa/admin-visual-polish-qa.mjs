@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
 import { createServer } from "vite";
@@ -135,8 +136,10 @@ function fixture(path, method, query, authorization, body) {
 }
 
 process.env.VITE_DISABLE_REACT_DEVTOOLS = "1";
+const viteCache = join(tmpdir(), "gvdg-admin-visual-qa-" + process.pid);
 const vite = await createServer({
-  configFile: false, cacheDir: "/tmp/gvdg-admin-visual-qa",
+  // Per-run cache: Vite rewrites deps on start, so a shared dir let overlapping runs clobber each other.
+  configFile: false, cacheDir: viteCache,
   server: { host: "127.0.0.1", port: 0, hmr: false },
   optimizeDeps: { entries: ["src/admin-app/main.js"] },
   plugins: [{ name: "admin-polish-fixture", configureServer(server) {
@@ -188,7 +191,9 @@ async function newPage(variant, who = token) {
     permissions: ["clipboard-read", "clipboard-write"], serviceWorkers: "block" });
   await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
-  page.setDefaultTimeout(12_000);
+  // 30s like the other heavy suites: the 1280 pass runs a long route sequence and 12s left no headroom
+  // under load (the UI was correct, just late).
+  page.setDefaultTimeout(30_000);
   page.on("pageerror", (err) => errors.push(err.message));
   page.on("console", (message) => {
     if (message.type() === "error" && message.text().includes("unique") && message.text().includes("key")) warnings.push(message.text());
@@ -387,6 +392,14 @@ async function verifyRoutes(variant) {
     await fit(page, variant.name + " Help");
     await help.getByRole("button", { name: "Close Crotts assistant" }).click();
     console.log(variant.name + " verified " + ADMIN_DESTINATIONS.length + " destinations, route interactions and contained scrolling");
+  } catch (error) {
+    // Leave evidence for intermittent failures: what the page showed, where focus was, and the route.
+    const evidence = (process.env.GVDG_ADMIN_SCREENSHOTS || tmpdir()) + "/admin-failure-" + variant.name + ".png";
+    await page.screenshot({ path: evidence, fullPage: true }).catch(() => {});
+    const state = await page.evaluate(() => ({ hash: location.hash, focus: document.activeElement?.outerHTML.slice(0, 160),
+      h1: [...document.querySelectorAll("h1")].map((node) => node.textContent) })).catch(() => ({}));
+    console.error("admin " + variant.name + " failed; screenshot " + evidence + " state " + JSON.stringify(state));
+    throw error;
   } finally { await context.close(); }
 }
 
@@ -444,4 +457,5 @@ try {
 } finally {
   await browser.close();
   await vite.close();
+  await rm(viteCache, { recursive: true, force: true });
 }

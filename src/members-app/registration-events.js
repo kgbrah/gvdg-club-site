@@ -21,9 +21,16 @@ function EventBadge({ status }) {
   return null;
 }
 
+/** A finished event's one action; it sits with the card's other actions, below the member's status lines. */
+function ResultsLink({ event }) {
+  return h("a", { className: "passkey-btn", href: `events.html#event/${encodeURIComponent(event.id)}` }, "View results");
+}
+
 function RegisteredEventActions({ event, registration, token, onReload }) {
   const manageable = event.status === "scheduled" || event.status === "live";
   const actions = [];
+
+  if (event.status === "final") actions.push(h(ResultsLink, { event, key: "results" }));
 
   if (event.status === "live") {
     actions.push(h("a", { className: "passkey-btn", href: `score.html?event=${encodeURIComponent(event.id)}`, key: "score" }, "Open scorecard"));
@@ -170,13 +177,7 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
     ]),
     eventMeta(event) ? h("div", { className: "register-fee", key: "meta" }, eventMeta(event)) : null,
     h(EventScheduleFacts, { event, key: "schedule" }),
-    event.status === "final"
-      ? h("a", {
-        className: "passkey-btn",
-        href: `events.html#event/${encodeURIComponent(event.id)}`,
-        key: "results",
-      }, "View results")
-      : h(AddToCalendarButton, { item: calendarEventFromClub(event), key: "cal" }),
+    event.status === "final" ? null : h(AddToCalendarButton, { item: calendarEventFromClub(event), key: "cal" }),
     !event._synth ? h(EventFieldRoster, { compact: true, key: "field", players: event.field }) : null,
     !event._synth ? h("div", { className: "register-fee", key: "fee" }, `${event.entry_fee_cents ? `${dollars(event.entry_fee_cents)} entry` : "Free entry"}${event.play_format ? ` - ${formatLabel(event.play_format)}` : ""}`) : null,
     registration && event.status === "cancelled"
@@ -200,7 +201,9 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
       : null,
     registration
       ? h(RegisteredEventActions, { event, registration, token, onReload, key: "actions" })
-      : h(OpenEventForm, { event, token, onReload, key: "form" }),
+      : event.status === "final"
+        ? h("div", { className: "register-actions", key: "actions" }, h(ResultsLink, { event }))
+        : h(OpenEventForm, { event, token, onReload, key: "form" }),
   ]);
 }
 

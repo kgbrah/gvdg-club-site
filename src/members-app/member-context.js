@@ -39,7 +39,9 @@ export function readMemberContext(detail = null) {
     isAdmin: source.isAdmin === true || stored.isAdmin === true,
     membership: membershipFrom(source.membership) || membershipFrom(stored.membership),
     sub: source.sub || stored.sub || null,
-    welcome: source.welcome === true,
+    // Routing events (e.g. gvdg:member-dashboard-ready) carry no `welcome`; only an explicit value may change
+    // it, otherwise a just-approved member's welcome card vanished whenever that event landed after /me.
+    welcome: source.welcome === undefined ? stored.welcome === true : source.welcome === true,
   };
 }
 

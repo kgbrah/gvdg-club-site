@@ -1144,3 +1144,48 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
 
 /* Event results: league names sit one level under the "Completed league rounds" heading. */
 #members .member-completed-league-rounds h3.register-subhead { font-size: .88rem; font-weight: 700; color: var(--text-muted); margin-block: .6rem .35rem; }
+
+/* Event cards: long event names wrap to two lines before truncating (they were cut to one). */
+#members .member-event-heading .register-name {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Action buttons wrap at spaces instead of clipping: these buttons are flex containers, where
+   text-overflow: ellipsis never renders, so a long label was cut off on both sides. Tab strips keep ellipsis. */
+#members :is(.member-action-grid, .dashboard-actions, .player-actions, .player-play-actions, .register-actions, .live-round-actions, .bag-disc-voice-actions, .member-practice-toolbar) > :is(a, button, .player-btn, .dashboard-action, .passkey-btn, .player-more-item) {
+  white-space: normal;
+  overflow-wrap: normal;
+  line-height: 1.15;
+  padding-block: .4rem;
+}
+/* Two or three across on a narrow phone (or with large text) leaves 70-100px a button: trim the side
+   padding (the labels are centred, so it doesn't show) so a single long word such as "Archive" still fits. */
+@media (max-width: 380px) {
+  #members :is(.member-action-grid, .dashboard-actions, .player-actions, .player-play-actions, .register-actions, .live-round-actions, .member-practice-toolbar) > :is(a, button, .player-btn, .dashboard-action, .passkey-btn, .player-more-item) {
+    padding-inline: .3rem;
+  }
+}
+/* Community profile: the primary save spans the row; the two profile-link actions share the next row. */
+#members .member-community-hub .dashboard-actions:has(> .dashboard-action.primary):has(> :nth-child(3):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#members .member-community-hub .dashboard-actions:has(> :nth-child(3):last-child) > .dashboard-action.primary { grid-column: 1 / -1; }
+/* Event card: "Pay $7 with store credit" sizes to its label and had no side padding (text touched the edges). */
+#members .register-wallet-pay .player-btn { padding-inline: 1rem; }
+/* Messages / Tee signs: the conversation list and the tee-sign capture + list now sit on cards. */
+#members .member-inbox-threads.player-card { display: grid; gap: .55rem; margin: 0; }
+#members .react-tee-signs-panel > .player-card { margin: 0 0 .75rem; }
+#members .react-tee-signs-panel .ts-capture-card > .my-dashboard-title { margin-top: 0; }
+#members .react-tee-signs-panel .ts-mylist-card .ts-mylist-title { margin-top: 0; }
+#members .react-tee-signs-panel .ts-status:empty { min-height: 0; margin: 0; padding: 0; }
+/* Course discovery difficulty chips in dark themes: the raw level colour measured 2.4:1 on the card (fails AA
+   for 12px text). Blend it with the text colour so the tint stays but the label reads (~8:1). */
+[data-theme="dark"] #members .course-chip.level-beginner { color: color-mix(in srgb, var(--under) 45%, var(--text-primary)); }
+[data-theme="dark"] #members .course-chip.level-intermediate { color: color-mix(in srgb, var(--accent) 45%, var(--text-primary)); }
+[data-theme="dark"] #members .course-chip.level-advanced { color: color-mix(in srgb, var(--over) 45%, var(--text-primary)); }

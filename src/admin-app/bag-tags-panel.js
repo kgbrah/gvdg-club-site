@@ -173,7 +173,6 @@ export function AdminBagTagsPanel() {
   const tagValue = assign.tagNumber === "" ? String(nextTag) : assign.tagNumber;
 
   return h("div", { "data-react-admin-bag-tags": "ready" }, [
-    h("h2", { className: "admin-pane-heading", key: "title" }, "Bag tags"),
     h("p", { className: "al-note", key: "note" }, "Lower number is better. Settle a card by score, or confirm a head-to-head challenge. A tie keeps the better tag."),
     !series
       ? h("form", {

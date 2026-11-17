@@ -899,3 +899,13 @@ body.admin-page.player-theme-active {
     text-wrap: balance;
   }
 }
+
+/* Today's live event card: the secondary action (Check-in) was dark text on the dark live gradient. */
+.admin-page .admin-today-feature[data-event-status="live"] .admin-today-actions > .admin-btn.secondary {
+  background: transparent;
+  color: var(--admin-event-ink);
+  border-color: color-mix(in srgb, var(--admin-event-ink) 55%, transparent);
+}
+/* Bag tags: the Tag requests section sat flush against the Assign tag button above it. */
+.admin-page [data-react-admin-bag-tags] #admin-bag-requests { margin-top: 1rem; }
+.admin-page [data-react-admin-bag-tags] > .al-note + * > .al-h:first-child { margin-top: .75rem; }

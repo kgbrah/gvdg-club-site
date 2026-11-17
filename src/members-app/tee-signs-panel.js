@@ -170,7 +170,9 @@ export function MemberTeeSignsPanel({ routeCourseId } = {}) {
 
   if (!token) return null;
 
+  // Two cards (capture, then the member's own signs) so no copy or control floats on the wallpaper.
   return h("div", { className: "react-tee-signs-panel", "data-react-tee-signs-panel": state.status }, [
+    h("section", { className: "player-card ts-capture-card", "aria-label": "Capture a tee sign", key: "capture" }, [
     h("h3", { className: "my-dashboard-title", key: "title" }, "Capture a Tee Sign"),
     h("p", { className: "tee-capture-note", key: "note" }, "Snap a photo of a tee sign while you play and Crotts will read the par and distance for every layout on it. An admin reviews each photo before it counts."),
     h("div", { className: "ts-controls", key: "controls" }, [
@@ -204,7 +206,10 @@ export function MemberTeeSignsPanel({ routeCourseId } = {}) {
     pending ? h("img", { className: "ts-preview", src: pending.image, alt: "Tee-sign photo preview", style: { display: "block" }, key: "preview" }) : null,
     h("div", { key: "upload" }, h("button", { type: "button", className: "passkey-btn", disabled: !pending || !state.courses.length, onClick: upload }, "Upload tee sign")),
     h("div", { className: `ts-status${message.tone ? ` ${message.tone}` : ""}`, role: "status", "aria-live": "polite", key: "status" }, message.text),
-    h("div", { className: "ts-mylist-title", key: "list-title" }, "My captured signs"),
-    h("div", { id: "reactTsMyList", key: "list" }, h(TeeSignList, { signs: state.signs, courses: state.courses, token, status: state.status })),
+    ]),
+    h("section", { className: "player-card ts-mylist-card", "aria-label": "My captured signs", key: "mine" }, [
+      h("div", { className: "ts-mylist-title", key: "list-title" }, "My captured signs"),
+      h("div", { id: "reactTsMyList", key: "list" }, h(TeeSignList, { signs: state.signs, courses: state.courses, token, status: state.status })),
+    ]),
   ]);
 }
