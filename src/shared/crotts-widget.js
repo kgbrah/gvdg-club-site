@@ -117,6 +117,8 @@ body .crotts-overlay > #crotts-panel {
 .crotts-overlay.crotts-keyboard > #crotts-panel {
   width: min(100%, 28rem); height: 100%; max-height: 100%; min-height: 0;
 }
+.crotts-overlay.crotts-keyboard-guess { align-items: start; padding-top: max(.4rem, var(--safe-top)); }
+.crotts-overlay.crotts-keyboard-guess > #crotts-panel { max-height: 46vh; max-height: 46dvh; min-height: 0; }
 @media (max-width: 360px) { #crotts-send svg { display: none; } }
 `;
 
@@ -132,20 +134,39 @@ export function visibleKeyboardInset(innerHeight, offsetTop, viewportHeight) {
   };
 }
 
+/** Larger of the two keyboard measurements: the visual viewport (iOS, default Android) and the
+ *  VirtualKeyboard API (Android Chrome with interactive-widget=overlays-content, where the visual viewport
+ *  does not shrink). */
+export function keyboardBox(viewportInset, virtualKeyboardHeight) {
+  const vk = Math.max(0, Math.round(Number(virtualKeyboardHeight) || 0));
+  return { top: viewportInset.top, bottom: Math.max(viewportInset.bottom, vk) };
+}
+
 function useKeyboardViewport(open, threadRef) {
-  const [box, setBox] = React.useState({ top: 0, bottom: 0 });
+  const [box, setBox] = React.useState({ top: 0, bottom: 0, guess: false });
   React.useEffect(() => {
     if (!open) return undefined;
     const viewport = window.visualViewport;
+    // Our pages declare interactive-widget=overlays-content, so on Android the keyboard covers the page
+    // without shrinking the visual viewport. Opt in to the VirtualKeyboard API while Crotts is open so the
+    // browser reports the keyboard's height (same overlay behaviour, plus geometry), then restore it.
+    const vk = navigator.virtualKeyboard;
+    const previousOverlay = vk ? vk.overlaysContent : null;
+    if (vk) { try { vk.overlaysContent = true; } catch { /* unsupported */ } }
+    const coarse = window.matchMedia?.("(pointer: coarse)").matches;
     let frame = 0;
+    let focused = false;
+    let guess = false;
     const timers = [];
     const apply = () => {
-      const next = viewport
+      const inset = viewport
         ? visibleKeyboardInset(window.innerHeight, viewport.offsetTop, viewport.height)
         : { top: 0, bottom: 0 };
-      setBox((current) => current.top === next.top && current.bottom === next.bottom ? current : next);
+      const measured = keyboardBox(inset, vk?.boundingRect?.height);
+      const next = { ...measured, guess: guess && measured.bottom <= 72 };
+      setBox((current) => current.top === next.top && current.bottom === next.bottom && current.guess === next.guess ? current : next);
       const thread = threadRef.current;
-      if (next.bottom > 72 && thread) thread.scrollTop = thread.scrollHeight;
+      if ((next.bottom > 72 || next.guess) && thread) thread.scrollTop = thread.scrollHeight;
     };
     const schedule = () => {
       cancelAnimationFrame(frame);
@@ -156,20 +177,40 @@ function useKeyboardViewport(open, threadRef) {
       timers.push(window.setTimeout(schedule, 60), window.setTimeout(schedule, 280));
     };
     const onFocus = (event) => {
-      if (event.target?.id === "crotts-input") burst();
+      if (event.target?.id !== "crotts-input") return;
+      focused = true;
+      burst();
+      // Last resort for browsers that report no keyboard geometry at all: on a touch screen, once the field
+      // has focus and nothing has been measured, lift the panel into the top half where a keyboard can't reach.
+      if (coarse && !vk) {
+        timers.push(window.setTimeout(() => {
+          if (focused) { guess = true; schedule(); }
+        }, 450));
+      }
+    };
+    const onBlur = (event) => {
+      if (event.target?.id !== "crotts-input") return;
+      focused = false;
+      guess = false;
+      timers.push(window.setTimeout(schedule, 120));
     };
     apply();
     window.addEventListener("resize", schedule);
     viewport?.addEventListener("resize", schedule);
     viewport?.addEventListener("scroll", schedule);
+    vk?.addEventListener?.("geometrychange", schedule);
     document.addEventListener("focusin", onFocus);
+    document.addEventListener("focusout", onBlur);
     return () => {
       cancelAnimationFrame(frame);
       timers.forEach((id) => window.clearTimeout(id));
       window.removeEventListener("resize", schedule);
       viewport?.removeEventListener("resize", schedule);
       viewport?.removeEventListener("scroll", schedule);
+      vk?.removeEventListener?.("geometrychange", schedule);
       document.removeEventListener("focusin", onFocus);
+      document.removeEventListener("focusout", onBlur);
+      if (vk) { try { vk.overlaysContent = previousOverlay; } catch { /* unsupported */ } }
     };
   }, [open, threadRef]);
   return box;
@@ -383,7 +424,7 @@ export function CrottsWidget() {
 
   return createPortal(h("div", {
     "data-a11y-overlay": "true",
-    className: "crotts-overlay" + (keyboard.bottom > 72 ? " crotts-keyboard" : ""),
+    className: "crotts-overlay" + (keyboard.bottom > 72 ? " crotts-keyboard" : keyboard.guess ? " crotts-keyboard-guess" : ""),
     ref: dialog.overlayRef,
     role: "presentation",
     style: { "--crotts-vv-top": keyboard.top + "px", "--crotts-keyboard": keyboard.bottom + "px" },
