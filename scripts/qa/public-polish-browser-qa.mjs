@@ -164,6 +164,15 @@ async function screenshot(page, name, { fullPage = true } = {}) {
 }
 
 async function assertFits(page, label) {
+  // No visible button or link label may be cut off (flex buttons never render an ellipsis, they just clip).
+  const clipped = await page.evaluate(() => [...document.querySelectorAll("button, a, [role=button], summary")].filter((node) => {
+    const box = node.getBoundingClientRect();
+    if (box.width <= 2 || box.height <= 2 || node.closest("[hidden], [aria-hidden='true'], [inert]")) return false;
+    const style = getComputedStyle(node);
+    if (style.overflowX === "visible" || node.scrollWidth <= node.clientWidth + 1) return false;
+    return !(style.textOverflow === "ellipsis" && !/flex|grid/.test(style.display));
+  }).map((node) => (node.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) + " (" + node.scrollWidth + ">" + node.clientWidth + ")"));
+  if (clipped.length) throw new Error(label + " clipped labels: " + clipped.join(" | "));
   const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth);
   if (overflow <= 1) return;
   const offenders = await page.evaluate(() => Array.from(document.body.querySelectorAll("*"))

@@ -64,7 +64,7 @@ export function MemberDashboardApp() {
     tab === "install" ? h(MemberInstallPage, { key: "install" }) : null,
     tab === "tags" && token ? h(BagTagPanel, { key: "tags", token }) : null,
     tab === "messages" && token ? h(MemberMessagesPanel, { key: "messages", token }) : null,
-    tab === "standings" ? h(ActiveStandingsPanel, { key: "standings" }) : null,
+    tab === "standings" ? h(ActiveStandingsPanel, { key: "standings", standalone: true }) : null,
     tab === "leagues" ? h(React.Fragment, { key: "leagues" }, [
       h(LeagueSchedule, { key: "current" }),
       h(DoublesLeaguePanel, { key: "doubles" }),

@@ -259,6 +259,23 @@ async function pageFor(width, mode, run, extra = "") {
     await page.evaluate(() => document.fonts.ready);
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
     assert.equal(fits, true, name + " viewport width");
+    // No action label may be cut off. Buttons are flex containers, where text-overflow: ellipsis never
+    // renders, so an overflowing label is silently clipped on both sides.
+    const clipped = await page.evaluate(() => [...document.querySelectorAll("#members :is(button, a, .dashboard-action, .passkey-btn)")]
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        if (!box.width || !box.height || element.closest("[hidden], [aria-hidden='true'], [inert]")) return false;
+        const style = getComputedStyle(element);
+        if (style.overflowX === "visible" || element.scrollWidth <= element.clientWidth + 1) return false;
+        return !(style.textOverflow === "ellipsis" && !/flex|grid/.test(style.display));
+      })
+      .map((element) => {
+        const style = getComputedStyle(element);
+        return (element.textContent || "").trim().slice(0, 40) + " (" + element.scrollWidth + ">" + element.clientWidth
+          + " in ." + String(element.parentElement?.className || element.parentElement?.tagName).split(" ")[0]
+          + " " + style.whiteSpace + " max " + style.maxWidth + ")";
+      }));
+    assert.deepEqual(clipped, [], name + " has clipped action labels");
     await page.screenshot({ path: join(screenshotDir, name + ".png"), animations: "disabled" });
   }
   return { page, context, errors, url, go, screen };
@@ -268,6 +285,7 @@ const readiness = {
   overview: "[data-react-home-hero]", play: "[data-react-play-join]", events: "[data-member-event-id='51']",
   season: "[data-react-season-page='ready']", more: "[data-react-more-page]", club: "[data-react-club-panel]",
   community: "[data-member-community]", "course-discovery": ".member-course-results li", board: ".board-post", tee: "#reactTsPhotoInput",
+  standings: "[data-react-active-standings='empty']",
   tags: "[data-react-bag-tags]", account: "[data-member-account-devices]", appearance: ".member-appearance", wallet: "[data-react-wallet='ready']",
   imports: "[data-react-udisc-history='ready']", practice: "[data-member-practice]", "my-bag": "[data-member-bag]",
 };
@@ -284,6 +302,9 @@ async function verifyDestinations(width, mode) {
         const mine = view.page.locator("section[aria-label='My events']");
         await mine.waitFor();
         assert.equal(await mine.getByText("Fall Finale Doubles").count(), 0, "finished events leave My events");
+      }
+      if (item.key === "standings") {
+        await view.page.getByText("No league standings right now.", { exact: false }).waitFor();
       }
       if (item.key === "leagues") {
         const schedule = view.page.locator("[data-react-league-schedule='ready']");

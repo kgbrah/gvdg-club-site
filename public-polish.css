@@ -932,3 +932,18 @@
 [data-public-polish="events"] .event-register-panel .event-registration-form > summary::after { position: absolute; right: 18px; top: 50%; margin: -7px 0 0; border-color: #fff; }
 [data-public-polish="events"] button.back-link:has(.back-link-icon) { color: var(--secondary-text); }
 [data-public-polish="events"] .detail-card[data-react-events-event-detail] .btn-watch-live { background: var(--primary-strong); border-color: var(--primary-strong); color: #fff; }
+
+/* Ryder Cup on phones: match cards scrolled sideways inside their link (names never wrapped), so the winner
+   was cut off with no hint to scroll, and the scroll box clipped the "#1" pill that sits above each card.
+   Names now wrap inside the card, nothing scrolls, and the week's meta chips wrap instead of scrolling. */
+[data-public-polish="ryder"] .match-link,
+[data-public-polish="ryder"] .match-grid > .match-card,
+[data-public-polish="ryder"] .match-link .match-card { overflow: visible; }
+[data-public-polish="ryder"] .match-link .match-card { width: auto; min-width: 0; }
+[data-public-polish="ryder"] .match-card { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+[data-public-polish="ryder"] .match-card :is(.player, .pair-name) {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+[data-public-polish="ryder"] .week-meta { flex-wrap: wrap; overflow-x: visible; }

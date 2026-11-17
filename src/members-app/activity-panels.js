@@ -340,7 +340,7 @@ function LiveEventStandings({ event }) {
   ]);
 }
 
-export function ActiveStandingsPanel() {
+export function ActiveStandingsPanel({ standalone = false } = {}) {
   const [state, setState] = React.useState({ status: "idle", leagues: [], liveEvents: [], ryderTally: undefined });
 
   React.useEffect(() => {
@@ -361,7 +361,17 @@ export function ActiveStandingsPanel() {
     return () => controller.abort();
   }, []);
 
-  if (state.status !== "ready" || (!state.leagues.length && !state.liveEvents.length)) return null;
+  if (state.status !== "ready" || (!state.leagues.length && !state.liveEvents.length)) {
+    // Embedded (Stats) the panel simply hides; as its own screen (Club → Club standings) it explains itself.
+    if (!standalone) return null;
+    const message = state.status === "error"
+      ? "Standings are unavailable right now. Please try again in a minute."
+      : state.status === "ready"
+        ? "No league standings right now. They show here while a league round is live and for 60 days after one."
+        : "Loading standings…";
+    return h("div", { className: "player-card active-standings", "data-react-active-standings": state.status === "ready" ? "empty" : state.status },
+      h("p", { className: "dash-note", role: state.status === "error" ? "alert" : "status" }, message));
+  }
   const leagues = applyOfficialRyderTally(state.leagues, state.ryderTally);
   return h("div", { className: "active-standings react-active-standings", "data-react-active-standings": "ready" }, [
     ...state.liveEvents.map((event) => h(LiveEventStandings, { event, key: `event-${event.id}` })),

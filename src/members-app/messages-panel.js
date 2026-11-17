@@ -298,7 +298,7 @@ function InboxView({ token, onOpen }) {
         h("span", { className: "member-list-date", key: "when" }, messageWhen(notice.at)),
       ]))),
     ]) : null,
-    h("div", { className: "member-inbox-threads", key: "threads" }, [
+    h("div", { className: "member-inbox-threads player-card", key: "threads" }, [
       h("h2", { key: "title" }, "Conversations"),
       status === "loading" ? h("p", { className: "player-card-meta", key: "loading" }, "Loading messages…") : null,
       status === "error" ? h("p", { className: "player-card-meta", role: "status", key: "error" }, "Could not load messages.") : null,
