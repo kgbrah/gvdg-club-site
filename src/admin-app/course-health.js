@@ -1,7 +1,9 @@
 import React from "react";
 
 import { COVERAGE_LABELS } from "../shared/course-quality.js";
-import { adminJson, adminRequest, adminToken } from "./admin-api.js";
+import { adminRequest, adminToken } from "./admin-api.js";
+import { useAdminResource as useResource } from "./admin-resource.js";
+import { CoursePdgaBaselines, PdgaBaselineTools } from "./pdga-baselines-panel.js";
 import { currentAdminAuthGateState, currentAdminRoute } from "./admin-shell-state.js";
 import { requestAdminTab } from "./navigation.js";
 
@@ -31,22 +33,6 @@ function useAdminContext() {
     };
   }, []);
   return { route, active: route.tab === "course-health" && auth.status === "panel" };
-}
-
-function useResource(path, token, revision = 0) {
-  const [state, setState] = React.useState({ path: "", status: "loading", data: null });
-  React.useEffect(() => {
-    if (!path || !token) return undefined;
-    const controller = new AbortController();
-    setState({ path, token, status: "loading", data: null });
-    adminJson(path, { token, signal: controller.signal }).then((data) => {
-      if (!controller.signal.aborted) setState({ path, token, status: "ready", data });
-    }).catch(() => {
-      if (!controller.signal.aborted) setState({ path, token, status: "error", data: null });
-    });
-    return () => controller.abort();
-  }, [path, token, revision]);
-  return state.path === path && state.token === token ? state : { status: "loading", data: null };
 }
 
 function defaultWindow() {
@@ -314,6 +300,7 @@ export function AdminCourseHealth() {
   const token = active ? adminToken() : "";
   const directory = useResource(active ? BASE : "", token);
   const [search, setSearch] = React.useState("");
+  const [pdgaRevision, setPdgaRevision] = React.useState(0);
   if (!active) return null;
   const selection = String(route.courseId || "");
   const courses = directory.data?.courses ?? [];
@@ -332,6 +319,8 @@ export function AdminCourseHealth() {
     directory.status === "error" ? h("p", { role: "alert", key: "error" }, "Could not load the course list.") : null,
     !filtered.length && directory.status === "ready" ? h("p", { className: "al-note", key: "empty" }, "No courses match.") : null,
     selection ? h(ReportWindow, { base: BASE + "/" + encodeURIComponent(selection), token, key: "report-" + selection }) : null,
+    selection ? h(CoursePdgaBaselines, { courseId: selection, token, revision: pdgaRevision, key: "pdga-" + selection }) : null,
     selection ? h(Maintenance, { base: BASE + "/" + encodeURIComponent(selection), token, key: "maintenance-" + selection }) : null,
+    h(PdgaBaselineTools, { token, revision: pdgaRevision, onChanged: () => setPdgaRevision((value) => value + 1), key: "pdga-tools" }),
   ]);
 }

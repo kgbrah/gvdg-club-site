@@ -1,0 +1,386 @@
+{
+ "data": {
+  "DateRange": "Saturday, Jul 11, 2026",
+  "EndDate": "2026-07-11",
+  "Country": "United States",
+  "Location": "Greenville, North Carolina",
+  "LocationShort": "Greenville, NC",
+  "Divisions": [
+   {
+    "DivisionID": 100,
+    "Division": "MPO",
+    "DivisionName": "Mixed Pro Open",
+    "Players": 6,
+    "IsPro": true,
+    "ShortName": "Mixed Pro Open",
+    "AbbreviatedName": "Mixed Pro Open",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 105,
+    "Division": "FPO",
+    "DivisionName": "Women's Pro Open",
+    "Players": 1,
+    "IsPro": true,
+    "ShortName": "Women's Pro Open",
+    "AbbreviatedName": "Women's Pro Open",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 111,
+    "Division": "MP40",
+    "DivisionName": "Mixed Pro 40+",
+    "Players": 4,
+    "IsPro": true,
+    "ShortName": "Mixed Pro 40+",
+    "AbbreviatedName": "Mixed Pro 40+",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 400,
+    "Division": "MA1",
+    "DivisionName": "Mixed Amateur 1",
+    "Players": 8,
+    "IsPro": false,
+    "ShortName": "Mixed Amateur 1",
+    "AbbreviatedName": "Mixed Am 1",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 411,
+    "Division": "MA40",
+    "DivisionName": "Mixed Amateur 40+",
+    "Players": 7,
+    "IsPro": false,
+    "ShortName": "Mixed Amateur 40+",
+    "AbbreviatedName": "Mixed Am 40+",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 416,
+    "Division": "FA40",
+    "DivisionName": "Women's Amateur 40+",
+    "Players": 1,
+    "IsPro": false,
+    "ShortName": "Women's Amateur 40+",
+    "AbbreviatedName": "Women's Am 40+",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 421,
+    "Division": "MA50",
+    "DivisionName": "Mixed Amateur 50+",
+    "Players": 4,
+    "IsPro": false,
+    "ShortName": "Mixed Amateur 50+",
+    "AbbreviatedName": "Mixed Am 50+",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 500,
+    "Division": "MA2",
+    "DivisionName": "Mixed Amateur 2",
+    "Players": 10,
+    "IsPro": false,
+    "ShortName": "Mixed Amateur 2",
+    "AbbreviatedName": "Mixed Am 2",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 600,
+    "Division": "MA3",
+    "DivisionName": "Mixed Amateur 3",
+    "Players": 10,
+    "IsPro": false,
+    "ShortName": "Mixed Amateur 3",
+    "AbbreviatedName": "Mixed Am 3",
+    "LatestRound": 2
+   },
+   {
+    "DivisionID": 801,
+    "Division": "MJ18",
+    "DivisionName": "Mixed Junior \u226418",
+    "Players": 1,
+    "IsPro": false,
+    "ShortName": "Mixed Junior \u226418",
+    "AbbreviatedName": "Mixed Junior \u226418",
+    "LatestRound": 2
+   }
+  ],
+  "HighestCompletedRound": 2,
+  "LatestRound": 2,
+  "FinalRound": 2,
+  "Layouts": [
+   {
+    "LayoutID": 761495,
+    "CourseID": 26060,
+    "CourseName": "The Meadow at West Meadowbrook Park",
+    "Name": "Yard Gnome Open",
+    "Holes": 18,
+    "Par": 64,
+    "Length": 7404,
+    "Units": "Feet",
+    "Accuracy": "M",
+    "Details": [
+     {
+      "Hole": "H1",
+      "Label": "1",
+      "Par": 3,
+      "Length": 319
+     },
+     {
+      "Hole": "H2",
+      "Label": "2",
+      "Par": 4,
+      "Length": 435
+     },
+     {
+      "Hole": "H3",
+      "Label": "3",
+      "Par": 3,
+      "Length": 284
+     },
+     {
+      "Hole": "H4",
+      "Label": "4",
+      "Par": 4,
+      "Length": 405
+     },
+     {
+      "Hole": "H5",
+      "Label": "5",
+      "Par": 3,
+      "Length": 338
+     },
+     {
+      "Hole": "H6",
+      "Label": "6",
+      "Par": 3,
+      "Length": 252
+     },
+     {
+      "Hole": "H7",
+      "Label": "7",
+      "Par": 5,
+      "Length": 679
+     },
+     {
+      "Hole": "H8",
+      "Label": "8",
+      "Par": 4,
+      "Length": 578
+     },
+     {
+      "Hole": "H9",
+      "Label": "9",
+      "Par": 3,
+      "Length": 150
+     },
+     {
+      "Hole": "H10",
+      "Label": "10",
+      "Par": 4,
+      "Length": 528
+     },
+     {
+      "Hole": "H11",
+      "Label": "11",
+      "Par": 4,
+      "Length": 510
+     },
+     {
+      "Hole": "H12",
+      "Label": "12",
+      "Par": 5,
+      "Length": 868
+     },
+     {
+      "Hole": "H13",
+      "Label": "13",
+      "Par": 3,
+      "Length": 273
+     },
+     {
+      "Hole": "H14",
+      "Label": "14",
+      "Par": 3,
+      "Length": 337
+     },
+     {
+      "Hole": "H15",
+      "Label": "15",
+      "Par": 4,
+      "Length": 551
+     },
+     {
+      "Hole": "H16",
+      "Label": "16",
+      "Par": 3,
+      "Length": 288
+     },
+     {
+      "Hole": "H17",
+      "Label": "17",
+      "Par": 3,
+      "Length": 255
+     },
+     {
+      "Hole": "H18",
+      "Label": "18",
+      "Par": 3,
+      "Length": 354
+     }
+    ]
+   },
+   {
+    "LayoutID": 761497,
+    "CourseID": 217466,
+    "CourseName": "Ayden Park",
+    "Name": "Ayden YGO",
+    "Holes": 18,
+    "Par": 59,
+    "Length": 5947,
+    "Units": "Feet",
+    "Accuracy": "M",
+    "Details": [
+     {
+      "Hole": "H1",
+      "Label": "1",
+      "Par": 3,
+      "Length": 295
+     },
+     {
+      "Hole": "H2",
+      "Label": "2",
+      "Par": 3,
+      "Length": 340
+     },
+     {
+      "Hole": "H3",
+      "Label": "3",
+      "Par": 3,
+      "Length": 305
+     },
+     {
+      "Hole": "H4",
+      "Label": "4",
+      "Par": 4,
+      "Length": 473
+     },
+     {
+      "Hole": "H5",
+      "Label": "5",
+      "Par": 3,
+      "Length": 367
+     },
+     {
+      "Hole": "H6",
+      "Label": "6",
+      "Par": 3,
+      "Length": 336
+     },
+     {
+      "Hole": "H7",
+      "Label": "7",
+      "Par": 3,
+      "Length": 197
+     },
+     {
+      "Hole": "H8",
+      "Label": "8",
+      "Par": 4,
+      "Length": 404
+     },
+     {
+      "Hole": "H9",
+      "Label": "9",
+      "Par": 4,
+      "Length": 419
+     },
+     {
+      "Hole": "H10",
+      "Label": "10",
+      "Par": 3,
+      "Length": 272
+     },
+     {
+      "Hole": "H11",
+      "Label": "11",
+      "Par": 3,
+      "Length": 291
+     },
+     {
+      "Hole": "H12",
+      "Label": "12",
+      "Par": 3,
+      "Length": 244
+     },
+     {
+      "Hole": "H13",
+      "Label": "13",
+      "Par": 3,
+      "Length": 295
+     },
+     {
+      "Hole": "H14",
+      "Label": "14",
+      "Par": 3,
+      "Length": 226
+     },
+     {
+      "Hole": "H15",
+      "Label": "15",
+      "Par": 4,
+      "Length": 529
+     },
+     {
+      "Hole": "H16",
+      "Label": "16",
+      "Par": 3,
+      "Length": 237
+     },
+     {
+      "Hole": "H17",
+      "Label": "17",
+      "Par": 3,
+      "Length": 321
+     },
+     {
+      "Hole": "H18",
+      "Label": "18",
+      "Par": 4,
+      "Length": 396
+     }
+    ]
+   }
+  ],
+  "Name": "Yard Gnomes Open presented by Play it Again Sports",
+  "SimpleName": "Yard Gnomes Open",
+  "RawTier": "B",
+  "Rounds": 2,
+  "RoundsList": {
+   "1": {
+    "Number": 1,
+    "Label": "Round 1",
+    "LabelAbbreviated": "Rd 1",
+    "Date": "2026-07-11",
+    "DateAbbreviated": "Jul 11",
+    "ShowDate": false
+   },
+   "2": {
+    "Number": 2,
+    "Label": "Round 2",
+    "LabelAbbreviated": "Rd 2",
+    "Date": "2026-07-11",
+    "DateAbbreviated": "Jul 11",
+    "ShowDate": false
+   }
+  },
+  "StartDate": "2026-07-11",
+  "Tier": "B",
+  "TotalPlayers": 52,
+  "TournamentId": "104547",
+  "TimeZone": "America/New_York",
+  "ScoringFormat": "S"
+ }
+}

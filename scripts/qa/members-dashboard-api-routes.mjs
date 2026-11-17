@@ -65,9 +65,27 @@ const myRatings = {
   },
   casual: {
     live_rating: 890,
-    rated_rounds: 1,
-    rounds_count: 1,
+    rated_rounds: 2,
+    rounds_count: 2,
     rounds: [
+      {
+        id: 203,
+        label: "Ayden Park - Main Layout",
+        date: "2026-07-12T14:00:00Z",
+        total: 55,
+        to_par: -4,
+        rating: 948,
+        rating_source: "stored",
+        rating_method: "pdga",
+        pdga_baseline_rounds: 6,
+        pdga_baseline_ssa: 49.6,
+        udisc_course_id: null,
+        scorecard: JSON.stringify([
+          { hole: 1, par: 3, strokes: 3 },
+          { hole: 2, par: 3, strokes: 2 },
+          { hole: 3, par: 3, strokes: 3 },
+        ]),
+      },
       {
         id: 202,
         label: "ECU North Rec Complex - Pee Dee's Treasure Map",

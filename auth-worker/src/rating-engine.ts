@@ -1,7 +1,9 @@
 export const RATING_STREAMS = ["competition", "casual"] as const;
 export type RatingStream = (typeof RATING_STREAMS)[number];
 
-export const RATING_METHODS = ["stable", "provisional", "layout", "unrated"] as const;
+// stable/provisional: the field's own day-of SSA; layout: an earlier club field on the same layout
+// revision; pdga: the median official SSA of earlier PDGA rounds on a matching layout; unrated.
+export const RATING_METHODS = ["stable", "provisional", "layout", "pdga", "unrated"] as const;
 export type RatingMethod = (typeof RATING_METHODS)[number];
 
 export type Propagator = {

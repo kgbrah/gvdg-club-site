@@ -42,6 +42,45 @@ const courseHealth = {
   participationDefinition: "Counts completed GVDG records in the selected dates.", coverageDefinition: "Counts approved layout holes.",
 };
 
+// PDGA layout baselines (Course health). Long real names stress wrapping at 320 px with large text.
+const pdgaCandidate = { courseId: 7, courseName: course.name, layoutId: 9, layoutName: "Blue tees", grade: "none", parMatches: 18, lengthMatches: 14,
+  comparableHoles: 18, holes: 18, totalDiffPct: 5.1, meanDiffFt: 31.9, reason: "Length differs by more than max(25 ft, 8%) on 4 holes" };
+const pdgaOverview = {
+  queue: { counts: { pending: 1, in_progress: 1, done: 14, failed: 1 }, items: [
+    { tournId: 104547, source: "member-history", status: "done", attempts: 0, lastError: null, ratingsOfficial: true,
+      name: "Yard Gnomes Open presented by Play it Again Sports", date: "2026-07-11", remainingFetches: 0 },
+    { tournId: 86672, source: "member-history", status: "in_progress", attempts: 1, lastError: "http-503", ratingsOfficial: true,
+      name: "Down East Players Cup presented by Yeet Street Discs", date: "2025-10-24", remainingFetches: 37 },
+  ] },
+  matches: { auto: { layouts: 3, rounds: 9 }, confirmed: { layouts: 1, rounds: 2 }, pending: { layouts: 2, rounds: 3 } },
+  review: [
+    { pdgaLayoutId: 761495, quality: "none", reason: "Closest layout: Length differs by more than max(25 ft, 8%) on 4 holes",
+      courseName: "The Meadow at West Meadowbrook Park", layoutName: "Yard Gnome Open", holes: 18, par: 64, lengthFt: 7404, rounds: 1,
+      firstDate: "2026-07-11", lastDate: "2026-07-11", eventName: "Yard Gnomes Open presented by Play it Again Sports", tournId: 104547,
+      proposedLayoutId: null, candidates: [pdgaCandidate] },
+    { pdgaLayoutId: 700001, quality: "ambiguous", reason: "White Pads to A-Pins and White Pads to B-Pins are equally close",
+      courseName: "West Meadowbrook Park", layoutName: "Mando Madness Shorts", holes: 18, par: 56, lengthFt: 5120, rounds: 2,
+      firstDate: "2025-05-26", lastDate: "2025-05-26", eventName: "Mando Madness @ the Meadow", tournId: 91304, proposedLayoutId: null,
+      candidates: [{ ...pdgaCandidate, layoutId: 9, grade: "close" }, { ...pdgaCandidate, layoutId: 10, layoutName: "Blue tees to B-Pins", grade: "close" }] },
+  ],
+};
+const pdgaCourse = { course: { ...course, state: "NC" }, layouts: [
+  { id: 9, name: "Blue tees", holes: 18,
+    baseline: { ssa: 49.565, ppt: 10.43, rounds: 6, officialRounds: 6, minSsa: 48.2, maxSsa: 51.0, firstDate: "2023-12-02", lastDate: "2026-07-11",
+      windRounds: 5, noWindDataRounds: 1,
+      provenance: "Median of the 6 most recent PDGA rounds (2023–2026), no-wind SSA 49.6; 1 round has no wind data and is used as played" },
+    rounds: [{ tournId: 104547, round: 1, pdgaLayoutId: 761497, date: "2026-07-11", eventName: "Yard Gnomes Open presented by Play it Again Sports",
+      pdgaLayoutName: "Ayden YGO", ssa: 49.565, ratingsStatus: "official", ratedPlayers: 41, quality: "close", reviewStatus: "auto", fitsCurrentLayout: "close",
+      gustMph: 23.9, weatherStatus: "ok" },
+    { tournId: 99178, round: 2, pdgaLayoutId: 740572, date: "2026-02-22", eventName: "2026 Ayden Founders' Day Classic (CEP Charity - Rated)",
+      pdgaLayoutName: "Ayden Founders' Day 2026", ssa: 51.254, ratingsStatus: "official", ratedPlayers: 29, quality: "exact", reviewStatus: "auto",
+      fitsCurrentLayout: "exact", gustMph: null, weatherStatus: "unavailable" }] },
+  { id: 10, name: "Short tees", holes: 18, baseline: null, rounds: [] },
+] };
+const pdgaValidation = { status: "small-sample", matchedRounds: 9, matchedLayouts: 3, predictedRounds: 5, roundsWithoutPriorBaseline: 4, ratingPairs: 47,
+  maeRating: 14.2, biasRating: -3.1, maxAbsRating: 38, ssaRounds: 5, maeSsaStrokes: 1.36, biasSsaStrokes: 0.29, formulaPairs: 61,
+  formulaMaeRating: 0.3, formulaMaxAbsRating: 1, clubComparisons: 0, clubMinusPdgaSsaMean: null, clubMinusPdgaSsaMae: null, layouts: [] };
+
 const probes = {
   today: ".admin-today-feature",
   events: ".admin-event-card-main",
@@ -106,6 +145,12 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/wallets/credit") return { balance_cents: 1750 };
   if (path === "/admin/tee-signs") return { teeSigns: query.get("status") === "candidate" ? [tee] : [] };
   if (path.endsWith("/tee-signs")) return { signs: [], teeSigns: [] };
+  if (path === "/admin/pdga-baselines") return pdgaOverview;
+  if (path === "/admin/pdga-baselines/courses/7") return pdgaCourse;
+  if (path === "/admin/pdga-baselines/validation") return pdgaValidation;
+  if (path === "/admin/pdga-baselines/events" && method === "POST") return { ok: true, tournId: Number(body.tournId) };
+  if (path === "/admin/pdga-baselines/ingest" && method === "POST") return { ok: true, summary: { fetches: 12, roundsStored: 4, eventsCompleted: 1, errors: [] } };
+  if (path.startsWith("/admin/pdga-baselines/matches/") && method === "POST") return { ok: true };
   if (path === "/admin/course-health") return { courses: [course] };
   if (path === "/admin/course-health/7") return courseHealth;
   if (path === "/admin/course-health/7/tasks") return { tasks: [task] };
@@ -353,6 +398,64 @@ async function verifyRoutes(variant) {
     await taskForm.getByRole("button", { name: "Add task" }).click();
     assert.equal((await taskSaved).status(), 200);
     await pane.getByText("Task added.", { exact: true }).waitFor();
+
+    // PDGA layout baselines: the course's matched rounds with provenance, then the club-wide tools.
+    const pdgaCourse = pane.locator("[data-admin-pdga-course='ready']");
+    await pdgaCourse.locator("summary", { hasText: /Blue tees · SSA\s49\.6/ }).click();
+    await pdgaCourse.getByText(/Median of the 6 most recent PDGA rounds \(2023–2026\), no-wind SSA 49\.6; 1 round has no wind data/).waitFor();
+    await pdgaCourse.getByText(/gust 23\.9 mph/).waitFor();
+    await pdgaCourse.getByText(/no wind data · official ratings/).waitFor();
+    await pdgaCourse.getByText("No PDGA rounds: Short tees").waitFor();
+    const pdgaTools = pane.locator("[data-admin-pdga-tools]");
+    await pdgaTools.locator("[data-admin-pdga-validation='ready']").getByText("14.2 pts", { exact: true }).waitFor();
+    // The four counts: 2×2 on phones, one row on wide screens; each label stays inside its tile.
+    const tiles = await pdgaTools.locator(".pdga-stat-grid > div").evaluateAll((nodes) => nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      const label = node.querySelector("dt");
+      return { top: Math.round(box.top), left: Math.round(box.left), spill: label.scrollWidth > label.clientWidth + 1 || box.right > document.documentElement.clientWidth };
+    }));
+    assert.equal(tiles.length, 4);
+    assert.deepEqual(tiles.filter((tile) => tile.spill), [], variant.name + " PDGA stat labels fit their tiles");
+    if (variant.width < 720) {
+      assert.ok(tiles[0].top === tiles[1].top && tiles[2].top === tiles[3].top && tiles[2].top > tiles[0].top && tiles[0].left === tiles[2].left,
+        variant.name + " PDGA stats are 2×2: " + JSON.stringify(tiles));
+    } else assert.ok(tiles.every((tile) => tile.top === tiles[0].top), variant.name + " PDGA stats share one row");
+    await pdgaTools.getByLabel("PDGA event number").fill("104547");
+    const pdgaAdded = page.waitForResponse((response) => response.url().endsWith("/admin/pdga-baselines/events") && response.request().method() === "POST");
+    await pdgaTools.getByRole("button", { name: "Add PDGA event" }).click();
+    assert.equal((await pdgaAdded).status(), 200);
+    assert.ok(requested.some((call) => call.path === "/admin/pdga-baselines/events" && call.body?.tournId === "104547"));
+    await pdgaTools.getByText(/PDGA event 104547 added/).waitFor();
+    const pdgaRead = page.waitForResponse((response) => response.url().endsWith("/admin/pdga-baselines/ingest") && response.request().method() === "POST");
+    await pdgaTools.getByRole("button", { name: "Read PDGA events now" }).click();
+    assert.equal((await pdgaRead).status(), 200);
+    await pdgaTools.getByText(/12 PDGA requests, 4 rounds stored, 1 event finished\./).waitFor();
+    const review = pdgaTools.locator("[data-admin-pdga-review='761495']");
+    await review.locator("summary").click();
+    await review.getByLabel(/Our layout for/).selectOption("9");
+    const pdgaMatched = page.waitForResponse((response) => response.url().endsWith("/admin/pdga-baselines/matches/761495"));
+    await review.getByRole("button", { name: "Use this layout" }).click();
+    assert.equal((await pdgaMatched).status(), 200);
+    assert.ok(requested.some((call) => call.path === "/admin/pdga-baselines/matches/761495" && call.body?.action === "assign" && call.body?.layoutId === 9));
+    await pdgaTools.getByText("PDGA layout matched.", { exact: true }).waitFor();
+    await pdgaTools.locator("details", { hasText: "Event queue" }).locator("summary").click();
+    await pdgaTools.locator("[data-admin-pdga-validation='ready']").waitFor();
+    await fit(page, variant.name + " PDGA baselines");
+    if (photos) {
+      // Element shots of tall sections: hide fixed/sticky chrome (header, dock, toasts) only while capturing.
+      const hidden = await page.evaluate(() => [...document.querySelectorAll("body *")].filter((node) =>
+        /fixed|sticky/.test(getComputedStyle(node).position)).map((node, index) => {
+        node.setAttribute("data-qa-hidden-chrome", String(index));
+        node.style.setProperty("visibility", "hidden", "important");
+        return index;
+      }).length);
+      await pdgaCourse.screenshot({ path: join(photos, "pdga-course-" + variant.name + ".png"), animations: "disabled", timeout: 20_000 });
+      await pdgaTools.screenshot({ path: join(photos, "pdga-tools-" + variant.name + ".png"), animations: "disabled", timeout: 20_000 });
+      if (hidden) await page.evaluate(() => document.querySelectorAll("[data-qa-hidden-chrome]").forEach((node) => {
+        node.style.removeProperty("visibility");
+        node.removeAttribute("data-qa-hidden-chrome");
+      }));
+    }
 
     pane = await route(page, "tee-signs");
     await pane.getByRole("button", { name: "Reject", exact: true }).click();

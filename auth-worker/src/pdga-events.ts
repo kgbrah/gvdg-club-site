@@ -124,18 +124,20 @@ export function parseDiscGolfSceneSearch(html: string, now = Date.now()): Omit<P
   return out;
 }
 
-function norm(value: string): string {
+export function normalizePlaceText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function tokens(value: string): Set<string> {
-  return new Set(norm(value).split(" ").filter((part) => part.length > 2 && !GENERIC.has(part)));
+/** Distinctive course-name words (generic words such as "disc", "golf" and "park" removed). */
+export function courseNameTokens(value: string): Set<string> {
+  return new Set(normalizePlaceText(value).split(" ").filter((part) => part.length > 2 && !GENERIC.has(part)));
 }
 
-function cityState(value: string): { city: string; state: string } | null {
+/** "Greenville, NC" -> { city: "greenville", state: "NC" }. */
+export function cityState(value: string): { city: string; state: string } | null {
   const match = value.match(/^(.*?),\s*([A-Z]{2})\b/);
   if (!match) return null;
-  return { city: norm(match[1] || ""), state: match[2]!.toUpperCase() };
+  return { city: normalizePlaceText(match[1] || ""), state: match[2]!.toUpperCase() };
 }
 
 function pointOf(course: PdgaEventCourse): { lat: number; lng: number } | null {
@@ -165,12 +167,12 @@ export function locatePdgaEvent(
         return geo && geo.city === place.city && geo.state === place.state && pointOf(course);
       })
     : [];
-  const want = tokens(event.course);
+  const want = courseNameTokens(event.course);
   let best: PdgaEventCourse | null = null;
   let bestScore = 0;
   for (const course of sameCity) {
     if (!want.size) continue;
-    const have = tokens(String(course.name || ""));
+    const have = courseNameTokens(String(course.name || ""));
     let shared = 0;
     for (const token of want) if (have.has(token)) shared += 1;
     const score = shared / want.size;

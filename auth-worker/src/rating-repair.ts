@@ -2,6 +2,8 @@ import type { D1Like } from "./db-types.js";
 import { roundRatingForScoreWithWeather, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { calibrateRatingField } from "./ratings-recompute-core.js";
 import { getRevisionRatingBaseline, priorRatingAnchors, ratingReadGuards, writeRatingBatch, type RatingBaselineInput, type RoundRatingInput } from "./rating-store.js";
+import { pdgaBaselineForPlayed, playedHolesFromShape } from "./pdga-baseline-store.js";
+import type { PdgaBaseline } from "./pdga-baselines.js";
 
 import { MAX_RATING_ROUND_RESULTS, RATING_SOURCE_ROWS, ratingFieldFingerprint, ratingSourceGroups, type EligibleRatingSource } from "./rating-source.js";
 
@@ -15,17 +17,25 @@ type GroupContext = {
   ssa: number; ppt: number; count: number; anchors: number; method: RatingMethod; baselineEventId: number | null;
 };
 
-function computeRating(row: EligibleRatingSource, context: GroupContext | null, anchors: number, reason: string | null): RoundRatingInput {
+function computeRating(row: EligibleRatingSource, context: GroupContext | null, anchors: number, reason: string | null,
+  pdga: PdgaBaseline | null): RoundRatingInput {
+  // A borrowed baseline (club field or PDGA) gets the round's own gust adjustment; a field's
+  // day-of solve already reflects the conditions everyone played in.
   const rated = context ? roundRatingForScoreWithWeather({
     score: row.total, ssa: context.ssa, ppt: context.ppt,
-    weather: context.method === "layout" ? { windGustMph: row.windGustMph } : null,
+    weather: context.method === "layout" || context.method === "pdga" ? { windGustMph: row.windGustMph } : null,
   }) : null;
   return {
     ...row, roundRating: rated?.roundRating ?? null, ssa: rated?.ssa ?? null, ppt: rated?.ppt ?? null,
     weatherAdjustment: rated?.weatherAdjustment ?? 0, propagatorCount: context?.count ?? 0,
     anchorCount: context?.anchors ?? anchors, baselineEventId: context?.baselineEventId ?? null,
     ratingMethod: context?.method ?? "unrated", unratedReason: reason,
+    pdgaBaselineSsa: pdga?.ssa ?? null, pdgaBaselineRounds: pdga?.rounds ?? null,
   };
+}
+
+function pdgaContext(pdga: PdgaBaseline, anchors: number): GroupContext {
+  return { ssa: pdga.ssa, ppt: pdga.ppt, count: 0, anchors, method: "pdga", baselineEventId: null };
 }
 
 export async function repairRatingSource(db: D1Like, stream: RatingStream, sourceId: number, currentGust: number | null = null) {
@@ -42,25 +52,32 @@ export async function repairRatingSource(db: D1Like, stream: RatingStream, sourc
   for (const group of groups) {
     const earliest = group.reduce((date, row) => row.roundDate < date ? row.roundDate : date, group[0]!.roundDate);
     const sample = group[0]!;
+    // Earlier PDGA rounds on a layout matching the as-played geometry (none from the same day or later).
+    const pdga = await pdgaBaselineForPlayed(db, sample.actualLayoutId, playedHolesFromShape(sample.shape), earliest, guards);
     if (stream === "casual") {
-      const baseline = await getRevisionRatingBaseline(db, sample.layoutRevision, earliest, guards);
-      const reason = baseline ? null : sample.layoutRevision ? RATING_EVIDENCE.baseline : RATING_EVIDENCE.layout;
+      // PDGA's SSAs come from far larger rated fields than a club round, so they take precedence.
+      const baseline = pdga ? null : await getRevisionRatingBaseline(db, sample.layoutRevision, earliest, guards);
+      const reason = pdga || baseline ? null : sample.layoutRevision ? RATING_EVIDENCE.baseline : RATING_EVIDENCE.layout;
       waiting ||= reason === RATING_EVIDENCE.baseline;
-      const context: GroupContext | null = baseline ? {
+      const context: GroupContext | null = pdga ? pdgaContext(pdga, 0) : baseline ? {
         ...baseline, count: baseline.propagatorCount, anchors: baseline.propagatorCount, method: "layout", baselineEventId: baseline.eventId,
       } : null;
-      for (const row of group) ratings.push(computeRating(row, context, 0, reason));
+      for (const row of group) ratings.push(computeRating(row, context, 0, reason, pdga));
       continue;
     }
 
     const anchors = await priorRatingAnchors(db, group.map((row) => row.memberId), earliest, guards);
     const { solved, anchorCount } = calibrateRatingField(group, anchors);
-    const context: GroupContext | null = solved ? {
+    // A field with a stable solve of its own (3+ rated players) keeps its day-of SSA, exactly as PDGA
+    // does, with the PDGA baseline kept beside it for comparison. A small field (a provisional 2-player
+    // solve, or none) uses the PDGA baseline when one exists.
+    const ownSolve: GroupContext | null = solved ? {
       ...solved, count: solved.propagatorCount, anchors: anchorCount, method: solved.status, baselineEventId: null,
     } : null;
+    const context: GroupContext | null = solved?.status === "stable" ? ownSolve : pdga ? pdgaContext(pdga, anchorCount) : ownSolve;
     const reason = context ? null : RATING_EVIDENCE.anchors;
     waiting ||= reason != null;
-    for (const row of group) ratings.push(computeRating(row, context, anchorCount, reason));
+    for (const row of group) ratings.push(computeRating(row, context, anchorCount, reason, pdga));
     if (solved && sample.layoutRevision && sample.actualLayoutId != null) {
       const last = group.reduce((latest, row) => row.availableAt > latest.availableAt ? row : latest, sample);
       baselines.push({ ...solved, eventId: sourceId, layoutRevision: sample.layoutRevision,
