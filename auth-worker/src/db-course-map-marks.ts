@@ -2,6 +2,7 @@ import type { D1Like } from "./db-types.js";
 import { getLayoutHoles, type ScorableHole } from "./db-courses.js";
 import { applyMapConsensus, computeMapConsensus, type MapConsensus, type MapMarkKind, type MapMarkSample } from "./course-map-marks.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { bustCourseCatalogCache } from "./course-catalog-cache.js";
 
 export interface CourseMapMarkInput {
   course_id: number;
@@ -83,7 +84,7 @@ export async function listCourseMapMarks(db: D1Like, layoutId: number, hole: num
 }
 
 export async function saveCourseMapConsensus(db: D1Like, row: MapConsensus, layoutId: number) {
-  return db
+  const saved = await db
     .prepare(
       `INSERT INTO course_map_consensus (layout_id, hole, kind, lat, lng, samples, members, spread_m, published, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -98,6 +99,9 @@ export async function saveCourseMapConsensus(db: D1Like, row: MapConsensus, layo
     )
     .bind(layoutId, row.hole, row.kind, row.lat, row.lng, row.samples, row.members, row.spread_m, row.published ? 1 : 0)
     .run();
+  // Published map marks feed GET /courses coverage; drop the edge copy (best effort).
+  try { await bustCourseCatalogCache(); } catch { /* bounded by the catalog's freshness window */ }
+  return saved;
 }
 
 export async function recomputeCourseMapConsensus(
