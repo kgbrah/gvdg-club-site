@@ -14,6 +14,7 @@ import { CrottsWidget, requestCrottsHelp } from "../shared/crotts-widget.js";
 import { usePlayerThemeSession } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme, SCORE_AUTH_EVENT } from "../shared/player-theme-session.js";
 import { readMemberToken } from "../shared/member-session.js";
+import { CLUB_LOGO_MARK, CLUB_LOGO_MARK_SRCSET } from "../shared/club-logo.js";
 import { useDiscColorSession } from "../shared/disc-color.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -135,7 +136,7 @@ function ScoreShell() {
 
   return h("div", { className: "wrap" }, [
     h("header", { key: "header", className: "topbar" }, [
-      h("img", { key: "logo", src: "img/logo.png", alt: "GVDG", className: "logo", width: 32, height: 32 }),
+      h("img", { key: "logo", src: CLUB_LOGO_MARK, srcSet: CLUB_LOGO_MARK_SRCSET, alt: "GVDG", className: "logo", width: 32, height: 32 }),
       h("h1", { key: "title", id: "barTitle" }, [
         header.title,
         h("small", { id: "barSub", key: "subtitle" }, header.subtitle),

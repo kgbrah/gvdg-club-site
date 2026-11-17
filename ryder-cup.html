@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="icon" type="image/png" href="img/logo-small.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="stylesheet" href="tokens.css">
@@ -26,10 +26,12 @@
         body::before {
             content: ""; position: fixed; inset: 0; z-index: -1;
             background: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), url("img/bg/forest-bg.png");
+            background-image: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), image-set(url("img/bg/forest-bg.webp") type("image/webp"), url("img/bg/forest-bg.png") type("image/png"));
             background-repeat: no-repeat; background-position: center bottom; background-size: cover; opacity: 1;
         }
         [data-theme="dark"] body::before {
             background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
+            background-image: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), image-set(url("img/bg/forest-bg.webp") type("image/webp"), url("img/bg/forest-bg.png") type("image/png"));
             background-repeat: no-repeat; background-position: center bottom; background-size: cover;
         }
 
