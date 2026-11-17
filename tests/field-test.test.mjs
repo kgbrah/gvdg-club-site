@@ -375,3 +375,14 @@ test("the owner's comparison joins exports from the same phone and labels the re
   assert.match(report, /\| Pixel 7 \| 0\/0 \| 0 \| 0 \| 50 \(60\) \| 150 \(150\) \|/);
   assert.match(report, /\| Score-entry feedback \(ms\) \| 60 \| 80 \| 50–80 \| 3 \|/);
 });
+
+test("clip and upload results use the recovery queue's retry rules", async () => {
+  const { fieldResultState } = await import("../src/shared/field-test-gate.js?results");
+  assert.equal(fieldResultState(null), "skipped");
+  assert.equal(fieldResultState({ ok: true, data: { id: 7 } }), "saved");
+  assert.equal(fieldResultState({ ok: true, data: { clientId: "c1" } }), "saved");
+  assert.equal(fieldResultState({ ok: true, data: {} }), "pending", "an OK without a clip record is retried");
+  for (const status of [0, 408, 425, 429, 500, 503]) assert.equal(fieldResultState({ ok: false, status }), "pending");
+  assert.equal(fieldResultState({ ok: false, status: 401 }), "auth");
+  assert.equal(fieldResultState({ ok: false, status: 413 }), "error");
+});

@@ -81,7 +81,7 @@ export function FieldNoteForm({ className = "field-note-form", buttonClass = "bt
       h("label", { htmlFor: textId, key: "label" }, "Note"),
       h("input", {
         id: textId, className: inputClass, value: text, maxLength: 280, autoComplete: "off", key: "input",
-        placeholder: "What happened?", onChange: (event) => setText(event.target.value),
+        placeholder: "What happened? No player names", onChange: (event) => setText(event.target.value),
       }),
       h("button", { type: "submit", className: buttonClass, key: "add" }, "Add note"),
     ]),

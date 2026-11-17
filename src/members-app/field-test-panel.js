@@ -183,7 +183,9 @@ export function MemberFieldTestPage() {
     setBusy(true);
     setStatus("");
     try {
-      const events = await readEvents();
+      // Safari only opens the share sheet straight from the tap, so use the log this screen already read
+      // (it refreshes when it opens, after notes and on Refresh) instead of waiting on storage again.
+      const events = log.events.length ? log.events : await readEvents();
       if (!events.length) { setStatus("The log is empty. Turn on field test mode and play a round first."); return; }
       const files = exportFiles(events, label.trim());
       const sets = [[files.json, files.csv], [files.jsonText, files.csv]];
