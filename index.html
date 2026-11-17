@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="GVDG Club">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="icon" type="image/png" href="img/logo.png">
+    <link rel="icon" type="image/png" href="img/logo-small.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
     <link rel="stylesheet" href="tokens.css">
@@ -32,10 +32,12 @@ body{ position: relative; }
 body::before{
   content: ""; position: fixed; inset: 0; z-index: -1;
   background: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), url("img/bg/forest-bg.png");
+  background-image: linear-gradient(to bottom, rgba(244,244,249,0.25), rgba(244,244,249,0.15)), image-set(url("img/bg/forest-bg.webp") type("image/webp"), url("img/bg/forest-bg.png") type("image/png"));
   background-repeat: no-repeat; background-position: center bottom; background-size: cover; opacity: 1;
 }
 [data-theme="dark"] body::before {
   background: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), url("img/bg/forest-bg.png");
+  background-image: linear-gradient(to bottom, rgba(15,15,30,0.25), rgba(15,15,30,0.15)), image-set(url("img/bg/forest-bg.webp") type("image/webp"), url("img/bg/forest-bg.png") type("image/png"));
   background-repeat: no-repeat; background-position: center bottom; background-size: cover;
 }
         header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(26, 26, 46, 0.95); backdrop-filter: blur(10px); padding: 1rem 1.5rem; transition: all 0.3s ease; }
@@ -614,6 +616,6 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 
     <link rel="stylesheet" href="homepage-polish.css">
     <link rel="stylesheet" href="public-polish.css">
-    <script type="module" src="home-app/home-app.js?v=185"></script>
+    <script type="module" src="home-app/home-app.js?v=187"></script>
 </body>
 </html>
