@@ -51,6 +51,7 @@ jobs:
           node scripts/qa/offline-service-worker-browser-qa.mjs
           node scripts/qa/pwa-update-browser-qa.mjs
           node scripts/qa/pwa-waiting-worker-browser-qa.mjs
+          node scripts/qa/field-test-browser-qa.mjs
 
   worker:
     runs-on: ubuntu-24.04

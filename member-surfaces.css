@@ -1189,3 +1189,74 @@ body:has(.stats-jump), #members:has(.stats-jump) { overflow-x: clip; }
 [data-theme="dark"] #members .course-chip.level-beginner { color: color-mix(in srgb, var(--under) 45%, var(--text-primary)); }
 [data-theme="dark"] #members .course-chip.level-intermediate { color: color-mix(in srgb, var(--accent) 45%, var(--text-primary)); }
 [data-theme="dark"] #members .course-chip.level-advanced { color: color-mix(in srgb, var(--over) 45%, var(--text-primary)); }
+
+/* Field test: the volunteer's measurement log (Account > Field log). */
+#members .member-field-test { --field-gap: .55rem; }
+#members .member-field-test .field-test-intro { display: grid; gap: .7rem; }
+#members .member-field-test .field-test-intro > .member-link-list { margin: 0; }
+/* The switch sits inside a card here, so its title may wrap instead of being cut off at large text sizes. */
+#members .field-test-intro .member-link-copy strong { white-space: normal; text-overflow: clip; }
+#members .field-device-label { display: grid; gap: .3rem; font-weight: 700; color: var(--text-primary); }
+#members .field-device-label .form-input { min-height: 44px; }
+#members .field-privacy { border-inline-start: 2px solid var(--member-line); padding-inline-start: .65rem; }
+#members .member-field-test .dashboard-action { gap: .4rem; justify-self: start; }
+#members .field-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .45rem; margin-bottom: .55rem; }
+#members .field-section-head > h2 { margin: 0; }
+#members .field-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  gap: var(--field-gap);
+}
+#members .field-tile {
+  display: grid;
+  align-content: start;
+  gap: .2rem;
+  min-width: 0;
+  padding: .7rem .75rem;
+  border: 1px solid var(--member-line);
+  border-radius: var(--member-radius);
+  background: var(--member-panel);
+}
+#members .field-tile-title { color: var(--member-muted); font: 750 .74rem/1.2 Archivo, system-ui, sans-serif; letter-spacing: .03em; text-transform: uppercase; }
+#members .field-tile-value { color: var(--text-primary); font: 800 1.45rem/1.1 Archivo, system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#members .field-tile-detail { color: var(--member-muted); font-size: .8rem; line-height: 1.35; overflow-wrap: anywhere; }
+#members .field-tile.is-warn { border-color: var(--over); }
+#members .field-tile.is-warn .field-tile-detail { color: var(--over); font-weight: 700; }
+#members .field-conditions {
+  margin-top: var(--field-gap);
+  padding: .6rem .75rem;
+  overflow-x: auto;
+  border: 1px solid var(--member-line);
+  border-radius: var(--member-radius);
+  background: var(--member-panel);
+}
+#members .field-conditions > .player-card-meta { margin: .45rem 0 0; }
+body.player-theme-glass[data-member-shell="members"] #members :is(.field-tile, .field-conditions) {
+  background: var(--glass-fill);
+  border-color: var(--glass-line);
+  box-shadow: var(--glass-edge), var(--glass-drop);
+  text-shadow: var(--glass-halo);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+#members .field-conditions table { width: 100%; border-collapse: collapse; font-size: .86rem; font-variant-numeric: tabular-nums; }
+#members .field-conditions caption { text-align: start; padding-bottom: .3rem; color: var(--member-muted); font-weight: 750; }
+#members .field-conditions :is(th, td) { padding: .42rem .5rem; border-bottom: 1px solid var(--member-line); text-align: start; }
+#members .field-conditions thead th { color: var(--member-muted); font-size: .76rem; text-transform: uppercase; letter-spacing: .03em; }
+#members .field-note-form { display: grid; gap: .55rem; }
+#members .field-note-chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+#members .field-note-chips .dashboard-action { flex: 1 1 8.5rem; }
+#members .field-note-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .3rem .45rem; }
+#members .field-note-row > label { grid-column: 1 / -1; font-weight: 700; color: var(--text-primary); }
+#members .field-note-row > .form-input { min-height: 44px; }
+#members .field-note-status { margin: 0; min-height: 1.2em; color: var(--member-muted); font-size: .84rem; }
+#members .field-note-status:empty { min-height: 0; }
+#members .field-test-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+#members .field-test-actions .dashboard-action { justify-self: auto; }
+#members .dashboard-action.field-danger { color: var(--over); border-color: var(--over); }
+#members .field-confirm { display: grid; gap: .5rem; margin-top: .6rem; padding: .7rem .75rem; border: 1px solid var(--over); border-radius: var(--member-radius); background: var(--over-soft); }
+#members .field-confirm p { margin: 0; color: var(--text-primary); font-weight: 650; }
+#members .field-export, #members .field-notes { display: grid; gap: .55rem; }
+#members .field-latest summary { display: flex; align-items: center; gap: .4rem; min-height: 44px; cursor: pointer; font-weight: 750; color: var(--text-primary); }
+#members .field-latest ol { margin: .3rem 0 0; padding-inline-start: 1.1rem; display: grid; gap: .25rem; font-size: .84rem; color: var(--text-secondary); overflow-wrap: anywhere; }
+#members .field-latest time { color: var(--member-muted); font-variant-numeric: tabular-nums; }

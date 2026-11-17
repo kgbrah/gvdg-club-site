@@ -12,6 +12,7 @@ import { offlineScorecard } from "./offline-round-score.js";
 import { nextHoleScore } from "./score-view-model.js";
 import { offlineAccount, offlineRequest, openOfflineIdentity, extendOpenArchive, sameOfflineOwner, syncOfflineRound, uploadOfflineClip, offlineClipUrl } from "./offline-round-sync.js";
 import { useClipRecovery } from "./throw-film.js";
+import { fieldLog, fieldMark, fieldRedactNames, fieldSince, fieldTestOn, fieldTrackClip } from "../shared/field-test-gate.js";
 
 const h = React.createElement;
 const HUB = "score.html?offline=1";
@@ -90,7 +91,12 @@ function useArchiveSync(rounds, { account, online }, onRound, onError) {
       try {
         if (actor.active && actor.kind === "open" && !actor.openArchive) actor = await extendOpenArchive(actor) || actor;
         if (!sameOfflineOwner(offlineAccount(), actor)) return;
+        const uploadMark = fieldMark();
         const result = await syncOfflineRound(offlineRoundStore, row, actor);
+        if (uploadMark) {
+          fieldLog("offline.upload", { roundId: row.localId, ms: fieldSince(uploadMark), ok: Boolean(result?.receipt),
+            error: result?.uploadError || null, attempts: result?.attempts ?? null });
+        }
         onRound(result);
         wake();
       } catch (error) { onError(storageNotice(error)); }
@@ -152,6 +158,11 @@ function RosterSetup({ packs, preferredKey, account }) {
       const round = createLocalRound({ pack: saved.pack, owner, names: roster, format: { groupFormat, scoringStyle } });
       if (!round) { setNotice("Enter each player’s name and choose a layout with all pars."); return; }
       await offlineRoundStore.add(round);
+      if (fieldTestOn()) {
+        fieldRedactNames(roster);
+        fieldLog("round.open", { mode: "offline", roundId: round.localId, courseId: pack.course.id ?? null, layoutId: pack.layout.id ?? null,
+          holeCount: round.source.holes.length, playerCount: round.players.length, doubles: groupFormat === "doubles" });
+      }
       location.assign(hrefFor(round.localId));
     } catch (error) { setNotice(storageNotice(error)); }
     finally { setBusy(false); }
@@ -343,7 +354,10 @@ function FinalRound({ round, connection, edit, onRetry, busy, notice, setNotice 
   const { account, online } = connection;
   const [linking, setLinking] = React.useState(false);
   const [name, setName] = React.useState("");
-  const uploadClip = React.useCallback((record) => uploadOfflineClip(round, offlineAccount(), record), [round.receipt, round.owner]);
+  const uploadClip = React.useCallback((record) => {
+    const sent = uploadOfflineClip(round, offlineAccount(), record);
+    return fieldTestOn() ? fieldTrackClip(sent, record, "offline") : sent;
+  }, [round.receipt, round.owner]);
   const clips = useClipRecovery({ scopeKey: "offline-round:" + round.localId, upload: round.receipt ? uploadClip : CLOSED_CLIP_UPLOAD });
   const archive = useArchive(round.receipt?.id, connection);
 
@@ -446,10 +460,11 @@ function ActiveRound({ round, edit, busy, notice }) {
   }
   const jump = (index) => { setReview(false); setHole(Math.max(0, Math.min(round.source.holes.length - 1, index))); };
   async function complete() {
-    await edit((current) => {
+    const saved = await edit((current) => {
       if (!offlineRoundOutcome(current).complete) return current;
       return { ...current, finishedAt: new Date(Math.max(Date.now(), Date.parse(current.startedAt))).toISOString() };
     });
+    fieldLog("round.finish", { mode: "offline", roundId: round.localId, result: saved ? "saved" : "error" });
   }
   const status = h("div", { key: "offline-status", style: { padding: "0 .35rem", flexShrink: 0 } },
     h("a", { className: "btn ghost small", style: { textDecoration: "none", marginInlineEnd: ".4rem" }, href: HUB }, "Offline rounds"),
@@ -525,7 +540,9 @@ function LocalRound({ id, connection, onScoring }) {
         return false;
       }
       try {
+        const saveMark = fieldMark();
         const row = await offlineRoundStore.update(id, expected ?? latest.current.revision, owner, change);
+        if (saveMark) fieldLog("offline.save", { roundId: id, ms: fieldSince(saveMark) });
         if (currentQueue.alive && generation === currentQueue.generation) applied(row);
         return true;
       } catch (error) {

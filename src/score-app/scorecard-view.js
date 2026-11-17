@@ -16,6 +16,7 @@ import { RoundSharing, WatchSharingDetails } from "./round-sharing.js";
 import { WatchPairing } from "./watch-pairing.js";
 import { PhoneActivityPairing } from "../shared/phone-activity-view.js";
 import { ShotLedgerPanel } from "./shot-ledger-view.js";
+import { FieldTestBadge, FieldTestToolSwitch } from "./field-test-chip.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 
 const h = React.createElement;
@@ -463,6 +464,7 @@ function RoundTools(props) {
             }),
             props.watchApi && h(WatchPairing, { api: props.watchApi, roundCode: props.roundCode, eventId: props.eventId }),
             props.phoneActivityApi && h(PhoneActivityPairing, { api: props.phoneActivityApi, ownerId: props.phoneOwnerId, roundCode: props.roundCode, eventId: props.eventId }),
+            h(FieldTestToolSwitch),
             h("p", { className: "muted round-tools-note" }, props.offline
               ? "Scores, lies, shots, and clips are saved on this device. Finished rounds can upload to your personal archive."
               : "Saved scores, lies, and shots sync when connected. Watch pairing and sharing need internet. Distance alerts update while this screen stays active.")),
@@ -1492,6 +1494,7 @@ export function ScorecardView(props) {
   const onMarkTee = typeof props.onMapMark === "function" ? () => onMapMark("tee") : null;
   const turn = props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null;
   const status = [
+    h(FieldTestBadge, { key: "field-test" }),
     props.offlineStatus,
     hasRecoveryStatus(props)
       ? h(RecoveryStatus, { ...props, key: "recovery", compact: true, turnHint: turn, scoreRegionRef })

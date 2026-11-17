@@ -29,6 +29,7 @@ const MemberAccountPage = lazyPanel(morePage, "MemberAccountPage");
 const MemberAppearancePage = lazyPanel(morePage, "MemberAppearancePage");
 const MemberInstallPage = lazyPanel(morePage, "MemberInstallPage");
 const MemberWalletPage = lazyPanel(morePage, "MemberWalletPage");
+const MemberFieldTestPage = lazyPanel(() => import("./field-test-panel.js"), "MemberFieldTestPage");
 const MemberBoardPanel = lazyPanel(() => import("./board-panel.js"), "MemberBoardPanel");
 const MemberTeeSignsPanel = lazyPanel(() => import("./tee-signs-panel.js"), "MemberTeeSignsPanel");
 const MemberClubPanel = lazyPanel(() => import("./club-panel.js"), "MemberClubPanel");
@@ -99,6 +100,7 @@ export function MemberDashboardApp() {
     tab === "wallet" ? h(MemberWalletPage, { key: "wallet" }) : null,
     tab === "appearance" ? h(MemberAppearancePage, { key: "appearance" }) : null,
     tab === "install" ? h(MemberInstallPage, { key: "install" }) : null,
+    tab === "field-test" ? h(MemberFieldTestPage, { key: "field-test" }) : null,
     tab === "tags" && token ? h(BagTagPanel, { key: "tags", token }) : null,
     tab === "messages" && token ? h(MemberMessagesPanel, { key: "messages", token }) : null,
     tab === "standings" ? h(ActiveStandingsPanel, { key: "standings", standalone: true }) : null,

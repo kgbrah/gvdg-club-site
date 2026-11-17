@@ -9,11 +9,15 @@ import { installMemberAuthController } from "./member-auth-controller.js";
 import { MemberPageChrome } from "./page-chrome.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 import { lazyPanel } from "./lazy-panel.js";
+import { fieldTestOn, startFieldTest } from "../shared/field-test-gate.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
   void import("react-scan");
 }
+
+// Field test mode loads its recorder only when a volunteer has turned it on for this phone.
+if (fieldTestOn()) void startFieldTest("members");
 
 const h = React.createElement;
 // A shared public profile link is the only first view that needs the community screen.

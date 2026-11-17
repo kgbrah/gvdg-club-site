@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v297";
+const CACHE = "gvdg-club-v298";
 // Member app screens past Home are content-hashed chunks. They live in their own cache, which keeps the
 // chunks of this version and the one before it, so a page that was open across an update can still open
 // its screens (online or offline) after their files are gone from the server.
@@ -40,7 +40,9 @@ const ASSETS = [
   OFFLINE_PAGE,
   "members-app/members-app.js",
   "score.html",
-  "score-app/score-app.js"
+  "score-app/score-app.js",
+  // Loaded only in field test mode; precached so a volunteer's offline reload still records.
+  "score-app/field-test-recorder.js"
 ];
 const STATIC_DESTINATIONS = new Set(["script", "style", "image", "font", "manifest"]);
 
