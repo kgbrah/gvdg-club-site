@@ -1,0 +1,38 @@
+name: Live QA drive (read-only, gvdgclub.com)
+
+# Signs in as the QA admin and visits every member and admin screen on the live site.
+# It only navigates; it never submits anything. Runs on pushes to qa/live-drive* branches.
+on:
+  push:
+    branches: ["qa/live-drive*"]
+  workflow_dispatch:
+
+concurrency:
+  group: live-qa-drive
+  cancel-in-progress: true
+
+jobs:
+  drive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Drive live member + admin screens
+        env:
+          GVDG_STAGING_QA_TOKEN: ${{ secrets.GVDG_STAGING_QA_TOKEN }}
+          GVDG_STAGING_QA_IDENTIFIER: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER }}
+          GVDG_STAGING_QA_PIN: ${{ secrets.GVDG_STAGING_QA_PIN }}
+          GVDG_LIVE_DRIVE_OUT: live-drive
+        run: node scripts/qa/live-authed-drive.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-drive
+          path: live-drive
+          retention-days: 7
