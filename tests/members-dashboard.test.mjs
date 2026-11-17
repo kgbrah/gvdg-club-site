@@ -7,10 +7,11 @@ import { formatEventDay } from '../src/members-app/format.js';
 
 test('member dashboard React registration panel includes casual round posts', () => {
   const panel = readFileSync('src/members-app/registration-panel.js', 'utf8');
+  const data = readFileSync('src/members-app/registration-data.js', 'utf8');
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
-  assert.match(panel, /requestJson\("\/casual-rounds"/);
+  assert.match(data, /requestJson\("\/casual-rounds"/);
   assert.match(panel, /casualRequests/);
-  assert.match(panel, /export function RegistrationProvider/);
+  assert.match(data, /export function RegistrationProvider/);
   assert.match(casual, /CasualRoundCard/);
   assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
   assert.match(casual, /Casual rounds/);
@@ -236,7 +237,7 @@ test('member dashboard React registration panel surfaces live events and lists e
   assert.match(events, /eventFromRegistration/); // registrations no longer in the open list still render
   assert.match(events, /EventScheduleFacts/);
   assert.match(events, /EventFieldRoster/);
-  assert.match(readFileSync('src/members-app/registration-panel.js', 'utf8'), /requestJson\("\/my-registrations"/);
+  assert.match(readFileSync('src/members-app/registration-data.js', 'utf8'), /requestJson\("\/my-registrations"/);
 });
 
 test('eventFromRegistration copies joined schedule timestamps onto the synth event', () => {

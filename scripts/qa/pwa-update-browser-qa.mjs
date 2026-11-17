@@ -3,6 +3,8 @@ import { createServer } from "node:http";
 import { mkdir, readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
+import { cachedChunks, startMemberChunkFixture } from "./member-chunk-fixture.mjs";
+
 // Exercise native service-worker installation and control transfer in Chromium.
 // The production worker's complete precache is covered by the built offline QA.
 const registrar = await readFile("pwa.js");
@@ -234,9 +236,89 @@ try {
   await banner(legacy).waitFor();
   assert.equal(await build(legacy), D, "an offline legacy document does not adopt the first later marker");
 
-  console.log("Chromium PWA update QA passed resume, cross-tab versions, per-release Later, offline recovery, explicit refresh safety and stored card data.");
+  await lazyScreensAcrossUpdates();
+
+  console.log("Chromium PWA update QA passed resume, cross-tab versions, per-release Later, offline recovery, explicit refresh safety, stored card data and lazily loaded member screens across updates.");
 } finally {
   if (scoreHead) scoreHead();
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
+}
+
+// The real sw.js with a member-app release whose screens load on demand from per-release chunk files.
+// A deploy removes the previous release's chunks from the server; a page that stays open across the
+// update must still open its screens, online and offline, and a third release drops the oldest chunks.
+async function lazyScreensAcrossUpdates() {
+  const fixture = await startMemberChunkFixture();
+  const chunkContext = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
+  chunkContext.setDefaultTimeout(15_000);
+  const chunks = (release) => [`/members-app/chunks/club-${release}.js`, `/members-app/chunks/stats-${release}.js`];
+  async function waitForChunks(page, expected) {
+    const started = Date.now();
+    let found = [];
+    while (Date.now() - started < 15_000) {
+      found = await cachedChunks(page);
+      if (JSON.stringify(found) === JSON.stringify(expected)) return;
+      await page.waitForTimeout(100);
+    }
+    assert.deepEqual(found, expected, "member chunk cache");
+  }
+  // The new worker installs (precaching its chunks) and takes over the way pwa.js's Refresh does it:
+  // SKIP_WAITING, then wait until it is activated.
+  async function updateWorker(page) {
+    await page.evaluate(() => { window.qaWorker = navigator.serviceWorker.controller; });
+    await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      await registration.update();
+      const worker = registration.installing || registration.waiting;
+      if (!worker) throw new Error("No new worker after the deploy");
+      const until = (done) => new Promise((resolve) => {
+        const check = () => { if (done()) { worker.removeEventListener("statechange", check); resolve(); } };
+        worker.addEventListener("statechange", check);
+        check();
+      });
+      await until(() => worker.state !== "installing");
+      if (worker.state === "installed") worker.postMessage({ type: "SKIP_WAITING" });
+      await until(() => worker.state === "activated" || worker.state === "redundant");
+      if (worker.state !== "activated") throw new Error("The new worker did not activate");
+    });
+    await page.waitForFunction(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller !== window.qaWorker);
+  }
+  try {
+    const app = await chunkContext.newPage();
+    await app.goto(fixture.origin + "/gvdg-members.html", { waitUntil: "load" });
+    await app.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15_000 });
+    await waitForChunks(app, chunks("A"));
+    assert.equal(await app.evaluate(() => window.openScreen("stats")), "stats A");
+
+    fixture.deploy("B");
+    const deployedAt = fixture.state.requests.length;
+    await updateWorker(app);
+    await waitForChunks(app, [...chunks("A"), ...chunks("B")].sort());
+    assert.equal(await app.locator("h1").innerText(), "Member app A", "the open page stays on its release");
+    // Release A's club chunk is gone from the server and the phone is offline; the worker still has it.
+    await chunkContext.setOffline(true);
+    assert.equal(await app.evaluate(() => window.openScreen("club")), "club A");
+    await chunkContext.setOffline(false);
+    assert.ok(!fixture.state.requests.slice(deployedAt).includes("/members-app/chunks/club-A.js"), "club A came from the install-time precache");
+
+    await app.reload({ waitUntil: "load" });
+    assert.equal(await app.locator("h1").innerText(), "Member app B");
+    await chunkContext.setOffline(true);
+    assert.equal(await app.evaluate(() => window.openScreen("stats")), "stats B");
+    const cold = await chunkContext.newPage();
+    await cold.goto(fixture.origin + "/gvdg-members.html", { waitUntil: "load" });
+    assert.equal(await cold.locator("h1").innerText(), "Member app B", "an offline start uses the installed page");
+    assert.equal(await cold.evaluate(() => window.openScreen("club")), "club B");
+    await cold.close();
+    await chunkContext.setOffline(false);
+
+    fixture.deploy("C");
+    await updateWorker(app);
+    await waitForChunks(app, [...chunks("B"), ...chunks("C")].sort());
+    if (screenshots) await app.screenshot({ path: screenshots + "/member-chunks-after-update-390.png" });
+  } finally {
+    await chunkContext.close();
+    await fixture.close();
+  }
 }

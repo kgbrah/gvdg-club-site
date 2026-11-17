@@ -395,9 +395,17 @@ function PlayerModal({ player, seasonOrder, onClose }) {
   ])), document.body);
 }
 
+// The records are build-time data, so the name merge (an all-pairs comparison) runs once, not on every render.
+let mergedLeaderboard = null;
+
+function allTimeLeaderboard(players) {
+  if (mergedLeaderboard?.source !== players) mergedLeaderboard = { source: players, rows: mergeDoublesLeaderboard(players || []) };
+  return mergedLeaderboard.rows;
+}
+
 export function DoublesLeaguePanel() {
   const data = DOUBLES_LEAGUE_DATA;
-  const leaderboard = mergeDoublesLeaderboard(data.leaderboard || []);
+  const leaderboard = allTimeLeaderboard(data.leaderboard);
   const seasonOrder = data.seasonOrder || [];
   const [activeTab, setActiveTab] = React.useState("champions");
   const [selectedPlayerName, setSelectedPlayerName] = React.useState("");

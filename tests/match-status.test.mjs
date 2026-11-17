@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { displayMatchStatus } from '../src/shared/match-status.js';
 
 test('displayMatchStatus: AS when missing, empty, or all square', () => {
@@ -35,7 +35,7 @@ test('every matchplay score surface uses displayMatchStatus', () => {
   const surfaces = {
     'src/public-app/events-detail-app.js': /from "\.\.\/shared\/match-status\.js"/,
     'src/members-app/club-ratings.js': /from "\.\.\/shared\/match-status\.js"/,
-    'src/members-app/activity-panels.js': /from "\.\.\/shared\/match-status\.js"/,
+    'src/members-app/active-standings-panel.js': /from "\.\.\/shared\/match-status\.js"/,
     'src/score-app/leaderboard-sheet.js': /from "\.\.\/shared\/match-status\.js"/,
     'src/score-app/score-view-model.js': /from "\.\.\/shared\/match-status\.js"/,
     'src/admin-app/scoring-scorecard.js': /from "\.\.\/shared\/match-status\.js"/,
@@ -55,7 +55,11 @@ test('committed route bundles include the matchplay remap', () => {
     'members-app/members-app.js',
     'admin-app/admin-app.js',
   ]) {
-    const source = readFileSync(path, 'utf8');
+    // The member app's standings and ratings screens are lazily loaded chunks next to the entry.
+    const chunks = path.startsWith('members-app/')
+      ? readdirSync('members-app/chunks').filter((name) => name.endsWith('.js')).map((name) => readFileSync(`members-app/chunks/${name}`, 'utf8'))
+      : [];
+    const source = [readFileSync(path, 'utf8'), ...chunks].join('\n');
     assert.match(source, remap, path);
   }
 });

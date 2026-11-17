@@ -2,7 +2,6 @@ import React from "react";
 import { Camera, ChevronRight, CircleHelp, ExternalLink, Globe, KeyRound, Mail, MessageSquare, Palette,
   ShieldCheck, Smartphone, Tag, Trophy, UserRound, Users, Wallet } from "lucide-react";
 
-import { destination } from "../shared/app-navigation.js";
 import { ToolFinder } from "../shared/tool-finder.js";
 import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
 import { inAppHost, installCoachCopy, installCoachMode, isStandaloneDisplay } from "../shared/install-coach.js";
@@ -10,6 +9,7 @@ import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { WalletPanel } from "./activity-panels.js";
 import { TOKEN_KEY, storageGet } from "./api.js";
 import { selectDashboardTab, requestLogout } from "./dashboard-shell.js";
+export { MoreLink } from "./more-link.js";
 import { useMemberContext } from "./member-context.js";
 import { membershipAccountLine } from "../shared/membership-status.js";
 import { DiscColorPicker } from "./disc-color-picker.js";
@@ -78,14 +78,6 @@ function AccountTools() {
     h("span", { className: "passkey-status", "data-react-passkey-status": passkeyState.message ? "message" : "empty",
       role: "status", "aria-live": "polite", key: "status" }, passkeyState.message),
   ]);
-}
-
-export function MoreLink({ tab, label, className = "player-more-item" }) {
-  return h("button", {
-    type: "button",
-    className,
-    onClick: () => selectDashboardTab(tab),
-  }, label || destination("member", tab).label);
 }
 
 export function MemberMorePage() {
