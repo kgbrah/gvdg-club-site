@@ -915,3 +915,22 @@ body.admin-page.player-theme-active {
    World") pushed Courses / Tee signs ~110px past a phone screen. Let the picker and its containers shrink. */
 .admin-page :is(.admin-workspace-context, .admin-context, .admin-context-caption) { min-width: 0; max-width: 100%; }
 .admin-page .admin-context-caption select { min-width: 0; text-overflow: ellipsis; }
+
+/* Action-grid buttons wrap at spaces instead of running past their box: "Review tee signs" (Course health)
+   spilled 38px out of its 120px button at 320 + large text and widened the page (live drive). */
+.admin-page .admin-action-grid > :is(.admin-btn, .admin-chip),
+.admin-page :is(.admin-form-actions, .ts-review-actions, .course-operator-actions) > .admin-btn,
+.admin-page .admin-evrow:not(.admin-event-card):not([data-admin-registration-ctp-id]) > .admin-btn {
+  white-space: normal;
+  line-height: 1.15;
+}
+@media (max-width: 380px) {
+  .admin-page .admin-action-grid > :is(.admin-btn, .admin-chip),
+  .admin-page :is(.admin-form-actions, .ts-review-actions, .course-operator-actions) > .admin-btn,
+  .admin-page .admin-evrow:not(.admin-event-card):not([data-admin-registration-ctp-id]) > .admin-btn { padding-inline: .45rem; }
+}
+/* Segmented filters on a narrow phone: equal quarters left "Fundraisers" 13px too wide (it ran into
+   "Meetings" at 320 + large text). Size segments to their labels there; wider screens keep equal widths. */
+@media (max-width: 380px) {
+  .admin-page .admin-seg button { flex: 1 1 auto; padding-inline: .3rem; }
+}

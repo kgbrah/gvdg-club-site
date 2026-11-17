@@ -238,6 +238,15 @@ async function fit(page, label) {
     focused: document.activeElement?.tagName,
   }));
   assert.ok(over.page <= over.width + 1, label + " overflows viewport: " + JSON.stringify(over));
+  // No label may be cut off or spill out of its button (a spill widens the page on real data).
+  const labels = await page.evaluate(() => [...document.querySelectorAll("button, a, [role=button], summary")].filter((node) => {
+    const box = node.getBoundingClientRect();
+    if (box.width <= 2 || box.height <= 2 || node.closest("[hidden], [aria-hidden='true'], [inert]")) return false;
+    if (node.scrollWidth <= node.clientWidth + 1) return false;
+    const style = getComputedStyle(node);
+    return !(style.overflowX !== "visible" && style.textOverflow === "ellipsis" && !/flex|grid/.test(style.display));
+  }).map((node) => (node.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) + " (" + node.scrollWidth + ">" + node.clientWidth + ")"));
+  assert.deepEqual(labels, [], label + " has clipped or spilling labels");
 }
 
 async function shot(page, name) {
