@@ -429,6 +429,11 @@ async function captureState(browser, origin, viewport, slug) {
   await assertPdgaRatingsStacked(page, slug);
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
+  // A round rated from PDGA rounds on its layout names that basis and how many rounds it rests on.
+  const pdgaRow = page.locator(".club-rating-row").filter({ hasText: "Based on 6 PDGA rated rounds on this layout" });
+  await pdgaRow.getByText("PDGA baseline", { exact: true }).waitFor({ timeout: 10_000 });
+  await pdgaRow.scrollIntoViewIfNeeded();
+  await pdgaRow.screenshot({ path: path.join(evidenceDir, `${slug}-pdga-rating-label.png`) });
   await captureFullPage(page, path.join(evidenceDir, `${slug}-season.png`));
 
   await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Events" }).click();

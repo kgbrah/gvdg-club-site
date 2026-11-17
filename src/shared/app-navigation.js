@@ -43,7 +43,7 @@ export const ADMIN_DESTINATIONS = [
   entry("fundraisers", "Campaigns", "money", { terms: "fundraiser donation" }),
   entry("more", "Tools", "more", { hash: "tools", terms: "admin help account settings" }),
   entry("courses", "Courses", "more", { terms: "course catalog add edit map UDisc", context: "course" }),
-  entry("course-health", "Course health", "more", { terms: "course maintenance repairs tasks backlog play counts participation impact usage coverage verification stale report CSV", context: "course" }),
+  entry("course-health", "Course health", "more", { terms: "course maintenance repairs tasks backlog play counts participation impact usage coverage verification stale report CSV PDGA SSA rating baseline rated rounds", context: "course" }),
   entry("layouts", "Layouts", "more", { terms: "course edit pars distances tee basket positions", context: "course" }),
   entry("tee-signs", "Tee signs", "more", { terms: "review approve rejects candidates photo photos course", context: "course" }),
   entry("bag-tags", "Bag tags", "more", { terms: "challenge claim requests ladder" }),

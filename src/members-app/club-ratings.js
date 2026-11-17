@@ -139,6 +139,7 @@ function ratingLabel(round) {
   if (round.rating == null) return "Unrated";
   if (round.rating_method === "provisional") return "Provisional";
   if (round.rating_method === "layout") return "Layout estimate";
+  if (round.rating_method === "pdga") return "PDGA baseline";
   if (round.rating_method === "stable") return "Round rating";
   if (round.rating_source === "estimated") return "Est.";
   return "Archived rating";
@@ -151,6 +152,10 @@ function ratingEvidence(round) {
   }
   const count = round.propagator_count;
   if (round.rating_method === "layout") return count ? "Earlier same-layout field · " + count + " anchors" : "";
+  if (round.rating_method === "pdga") {
+    const rounds = round.pdga_baseline_rounds;
+    return rounds ? "Based on " + rounds + " PDGA rated " + plural(rounds, "round", "rounds") + " on this layout" : "Based on PDGA rated rounds on this layout";
+  }
   if (count) return count + " prior rating " + plural(count, "anchor", "anchors");
   return "";
 }
