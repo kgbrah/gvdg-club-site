@@ -1,8 +1,12 @@
 name: Live QA drive (read-only, gvdgclub.com)
 
 # Signs in as the QA admin and visits every member and admin screen on the live site.
-# It only navigates; it never submits anything. Runs on pushes to qa/live-drive* branches.
+# It only navigates; it never submits anything. Runs automatically after every successful deploy to
+# gvdgclub.com, on demand (workflow_dispatch), or on pushes to qa/live-drive* branches.
 on:
+  workflow_run:
+    workflows: ["Deploy to staging (gvdgclub.com)"]
+    types: [completed]
   push:
     branches: ["qa/live-drive*"]
   workflow_dispatch:
@@ -18,6 +22,8 @@ concurrency:
 
 jobs:
   drive:
+    # After a deploy, only drive a deploy that actually succeeded.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
