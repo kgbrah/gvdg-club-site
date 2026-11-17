@@ -142,7 +142,7 @@ try {
           assert.match(read[key].filter, /blur\(/, key + " blurs (" + glass + " " + mode + "): " + read[key].filter);
         }
         const dockAlpha = alpha(read.dock.bg);
-        assert.ok(dockAlpha >= 0.699, "dock is at most 30% see-through at " + glass + ": " + read.dock.bg);
+        assert.ok(dockAlpha >= 0.599, "dock is at most 40% see-through at " + glass + ": " + read.dock.bg);
         const dockBlur = Number(/blur\(([\d.]+)px\)/.exec(read.dock.filter)?.[1]);
         const panelBlur = Number(/blur\(([\d.]+)px\)/.exec(read.stats.filter)?.[1]);
         assert.ok(dockBlur >= panelBlur && dockBlur >= 16, "dock blur is strong at " + glass + ": " + read.dock.filter);

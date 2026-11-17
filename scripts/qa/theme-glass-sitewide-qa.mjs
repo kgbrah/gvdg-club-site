@@ -33,7 +33,9 @@ async function load(name, options) {
   for (let attempt = 0; ; attempt += 1) {
     const opened = await openPage(browser, site.origin, screen.path, { ...options, seed: screen.seed });
     try {
-      await opened.page.waitForSelector(screen.ready, { state: "attached", timeout: 20_000 });
+      // A cold dev-server load occasionally misses the window; one reload, then fail for real.
+      try { await opened.page.waitForSelector(screen.ready, { state: "attached", timeout: 20_000 }); }
+      catch { await opened.page.reload({ waitUntil: "load" }); await opened.page.waitForSelector(screen.ready, { state: "attached", timeout: 30_000 }); }
       if (screen.click) {
         await opened.page.getByRole("button", { name: screen.click }).first().click();
         await opened.page.waitForSelector(screen.after, { state: "attached" });

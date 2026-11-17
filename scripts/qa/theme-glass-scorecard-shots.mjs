@@ -9,7 +9,7 @@ import { GLASS_PRESETS, buildTheme } from "../../src/shared/dashboard-theme-mode
 const base = "http://127.0.0.1:" + (process.env.GVDG_SCORER_PORT || 5442);
 const out = process.env.GVDG_SHOTS_OUT || "/tmp/gvdg-scorecard-shots";
 await mkdir(out, { recursive: true });
-const wallpaper = "data:image/jpeg;base64," + (await readFile("img/slide5.jpg")).toString("base64");
+const wallpaper = "data:image/jpeg;base64," + (await readFile(process.env.GVDG_WALLPAPER || "img/slide5.jpg")).toString("base64");
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 async function shot(glass, mode, width) {
   const context = await browser.newContext({ viewport: { width, height: 812 }, serviceWorkers: "block", reducedMotion: "reduce" });

@@ -467,12 +467,12 @@ body.player-theme-glass {
   --glass-tint: #fff;
   --glass-fill: color-mix(in srgb, var(--glass-tint) calc(100% - var(--glass-alpha, 0%)), transparent);
   --glass-fill-sheet: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 45%)), transparent);
-  --glass-fill-safe: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 30%)), transparent);
+  --glass-fill-safe: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 40%)), transparent);
   --glass-fill-chrome: var(--glass-fill);
   --glass-chip: color-mix(in srgb, var(--glass-tint) calc(100% - min(var(--glass-alpha, 0%), 20%)), transparent);
   --glass-tone: brightness(1.05);
   --glass-filter: blur(var(--glass-blur, 0px)) saturate(110%) var(--glass-tone);
-  --glass-filter-strong: blur(max(calc(var(--glass-blur, 0px) * 1.25), 16px)) saturate(110%) var(--glass-tone);
+  --glass-filter-strong: blur(max(var(--glass-blur, 0px), 16px)) saturate(110%) var(--glass-tone);
   --glass-line: color-mix(in srgb, #0a0c12 10%, transparent);
   --glass-edge: inset 0 1px 0 color-mix(in srgb, #fff 70%, transparent);
   --glass-drop: 0 8px 24px color-mix(in srgb, #0a0c12 12%, transparent);
@@ -589,7 +589,7 @@ body.score-glove.player-theme-glass #scoreRoot .score-advanced-toggle,
 body.score-glove.player-theme-glass #scoreRoot .holegrid button:not(.cur):not([class*="tier-"]) {
   background: var(--glass-chip);
 }
-/* The dock carries score entry, totals and hole navigation: at most 30% see-through, whatever the setting, with a stronger blur. */
+/* The dock carries score entry, totals and hole navigation: at most 40% see-through, whatever the setting, with a stronger blur. */
 body.score-glove.player-theme-glass .score-glove-layout .score-glove-dock,
 body.score-glove.player-theme-glass.player-theme-page .score-glove-dock,
 body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .score-glove-dock {
@@ -726,18 +726,24 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
       -webkit-backdrop-filter: var(--glass-filter);
       backdrop-filter: var(--glass-filter);
     }
-    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > p.muted,
+    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > p.muted:not(.card p),
     body.player-theme-glass:not(.score-glove) #scoreRoot > main > .btn.ghost,
     body.player-theme-glass:not(.score-glove) #scoreRoot .stack > .btn.ghost {
       background: var(--glass-chip);
       border-radius: 10px;
       text-shadow: none;
     }
-    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > p.muted { padding: .4rem .7rem; }
+    /* Plates and panels never move layout: the note's plate is an outline (takes no space); the filter
+       panel's padding is cancelled by an equal negative margin. */
+    body.player-theme-glass:not(.score-glove) #scoreRoot .stack > p.muted:not(.card p) {
+      border-radius: 6px;
+      outline: .4rem solid var(--glass-chip);
+    }
     body.player-theme-glass:not(.score-glove) #scoreRoot .course-filters {
       border: 1px solid var(--glass-line);
       border-radius: 14px;
-      padding: .5rem;
+      padding: calc(.5rem - 1px);
+      margin: -.5rem;
     }
     body.player-theme-glass:not(.score-glove) #scoreRoot .card .tap-row { background: var(--glass-chip); border-color: var(--glass-line); text-shadow: none; }
     body.player-theme-glass:not(.score-glove) #scoreRoot :is(.card, .course-filters, .tap-row) :is(input, select, textarea, button, .btn) { text-shadow: none; }
