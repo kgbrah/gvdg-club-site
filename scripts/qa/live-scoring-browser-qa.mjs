@@ -373,6 +373,17 @@ async function runCasualRoundQa(browser, origin) {
   }
 
   await page.getByRole("button", { name: "Round tools", exact: true }).click();
+  // Lost & Found from the round: the post form opens with this course and hole filled in, and a way back.
+  for (const [name, kind] of [["Found a disc", "found"], ["Lost a disc", "lost"]]) {
+    const href = await page.getByRole("link", { name, exact: true }).getAttribute("href");
+    const target = new URL(href, page.url());
+    const query = new URLSearchParams(target.hash.split("?")[1] || "");
+    if (!target.pathname.endsWith("/lost-found.html") || !target.hash.startsWith("#new/" + kind + "?") || query.get("from") !== "score"
+      || !/^score\.html/.test(query.get("return") || "") || (query.get("course") && query.get("hole") !== "1")) {
+      throw new Error(`Unexpected ${name} link: ${href}`);
+    }
+    console.log(`round tools: ${name} -> ${href}`);
+  }
   await page.getByRole("button", { name: "Add player" }).click();
   await page.getByRole("dialog", { name: "Add player" }).waitFor();
   await page.getByLabel("Player name").fill("Nina Park");

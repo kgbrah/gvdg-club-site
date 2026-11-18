@@ -24,6 +24,10 @@ export interface PostInput {
   color: string;
   courseId: number | null;
   area: string;
+  /** Grams, 100–200, from the weight pick-list; null = not given. */
+  weightG: number | null;
+  /** The hole it was found or lost on, 1–40; null = not on a hole / not given. */
+  hole: number | null;
   eventDate: string | null;
   holding: "finder" | "club_bin" | null;
   binNote: string;
@@ -47,6 +51,13 @@ function positiveInt(value: unknown): number | null | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
+/** A whole number in [min, max]; "" / null / undefined = not given (null); anything else is invalid (undefined). */
+function boundedInt(value: unknown, min: number, max: number): number | null | undefined {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : typeof value === "string" && /^\d{1,3}$/.test(value) ? Number(value) : NaN;
+  return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
+}
+
 export function parsePost(body: Record<string, unknown>, now = Date.now()): Ok<PostInput> | Fail {
   const kind = typeof body.kind === "string" && (POST_KINDS as readonly string[]).includes(body.kind) ? body.kind as PostKind : null;
   if (!kind) return { ok: false, field: "kind" };
@@ -62,6 +73,10 @@ export function parsePost(body: Record<string, unknown>, now = Date.now()): Ok<P
   if (courseId === undefined) return { ok: false, field: "courseId" };
   const area = cleanLine(body.area, 60);
   if (area == null) return { ok: false, field: "area" };
+  const weightG = boundedInt(body.weightG, 100, 200);
+  if (weightG === undefined) return { ok: false, field: "weightG" };
+  const hole = boundedInt(body.hole, 1, 40);
+  if (hole === undefined) return { ok: false, field: "hole" };
   const eventDate = parseEventDate(body.eventDate, now);
   if (eventDate === undefined) return { ok: false, field: "eventDate" };
   let holding: PostInput["holding"] = null;
@@ -84,7 +99,7 @@ export function parsePost(body: Record<string, unknown>, now = Date.now()): Ok<P
     // A lost post needs something to match on.
     if (!brand && !mold && !color && !privateInk) return { ok: false, field: "mold" };
   }
-  return { ok: true, value: { kind, brand, mold, plastic, color, courseId, area, eventDate, holding, binNote, rewardNote, privateInk } };
+  return { ok: true, value: { kind, brand, mold, plastic, color, courseId, area, weightG, hole, eventDate, holding, binNote, rewardNote, privateInk } };
 }
 
 export function discTitle(row: { brand?: string | null; plastic?: string | null; mold?: string | null; color?: string | null }): string {

@@ -51,7 +51,7 @@ export async function browsePosts(c: MarketCtx): Promise<Response> {
   const offset = rawOffset && /^\d{1,4}$/.test(rawOffset) ? Number(rawOffset) : 0;
   const rows = (await c.env.DB.prepare(
     `SELECT p.id, p.kind, p.owner_id, p.status, p.brand, p.mold, p.plastic, p.color, p.course_id, p.course_name, p.area, p.event_date,
-            p.holding, p.bin_note, p.reward_note, p.ai_fields, p.hidden, p.created_at, p.expires_at
+            p.holding, p.bin_note, p.reward_note, p.ai_fields, p.hidden, p.created_at, p.expires_at, p.weight_g, p.hole
      FROM lf_posts p WHERE ${where.join(" AND ")} ORDER BY p.created_at DESC, p.id DESC LIMIT ${PAGE + 1} OFFSET ?`,
   ).bind(...binds, offset).all<Row>()).results ?? [];
   return ok(c, {
@@ -154,11 +154,11 @@ export async function createPost(c: MarketCtx): Promise<Response> {
   if (blocked) return blocked;
   await ensureTrader(c.env, poster);
   const created = await c.env.DB.prepare(
-    `INSERT INTO lf_posts (kind, owner_id, brand, mold, plastic, color, course_id, course_name, area, event_date, holding, bin_note,
-       reward_note, private_ink, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+${POST_DAYS} days')) RETURNING id`,
-  ).bind(v.kind, poster.id, v.brand, v.mold, v.plastic, v.color, v.courseId, courseName, v.area, v.eventDate, v.holding, v.binNote,
-    v.rewardNote, v.privateInk).first<{ id: number }>();
+    `INSERT INTO lf_posts (kind, owner_id, brand, mold, plastic, color, course_id, course_name, area, weight_g, hole, event_date, holding,
+       bin_note, reward_note, private_ink, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+${POST_DAYS} days')) RETURNING id`,
+  ).bind(v.kind, poster.id, v.brand, v.mold, v.plastic, v.color, v.courseId, courseName, v.area, v.weightG, v.hole, v.eventDate, v.holding,
+    v.binNote, v.rewardNote, v.privateInk).first<{ id: number }>();
   const id = Number(created?.id);
   if (!id) return fail(c, 500, "server_error");
   let stored: string[] = [];

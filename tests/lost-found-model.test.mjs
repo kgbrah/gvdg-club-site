@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  aiFieldsNote, discTitle, holdingText, karmaLabel, lfErrorMessage, parseLfRoute, personHref, postMeta, postPayload, validatePost,
+  aiFieldsNote, composeArea, discTitle, holdingText, karmaLabel, lfErrorMessage, parseLfRoute, personHref, postMeta, postPayload, safeRoundReturn,
+  validatePost,
 } from "../src/shared/lost-found-model.js";
 
 test("lost & found routes", () => {
@@ -57,6 +58,17 @@ test("post payload and validation mirror the Worker", () => {
   assert.equal(validatePost("found", { holding: "club_bin" }, 1).field, "binNote");
   assert.equal(validatePost("lost", {}, 0).field, "mold");
   assert.equal(validatePost("lost", { privateInk: "AL" }, 0), null);
+  // Weight and hole come from pick-lists; the hole leads the area text.
+  const picked = postPayload("found", { weightG: "175", hole: "7", area: " by the pond " }, []);
+  assert.deepEqual([picked.weightG, picked.hole, picked.area], [175, 7, "Hole 7 · by the pond"]);
+  const off = postPayload("found", { weightG: "", hole: "off", area: "Parking lot" }, []);
+  assert.deepEqual([off.weightG, off.hole, off.area], [undefined, undefined, "Parking lot"]);
+  assert.equal(composeArea("12", ""), "Hole 12");
+  assert.equal(validatePost("found", { area: "x".repeat(49) }, 1).field, "area");
+  assert.equal(safeRoundReturn("score.html?round=AB12#hole/3"), "score.html?round=AB12#hole/3");
+  assert.equal(safeRoundReturn("https://evil.example/score.html"), "");
+  assert.equal(safeRoundReturn("javascript:alert(1)"), "");
+  assert.equal(safeRoundReturn("//evil.example"), "");
   assert.equal(lfErrorMessage({ error: "own_post" }), "That's your own post.");
   assert.equal(lfErrorMessage({ error: "???" }, "fallback"), "fallback");
 });

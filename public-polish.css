@@ -1134,6 +1134,27 @@
   font: 720 .86rem/1.25 Archivo, system-ui, sans-serif;
 }
 
+/* Disc pick-lists and "Say it" voice entry (Marketplace and Lost & Found forms). */
+[data-public-polish="shop"] .disc-pick .disc-pick-other { margin-top: 2px; }
+[data-public-polish="shop"] .disc-voice {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--site-line);
+  border-radius: 10px;
+  background: var(--site-quiet);
+}
+[data-public-polish="shop"] .disc-voice .disc-voice-button { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding-inline: 18px; }
+[data-public-polish="shop"] .disc-voice-time { font-variant-numeric: tabular-nums; font-weight: 650; }
+[data-public-polish="shop"] .disc-voice[data-disc-voice="recording"] .disc-voice-button { background: var(--site-error); }
+[data-public-polish="shop"] .disc-voice .disc-voice-example { margin: 0; color: var(--text-secondary); }
+[data-public-polish="shop"] .disc-voice-result:empty { display: none; }
+[data-public-polish="shop"] .disc-voice-result { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--site-line); }
+[data-public-polish="shop"] .disc-voice-result p { margin: 0; }
+[data-public-polish="shop"] .disc-voice-heard { color: var(--text-primary); font: 650 .9rem/1.4 Archivo, system-ui, sans-serif; }
+[data-public-polish="shop"] .lf-round-return { display: inline-flex; margin: 0 0 12px; }
+
 /* In-app camera (Marketplace and Lost & Found photos). Black like a phone camera; the club's yellow marks Done. */
 .gv-camera {
   position: fixed;

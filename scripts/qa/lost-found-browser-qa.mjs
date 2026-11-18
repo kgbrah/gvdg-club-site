@@ -95,6 +95,11 @@ const photos = memoryR2();
 const mail = [];
 const NO_INK = JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "Star Destroyer", ink: [], unreadable_writing: false, ink_confidence: "high" });
 let geminiQueue = [];
+// Whisper (Groq first, OpenRouter as the backup), mocked: what the next clip "says", what was sent, and a Groq
+// answer to force (e.g. its free-plan 429) for the next call.
+let whisperQueue = [];
+const whisperCalls = [];
+let groqStatusNext = 0;
 let geminiCalls = 0;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
@@ -103,6 +108,19 @@ globalThis.fetch = async (input, init) => {
     const body = JSON.parse(String(init?.body || "{}"));
     mail.push({ to: body.to?.[0], subject: body.subject, text: body.text });
     return new Response("{}", { status: 200 });
+  }
+  if (url === "https://openrouter.ai/api/v1/audio/transcriptions" || url === "https://api.groq.com/openai/v1/audio/transcriptions") {
+    const form = init?.body;
+    const file = form?.get?.("file");
+    const provider = url.includes("groq") ? "groq" : "openrouter";
+    whisperCalls.push({ provider, model: form?.get?.("model"), language: form?.get?.("language"), prompt: form?.get?.("prompt") ?? null,
+      name: file?.name, type: file?.type, size: file?.size, auth: new Headers(init?.headers).get("Authorization") });
+    if (provider === "groq" && groqStatusNext) {
+      const status = groqStatusNext;
+      groqStatusNext = 0;
+      return Response.json({ error: { message: "limit" } }, { status });
+    }
+    return Response.json({ text: whisperQueue.shift() ?? "" });
   }
   if (url.startsWith("https://generativelanguage.googleapis.com/")) {
     geminiCalls += 1;
@@ -131,7 +149,7 @@ let env = null;
 let origin = "";
 let glassTheme = null;
 const tokenOwners = new Map();
-const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices)(\/|$)/;
+const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
 
 function fixture(path, authorization) {
   if (path === "/me") {
@@ -407,12 +425,14 @@ async function runFlows() {
   const owner = await open(P, { member: tokens.owner });
   await go(owner.page, "new/lost", "form[aria-label='Post a lost disc']");
   const lostForm = owner.page.locator("form[aria-label='Post a lost disc']");
-  await lostForm.getByLabel("Brand", { exact: true }).fill("Innova");
+  await lostForm.getByLabel("Brand", { exact: true }).selectOption("Innova");
   await lostForm.getByLabel("Mold", { exact: true }).fill("Destroyer");
-  await lostForm.getByLabel("Plastic", { exact: true }).fill("Star");
-  await lostForm.getByLabel("Colour", { exact: true }).fill("Orange");
+  await lostForm.getByLabel("Plastic", { exact: true }).selectOption("Star");
+  await lostForm.getByLabel("Colour", { exact: true }).selectOption("Orange");
+  await lostForm.getByLabel("Weight (if you know it)", { exact: true }).selectOption("175");
   await lostForm.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
-  await lostForm.getByLabel("Hole or area", { exact: true }).fill("Hole 7 by the pond");
+  await lostForm.getByLabel("Hole lost on", { exact: true }).selectOption("7");
+  await lostForm.getByLabel("Where exactly (optional)", { exact: true }).fill("by the pond");
   await lostForm.getByLabel("Reward note (optional, shown)").fill("Cold drink on me");
   await lostForm.getByLabel("What's written on it (private)").fill("Jordan Parker 252-555-0187");
   await lostForm.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
@@ -433,7 +453,8 @@ async function runFlows() {
   await form.getByLabel("Choose disc photos").setInputFiles(ink.file);
   await form.locator(".market-photo-thumb").first().waitFor();
   await form.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
-  await form.getByLabel("Hole or area", { exact: true }).fill("Hole 7 drop zone");
+  await form.getByLabel("Hole found on", { exact: true }).selectOption("7");
+  await form.getByLabel("Where exactly (optional)", { exact: true }).fill("drop zone");
   await form.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
   await form.getByText("Anyone can see the photos you post.", { exact: false }).waitFor();
   assert.equal(await form.getByText(/blur/i).count(), 0, "the form promises no blurring");
@@ -848,7 +869,7 @@ async function runCamera() {
   const tracks = await cameraTracks(member.page);
   assert(tracks.length > 0 && tracks.every((track) => track === "video:ended"), "the camera is off after Done (" + tracks.join(", ") + ")");
   await form.getByLabel("Mold", { exact: true }).fill("Firebird");
-  await form.getByLabel("Colour", { exact: true }).fill("Red");
+  await form.getByLabel("Colour", { exact: true }).selectOption("Red");
   await form.getByRole("button", { name: "Post lost disc" }).click();
   await member.page.waitForURL(/#post\/\d+$/);
   const cameraPostId = Number(/post\/(\d+)$/.exec(member.page.url())[1]);
@@ -874,14 +895,14 @@ async function runCamera() {
   await closer.page.locator(".gv-camera").waitFor({ state: "detached" });
   assert.equal(await closer.page.evaluate(() => document.activeElement?.textContent), "Take photo", "focus goes back to Take photo");
   // The phone's Back button closes the camera and keeps the form and what's typed; with a shot taken it asks first.
-  await found.getByLabel("Hole or area", { exact: true }).fill("Hole 9 creek");
+  await found.getByLabel("Where exactly (optional)", { exact: true }).fill("Hole 9 creek");
   const formUrl = closer.page.url();
   await take.click();
   await closeSheet.waitFor();
   await closer.page.evaluate(() => history.back());
   await closer.page.locator(".gv-camera").waitFor({ state: "detached" });
   assert.equal(closer.page.url(), formUrl, "Back closed the camera, not the form");
-  assert.equal(await found.getByLabel("Hole or area", { exact: true }).inputValue(), "Hole 9 creek", "what was typed is still there");
+  assert.equal(await found.getByLabel("Where exactly (optional)", { exact: true }).inputValue(), "Hole 9 creek", "what was typed is still there");
   await take.click();
   await closeSheet.waitFor();
   await snapShots(closeSheet, 1);
@@ -894,7 +915,7 @@ async function runCamera() {
   await closer.page.waitForTimeout(300);
   assert.equal(closer.page.url(), formUrl, "Done leaves the form where it was");
   await found.getByRole("button", { name: "Remove photo 1" }).click();
-  await found.getByLabel("Hole or area", { exact: true }).fill("");
+  await found.getByLabel("Where exactly (optional)", { exact: true }).fill("");
   await take.click();
   await closeSheet.waitFor();
   await snapShots(closeSheet, 1);
@@ -1034,6 +1055,141 @@ async function runCamera() {
   console.log("in-app camera: Pro Shop sell form; viewfinder fits at 390 dark, 320 large text and 1280");
 }
 
+// ---------------------------------------------------------------------------------------------------
+// One-thumb disc details: pick-lists (brand -> its plastics, colour, weight, the course's holes), "Other…" for
+// anything unlisted, the scoring app's "Found a disc" prefill and way back, and "Say it" (a real recording from
+// Chromium's simulated microphone -> the real Worker route -> mocked Whisper on OpenRouter -> the pick-lists).
+// ---------------------------------------------------------------------------------------------------
+
+async function selected(locator) {
+  return locator.evaluate((node) => node.options[node.selectedIndex]?.textContent || "");
+}
+
+async function runPickers() {
+  const P = profiles.light390;
+  const course = db.raw.prepare("SELECT id, name FROM courses ORDER BY id LIMIT 1").get();
+  db.raw.prepare("INSERT INTO course_layouts (course_id, name, holes) VALUES (?, 'QA 21', ?)")
+    .run(course.id, JSON.stringify(Array.from({ length: 21 }, (_, index) => ({ hole: index + 1, par: 3 }))));
+
+  // 1. From the scoring app: course and hole are filled in; "Back to your round" stays through posting.
+  const view = await cameraView(P, { member: tokens.other });
+  await go(view.page, `new/found?course=${course.id}&hole=7&from=score&return=${encodeURIComponent("score.html?round=QA77")}`, "form[aria-label='Post a found disc']");
+  const form = view.page.locator("form[aria-label='Post a found disc']");
+  const back = view.page.locator("[data-lf-round-return]");
+  assert.equal(await back.getAttribute("href"), "score.html?round=QA77");
+  await view.page.waitForFunction((id) => document.querySelector("#lfCourse")?.value === id, String(course.id));
+  const hole = form.getByLabel("Hole found on", { exact: true });
+  await view.page.waitForFunction(() => document.querySelectorAll("#lfHole option").length === 1 + 21 + 1);
+  assert.equal(await hole.inputValue(), "7", "the hole from the round is chosen");
+  assert.equal(await selected(hole), "Hole 7");
+
+  // 2. Brand narrows the plastics; Other… opens a text box; changing brand drops a plastic that no longer fits.
+  const brand = form.getByLabel("Brand", { exact: true });
+  const plastic = form.getByLabel("Plastic", { exact: true });
+  await brand.selectOption("Discraft");
+  const discraft = await plastic.locator("option").allTextContents();
+  assert(discraft.includes("ESP") && !discraft.includes("Star"), "Discraft lists its own plastics");
+  await plastic.selectOption("ESP");
+  await brand.selectOption("Innova");
+  assert.equal(await plastic.inputValue(), "", "ESP isn't an Innova plastic");
+  await plastic.selectOption("Champion");
+  await brand.selectOption("__other__");
+  await form.getByLabel("Brand (not listed)").fill("Yikun");
+  assert.equal(await brand.inputValue(), "__other__");
+  assert.equal(await plastic.inputValue(), "Champion", "an unlisted brand keeps the plastic (every plastic is offered)");
+  await form.getByLabel("Colour", { exact: true }).selectOption("Pink");
+  const weights = await form.getByLabel("Weight (if you know it)", { exact: true }).locator("option").allTextContents();
+  assert.deepEqual([weights[1], weights.at(-1)], ["200 g", "100 g"]);
+  await assertFits(view.page, "found form pick-lists");
+  await shot(view.page, "pickers-found-form-390-light");
+
+  // 3. Say it: record, stop, Whisper hears the disc, the lists fill in (brand, its plastic, colour, weight, hole).
+  env.OPENROUTER_API_KEY = "or_qa";
+  env.GROQ_API_KEY = "gsk_qa";
+  whisperQueue.push("Orange Star Destroyer, 175 grams, found it on hole 12.");
+  const voice = form.locator("[data-disc-voice]");
+  await voice.getByRole("button", { name: "Say the disc details" }).click();
+  await voice.locator("[data-disc-voice=recording]").or(form.locator("[data-disc-voice=recording]")).first().waitFor();
+  await view.page.waitForTimeout(1200);
+  await form.getByRole("button", { name: "Stop recording" }).click();
+  await form.locator(".disc-voice-heard").getByText("Heard: “Orange Star Destroyer, 175 grams, found it on hole 12.”").waitFor();
+  assert.deepEqual(await Promise.all([brand, plastic, form.getByLabel("Colour", { exact: true }), form.getByLabel("Weight (if you know it)", { exact: true }), hole]
+    .map((node) => node.inputValue())), ["Innova", "Star", "Orange", "175", "12"]);
+  assert.equal(await form.getByLabel("Mold", { exact: true }).inputValue(), "Destroyer");
+  await form.locator(".disc-voice-result").getByText("Filled in the brand, mold, plastic, colour, weight and hole. Check them below.").waitFor();
+  const sent = whisperCalls.at(-1);
+  assert.deepEqual([sent.provider, sent.model, sent.auth], ["groq", "whisper-large-v3-turbo", "Bearer gsk_qa"], "Groq's free Whisper goes first");
+  assert.match(sent.prompt || "", /Buzzz/, "with the disc spelling hint");
+  assert(sent.size > 256 && /^audio\//.test(sent.type) && sent.name.startsWith("disc."), "a real clip went to Whisper: " + JSON.stringify(sent));
+  const micTracks = await cameraTracks(view.page);
+  assert(micTracks.length > 0 && micTracks.every((track) => track === "audio:ended"), "voice uses only the microphone, and turns it off (" + micTracks.join(", ") + ")");
+  await assertFits(view.page, "found form after voice");
+  await shot(view.page, "voice-filled-found-form-390-light");
+
+  // Nothing heard / the daily budget: a plain message, the form untouched.
+  whisperQueue.push("um");
+  await voice.getByRole("button", { name: "Say the disc details" }).click();
+  await view.page.waitForTimeout(700);
+  await form.getByRole("button", { name: "Stop recording" }).click();
+  await form.locator(".disc-voice-result").getByText("Nothing matched the lists. Pick them below, or try again.").waitFor();
+  assert.equal(await brand.inputValue(), "Innova");
+
+  // Post it: weight and hole are stored and shown; the way back to the round is still there.
+  await form.getByLabel("Where exactly (optional)", { exact: true }).fill("left of the basket");
+  await form.getByLabel("Choose disc photos").setInputFiles((await makeInkPhoto(join(workDir, "picker-post.jpg"), [])).file);
+  await form.locator(".market-photo-thumb").first().waitFor();
+  await form.getByRole("button", { name: "Post found disc" }).click();
+  await view.page.waitForURL(/#post\/\d+$/);
+  const postId = Number(/post\/(\d+)$/.exec(view.page.url())[1]);
+  const row = db.raw.prepare("SELECT brand, plastic, color, weight_g, hole, area FROM lf_posts WHERE id = ?").get(postId);
+  assert.deepEqual({ ...row }, { brand: "Innova", plastic: "Star", color: "Orange", weight_g: 175, hole: 12, area: "Hole 12 · left of the basket" });
+  const facts = view.page.locator("[data-lf-view=post][data-lf-state=ready] .market-facts");
+  await facts.getByText("175 g").waitFor();
+  await facts.getByText("Hole 12 · left of the basket").waitFor();
+  assert.equal(await view.page.locator("[data-lf-round-return]").getAttribute("href"), "score.html?round=QA77");
+  await view.context.close();
+  console.log("pick-lists: brand -> plastics, Other…, colour, weight, the course's 21 holes; the round prefill and way back");
+  console.log("voice: a recorded clip went through the Worker to Groq's Whisper (mocked) and filled brand, mold, plastic, colour, weight and hole");
+
+  // 4. The Pro Shop sell and WANTED forms: same lists and Say it.
+  whisperQueue.push("Discraft ESP Buzzz, blue, one seventy seven");
+  groqStatusNext = 429; // Groq's free-plan limit: this clip falls back to OpenRouter
+  const seller = await cameraView(P, { member: tokens.finder2 });
+  await seller.page.goto(origin + "/pro-shop.html#market/sell", { waitUntil: "domcontentloaded" });
+  const sell = seller.page.locator("form[aria-label='Sell a disc']");
+  await sell.getByRole("button", { name: "Say the disc details" }).click();
+  await seller.page.waitForTimeout(900);
+  await sell.getByRole("button", { name: "Stop recording" }).click();
+  await sell.locator(".disc-voice-heard").waitFor();
+  assert.deepEqual(whisperCalls.slice(-2).map((call) => call.provider), ["groq", "openrouter"], "a Groq limit falls back to OpenRouter");
+  assert.deepEqual(await Promise.all(["Brand", "Plastic", "Color", "Weight (g)", "Mold"].map((label) => sell.getByLabel(label, { exact: true }).inputValue())),
+    ["Discraft", "ESP", "Blue", "177", "Buzzz"]);
+  await assertFits(seller.page, "sell form after voice");
+  await shot(seller.page, "voice-filled-sell-form-390-light");
+  await seller.page.goto(origin + "/pro-shop.html#wanted/new", { waitUntil: "domcontentloaded" });
+  const wanted = seller.page.locator("[data-market-view=wanted-new] form");
+  await wanted.getByLabel("Brand", { exact: true }).selectOption("MVP");
+  assert((await wanted.getByLabel("Plastic", { exact: true }).locator("option").allTextContents()).includes("Neutron"));
+  await wanted.getByLabel("Min weight (g)").selectOption("170");
+  await assertFits(seller.page, "wanted form pick-lists");
+  await seller.context.close();
+  delete env.OPENROUTER_API_KEY;
+  delete env.GROQ_API_KEY;
+
+  // 5. The pick-lists at the other sizes.
+  for (const profile of [profiles.dark390, profiles.dark320, profiles.light1280]) {
+    const sized = await cameraView(profile, { member: tokens.other });
+    await go(sized.page, "new/lost", "form[aria-label='Post a lost disc']");
+    const lost = sized.page.locator("form[aria-label='Post a lost disc']");
+    await lost.getByLabel("Brand", { exact: true }).selectOption("__other__");
+    await lost.getByLabel("Brand (not listed)").fill("Yikun");
+    await assertFits(sized.page, profile.name + " lost form pick-lists");
+    await shot(sized.page, "pickers-lost-form-" + profile.name);
+    await sized.context.close();
+  }
+  console.log("pick-lists and Say it on the Pro Shop sell and WANTED forms; fit at 390 dark, 320 large text and 1280");
+}
+
 // The public menu: Lost & Found sits next to Pro Shop on every page that renders it (public pages and the
 // homepage share src/shared/site-nav.js). Desktop widths keep one line; at 1024 and below the menu opens as a
 // panel; phones include 320 px with large text. Nothing wraps, overflows or clips.
@@ -1117,6 +1273,7 @@ try {
   if (!process.env.GVDG_LF_SKIP_SCREENS) await runScreens();
   await runGlass();
   await runCamera();
+  await runPickers();
   // The background cron path works too: nothing due right now, and a tick reads nothing.
   const tick = await lfProcess.runLostFoundTick(env);
   assert.equal(tick.reads, 0);

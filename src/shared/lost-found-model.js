@@ -23,7 +23,7 @@ export const LF_REPORT_REASONS = [
   ["other", "Something else"],
 ];
 
-export const LF_LIMITS = { brand: 40, mold: 40, plastic: 40, color: 40, area: 60, binNote: 80, rewardNote: 80, privateInk: 120, message: 500, caption: 200 };
+export const LF_LIMITS = { brand: 40, mold: 40, plastic: 40, color: 40, area: 60, areaDetail: 48, binNote: 80, rewardNote: 80, privateInk: 120, message: 500, caption: 200 };
 export const LF_MAX_PHOTOS = { found: 3, lost: 2, celebration: 2 };
 
 /** Shown wherever photos are added: photos are public as uploaded. */
@@ -134,11 +134,29 @@ export const CLAIM_STATUS_LABELS = {
 };
 
 /** Form draft -> request body (strings trimmed, blanks dropped). The Worker re-validates everything. */
+/** "Hole 7 · by the pond" from the hole pick-list and the optional detail; "off" = not on a hole. */
+export function composeArea(hole, detail) {
+  const where = String(detail ?? "").trim();
+  const number = Number(hole);
+  if (!Number.isInteger(number) || number < 1 || number > 40) return where;
+  return where ? "Hole " + number + " · " + where : "Hole " + number;
+}
+
+/** Where "Back to your round" goes: only this site's scoring page. */
+export function safeRoundReturn(value) {
+  const text = String(value ?? "").trim();
+  return /^score\.html(?:\?[\w=&%.-]*)?(?:#[\w/=&%.-]*)?$/.test(text) && text.length <= 200 ? text : "";
+}
+
 export function postPayload(kind, draft, photos) {
   const text = (key) => String(draft?.[key] ?? "").trim();
-  const body = { kind, brand: text("brand"), mold: text("mold"), plastic: text("plastic"), color: text("color"), area: text("area") };
+  const body = { kind, brand: text("brand"), mold: text("mold"), plastic: text("plastic"), color: text("color"), area: composeArea(draft?.hole, draft?.area) };
   const courseId = positiveId(draft?.courseId);
   if (courseId) body.courseId = courseId;
+  const weight = Number(text("weightG"));
+  if (Number.isInteger(weight) && weight >= 100 && weight <= 200) body.weightG = weight;
+  const hole = Number(text("hole"));
+  if (Number.isInteger(hole) && hole >= 1 && hole <= 40) body.hole = hole;
   if (text("eventDate")) body.eventDate = text("eventDate");
   if (kind === "found") {
     body.holding = draft?.holding === "club_bin" ? "club_bin" : "finder";
@@ -154,9 +172,10 @@ export function postPayload(kind, draft, photos) {
 /** The first problem with a draft, as { field, text }, or null. Mirrors the Worker's rules. */
 export function validatePost(kind, draft, photoCount) {
   const value = (key) => String(draft?.[key] ?? "").trim();
-  for (const key of ["brand", "mold", "plastic", "color", "area"]) {
+  for (const key of ["brand", "mold", "plastic", "color"]) {
     if (value(key).length > LF_LIMITS[key]) return { field: key, text: "That's too long." };
   }
+  if (value("area").length > LF_LIMITS.areaDetail) return { field: "area", text: "That's too long." };
   if (kind === "found" && photoCount < 1) return { field: "photos", text: "Add at least one photo of the disc." };
   if (kind === "found" && draft?.holding === "club_bin" && !value("binNote")) return { field: "binNote", text: "Say which club bin you left it in." };
   if (kind === "lost" && !value("brand") && !value("mold") && !value("color") && !value("privateInk")) {

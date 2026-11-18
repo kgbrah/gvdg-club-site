@@ -9,6 +9,8 @@ import { errorMessage, marketRequest } from "./market-api.js";
 import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
 import { PhotoAddButtons } from "./photo-add.js";
+import { BrandPick, ColorPick, MoldInput, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
+import { plasticsFor } from "../shared/disc-catalog.js";
 
 const h = React.createElement;
 const MAX_PHOTOS = 4;
@@ -61,6 +63,15 @@ function PhotoPicker({ photos, onAdd, onRemove, busy, existing = false }) {
   ]);
 }
 
+/** A new brand clears a plastic that only belonged to the old one. */
+function withBrand(current, brand) {
+  const key = (value) => String(value).toLowerCase();
+  const plastic = current.plastic;
+  const belongsToOld = current.brand && plasticsFor(current.brand).some((name) => key(name) === key(plastic));
+  const fitsNew = plasticsFor(brand).some((name) => key(name) === key(plastic));
+  return { ...current, brand, plastic: plastic && belongsToOld && !fitsNew ? "" : plastic };
+}
+
 export function MarketSell({ editId = null }) {
   const config = useMarketConfig();
   const viewer = config.viewer;
@@ -103,7 +114,12 @@ export function MarketSell({ editId = null }) {
     return () => controller.abort();
   }, [editId, editing]);
 
-  const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const set = (key, value) => setDraft((current) => (key === "brand" ? withBrand(current, value) : { ...current, [key]: value }));
+  const heard = (fields) => setDraft((current) => {
+    const next = fields.brand ? withBrand(current, fields.brand) : { ...current };
+    for (const key of ["mold", "plastic", "color", "weightG"]) if (fields[key]) next[key] = fields[key];
+    return next;
+  });
 
   async function addPhotos(files) {
     setPhotoBusy(true);
@@ -218,10 +234,11 @@ export function MarketSell({ editId = null }) {
           autoCapitalize: "none", autoComplete: "email", id: "sell-sellerEmail", inputMode: "email", key: "input", maxLength: 120,
           onChange: (event) => setSellerEmail(event.target.value), required: true, type: "email", value: sellerEmail,
         }))) : null,
+      h(VoiceDiscButton, { example: "Try: “Orange Star Destroyer, 175 grams.”", key: "voice", onFields: heard }),
       h("div", { className: "market-grid-2", key: "names" }, [
-        h(Field, { id: "sell-brand", key: "brand", label: "Brand" }, textInput("sell-brand", draft, set, "brand", { placeholder: "Innova" })),
-        h(Field, { id: "sell-mold", key: "mold", label: "Mold" }, textInput("sell-mold", draft, set, "mold", { placeholder: "Destroyer", required: true })),
-        h(Field, { id: "sell-plastic", key: "plastic", label: "Plastic" }, textInput("sell-plastic", draft, set, "plastic", { placeholder: "Star" })),
+        h(BrandPick, { id: "sell-brand", key: "brand", maxLength: LIMITS.brand, onChange: (value) => set("brand", value), value: draft.brand }),
+        h(MoldInput, { brand: draft.brand, id: "sell-mold", key: "mold", maxLength: LIMITS.mold, onChange: (value) => set("mold", value), placeholder: "Destroyer", value: draft.mold }),
+        h(PlasticPick, { brand: draft.brand, id: "sell-plastic", key: "plastic", maxLength: LIMITS.plastic, onChange: (value) => set("plastic", value), value: draft.plastic }),
         h(Field, { id: "sell-discType", key: "type", label: "Disc type" }, h("select", {
           id: "sell-discType", key: "input", onChange: (event) => set("discType", event.target.value), required: true, value: draft.discType,
         }, [h("option", { key: "none", value: "" }, "Choose a type"), ...DISC_TYPES.map(([value, text]) => h("option", { key: value, value }, text))])),
@@ -234,10 +251,8 @@ export function MarketSell({ editId = null }) {
           })))),
       ]),
       h("div", { className: "market-grid-2", key: "physical" }, [
-        h(Field, { id: "sell-weightG", key: "weight", label: "Weight (g)" }, h("input", {
-          id: "sell-weightG", inputMode: "numeric", key: "input", max: 200, min: 100, onChange: (event) => set("weightG", event.target.value), type: "number", value: draft.weightG,
-        })),
-        h(Field, { id: "sell-color", key: "color", label: "Color" }, textInput("sell-color", draft, set, "color")),
+        h(WeightPick, { id: "sell-weightG", key: "weight", label: "Weight (g)", onChange: (value) => set("weightG", value), value: draft.weightG }),
+        h(ColorPick, { id: "sell-color", key: "color", label: "Color", maxLength: LIMITS.color, onChange: (value) => set("color", value), value: draft.color }),
         h(Field, { id: "sell-condition", key: "condition", label: "Condition" }, h("select", {
           id: "sell-condition", key: "input", onChange: (event) => set("condition", event.target.value), required: true, value: draft.condition,
         }, [h("option", { key: "none", value: "" }, "Choose 1–10"), ...CONDITION_LEGEND.map(([score, text]) => h("option", { key: score, value: String(score) }, `${score} · ${text}`))])),

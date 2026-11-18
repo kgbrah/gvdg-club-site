@@ -6,14 +6,56 @@ import React from "react";
 
 import { resizeImageFile } from "../shared/image-resize.js";
 import { LF_LIMITS, LF_MAX_PHOTOS, LF_PHOTO_TIP, lfErrorMessage, postHref, postPayload, validatePost } from "../shared/lost-found-model.js";
+import { plasticsFor } from "../shared/disc-catalog.js";
 import { Note, StatusLine, useAction } from "./market-ui.js";
 import { announceLfChange, lfRequest, PrivacyNote, useLfConfig, useLfIdentityGate } from "./lf-ui.js";
 import { useCourses } from "./lf-list.js";
 import { PhotoAddButtons } from "./photo-add.js";
+import { BrandPick, ColorPick, MoldInput, PickList, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
 
 const h = React.createElement;
 const MAX_PHOTO_DATA_URL = 2_000_000;
-const EMPTY = { brand: "", mold: "", plastic: "", color: "", courseId: "", area: "", eventDate: "", holding: "finder", binNote: "", rewardNote: "", privateInk: "" };
+const EMPTY = {
+  brand: "", mold: "", plastic: "", color: "", weightG: "", courseId: "", hole: "", area: "", eventDate: "", holding: "finder", binNote: "", rewardNote: "",
+  privateInk: "",
+};
+const DEFAULT_HOLES = 18;
+const holeCounts = new Map();
+
+/** How many holes the course has (its longest layout), for the hole pick-list; 18 until known. */
+function useCourseHoles(courseId) {
+  const id = Number(courseId) || 0;
+  const [counts, setCounts] = React.useState(() => new Map(holeCounts));
+  React.useEffect(() => {
+    if (!id || holeCounts.has(id)) return undefined;
+    let live = true;
+    lfRequest("/courses/" + id + "/layouts").then(({ ok, data }) => {
+      const layouts = ok && Array.isArray(data?.layouts) ? data.layouts : [];
+      let most = 0;
+      for (const layout of layouts) {
+        try {
+          const holes = typeof layout.holes === "string" ? JSON.parse(layout.holes) : layout.holes;
+          if (Array.isArray(holes)) most = Math.max(most, holes.length);
+        } catch {
+          /* a layout without readable holes */
+        }
+      }
+      holeCounts.set(id, most >= 1 && most <= 40 ? most : DEFAULT_HOLES);
+      if (live) setCounts(new Map(holeCounts));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [id]);
+  return (id && counts.get(id)) || DEFAULT_HOLES;
+}
+
+/** A new brand clears a plastic that only belonged to the old one. */
+function withBrand(current, brand) {
+  const plastic = current.plastic;
+  const key = (value) => String(value).toLowerCase();
+  const belongsToOld = plasticsFor(current.brand).some((name) => key(name) === key(plastic)) && current.brand;
+  const fitsNew = plasticsFor(brand).some((name) => key(name) === key(plastic));
+  return { ...current, brand, plastic: plastic && belongsToOld && !fitsNew ? "" : plastic };
+}
 
 function todayEastern() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
@@ -63,10 +105,17 @@ export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, cameraH
   ]);
 }
 
-export function NewPost({ kind }) {
+/** `route.query` may carry course / hole from the scoring app ("Found a disc" on the hole you're playing). */
+export function NewPost({ kind, route }) {
   const config = useLfConfig();
   const courses = useCourses();
-  const [draft, setDraft] = React.useState(() => ({ ...EMPTY, eventDate: todayEastern() }));
+  const [draft, setDraft] = React.useState(() => {
+    const query = route?.query;
+    const course = /^\d{1,9}$/.test(query?.get("course") || "") ? query.get("course") : "";
+    const hole = /^\d{1,2}$/.test(query?.get("hole") || "") && Number(query.get("hole")) >= 1 && Number(query.get("hole")) <= 40 ? query.get("hole") : "";
+    return { ...EMPTY, courseId: course, hole: course ? hole : "", eventDate: todayEastern() };
+  });
+  const holes = useCourseHoles(draft.courseId);
   const [photos, setPhotos] = React.useState([]);
   const [problem, setProblem] = React.useState(null);
   const action = useAction();
@@ -77,7 +126,13 @@ export function NewPost({ kind }) {
     if (gateOpen) gateBox.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [gateOpen]);
   const found = kind === "found";
-  const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const set = (key, value) => setDraft((current) => (key === "brand" ? withBrand(current, value) : { ...current, [key]: value }));
+  const heard = (fields) => setDraft((current) => {
+    const next = fields.brand ? withBrand(current, fields.brand) : { ...current };
+    for (const key of ["mold", "plastic", "color", "weightG", "hole"]) if (fields[key]) next[key] = fields[key];
+    return next;
+  });
+  const fieldError = (key) => (problem?.field === key ? problem.text : "");
   const text = (id, key, label, extra = {}) => h(Field, { error: problem?.field === key ? problem.text : "", hint: extra.hint, id, key, label },
     h("input", { id, key: "input", maxLength: LF_LIMITS[key], onChange: (event) => set(key, event.target.value), type: "text", value: draft[key], ...extra.input }));
 
@@ -120,19 +175,29 @@ export function NewPost({ kind }) {
       }),
       problem?.field === "photos" ? h(Note, { key: "photo-error", tone: "error" }, problem.text) : null,
       h(Note, { key: "optional" }, found ? "Everything below is optional. We can read most of it from the photo." : "Add what you remember."),
+      h(VoiceDiscButton, {
+        example: found ? "Try: “Orange Star Destroyer, 175 grams, found on hole 7.”" : "Try: “Blue ESP Buzzz, 177 grams, lost on hole 12.”",
+        holes, key: "voice", onFields: heard,
+      }),
       h("div", { className: "market-grid-2", key: "disc" }, [
-        text("lfBrand", "brand", "Brand", { input: { placeholder: "Innova, Discraft…" } }),
-        text("lfMold", "mold", "Mold", { input: { placeholder: "Destroyer, Buzzz…" } }),
-        text("lfPlastic", "plastic", "Plastic", { input: { placeholder: "Star, ESP…" } }),
-        text("lfColor", "color", "Colour", { input: { placeholder: "Orange" } }),
+        h(BrandPick, { error: fieldError("brand"), id: "lfBrand", key: "brand", maxLength: LF_LIMITS.brand, onChange: (value) => set("brand", value), value: draft.brand }),
+        h(MoldInput, { brand: draft.brand, error: fieldError("mold"), id: "lfMold", key: "mold", maxLength: LF_LIMITS.mold, onChange: (value) => set("mold", value), value: draft.mold }),
+        h(PlasticPick, { brand: draft.brand, error: fieldError("plastic"), id: "lfPlastic", key: "plastic", maxLength: LF_LIMITS.plastic, onChange: (value) => set("plastic", value), value: draft.plastic }),
+        h(ColorPick, { error: fieldError("color"), id: "lfColor", key: "color", onChange: (value) => set("color", value), value: draft.color }),
+        h(WeightPick, { error: fieldError("weightG"), id: "lfWeight", key: "weight", label: "Weight (if you know it)", onChange: (value) => set("weightG", value), value: draft.weightG }),
       ]),
       h("div", { className: "market-grid-2", key: "where" }, [
         h(Field, { id: "lfCourse", key: "course", label: "Course" },
-          h("select", { id: "lfCourse", key: "input", onChange: (event) => set("courseId", event.target.value), value: draft.courseId }, [
+          h("select", { id: "lfCourse", key: "input", onChange: (event) => setDraft((current) => ({ ...current, courseId: event.target.value, hole: "" })), value: draft.courseId }, [
             h("option", { key: "none", value: "" }, "Choose a course"),
             ...courses.map((row) => h("option", { key: row.id, value: String(row.id) }, row.name)),
           ])),
-        text("lfArea", "area", "Hole or area", { input: { placeholder: "Hole 7 pond" } }),
+        h(PickList, {
+          allowOther: false, error: fieldError("hole"), field: "hole", id: "lfHole", key: "hole", label: found ? "Hole found on" : "Hole lost on", onChange: (value) => set("hole", value),
+          options: [...Array.from({ length: holes }, (_, index) => [String(index + 1), "Hole " + (index + 1)]), ["off", "Not on a hole"]],
+          placeholder: "Choose a hole", value: draft.hole,
+        }),
+        text("lfArea", "area", "Where exactly (optional)", { input: { maxLength: LF_LIMITS.areaDetail, placeholder: found ? "By the pond, left of the fairway" : "Parking lot, the creek…" } }),
         h(Field, { id: "lfDate", key: "date", label: found ? "Date found" : "Date lost" },
           h("input", { id: "lfDate", key: "input", max: todayEastern(), onChange: (event) => set("eventDate", event.target.value), type: "date", value: draft.eventDate })),
       ]),
