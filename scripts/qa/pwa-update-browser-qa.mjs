@@ -266,21 +266,45 @@ async function lazyScreensAcrossUpdates() {
   // The new worker installs (precaching its chunks) and takes over the way pwa.js's Refresh does it:
   // SKIP_WAITING, then wait until it is activated.
   async function updateWorker(page) {
+    // Diagnostics for the rare stall: which page requests are still in flight (each one is a pending fetch
+    // event on the old worker, and a waiting worker cannot activate until those settle).
+    const inFlight = new Map();
+    const started = (request) => inFlight.set(request, request.url());
+    const settled = (request) => inFlight.delete(request);
+    page.on("request", started);
+    page.on("requestfinished", settled);
+    page.on("requestfailed", settled);
+    try {
+      await activateNewWorker(page);
+    } catch (error) {
+      throw new Error(error.message + " in-flight: " + JSON.stringify([...inFlight.values()].map((url) => url.replace(/^https?:\/\/[^/]+/, ""))));
+    } finally {
+      page.off("request", started);
+      page.off("requestfinished", settled);
+      page.off("requestfailed", settled);
+    }
+  }
+  async function activateNewWorker(page) {
     await page.evaluate(() => { window.qaWorker = navigator.serviceWorker.controller; });
     await page.evaluate(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
+      const before = registration.active;
       await registration.update();
-      const worker = registration.installing || registration.waiting;
-      if (!worker) throw new Error("No new worker after the deploy");
-      const until = (done) => new Promise((resolve) => {
-        const check = () => { if (done()) { worker.removeEventListener("statechange", check); resolve(); } };
-        worker.addEventListener("statechange", check);
-        check();
-      });
-      await until(() => worker.state !== "installing");
-      if (worker.state === "installed") worker.postMessage({ type: "SKIP_WAITING" });
-      await until(() => worker.state === "activated" || worker.state === "redundant");
-      if (worker.state !== "activated") throw new Error("The new worker did not activate");
+      if (!registration.installing && !registration.waiting && registration.active === before) throw new Error("No new worker after the deploy");
+      // Follow whichever new worker takes over, not one object: the app's own update check can race this
+      // one and replace the first new worker (it then reports "redundant", a CI flake). Still fail if no new
+      // worker ever activates.
+      const started = Date.now();
+      while (Date.now() - started < 20_000) {
+        if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        if (registration.active && registration.active !== before && registration.active.state === "activated") return;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const state = (worker) => worker ? worker.state : null;
+      throw new Error("The new worker did not activate: " + JSON.stringify({
+        installing: state(registration.installing), waiting: state(registration.waiting),
+        active: state(registration.active), activeIsNew: registration.active !== before,
+      }));
     });
     await page.waitForFunction(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller !== window.qaWorker);
   }
