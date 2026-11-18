@@ -1,6 +1,7 @@
 import React from "react";
 import { Camera, KeyRound, LockKeyhole, UserRound } from "lucide-react";
 import { ApplySubmitted } from "./apply-submitted.js";
+import { requestJson } from "./api.js";
 
 const h = React.createElement;
 
@@ -53,7 +54,7 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
     },
   }, [
     h(FormGroup, {
-      label: "PDGA # or UDisc Username",
+      label: "PDGA #, UDisc username or email",
       htmlFor: "identifierInput",
       hint: "Whichever you registered with the club",
       key: "identifier",
@@ -108,7 +109,33 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
   ].filter(Boolean));
 }
 
+/** Guest accounts are a promotion for the first 100: how many spots are left (null while loading or offline). */
+function useGuestSpots(enabled) {
+  const [spots, setSpots] = React.useState(null);
+  React.useEffect(() => {
+    if (!enabled) return undefined;
+    const controller = new AbortController();
+    requestJson("/membership/guest-spots", { signal: controller.signal }).then((data) => {
+      if (Number.isInteger(data?.left) && Number.isInteger(data?.limit)) setSpots({ left: data.left, limit: data.limit });
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [enabled]);
+  return spots;
+}
+
+export function guestSpotsText(spots) {
+  if (!spots) return "Free for the first 100 players: sign up for events, keep score, post in Lost & Found and buy in the marketplace.";
+  if (spots.left > 0) {
+    return `Free promotion: ${spots.left} of ${spots.limit} guest spots left, with round history and stats included. Sign up for events, keep score, post in Lost & Found and buy in the marketplace.`;
+  }
+  return `All ${spots.limit} promotional guest spots are taken. A guest account still lets you sign up for events, keep score, post in Lost & Found and buy in the marketplace; round history and stats come with a club membership.`;
+}
+
 export function ApplyForm({ active, state, onValuesChange }) {
+  const kind = state.values.kind === "guest" ? "guest" : "member";
+  const guest = kind === "guest";
+  const phone = state.values.phone || "";
+  const spots = useGuestSpots(active && guest);
   const name = state.values.name || "";
   const pdgaNo = state.values.pdgaNo || "";
   const udisc = state.values.udisc || "";
@@ -127,10 +154,17 @@ export function ApplyForm({ active, state, onValuesChange }) {
     hidden: !active,
     onSubmit: (event) => {
       event.preventDefault();
-      request("gvdg:member-apply-requested", { name, pdgaNo, udisc, pin, confirmPin, email });
+      request("gvdg:member-apply-requested", { kind, name, pdgaNo, udisc, pin, confirmPin, email, phone });
     },
   }, [
-    h("p", { className: "login-subtitle", key: "copy" }, "Pick a PDGA # or UDisc name and a PIN. An admin approves you, then you can log in."),
+    h("div", { className: "auth-kind", "data-apply-kind": kind, key: "kind", role: "radiogroup", "aria-label": "Account type" }, [
+      ["member", "Club member"], ["guest", "Guest account"],
+    ].map(([value, label]) => h("button", {
+      "aria-checked": String(kind === value), key: value, onClick: () => onValuesChange("apply", { kind: value }), role: "radio", type: "button",
+    }, label))),
+    h("p", { className: "login-subtitle", key: "copy" }, guest
+      ? guestSpotsText(spots) + " An admin approves you, then you sign in with your email and PIN."
+      : "Pick a PDGA # or UDisc name and a PIN. An admin approves you, then you can log in."),
     h(FormGroup, { label: "Name", htmlFor: "applyNameInput", key: "name" }, h("input", {
       type: "text",
       className: "form-input",
@@ -141,7 +175,7 @@ export function ApplyForm({ active, state, onValuesChange }) {
       value: name,
       onChange: (event) => onValuesChange("apply", { name: event.target.value }),
     })),
-    h(FormGroup, { label: "PDGA #", htmlFor: "applyPdgaInput", hint: "Need PDGA # or UDisc", key: "pdga" }, h("input", {
+    h(FormGroup, { label: guest ? "PDGA # (optional)" : "PDGA #", htmlFor: "applyPdgaInput", hint: guest ? undefined : "Need PDGA # or UDisc", key: "pdga" }, h("input", {
       type: "text",
       className: "form-input",
       id: "applyPdgaInput",
@@ -150,7 +184,7 @@ export function ApplyForm({ active, state, onValuesChange }) {
       value: pdgaNo,
       onChange: (event) => onValuesChange("apply", { pdgaNo: event.target.value }),
     })),
-    h(FormGroup, { label: "UDisc username", htmlFor: "applyUdiscInput", key: "udisc" }, h("input", {
+    h(FormGroup, { label: guest ? "UDisc username (optional)" : "UDisc username", htmlFor: "applyUdiscInput", key: "udisc" }, h("input", {
       type: "text",
       className: "form-input",
       id: "applyUdiscInput",
@@ -158,16 +192,32 @@ export function ApplyForm({ active, state, onValuesChange }) {
       value: udisc,
       onChange: (event) => onValuesChange("apply", { udisc: event.target.value }),
     })),
-    h(FormGroup, { label: "Email (optional)", htmlFor: "applyEmailInput", hint: "For a welcome message when you're approved. Never shown publicly.", key: "email" }, h("input", {
+    h(FormGroup, {
+      label: guest ? "Email" : "Email (optional)", htmlFor: "applyEmailInput", key: "email",
+      hint: guest ? "You sign in with it. Never shown publicly." : "For a welcome message when you're approved. Never shown publicly.",
+    }, h("input", {
       type: "email",
       className: "form-input",
       id: "applyEmailInput",
       name: "email",
       autoComplete: "email",
       maxLength: 120,
+      required: guest,
       value: email,
       onChange: (event) => onValuesChange("apply", { email: event.target.value }),
     })),
+    guest ? h(FormGroup, { label: "Phone", htmlFor: "applyPhoneInput", hint: "So the club can reach you. Never shown publicly.", key: "phone" }, h("input", {
+      type: "tel",
+      className: "form-input",
+      id: "applyPhoneInput",
+      name: "tel",
+      autoComplete: "tel",
+      inputMode: "tel",
+      maxLength: 32,
+      required: true,
+      value: phone,
+      onChange: (event) => onValuesChange("apply", { phone: event.target.value }),
+    })) : null,
     h(FormGroup, { label: "Choose a PIN", htmlFor: "applyPinInput", key: "pin" }, h("input", {
       type: "password",
       className: "form-input",

@@ -1,5 +1,5 @@
 import type { Env, RawEnv } from "./env.js";
-import { secretOk } from "./authz.js";
+import { historyGate, secretOk } from "./authz.js";
 import { allowedOrigin, corsHeaders, json, RequestBodyTooLargeError } from "./http.js";
 import {
   handleLogin,
@@ -34,6 +34,7 @@ import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { handlePdgaRegistrationStatus, handlePdgaRegistrations, runPdgaRegistrationTick } from "./pdga-registrations.js";
 import { handleKarma } from "./karma-directory.js";
 import { handleActiveRounds } from "./active-rounds.js";
+import { handleGuestSpots } from "./guest-accounts.js";
 import { runKarmaWatch } from "./karma-watch.js";
 import { handlePdgaBaselines, isPdgaBaselineRoute } from "./pdga-baseline-routes.js";
 import { runPdgaBaselineTick } from "./pdga-baseline-ingest.js";
@@ -112,6 +113,12 @@ export default {
       }
       const messages = await handleMemberMessages(request, env, origin, pathname, method, ctx);
       if (messages) return messages;
+      // Round history and stats: members, admins, and guests with a promo spot (guest-accounts.ts).
+      if ((pathname === "/my-results" || pathname === "/my-play-history" || pathname === "/my-play-export" || pathname === "/my-ratings") && method === "GET") {
+        const blocked = await historyGate(request, env, origin);
+        if (blocked) return blocked;
+      }
+      if (pathname === "/membership/guest-spots" && method === "GET") return await handleGuestSpots(env, origin);
       if (pathname === "/my-results" && method === "GET") return await handleMyResults(request, env, origin);
       if (pathname === "/me/udisc-history" && (method === "GET" || method === "POST" || method === "DELETE")) {
         return await handleUdiscHistory(request, env, origin, method);

@@ -4,6 +4,8 @@ import { requestJson } from "./api.js";
 import { formatRatingDate, formatToPar, plural } from "./format.js";
 import { displayMatchStatus } from "../shared/match-status.js";
 import { UDiscExportDetails } from "../shared/udisc-export.js";
+import { historyLocked, MembershipNeeded } from "./membership-needed.js";
+import { useMemberContext } from "./member-context.js";
 
 const h = React.createElement;
 const RATING_PAGE_SIZE = 250;
@@ -211,7 +213,13 @@ function RatingPanel({ kind, title, group, onLoadMore }) {
   ]);
 }
 
-export function ClubRatings({ token }) {
+export function ClubRatings(props) {
+  const context = useMemberContext();
+  if (historyLocked(context)) return h(MembershipNeeded, { what: "Round ratings" });
+  return h(ClubRatingsBody, props);
+}
+
+function ClubRatingsBody({ token }) {
   const { state, loadMore } = useClubRatings(token);
   if (!token || state.status === "error") return null;
 

@@ -29,6 +29,10 @@ function pub(m: Member | AdminMember) {
     renewalYear: status.renewalYear,
     tier: memberTier(m),
     held: m.held === true,
+    // Guest accounts: how to reach them (admin-only), and whether they got a promo spot.
+    email: m.email ?? null,
+    phone: m.phone ?? null,
+    guestPromo: m.guestPromo === true,
   };
 }
 

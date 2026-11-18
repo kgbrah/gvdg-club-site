@@ -96,7 +96,7 @@ const pages = [
   {
     name: "members-auth",
     path: "/gvdg-members.html",
-    text: ["Members Only", "PDGA # or UDisc Username"],
+    text: ["Members Only", "PDGA #, UDisc username or email"],
   },
   {
     name: "admin-auth",

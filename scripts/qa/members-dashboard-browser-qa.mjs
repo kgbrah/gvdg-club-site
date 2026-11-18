@@ -244,9 +244,9 @@ async function captureAuthGate(browser, origin, viewport, slug) {
   await page.goto(`${origin}/gvdg-members.html`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('[data-react-auth-gate="login"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-auth-gate]", "Members Only", "React auth gate");
-  await waitForText(page, "[data-react-auth-gate]", "PDGA # or UDisc Username", "React auth login form");
+  await waitForText(page, "[data-react-auth-gate]", "PDGA #, UDisc username or email", "React auth login form");
   await page.getByRole("button", { name: "Log In", exact: true }).click();
-  await waitForText(page, '[data-react-auth-error="login"]', "Enter your PDGA #/UDisc and PIN.", "empty login validation");
+  await waitForText(page, '[data-react-auth-error="login"]', "Enter your PDGA #, UDisc or email and your PIN.", "empty login validation");
   await page.evaluate(() => {
     window.dispatchEvent(new CustomEvent("gvdg:member-auth-form-state", {
       detail: { form: "login", busyAction: "login" },

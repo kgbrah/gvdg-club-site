@@ -66,7 +66,8 @@ function memberSummary(member) {
     member.tier === "guest" ? "guest" : member.throughYear ? `through ${member.throughYear}` : "",
   ].filter(Boolean) : [
     member.identifier || member.memberId || "no id",
-    member.tier === "admin" ? "admin" : member.tier === "guest" ? "guest" : "",
+    member.tier === "admin" ? "admin" : member.tier === "guest" ? (member.source.guestPromo === true ? "guest (promo)" : "guest") : "",
+    member.tier === "guest" ? [member.source.email, member.source.phone].filter((value) => typeof value === "string" && value).join(" - ") : "",
     member.tier === "guest" ? "" : member.lapsed ? "lapsed" : member.throughYear ? `through ${member.throughYear}` : "",
     member.mustChangePin ? "PIN not set" : "",
   ].filter(Boolean);
@@ -297,6 +298,9 @@ function normalizeApplication(row) {
     payment: normalizePayment(source.payment),
     pdgaNo: normalizeText(source.pdgaNo),
     udisc: normalizeText(source.udisc),
+    guest: source.kind === "guest",
+    email: normalizeText(source.contact?.email),
+    phone: normalizeText(source.contact?.phone),
   };
 }
 
@@ -338,9 +342,10 @@ function ApplicationRow({ row, duesOnline }) {
     setNote("");
   }
 
-  return h("div", { className: "admin-evrow", "data-admin-application-id": row.id }, [
-    h("span", { className: "ev-name", key: "name" }, `${row.name} - ${[row.pdgaNo && `PDGA# ${row.pdgaNo}`, row.udisc].filter(Boolean).join(" - ") || row.id}`),
-    h("span", { className: `admin-roster-chip ${chip.tone}`, "data-admin-payment-chip": row.payment.status, key: "chip" }, chip.label),
+  return h("div", { className: "admin-evrow", "data-admin-application-id": row.id, "data-admin-application-kind": row.guest ? "guest" : "member" }, [
+    h("span", { className: "ev-name", key: "name" }, `${row.name} - ${[row.guest && "Guest account", row.pdgaNo && `PDGA# ${row.pdgaNo}`, row.udisc, row.email, row.phone].filter(Boolean).join(" - ") || row.id}`),
+    // Guests pay no dues.
+    row.guest ? null : h("span", { className: `admin-roster-chip ${chip.tone}`, "data-admin-payment-chip": row.payment.status, key: "chip" }, chip.label),
     marking
       ? h("form", { className: "admin-mark-paid-form", key: "form", onSubmit: submitMarkPaid }, [
         h("input", {
@@ -350,7 +355,7 @@ function ApplicationRow({ row, duesOnline }) {
         h("button", { className: "admin-btn", key: "save", type: "submit" }, "Save"),
         h("button", { className: "admin-btn secondary", key: "cancel", onClick: () => setMarking(false), type: "button" }, "Cancel"),
       ])
-      : paid
+      : paid || row.guest
         ? null
         : h("button", { className: "admin-btn secondary", key: "mark", onClick: () => setMarking(true), type: "button" },
           // <wbr> lets "(cash/other)" break after the slash on a narrow phone; the accessible name is unchanged.

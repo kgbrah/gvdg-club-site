@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import { verifySession, type SessionClaims } from "./jwt.js";
-import { getMember, type Member } from "./roster.js";
+import { getMember, hasHistoryAccess, type Member } from "./roster.js";
 import { bearer, json } from "./http.js";
 
 export const OPEN_PLAY_PREFIX = "op_";
@@ -41,6 +41,14 @@ export async function requireMember(request: Request, env: Env, origin: string |
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
   return { sub: claims.sub };
+}
+
+/** Round history and stats need a membership, an admin, or a guest promo spot: a 403 the app explains, else null. */
+export async function historyGate(request: Request, env: Env, origin: string | null): Promise<Response | null> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return null; // the handler's own auth check answers
+  const member = claims.member ?? await getMember(env.ROSTER, claims.sub);
+  return hasHistoryAccess(member) ? null : json({ error: "membership_required" }, 403, origin);
 }
 
 export async function adminGate(request: Request, env: Env, origin: string | null): Promise<{ adminId: string } | Response> {

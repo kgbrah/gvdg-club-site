@@ -4,6 +4,8 @@ import { formatPct, playStyleLabel, statPct } from "../shared/play-stats.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 import { describeShot } from "../shared/shot-ledger.js";
 import { PersonalArchivePanel } from "./member-archive-panel.js";
+import { historyLocked, MembershipNeeded } from "./membership-needed.js";
+import { useMemberContext } from "./member-context.js";
 
 const h = React.createElement;
 const initialFilters = { window: "year", last: "10", from: "", to: "", source: "all", group: "singles", style: "stroke", course: "", layout: "", hole: "" };
@@ -227,6 +229,12 @@ function PlayExport({ token }) {
 }
 
 export function PersonalPlayHistory() {
+  const context = useMemberContext();
+  if (historyLocked(context)) return h(MembershipNeeded, { what: "Round history" });
+  return h(PersonalPlayHistoryBody);
+}
+
+function PersonalPlayHistoryBody() {
   const token = storageGet(TOKEN_KEY);
   const [draft, setDraft] = React.useState(initialFilters);
   const [query, setQuery] = React.useState(() => filtersQuery(initialFilters));

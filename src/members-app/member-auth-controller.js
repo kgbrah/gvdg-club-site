@@ -68,7 +68,7 @@ export function installMemberAuthController() {
       return;
     }
     if (!identifier || !pin) {
-      showAuthError("login", "Enter your PDGA #/UDisc and PIN.");
+      showAuthError("login", "Enter your PDGA #, UDisc or email and your PIN.");
       return;
     }
 
@@ -148,12 +148,14 @@ export function installMemberAuthController() {
   }
 
   function finishApply() {
-    setAuthFormValues("apply", { submitted: null, name: "", pdgaNo: "", udisc: "", email: "" });
+    setAuthFormValues("apply", { submitted: null, name: "", pdgaNo: "", udisc: "", email: "", phone: "", kind: "member" });
     showLoginShell(passkeysSupported());
     setAuthFormState("login", { error: "Application sent. After an admin approves you, log in with this PIN." });
   }
 
   async function handleApply(event) {
+    const guest = detailString(event, "kind") === "guest";
+    const phone = detailString(event, "phone");
     const name = detailString(event, "name");
     const pdgaNo = detailString(event, "pdgaNo");
     const udisc = detailString(event, "udisc");
@@ -169,8 +171,16 @@ export function installMemberAuthController() {
       showAuthError("apply", "Enter your name.");
       return;
     }
-    if (!pdgaNo && !udisc) {
+    if (!guest && !pdgaNo && !udisc) {
       showAuthError("apply", "Enter a PDGA # or UDisc username.");
+      return;
+    }
+    if (guest && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      showAuthError("apply", "Enter a valid email. You sign in with it.");
+      return;
+    }
+    if (guest && phone.replace(/\D/g, "").length < 10) {
+      showAuthError("apply", "Enter a valid phone number.");
       return;
     }
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -188,11 +198,11 @@ export function installMemberAuthController() {
 
     setAuthBusy("apply", "apply", true);
     try {
-      const response = await api("/membership/apply", { method: "POST", body: { name, pdgaNo, udisc, pin, ...(email ? { email } : {}) } });
+      const response = await api("/membership/apply", { method: "POST", body: { name, pdgaNo, udisc, pin, ...(email ? { email } : {}), ...(guest ? { kind: "guest", phone } : {}) } });
       if (response.status === 201) {
         const data = await response.json().catch(() => ({}));
         setAuthFormValues("apply", { pin: "", confirmPin: "" });
-        setAuthFormValues("login", { identifier: pdgaNo || udisc, pin: "" });
+        setAuthFormValues("login", { identifier: pdgaNo || udisc || (guest ? email : ""), pin: "" });
         // Dues checkout / push opt-in are credential-gated server-side: with neither available the flow is unchanged.
         const pushKey = pushSupported() ? data.pushPublicKey : null;
         if (data.payToken && data.application?.id && (data.duesOnline || pushKey)) {
@@ -211,11 +221,13 @@ export function installMemberAuthController() {
         }
       } else if (response.status === 409) {
         const data = await response.json().catch(() => ({}));
-        if (data.error === "member_exists") showAuthError("apply", "That PDGA # or UDisc is already on the roster. Log in instead.");
-        else if (data.error === "already_pending") showAuthError("apply", "We already have an application for that PDGA # or UDisc.");
+        if (data.error === "member_exists") showAuthError("apply", guest ? "That email, PDGA # or UDisc already has an account. Log in instead." : "That PDGA # or UDisc is already on the roster. Log in instead.");
+        else if (data.error === "already_pending") showAuthError("apply", guest ? "We already have an application with that email, PDGA # or UDisc." : "We already have an application for that PDGA # or UDisc.");
         else showAuthError("apply", "Could not submit that application.");
-      } else if (response.status === 400 && (await response.clone().json().catch(() => ({}))).error === "invalid_email") {
-        showAuthError("apply", "Enter a valid email, or leave it blank.");
+      } else if (response.status === 400 && ["invalid_email", "email_required"].includes((await response.clone().json().catch(() => ({}))).error)) {
+        showAuthError("apply", guest ? "Enter a valid email. You sign in with it." : "Enter a valid email, or leave it blank.");
+      } else if (response.status === 400 && (await response.clone().json().catch(() => ({}))).error === "invalid_phone") {
+        showAuthError("apply", "Enter a valid phone number.");
       } else if (response.status === 429) {
         showAuthError("apply", "Too many tries. Wait a bit and try again.");
       } else {

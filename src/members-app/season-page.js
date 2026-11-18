@@ -15,6 +15,7 @@ import { JumpBar, RatingTrend, SkeletonBlocks, downloadCsv, seasonCsv } from "./
 import { buildSeasonPage } from "./season-page-model.js";
 import { liveWatchHref } from "../shared/live-watch.js";
 import { relClass, roundRatingOf } from "./play-page-model.js";
+import { historyLocked, MembershipNeeded } from "./membership-needed.js";
 
 const h = React.createElement;
 
@@ -122,7 +123,13 @@ function StandingCard({ item }) {
   ]);
 }
 
-export function MemberSeasonPage({ resultsOnly = false } = {}) {
+export function MemberSeasonPage(props = {}) {
+  const context = useMemberContext();
+  if (historyLocked(context)) return h(MembershipNeeded, { what: props.resultsOnly ? "Your results" : "Season stats" });
+  return h(SeasonPageBody, props);
+}
+
+function SeasonPageBody({ resultsOnly = false } = {}) {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
   const pdgaState = usePdgaStats(context.pdgaNo);

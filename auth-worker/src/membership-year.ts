@@ -19,9 +19,11 @@ export interface MembershipView {
   remind: boolean;
   /** A guest account (tier set by an admin): not a dues-paying member, so never lapsed or reminded. */
   guest: boolean;
+  /** Round history and stats: members, admins, and guests with a promo spot (the first 100 guest applications). */
+  history: boolean;
 }
 
-type YearMember = { memberThroughYear?: number | null; isAdmin?: boolean; guest?: boolean; held?: boolean };
+type YearMember = { memberThroughYear?: number | null; isAdmin?: boolean; guest?: boolean; held?: boolean; guestPromo?: boolean };
 
 function part(now: Date, type: Intl.DateTimeFormatPartTypes): number {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -55,7 +57,7 @@ export function membershipStatus(member: YearMember | null | undefined, now = ne
   const renewalYear = throughYear < currentYear ? currentYear : throughYear < currentYear + 1 ? currentYear + 1 : null;
   const month = easternMonthDay(now).month;
   if (member?.guest === true && member.isAdmin !== true) {
-    return { throughYear, currentYear, current: false, lapsed: false, renewalYear: null, remind: false, guest: true };
+    return { throughYear, currentYear, current: false, lapsed: false, renewalYear: null, remind: false, guest: true, history: member.guestPromo === true };
   }
   return {
     throughYear,
@@ -65,6 +67,7 @@ export function membershipStatus(member: YearMember | null | undefined, now = ne
     renewalYear,
     remind: renewalYear != null && month === 12 && member?.held !== true,
     guest: false,
+    history: true,
   };
 }
 

@@ -10,6 +10,8 @@ import { formatUdiscWhen, recentPlayRounds, relClass } from "./play-page-model.j
 import { myLayoutHandicaps } from "../shared/handicap.js";
 import { trafficHoleLine, trafficSummary } from "../shared/course-traffic.js";
 import { memberConfirm } from "./member-dialogs.js";
+import { historyLocked, MembershipNeeded } from "./membership-needed.js";
+import { useMemberContext } from "./member-context.js";
 
 const h = React.createElement;
 
@@ -477,7 +479,13 @@ export function UdiscHistory({ token }) {
   ]);
 }
 
-function PlayHistory({ token }) {
+function PlayHistory(props) {
+  const context = useMemberContext();
+  if (historyLocked(context)) return h(MembershipNeeded, { what: "Your recent rounds" });
+  return h(PlayHistoryBody, props);
+}
+
+function PlayHistoryBody({ token }) {
   const [state, setState] = React.useState({ status: token ? "loading" : "idle", items: [], handicaps: [] });
 
   React.useEffect(() => {

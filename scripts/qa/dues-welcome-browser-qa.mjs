@@ -269,6 +269,78 @@ await adminApplications({ width: 1280, duesOnline: true });
 await adminApplications({ width: 390, duesOnline: false });
 await adminApplications({ width: 1280, duesOnline: false });
 
+// ---------- guest accounts: apply (email + phone required, promo spots), and the admin's view ----------
+async function guestApply({ width, dark, left }) {
+  const { page, context } = await newPage({ width, dark });
+  const calls = [];
+  await page.route(`${apiBase}/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const body = request.postData() ? JSON.parse(request.postData()) : null;
+    calls.push({ path: url.pathname, method: request.method(), body });
+    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
+    if (url.pathname === "/membership/guest-spots") return route.fulfill(json({ limit: 100, left }));
+    if (url.pathname === "/membership/apply") {
+      return route.fulfill(json({ application: { id: "g1", name: body.name, kind: "guest" }, payToken: "tok", duesOnline: false, pushPublicKey: null, guestSpots: { limit: 100, left } }, 201));
+    }
+    return route.fulfill(json({}, 404));
+  });
+  await page.goto(`${origin}/gvdg-members.html#apply`, { waitUntil: "domcontentloaded" });
+  await page.locator("#applyNameInput").waitFor();
+  await page.getByRole("radio", { name: "Guest account" }).click();
+  await page.getByText(left ? `${left} of 100 guest spots left` : "All 100 promotional guest spots are taken", { exact: false }).waitFor();
+  await page.locator("label[for='applyPdgaInput']", { hasText: "PDGA # (optional)" }).waitFor();
+  await page.locator("#applyNameInput").fill("Drew Visitor");
+  await page.locator("#applyEmailInput").fill("drew@example.com");
+  await page.locator("#applyPinInput").fill("2468");
+  await page.locator("#applyConfirmPinInput").fill("2468");
+  // The phone is required (the browser's own check is bypassed so ours shows).
+  await page.locator("#applyForm").evaluate((form) => { form.noValidate = true; });
+  await page.getByRole("button", { name: "Submit application" }).click();
+  await page.locator('[data-react-auth-error="apply"]').getByText("Enter a valid phone number.").waitFor();
+  await page.locator("#applyPhoneInput").fill("(864) 555-0123");
+  await noOverflow(page, `guest apply form ${width}`);
+  await page.screenshot({ path: path.join(shots, `apply-guest-${left ? "spots" : "full"}-${width}-${dark ? "dark" : "light"}.png`), fullPage: true });
+  await page.getByRole("button", { name: "Submit application" }).click();
+  await page.getByText("Application sent. After an admin approves you, log in with this PIN.").waitFor();
+  const posted = calls.find((c) => c.path === "/membership/apply")?.body;
+  assert.deepEqual({ kind: posted.kind, email: posted.email, phone: posted.phone, pdgaNo: posted.pdgaNo, udisc: posted.udisc },
+    { kind: "guest", email: "drew@example.com", phone: "(864) 555-0123", pdgaNo: "", udisc: "" });
+  // They sign in with the email.
+  assert.equal(await page.getByLabel("PDGA #, UDisc username or email").inputValue(), "drew@example.com");
+  await context.close();
+}
+await guestApply({ width: 390, dark: true, left: 37 });
+await guestApply({ width: 1280, dark: false, left: 0 });
+
+async function adminGuestApplication() {
+  const { page, context } = await newPage({ width: 390, dark: false, token: "qa-admin" });
+  await page.route(`${apiBase}/**`, async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
+    if (url.pathname === "/me") return route.fulfill(json({ sub: "m_taylor", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: true }));
+    if (url.pathname === "/admin/members/applications") {
+      return route.fulfill(json({ duesOnline: true, applications: [{ id: "g1", name: "Drew Visitor", pdgaNo: null, udisc: null, createdAt: new Date().toISOString(), kind: "guest",
+        contact: { email: "drew@example.com", phone: "+18645550123" }, payment: { status: "unpaid" } }] }));
+    }
+    if (url.pathname === "/admin/members") return route.fulfill(json({ members: [] }));
+    if (url.pathname === "/events") return route.fulfill(json({ events: [] }));
+    return route.fulfill(json({}));
+  });
+  await page.goto(`${origin}/admin.html${appHref("admin", "applications")}`, { waitUntil: "domcontentloaded" });
+  const row = page.locator("[data-admin-application-kind='guest']");
+  await row.getByText("Drew Visitor - Guest account - drew@example.com - +18645550123").waitFor({ timeout: 20_000 });
+  assert.equal(await row.locator("[data-admin-payment-chip]").count(), 0, "guests pay no dues");
+  assert.equal(await row.getByRole("button", { name: "Mark paid (cash/other)" }).count(), 0);
+  await row.getByRole("button", { name: "Approve" }).waitFor();
+  await noOverflow(page, "admin guest application 390");
+  await page.screenshot({ path: path.join(shots, "admin-guest-application-390.png"), fullPage: true });
+  await context.close();
+}
+await adminGuestApplication();
+console.log("guest accounts: apply with email + phone (spots / full), admin sees a guest application");
+
 // ---------- welcome card ----------
 for (const dark of [true, false]) {
   const { page, context } = await newPage({ width: 390, dark, token: "qa-member" });
