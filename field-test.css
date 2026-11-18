@@ -1,0 +1,125 @@
+/* field-test.html: the printable volunteer checklist. Colors come from tokens.css and public-polish.css. */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 96px; }
+body { margin: 0; font-family: Archivo, system-ui, sans-serif; background: var(--bg-primary); color: var(--text-primary); line-height: 1.55; }
+a { color: var(--site-link, var(--secondary-text)); text-underline-offset: 4px; }
+button { font-family: inherit; }
+.wrap { width: calc(100% - 64px); max-width: 1120px; margin-inline: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link { position: fixed; top: -100px; left: 20px; z-index: 1100; padding: 12px; background: var(--bg-secondary); }
+.skip-link:focus { top: 12px; }
+
+/* Shared public chrome (laid out here, colored by public-polish.css). */
+header { position: fixed; inset: 0 0 auto; z-index: 1000; background: var(--dark); padding: 10px 32px; }
+header nav { max-width: 1200px; margin: auto; display: flex; align-items: center; justify-content: space-between; min-height: 52px; gap: 24px; }
+.logo { display: flex; align-items: center; text-decoration: none; }
+.logo-image { height: 44px; width: 44px; object-fit: contain; }
+.nav-links { display: flex; align-items: center; gap: 20px; padding: 0; margin: 0; list-style: none; }
+.nav-links a, header .nav-more-btn { color: var(--light); text-decoration: none; font-size: .76rem; font-weight: 700; }
+.nav-links .nav-donate { padding: 10px 16px; border-radius: 8px; background: var(--accent); color: var(--dark); }
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.theme-toggle, .menu-toggle { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--light) 30%, transparent); border-radius: 50%; background: transparent; color: var(--light); cursor: pointer; }
+.theme-toggle svg { width: 24px; height: 24px; }
+.menu-toggle { display: none; }
+footer { background: var(--site-ink, var(--dark)); color: var(--light); padding: 30px max(32px, calc((100% - 1120px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 24px; font-size: .8rem; }
+footer a { color: var(--light); }
+footer > a:first-child { font-family: 'Bebas Neue', sans-serif; text-decoration: none; font-size: 1.3rem; }
+
+/* Hero */
+h1, h2, h3 { margin: 0; line-height: 1.08; }
+.field-hero { padding-top: var(--site-header-height, 73px); background: var(--site-ink, var(--dark)); color: var(--light); }
+.field-hero-inner { padding-block: clamp(30px, 6vw, 64px); display: grid; gap: 18px; justify-items: start; }
+.field-hero .eyebrow { margin: 0; color: var(--accent); font-size: .74rem; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; }
+.field-hero h1 { font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: clamp(2.7rem, 7vw, 4.6rem); letter-spacing: .01em; max-width: 16ch; }
+.field-lead { margin: 0; max-width: 60ch; font-size: 1.04rem; line-height: 1.65; }
+.field-facts { display: flex; flex-wrap: wrap; gap: 10px; padding: 0; margin: 0; list-style: none; }
+.field-facts li { display: grid; gap: 2px; min-width: 9.5rem; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--light) 22%, transparent); border-radius: var(--site-radius, 14px); font-size: .86rem; }
+.field-facts strong { color: var(--accent); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+.field-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 11px 18px; border-radius: 8px; font: 750 .9rem/1.2 Archivo, system-ui, sans-serif; text-decoration: none; cursor: pointer; }
+.button.primary { background: var(--site-action, var(--green)); color: var(--light); border: 1px solid color-mix(in srgb, var(--light) 24%, var(--site-action, var(--green))); }
+.button.secondary { background: transparent; color: var(--light); border: 1px solid color-mix(in srgb, var(--light) 40%, transparent); }
+
+/* The sheet */
+.field-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding-block: clamp(22px, 4vw, 44px) clamp(36px, 6vw, 64px); }
+.field-block { min-width: 0; padding: clamp(16px, 2.6vw, 24px); border: 1px solid var(--site-line); border-radius: var(--site-radius, 14px); background: var(--site-paper, var(--bg-secondary)); }
+.field-block.field-wide { grid-column: 1 / -1; }
+.field-block > p { margin: .6rem 0 0; }
+.field-block h2 { display: flex; align-items: center; gap: 10px; font: 800 clamp(1.15rem, 2.4vw, 1.45rem)/1.2 Archivo, system-ui, sans-serif; letter-spacing: -.01em; }
+.field-block h3 { font: 800 1rem/1.25 Archivo, system-ui, sans-serif; }
+.step { display: inline-grid; place-items: center; flex: none; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--site-action, var(--green)); color: var(--light); font-size: .95rem; }
+.field-small { font-size: .9rem; color: var(--text-secondary); }
+.field-privacy { padding: 10px 12px; border-inline-start: 3px solid var(--site-action, var(--green)); background: var(--site-quiet, var(--bg-primary)); font-size: .92rem; }
+.field-steps { margin: .7rem 0 0; padding-inline-start: 1.3rem; display: grid; gap: .45rem; }
+.field-checks { list-style: none; margin: .7rem 0 0; padding: 0; display: grid; gap: .2rem; }
+.field-checks label { display: flex; align-items: flex-start; gap: .6rem; min-height: 44px; padding-block: .45rem; cursor: pointer; }
+.field-checks input { flex: none; width: 1.2rem; height: 1.2rem; margin-top: .15rem; accent-color: var(--site-action, var(--green)); }
+.field-later { margin-top: .9rem; padding: 12px 14px; border: 1px dashed var(--site-line); border-radius: 10px; }
+.field-later p { margin: .35rem 0 0; font-size: .92rem; color: var(--text-secondary); }
+
+table { width: 100%; border-collapse: collapse; margin-top: .8rem; font-size: .93rem; }
+th, td { padding: .55rem .6rem; border-bottom: 1px solid var(--site-line); text-align: start; vertical-align: top; }
+thead th { font-size: .76rem; letter-spacing: .05em; text-transform: uppercase; color: var(--text-secondary); }
+tbody th { font-weight: 750; }
+.field-fill { table-layout: fixed; }
+.field-fill thead th:first-child { width: 40%; }
+.field-fill :is(th, td) { overflow-wrap: anywhere; }
+.field-fill td { height: 2.4rem; border-inline-start: 1px solid var(--site-line); }
+.field-script tbody th { white-space: nowrap; width: 4.8rem; color: var(--site-link, var(--secondary-text)); }
+.field-script td:last-child { width: 28%; color: var(--text-secondary); }
+
+@media (max-width: 1024px) {
+  .menu-toggle { display: flex; }
+  .nav-links { position: fixed; top: 73px; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; background: var(--dark); padding: 12px 32px 24px; opacity: 0; visibility: hidden; pointer-events: none; max-height: calc(100dvh - 73px); overflow-y: auto; }
+  .nav-links.active { opacity: 1; visibility: visible; pointer-events: auto; }
+  .nav-links a { display: block; padding: 12px; min-height: 44px; }
+}
+@media (max-width: 760px) {
+  header { padding-inline: 16px; }
+  .wrap { width: calc(100% - 32px); }
+  .field-sheet { grid-template-columns: 1fr; }
+  .field-facts li { min-width: 0; flex: 1 1 8rem; }
+  footer { padding: 25px 16px; flex-direction: column; align-items: flex-start; gap: 9px; }
+  /* Tables become stacked rows so nothing scrolls sideways on a phone. */
+  .field-script, .field-script tbody, .field-script tr, .field-script th, .field-script td { display: block; width: auto; }
+  .field-script thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .field-script tr { padding: .55rem 0; border-bottom: 1px solid var(--site-line); }
+  .field-script tbody th, .field-script td { padding: .1rem 0; border: 0; }
+  .field-script td:last-child { width: auto; font-size: .88rem; }
+  .field-script td:last-child::before { content: "Note: "; font-weight: 750; }
+  .field-fill th, .field-fill td { padding: .45rem .4rem; }
+  .field-fill thead th { font-size: .7rem; letter-spacing: .02em; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* One printed page: no site chrome, two columns, compact type. */
+@media print {
+  @page { size: letter; margin: 9mm; }
+  :root { color-scheme: light; }
+  body { background: none; color: black; font-size: 7.6pt; line-height: 1.32; }
+  #publicReactPageChrome, header, footer, .skip-link, #crottsReactApp, .field-actions, .field-facts, .field-lead { display: none !important; }
+  .field-hero { padding: 0; background: none; color: black; }
+  .field-hero-inner { padding: 0 0 4pt; gap: 2pt; }
+  .field-hero .eyebrow { color: black; font-size: 6.5pt; }
+  .field-hero h1 { font-size: 17pt; max-width: none; }
+  .wrap { width: 100%; max-width: none; }
+  .field-sheet { display: block; columns: 2; column-gap: 12pt; padding: 0; }
+  .field-block { break-inside: avoid; margin: 0 0 6pt; padding: 0; border: 0; background: none; }
+  .field-block.field-wide { column-span: none; }
+  .field-block h2 { font-size: 9.5pt; gap: 4pt; }
+  .field-block h3 { font-size: 8pt; }
+  .step { width: 12pt; height: 12pt; font-size: 7pt; background: black; color: white; }
+  .field-block > p, .field-small, .field-privacy, .field-later p { margin-top: 2pt; font-size: 7pt; color: black; }
+  .field-privacy { padding: 2pt 4pt; background: none; border-inline-start-color: black; }
+  .field-steps { margin-top: 2pt; gap: 1pt; padding-inline-start: 11pt; }
+  .field-checks { margin-top: 2pt; gap: 0; }
+  .field-checks label { min-height: 0; padding-block: 0; gap: 3pt; }
+  .field-checks input { width: 7pt; height: 7pt; margin-top: 1pt; }
+  .field-later { margin-top: 3pt; padding: 3pt 4pt; }
+  table { margin-top: 2pt; font-size: 6.8pt; }
+  th, td { padding: 1.4pt 2.5pt; border-bottom-color: black; color: black; }
+  thead th { font-size: 6pt; color: black; }
+  .field-fill td { height: 14pt; border-inline-start-color: black; }
+  .field-script tbody th, .field-script td:last-child { width: auto; color: black; }
+  a { color: black; text-decoration: none; }
+}

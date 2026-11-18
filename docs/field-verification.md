@@ -2,6 +2,8 @@
 
 Status: not run. Automated browser, database and native-build checks do not establish physical-device reliability, battery performance, or equality with UDisc Pro. Use club volunteers who already own the intended devices; the project owner does not wear a watch.
 
+Volunteers run this with the field test kit: the printable checklist at [`field-test.html`](../field-test.html), Field test mode and the Field log in the member app, and `scripts/field/summarize-logs.mjs` to compare the exported logs. See [field-test-kit.md](field-test-kit.md).
+
 ## Record the test conditions
 
 Record the app commit, installed app version, phone/watch model, OS version, course and layout revision, mapped-hole coverage, network conditions, battery health and starting charge. For a comparison, record the current UDisc version and subscription capabilities as observed on the test device. Use the same course, route, screen brightness and tasks. Alternate app order across repeats so weather and battery conditions do not always favor one app.

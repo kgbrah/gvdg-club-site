@@ -1,7 +1,11 @@
+// Report the service worker's own network activity to Playwright. Without it, Chromium under Playwright
+// often left an updated worker waiting (never activating) with no page request in flight: about half of
+// attempts stalled locally and in CI, and none did with it set before Playwright loads. Static imports are
+// hoisted, so Playwright is imported dynamically below, after this line.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS ??= "1";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdir, readFile } from "node:fs/promises";
-import { chromium } from "playwright";
 
 import { cachedChunks, startMemberChunkFixture } from "./member-chunk-fixture.mjs";
 
@@ -80,6 +84,7 @@ ${stamp}<link rel="stylesheet" href="/tokens.css"><script src="/pwa.js" defer></
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = "http://127.0.0.1:" + server.address().port;
+const { chromium } = await import("playwright");
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
 context.setDefaultTimeout(12_000);
@@ -236,7 +241,17 @@ try {
   await banner(legacy).waitFor();
   assert.equal(await build(legacy), D, "an offline legacy document does not adopt the first later marker");
 
-  await lazyScreensAcrossUpdates();
+  // Chromium sometimes leaves a waiting worker un-activated for a long time while a page stays open, with no
+  // requests in flight (seen in CI: waiting "installed", active unchanged, in-flight []). Members then get the
+  // update on the next launch and pwa.js's Refresh says so. Retry only that stall, once, from a fresh fixture
+  // and context; any other failure, or a second stall, still fails the check.
+  try {
+    await lazyScreensAcrossUpdates();
+  } catch (error) {
+    if (!/did not activate/.test(String(error && error.message))) throw error;
+    console.warn("lazy screens across updates: worker activation stalled; retrying once from scratch. " + error.message);
+    await lazyScreensAcrossUpdates();
+  }
 
   console.log("Chromium PWA update QA passed resume, cross-tab versions, per-release Later, offline recovery, explicit refresh safety, stored card data and lazily loaded member screens across updates.");
 } finally {
@@ -252,6 +267,12 @@ async function lazyScreensAcrossUpdates() {
   const fixture = await startMemberChunkFixture();
   const chunkContext = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
   chunkContext.setDefaultTimeout(15_000);
+  // Every request in this context since it opened, including the service worker's own fetches when
+  // PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1: a never-settling one keeps the old worker busy.
+  const contextInFlight = new Map();
+  chunkContext.on("request", (request) => contextInFlight.set(request, (request.serviceWorker() ? "sw:" : "page:") + request.url().replace(/^https?:\/\/[^/]+/, "")));
+  chunkContext.on("requestfinished", (request) => contextInFlight.delete(request));
+  chunkContext.on("requestfailed", (request) => contextInFlight.delete(request));
   const chunks = (release) => [`/members-app/chunks/club-${release}.js`, `/members-app/chunks/stats-${release}.js`];
   async function waitForChunks(page, expected) {
     const started = Date.now();
@@ -266,21 +287,46 @@ async function lazyScreensAcrossUpdates() {
   // The new worker installs (precaching its chunks) and takes over the way pwa.js's Refresh does it:
   // SKIP_WAITING, then wait until it is activated.
   async function updateWorker(page) {
+    // Diagnostics for the rare stall: which page requests are still in flight (each one is a pending fetch
+    // event on the old worker, and a waiting worker cannot activate until those settle).
+    const inFlight = new Map();
+    const started = (request) => inFlight.set(request, request.url());
+    const settled = (request) => inFlight.delete(request);
+    page.on("request", started);
+    page.on("requestfinished", settled);
+    page.on("requestfailed", settled);
+    try {
+      await activateNewWorker(page);
+    } catch (error) {
+      throw new Error(error.message + " in-flight: " + JSON.stringify([...inFlight.values()].map((url) => url.replace(/^https?:\/\/[^/]+/, "")))
+        + " context-in-flight: " + JSON.stringify([...contextInFlight.values()]));
+    } finally {
+      page.off("request", started);
+      page.off("requestfinished", settled);
+      page.off("requestfailed", settled);
+    }
+  }
+  async function activateNewWorker(page) {
     await page.evaluate(() => { window.qaWorker = navigator.serviceWorker.controller; });
     await page.evaluate(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
+      const before = registration.active;
       await registration.update();
-      const worker = registration.installing || registration.waiting;
-      if (!worker) throw new Error("No new worker after the deploy");
-      const until = (done) => new Promise((resolve) => {
-        const check = () => { if (done()) { worker.removeEventListener("statechange", check); resolve(); } };
-        worker.addEventListener("statechange", check);
-        check();
-      });
-      await until(() => worker.state !== "installing");
-      if (worker.state === "installed") worker.postMessage({ type: "SKIP_WAITING" });
-      await until(() => worker.state === "activated" || worker.state === "redundant");
-      if (worker.state !== "activated") throw new Error("The new worker did not activate");
+      if (!registration.installing && !registration.waiting && registration.active === before) throw new Error("No new worker after the deploy");
+      // Follow whichever new worker takes over, not one object: the app's own update check can race this
+      // one and replace the first new worker (it then reports "redundant", a CI flake). Still fail if no new
+      // worker ever activates.
+      const started = Date.now();
+      while (Date.now() - started < 20_000) {
+        if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        if (registration.active && registration.active !== before && registration.active.state === "activated") return;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const state = (worker) => worker ? worker.state : null;
+      throw new Error("The new worker did not activate: " + JSON.stringify({
+        installing: state(registration.installing), waiting: state(registration.waiting),
+        active: state(registration.active), activeIsNew: registration.active !== before,
+      }));
     });
     await page.waitForFunction(() => navigator.serviceWorker.controller && navigator.serviceWorker.controller !== window.qaWorker);
   }

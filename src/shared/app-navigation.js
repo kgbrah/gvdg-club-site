@@ -22,6 +22,7 @@ export const MEMBER_DESTINATIONS = [
   entry("wallet", "Wallet", "account", { terms: "money balance credit store transactions purchases payouts" }),
   entry("appearance", "Appearance", "account", { terms: "theme color dark light background customize disc bag" }),
   entry("install", "Install app", "account", { terms: "PWA home screen phone device Android iPhone help notifications" }),
+  entry("field-test", "Field test", "account", { terms: "field test log volunteer measurements timing battery export device" }),
   entry("imports", "Imported history", "season", { terms: "UDisc import CSV upload score rounds" }),
 ];
 
