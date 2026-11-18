@@ -3,7 +3,7 @@
 import React from "react";
 import { ArrowLeft } from "lucide-react";
 
-import { LF_TAB_COPY, LF_TABS, parseLfRoute, safeRoundReturn } from "../shared/lost-found-model.js";
+import { LF_TAB_COPY, LF_TABS, parseLfRoute } from "../shared/lost-found-model.js";
 import { clearGuest } from "./market-api.js";
 import { ClaimView, CelebrateForm, MatchView } from "./lf-claim.js";
 import { NewPost } from "./lf-form.js";
@@ -11,6 +11,7 @@ import { PostList } from "./lf-list.js";
 import { MyLostFound } from "./lf-mine.js";
 import { PostDetail } from "./lf-post.js";
 import { GuestBadge, useLfConfig } from "./lf-ui.js";
+import { useRoundReturn } from "./live-round.js";
 import { PersonProfile, ReturnedWall } from "./lf-wall.js";
 
 const h = React.createElement;
@@ -47,29 +48,6 @@ function IdentityPanel() {
   ]);
 }
 
-const ROUND_RETURN_KEY = "gvdg_lf_round_return";
-
-/** Arriving from the scoring app ("Found a disc"): keep the way back to the round for this visit. */
-function useRoundReturn(route) {
-  const fromScore = route.query.get("from") === "score" ? safeRoundReturn(route.query.get("return")) : "";
-  const [target, setTarget] = React.useState(() => {
-    try {
-      return fromScore || safeRoundReturn(sessionStorage.getItem(ROUND_RETURN_KEY));
-    } catch {
-      return fromScore;
-    }
-  });
-  React.useEffect(() => {
-    if (!fromScore) return;
-    setTarget(fromScore);
-    try { sessionStorage.setItem(ROUND_RETURN_KEY, fromScore); } catch { /* the link still shows on this screen */ }
-  }, [fromScore]);
-  const clear = () => {
-    try { sessionStorage.removeItem(ROUND_RETURN_KEY); } catch { /* nothing kept */ }
-  };
-  return [target, clear];
-}
-
 function Tabs({ tab }) {
   return h("nav", { "aria-label": "Lost & Found sections", className: "shop-sections lf-tabs" }, LF_TABS.map(([key, href, label]) => h("a", {
     "aria-current": key === tab ? "page" : undefined, className: "shop-section-link" + (key === tab ? " on" : ""), href, key,
@@ -93,9 +71,10 @@ export function LostFoundApp() {
   else if (route.view === "wall") body = h(ReturnedWall, { key: "wall" });
   else if (route.view === "mine") body = h(MyLostFound, { key: "mine" });
   else body = h(PostList, { key: "list-" + route.tab, kind: route.tab, route });
-  return h("main", { "data-lf-tab": route.tab, "data-react-lost-found": "ready" }, [
-    roundReturn ? h("a", { className: "shop-filter-reset lf-round-return", "data-lf-round-return": "true", href: roundReturn, key: "round", onClick: clearRoundReturn }, [
-      h(ArrowLeft, { "aria-hidden": true, key: "icon", size: 18 }), "Back to your round",
+  return h("main", { className: roundReturn ? "lf-has-round-return" : undefined, "data-lf-tab": route.tab, "data-react-lost-found": "ready" }, [
+    // Pinned where a thumb reaches it, on every Lost & Found screen while you're on a live card.
+    roundReturn ? h("a", { className: "lf-round-return", "data-lf-round-return": "true", href: roundReturn, key: "round", onClick: clearRoundReturn }, [
+      h(ArrowLeft, { "aria-hidden": true, key: "icon", size: 20 }), "Return to round",
     ]) : null,
     h("div", { className: "shop-head", key: "head" }, [
       h("div", { key: "copy" }, [

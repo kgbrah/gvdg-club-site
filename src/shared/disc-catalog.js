@@ -232,6 +232,27 @@ function pickFrom(text, names) {
   return best;
 }
 
+// ---- Where exactly ----
+
+const SPOT_START = /\b(?:in|by|near|under|behind|beside|next to|left of|right of|past|across|along|inside|around|off|over|below|at the (?:bottom|top|edge|back|base) of|on the (?:left|right|edge|side))\b/i;
+const SPOT_NOUN = /\b(?:pond|lake|creek|stream|river|water|swamp|marsh|woods|wood|forest|trees?|bush(?:es)?|brush|shrubs?|thicket|rough|fairway|basket|pin|tee|pad|parking|lot|bench|trail|path|road|fence|hill|ditch|grass|field|shed|bin|sign|bridge|rocks?|gravel|sidewalk|drop zone|mando|out of bounds|ob|green|circle|ravine|gully|pine|leaves|mud|sand|playground|pavilion|bathroom|restroom|dumpster|cart path|tree line|treeline|bank|shore|island)\b/i;
+const SPOT_END = /\s+(?:on hole\b|hole\b|at\s+(?!the\b)|it'?s\s|it was\s|weighs\b|\d{3}\s*(?:g|grams)\b).*$/i;
+
+/** The place a disc was, said in passing: "…in the pond left of the fairway" -> "In the pond left of the fairway". */
+export function parseSpokenSpot(transcript, maxLength = 48) {
+  const clauses = String(transcript ?? "").split(/[.,;!?]+|\s+and then\s+|\s+(?:and|but)\s+(?=(?:it was|found|lost)\b)/i).map((clause) => clause.trim()).filter(Boolean);
+  for (const clause of clauses.reverse()) {
+    const start = SPOT_START.exec(clause);
+    if (!start) continue;
+    let spot = clause.slice(start.index).replace(SPOT_END, "").trim();
+    if (!SPOT_NOUN.test(spot) || /^(?:in|on|at)\s+hole\b/i.test(spot)) continue;
+    spot = spot.replace(/\s+/g, " ");
+    if (spot.length > maxLength) spot = spot.slice(0, maxLength).replace(/\s+\S*$/, "");
+    return spot.charAt(0).toUpperCase() + spot.slice(1);
+  }
+  return "";
+}
+
 /**
  * A voice transcript -> the form's values. Only what was heard is returned (missing keys mean "not said").
  * `holes`: how many holes the chosen course has, so "hole 7" is kept only when it exists.
@@ -286,5 +307,7 @@ export function parseSpokenDisc(transcript, { holes = 27 } = {}) {
   // Weight: "175 grams", "175 g", or a lone 3-digit number in the disc range that isn't a hole.
   const grams = /(?:^| )(\d{3})(?: ?(?:g|gram|grams|gs))(?= |$)/.exec(text) || /(?:^| )(1[0-9]{2}|200)(?= |$)/.exec(text);
   if (grams && Number(grams[1]) >= 100 && Number(grams[1]) <= 200) fields.weightG = Number(grams[1]);
+  const spot = parseSpokenSpot(transcript);
+  if (spot) fields.area = spot;
   return fields;
 }

@@ -158,7 +158,10 @@ function fixture(path, authorization) {
     return person ? [200, { sub: person.memberId, name: person.name, isAdmin: person.isAdmin === true, mustChangePin: false, pdgaNo: "" }] : [401, { error: "unauthorized" }];
   }
   if (path === "/me/dashboard-theme") return [200, { theme: glassTheme }];
-  if (path === "/courses") return [200, { courses: db.raw.prepare("SELECT id, name, location FROM courses ORDER BY id LIMIT 30").all() }];
+  if (path === "/courses") return [200, { courses: db.raw.prepare("SELECT id, name, location, lat, lng FROM courses ORDER BY id LIMIT 30").all() }];
+  // A casual card this phone is on (the QA's "Return to round" detection); members have no live club event.
+  if (path === "/rounds/QA9/live/mine") return [200, { status: "live", cardId: 1, cardmates: [{ name: "Riley Chen" }] }];
+  if (path === "/my-live-rounds") return [200, { rounds: [] }];
   if (path === "/shop/products") return [200, { products: [] }];
   if (path === "/shop/wallet") return [200, { balance_cents: 0, transactions: [], orders: [] }];
   if (path === "/payments/config") return [200, { enabled: false }];
@@ -430,7 +433,7 @@ async function runFlows() {
   await lostForm.getByLabel("Plastic", { exact: true }).selectOption("Star");
   await lostForm.getByLabel("Colour", { exact: true }).selectOption("Orange");
   await lostForm.getByLabel("Weight (if you know it)", { exact: true }).selectOption("175");
-  await lostForm.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
+  await pickCourse(lostForm, "ECU North", "ECU North Rec Complex");
   await lostForm.getByLabel("Hole lost on", { exact: true }).selectOption("7");
   await lostForm.getByLabel("Where exactly (optional)", { exact: true }).fill("by the pond");
   await lostForm.getByLabel("Reward note (optional, shown)").fill("Cold drink on me");
@@ -452,7 +455,7 @@ async function runFlows() {
   const form = guest.page.locator("form[aria-label='Post a found disc']");
   await form.getByLabel("Choose disc photos").setInputFiles(ink.file);
   await form.locator(".market-photo-thumb").first().waitFor();
-  await form.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
+  await pickCourse(form, "ecu", "ECU North Rec Complex");
   await form.getByLabel("Hole found on", { exact: true }).selectOption("7");
   await form.getByLabel("Where exactly (optional)", { exact: true }).fill("drop zone");
   await form.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
@@ -1061,6 +1064,15 @@ async function runCamera() {
 // Chromium's simulated microphone -> the real Worker route -> mocked Whisper on OpenRouter -> the pick-lists).
 // ---------------------------------------------------------------------------------------------------
 
+/** The course search: type, then tap the course in the results. */
+async function pickCourse(form, query, name) {
+  const picker = form.locator("[data-course-picker]");
+  if (await picker.getAttribute("data-course-picker") === "chosen") await picker.getByRole("button", { name: "Change course" }).click();
+  await form.getByLabel("Course", { exact: true }).fill(query);
+  await form.locator(".course-results").getByRole("button", { name: new RegExp("^" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+  await form.locator("[data-course-picker=chosen]").getByText(name, { exact: true }).waitFor();
+}
+
 async function selected(locator) {
   return locator.evaluate((node) => node.options[node.selectedIndex]?.textContent || "");
 }
@@ -1077,7 +1089,7 @@ async function runPickers() {
   const form = view.page.locator("form[aria-label='Post a found disc']");
   const back = view.page.locator("[data-lf-round-return]");
   assert.equal(await back.getAttribute("href"), "score.html?round=QA77");
-  await view.page.waitForFunction((id) => document.querySelector("#lfCourse")?.value === id, String(course.id));
+  await form.locator("[data-course-picker=chosen]").getByText(course.name, { exact: true }).waitFor();
   const hole = form.getByLabel("Hole found on", { exact: true });
   await view.page.waitForFunction(() => document.querySelectorAll("#lfHole option").length === 1 + 21 + 1);
   assert.equal(await hole.inputValue(), "7", "the hole from the round is chosen");
@@ -1190,6 +1202,154 @@ async function runPickers() {
   console.log("pick-lists and Say it on the Pro Shop sell and WANTED forms; fit at 390 dark, 320 large text and 1280");
 }
 
+// ---------------------------------------------------------------------------------------------------
+// Where you are: the course search, the course and hole filled in from the phone's location (read silently when
+// location is already allowed; "Use my location" asks), the course and "where exactly" from voice, and "Return to
+// round" pinned on every screen while you're on a live card (from the scoring app's link, or found on its own).
+// ---------------------------------------------------------------------------------------------------
+
+async function runLocation() {
+  const P = profiles.light390;
+  const course = db.raw.prepare("SELECT id, name FROM courses ORDER BY id LIMIT 1 OFFSET 1").get();
+  // Put this course in open country (no other course within miles) with nine holes running north, 120 m apart.
+  db.raw.prepare("UPDATE courses SET lat = ?, lng = ? WHERE id = ?").run(35.0, -78.0, course.id);
+  const metresLat = (m) => m / 111_320;
+  const nine = Array.from({ length: 9 }, (_, index) => ({ hole: index + 1, par: 3,
+    tee: { lat: 35.0 + metresLat(index * 120), lng: -78.0 }, target: { lat: 35.0 + metresLat(index * 120 + 90), lng: -78.0 } }));
+  db.raw.prepare("INSERT INTO course_layouts (course_id, name, holes) VALUES (?, 'QA nine', ?)").run(course.id, JSON.stringify(nine));
+  const onHole5 = { latitude: 35.0 + metresLat(4 * 120 + 45), longitude: -78.0 + 20 / (111_320 * Math.cos(35 * Math.PI / 180)) };
+
+  // 1. Location already allowed: the course and the hole you're on fill in by themselves.
+  const view = await cameraView(P, { member: tokens.other });
+  await view.context.grantPermissions(["geolocation"], { origin });
+  await view.context.setGeolocation(onHole5);
+  await go(view.page, "new/found", "form[aria-label='Post a found disc']");
+  const form = view.page.locator("form[aria-label='Post a found disc']");
+  await form.locator("[data-course-picker=chosen]").getByText(course.name, { exact: true }).waitFor();
+  await form.getByText("Filled in from your location. Change it if that's wrong.").waitFor();
+  await view.page.waitForFunction(() => document.querySelector("#lfHole")?.value === "5");
+  await form.getByText("The hole closest to you.").waitFor();
+  await assertFits(view.page, "found form filled from location");
+  await shot(view.page, "location-filled-found-form-390-light");
+  // Change: the search lists nearby courses first, with distances; typing narrows by name or town.
+  await form.getByRole("button", { name: "Change course" }).click();
+  const results = form.locator(".course-results");
+  await results.getByRole("button").first().getByText(course.name).waitFor();
+  assert.match(await results.getByRole("button").first().innerText(), /· (?:Here|0\.\d mi)$/, "the nearest course first, with its distance");
+  await form.getByLabel("Course", { exact: true }).fill("ecu nor");
+  await results.getByRole("button", { name: /^ECU North Rec Complex/ }).waitFor();
+  await shot(view.page, "course-search-390-light");
+  await results.getByRole("button", { name: /^ECU North Rec Complex/ }).click();
+  assert.equal(await form.locator("#lfHole").inputValue(), "", "a different course clears the hole");
+  assert.equal(await form.getByText("Filled in from your location.", { exact: false }).count(), 0, "the note goes once you change it");
+  await view.context.close();
+
+  // 2. Location not allowed yet: nothing is asked on open; "Use my location" asks, and says so when it's refused.
+  const asking = await cameraView(P, { member: tokens.other });
+  await go(asking.page, "new/found", "form[aria-label='Post a found disc']");
+  const askForm = asking.page.locator("form[aria-label='Post a found disc']");
+  await askForm.locator("[data-course-picker=search]").waitFor();
+  await askForm.getByRole("button", { name: "Use my location" }).click();
+  await askForm.getByText("Location is off for this site. Search by name or town instead.").waitFor();
+  await asking.context.grantPermissions(["geolocation"], { origin });
+  await asking.context.setGeolocation(onHole5);
+  await askForm.getByRole("button", { name: "Use my location" }).click();
+  await askForm.locator("[data-course-picker=chosen]").getByText(course.name, { exact: true }).waitFor();
+  await asking.page.waitForFunction(() => document.querySelector("#lfHole")?.value === "5");
+  await asking.context.close();
+  console.log("location: the course and hole fill in when allowed; Use my location asks; search by name or town, nearest first");
+
+  // 3. Voice names the course, the hole and where exactly.
+  env.GROQ_API_KEY = "gsk_qa";
+  const speaker = await cameraView(P, { member: tokens.other });
+  await go(speaker.page, "new/lost", "form[aria-label='Post a lost disc']");
+  const lost = speaker.page.locator("form[aria-label='Post a lost disc']");
+  whisperQueue.push(`Blue ESP Buzzz, lost it on hole 3 at ${course.name}, in the woods left of the fairway.`);
+  await lost.getByRole("button", { name: "Say the disc details" }).click();
+  await speaker.page.waitForTimeout(900);
+  await lost.getByRole("button", { name: "Stop recording" }).click();
+  await lost.locator(".disc-voice-result").getByText("Filled in the brand, mold, plastic, colour, course, hole and where exactly. Check them below.").waitFor();
+  await lost.locator("[data-course-picker=chosen]").getByText(course.name, { exact: true }).waitFor();
+  assert.equal(await lost.locator("#lfHole").inputValue(), "3");
+  assert.equal(await lost.getByLabel("Where exactly (optional)", { exact: true }).inputValue(), "In the woods left of the fairway");
+  await assertFits(speaker.page, "lost form after voice with course and spot");
+  await shot(speaker.page, "voice-course-spot-lost-form-390-light");
+  await speaker.context.close();
+  delete env.GROQ_API_KEY;
+  console.log("voice: the course, hole and where exactly are filled in");
+
+  // 4. Return to round: on a live card (this phone's recent round, checked live), pinned on every screen.
+  const player = await cameraView(P, { member: tokens.other });
+  await player.context.addInitScript(() => {
+    localStorage.setItem("gvdg_recent_rounds", JSON.stringify([{ code: "QA9", label: "Casual round QA9", updatedAt: Date.now() - 600_000 },
+      { code: "OLD1", label: "Last week", updatedAt: Date.now() - 6 * 86_400_000 }]));
+  });
+  await go(player.page, "found", "[data-lf-view=found][data-lf-state=ready]");
+  const back = player.page.locator("[data-lf-round-return]");
+  await back.waitFor();
+  assert.equal(await back.getAttribute("href"), "score.html?round=QA9");
+  assert.equal((await back.innerText()).trim(), "Return to round");
+  const pinned = await back.evaluate((node) => { const r = node.getBoundingClientRect(); return { position: getComputedStyle(node).position, bottom: innerHeight - r.bottom, height: r.height }; });
+  assert(pinned.position === "fixed" && pinned.bottom >= 8 && pinned.bottom <= 40 && pinned.height >= 48, "pinned at the bottom, thumb-sized: " + JSON.stringify(pinned));
+  await go(player.page, "new/lost", "form[aria-label='Post a lost disc']");
+  await back.waitFor();
+  // The last control on the page isn't hidden behind the pinned button.
+  await player.page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const clear = await player.page.evaluate(() => {
+    const submit = document.querySelector("form[aria-label='Post a lost disc'] button[type=submit]").getBoundingClientRect();
+    const pin = document.querySelector("[data-lf-round-return]").getBoundingClientRect();
+    return submit.bottom <= pin.top || submit.top >= pin.bottom;
+  });
+  assert(clear, "the post button scrolls clear of Return to round");
+  await assertFits(player.page, "lost form with Return to round");
+  await shot(player.page, "return-to-round-lost-form-390-light", { fullPage: false });
+  await player.context.close();
+  // Not on a card: no button.
+  const idle = await cameraView(P, { member: tokens.other });
+  await go(idle.page, "found", "[data-lf-view=found][data-lf-state=ready]");
+  await idle.page.waitForLoadState("networkidle").catch(() => {});
+  assert.equal(await idle.page.locator("[data-lf-round-return]").count(), 0);
+  await idle.context.close();
+  for (const profile of [profiles.dark320, profiles.light1280]) {
+    const sized = await cameraView(profile, { member: tokens.other });
+    await go(sized.page, `new/found?course=${course.id}&hole=4&from=score&return=${encodeURIComponent("score.html?round=QA9")}`, "form[aria-label='Post a found disc']");
+    await sized.page.locator("[data-lf-round-return]").waitFor();
+    await assertFits(sized.page, profile.name + " found form with Return to round");
+    await shot(sized.page, "return-to-round-" + profile.name, { fullPage: false });
+    await sized.context.close();
+  }
+  console.log("Return to round: pinned on every screen while on a live card (from the scoring app or found), none otherwise");
+
+  // 5. The Found / Lost list filter uses the same search: nothing listed until you type or ask for nearby courses.
+  const lister = await cameraView(P, {});
+  await lister.context.grantPermissions(["geolocation"], { origin });
+  await lister.context.setGeolocation(onHole5);
+  const asked = [];
+  lister.page.on("request", (request) => { if (request.url().includes("/lost-found/posts?")) asked.push(new URL(request.url()).searchParams.get("course")); });
+  await go(lister.page, "found", "[data-lf-view=found][data-lf-state=ready]");
+  const filters = lister.page.locator(".lf-filters");
+  const allCards = await lister.page.locator("article.lf-card").count();
+  assert(allCards > 0);
+  assert.equal(await filters.locator(".course-results").count(), 0, "no course list until you search");
+  await filters.getByLabel("Course", { exact: true }).fill("ecu");
+  await filters.locator(".course-results").getByRole("button", { name: /^ECU North Rec Complex/ }).click();
+  await filters.locator("[data-course-picker=chosen]").getByText("ECU North Rec Complex", { exact: true }).waitFor();
+  const ecu = db.raw.prepare("SELECT id FROM courses WHERE name = 'ECU North Rec Complex'").get().id;
+  await lister.page.waitForFunction(() => document.querySelector("[data-lf-view=found]")?.getAttribute("data-lf-state") === "ready");
+  assert(asked.includes(String(ecu)), "the list reloads for that course");
+  const ecuCards = await lister.page.locator("article.lf-card").count();
+  assert.equal(ecuCards, db.raw.prepare("SELECT COUNT(*) AS n FROM lf_posts WHERE kind = 'found' AND course_id = ? AND status IN ('open', 'claimed') AND hidden = 0").get(ecu).n);
+  await assertFits(lister.page, "found list filtered by course");
+  await shot(lister.page, "list-course-filter-390-light", { fullPage: false });
+  await filters.getByRole("button", { name: "All courses" }).click();
+  await filters.locator("[data-course-picker=search]").waitFor();
+  await lister.page.waitForFunction((n) => document.querySelectorAll("article.lf-card").length === n, allCards);
+  await filters.getByRole("button", { name: "Courses near me" }).click();
+  await filters.locator(".course-results").getByRole("button").first().getByText(course.name).waitFor();
+  await lister.context.close();
+  console.log("list filter: course search (type or near me), All courses clears it");
+}
+
 // The public menu: Lost & Found sits next to Pro Shop on every page that renders it (public pages and the
 // homepage share src/shared/site-nav.js). Desktop widths keep one line; at 1024 and below the menu opens as a
 // panel; phones include 320 px with large text. Nothing wraps, overflows or clips.
@@ -1274,6 +1434,7 @@ try {
   await runGlass();
   await runCamera();
   await runPickers();
+  await runLocation();
   // The background cron path works too: nothing due right now, and a tick reads nothing.
   const tick = await lfProcess.runLostFoundTick(env);
   assert.equal(tick.reads, 0);

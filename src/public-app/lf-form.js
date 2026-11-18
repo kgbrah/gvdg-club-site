@@ -7,11 +7,15 @@ import React from "react";
 import { resizeImageFile } from "../shared/image-resize.js";
 import { LF_LIMITS, LF_MAX_PHOTOS, LF_PHOTO_TIP, lfErrorMessage, postHref, postPayload, validatePost } from "../shared/lost-found-model.js";
 import { plasticsFor } from "../shared/disc-catalog.js";
+import { holeCount, layoutHoles, matchSpokenCourse, nearestCourse, nearestHole } from "../shared/course-geo.js";
 import { Note, StatusLine, useAction } from "./market-ui.js";
 import { announceLfChange, lfRequest, PrivacyNote, useLfConfig, useLfIdentityGate } from "./lf-ui.js";
 import { useCourses } from "./lf-list.js";
 import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PickList, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
+import { CoursePicker, useHere } from "./course-picker.js";
+
+const LF_VOICE_FIELDS = ["brand", "mold", "plastic", "color", "weightG", "courseId", "hole", "area"];
 
 const h = React.createElement;
 const MAX_PHOTO_DATA_URL = 2_000_000;
@@ -20,32 +24,24 @@ const EMPTY = {
   privateInk: "",
 };
 const DEFAULT_HOLES = 18;
-const holeCounts = new Map();
+const courseLayouts = new Map();
 
-/** How many holes the course has (its longest layout), for the hole pick-list; 18 until known. */
-function useCourseHoles(courseId) {
+/** The course's holes with their tees and baskets (every layout), for the hole pick-list and "the hole I'm on". */
+function useCourseLayout(courseId) {
   const id = Number(courseId) || 0;
-  const [counts, setCounts] = React.useState(() => new Map(holeCounts));
+  const [loaded, setLoaded] = React.useState(() => new Map(courseLayouts));
   React.useEffect(() => {
-    if (!id || holeCounts.has(id)) return undefined;
+    if (!id || courseLayouts.has(id)) return undefined;
     let live = true;
     lfRequest("/courses/" + id + "/layouts").then(({ ok, data }) => {
       const layouts = ok && Array.isArray(data?.layouts) ? data.layouts : [];
-      let most = 0;
-      for (const layout of layouts) {
-        try {
-          const holes = typeof layout.holes === "string" ? JSON.parse(layout.holes) : layout.holes;
-          if (Array.isArray(holes)) most = Math.max(most, holes.length);
-        } catch {
-          /* a layout without readable holes */
-        }
-      }
-      holeCounts.set(id, most >= 1 && most <= 40 ? most : DEFAULT_HOLES);
-      if (live) setCounts(new Map(holeCounts));
+      courseLayouts.set(id, { holes: layoutHoles(layouts), count: holeCount(layouts) });
+      if (live) setLoaded(new Map(courseLayouts));
     }).catch(() => {});
     return () => { live = false; };
   }, [id]);
-  return (id && counts.get(id)) || DEFAULT_HOLES;
+  const layout = id ? loaded.get(id) : null;
+  return { holes: layout?.holes ?? [], count: layout?.count >= 1 && layout.count <= 40 ? layout.count : DEFAULT_HOLES, ready: Boolean(layout) };
 }
 
 /** A new brand clears a plastic that only belonged to the old one. */
@@ -115,7 +111,29 @@ export function NewPost({ kind, route }) {
     const hole = /^\d{1,2}$/.test(query?.get("hole") || "") && Number(query.get("hole")) >= 1 && Number(query.get("hole")) <= 40 ? query.get("hole") : "";
     return { ...EMPTY, courseId: course, hole: course ? hole : "", eventDate: todayEastern() };
   });
-  const holes = useCourseHoles(draft.courseId);
+  const layout = useCourseLayout(draft.courseId);
+  const holes = layout.count;
+  // Where you are: read on open when location is already allowed (never prompts by itself); "Use my location" asks.
+  const here = useHere();
+  // What location filled in (and was left alone since), for the notes under the fields.
+  const [located, setLocated] = React.useState(() => ({ course: "", hole: "", tried: route?.query?.get("course") ? "prefilled" : "" }));
+  React.useEffect(() => {
+    if (here.status !== "ready" || !courses.length || located.tried || draft.courseId) return;
+    const near = nearestCourse(courses, here.here);
+    setLocated((current) => ({ ...current, tried: "course", course: near ? String(near.course.id) : "" }));
+    if (near) setDraft((current) => (current.courseId ? current : { ...current, courseId: String(near.course.id), hole: "" }));
+  }, [here.status, here.here, courses, located.tried, draft.courseId]);
+  React.useEffect(() => {
+    if (here.status !== "ready" || !layout.ready || draft.hole || located.holeFor === draft.courseId) return;
+    const near = nearestHole(layout.holes, here.here);
+    setLocated((current) => ({ ...current, holeFor: draft.courseId, hole: near ? String(near.hole) : "" }));
+    if (near) setDraft((current) => (current.hole ? current : { ...current, hole: String(near.hole) }));
+  }, [here.status, here.here, layout.ready, layout.holes, draft.hole, draft.courseId, located.holeFor]);
+  const position = here.status === "ready" ? here.here : null;
+  const spokenCourse = (transcript) => {
+    const course = matchSpokenCourse(transcript, courses, position);
+    return course ? { courseId: String(course.id) } : {};
+  };
   const [photos, setPhotos] = React.useState([]);
   const [problem, setProblem] = React.useState(null);
   const action = useAction();
@@ -129,7 +147,8 @@ export function NewPost({ kind, route }) {
   const set = (key, value) => setDraft((current) => (key === "brand" ? withBrand(current, value) : { ...current, [key]: value }));
   const heard = (fields) => setDraft((current) => {
     const next = fields.brand ? withBrand(current, fields.brand) : { ...current };
-    for (const key of ["mold", "plastic", "color", "weightG", "hole"]) if (fields[key]) next[key] = fields[key];
+    if (fields.courseId && fields.courseId !== current.courseId) { next.courseId = fields.courseId; next.hole = ""; }
+    for (const key of ["mold", "plastic", "color", "weightG", "hole", "area"]) if (fields[key]) next[key] = fields[key];
     return next;
   });
   const fieldError = (key) => (problem?.field === key ? problem.text : "");
@@ -176,8 +195,8 @@ export function NewPost({ kind, route }) {
       problem?.field === "photos" ? h(Note, { key: "photo-error", tone: "error" }, problem.text) : null,
       h(Note, { key: "optional" }, found ? "Everything below is optional. We can read most of it from the photo." : "Add what you remember."),
       h(VoiceDiscButton, {
-        example: found ? "Try: “Orange Star Destroyer, 175 grams, found on hole 7.”" : "Try: “Blue ESP Buzzz, 177 grams, lost on hole 12.”",
-        holes, key: "voice", onFields: heard,
+        example: found ? "Try: “Orange Star Destroyer, 175 grams, hole 7 at Elm Street, by the pond.”" : "Try: “Blue ESP Buzzz, 177 grams, lost on hole 12 at the Farm, in the woods.”",
+        extraParse: spokenCourse, fields: LF_VOICE_FIELDS, holes, key: "voice", onFields: heard,
       }),
       h("div", { className: "market-grid-2", key: "disc" }, [
         h(BrandPick, { error: fieldError("brand"), id: "lfBrand", key: "brand", maxLength: LF_LIMITS.brand, onChange: (value) => set("brand", value), value: draft.brand }),
@@ -187,13 +206,14 @@ export function NewPost({ kind, route }) {
         h(WeightPick, { error: fieldError("weightG"), id: "lfWeight", key: "weight", label: "Weight (if you know it)", onChange: (value) => set("weightG", value), value: draft.weightG }),
       ]),
       h("div", { className: "market-grid-2", key: "where" }, [
-        h(Field, { id: "lfCourse", key: "course", label: "Course" },
-          h("select", { id: "lfCourse", key: "input", onChange: (event) => setDraft((current) => ({ ...current, courseId: event.target.value, hole: "" })), value: draft.courseId }, [
-            h("option", { key: "none", value: "" }, "Choose a course"),
-            ...courses.map((row) => h("option", { key: row.id, value: String(row.id) }, row.name)),
-          ])),
+        h(CoursePicker, {
+          courses, error: fieldError("courseId"), here, id: "lfCourse", key: "course",
+          note: located.course && located.course === draft.courseId ? "Filled in from your location. Change it if that's wrong." : "",
+          onChange: (value) => setDraft((current) => ({ ...current, courseId: value, hole: "" })), value: draft.courseId,
+        }),
         h(PickList, {
           allowOther: false, error: fieldError("hole"), field: "hole", id: "lfHole", key: "hole", label: found ? "Hole found on" : "Hole lost on", onChange: (value) => set("hole", value),
+          hint: located.hole && located.hole === draft.hole && located.holeFor === draft.courseId ? "The hole closest to you." : "",
           options: [...Array.from({ length: holes }, (_, index) => [String(index + 1), "Hole " + (index + 1)]), ["off", "Not on a hole"]],
           placeholder: "Choose a hole", value: draft.hole,
         }),

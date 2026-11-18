@@ -1153,7 +1153,77 @@
 [data-public-polish="shop"] .disc-voice-result { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--site-line); }
 [data-public-polish="shop"] .disc-voice-result p { margin: 0; }
 [data-public-polish="shop"] .disc-voice-heard { color: var(--text-primary); font: 650 .9rem/1.4 Archivo, system-ui, sans-serif; }
-[data-public-polish="shop"] .lf-round-return { display: inline-flex; margin: 0 0 12px; }
+/* "Return to round": pinned bottom centre (thumb reach) on every Lost & Found screen during a live card. */
+[data-page="lost-found"] .lf-round-return {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  max-width: calc(100vw - 32px);
+  padding: 0 22px;
+  transform: translateX(-50%);
+  border: 2px solid var(--light);
+  border-radius: 999px;
+  background: var(--site-action);
+  color: var(--light);
+  box-shadow: 0 6px 18px rgb(0 0 0 / .28);
+  font: 800 1rem/1.1 Archivo, system-ui, sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+[data-page="lost-found"] .lf-round-return:focus-visible { outline: 3px solid var(--site-focus); outline-offset: 3px; }
+[data-page="lost-found"] main.lf-has-round-return { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+
+/* Course search (Lost & Found post forms). */
+[data-public-polish="shop"] .course-picker { display: grid; gap: 6px; }
+[data-public-polish="shop"] .course-picker-label { color: var(--text-secondary); font: 650 .86rem/1.35 Archivo, system-ui, sans-serif; }
+[data-public-polish="shop"] .course-search-row { display: flex; gap: 6px; min-width: 0; }
+[data-public-polish="shop"] .course-search-row input { flex: 1 1 auto; min-width: 0; }
+[data-public-polish="shop"] .course-locate { justify-self: start; }
+[data-page="lost-found"] .lf-filters .shop-search-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; }
+[data-page="lost-found"] .lf-filters :is(.lf-filter-label, .course-picker > label, .course-picker-label) {
+  color: var(--text-secondary);
+  font: 650 .82rem/1.35 Archivo, system-ui, sans-serif;
+}
+@media (min-width: 760px) {
+  [data-page="lost-found"] .lf-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 12px; }
+}
+[data-public-polish="shop"] .course-clear { justify-self: start; min-height: 44px; }
+[data-public-polish="shop"] .course-results { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--site-line); border-radius: 10px; overflow: hidden; }
+[data-public-polish="shop"] .course-results li + li { border-top: 1px solid var(--site-line); }
+[data-public-polish="shop"] .course-result {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 0;
+  background: var(--site-paper);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font: 700 .95rem/1.3 Archivo, system-ui, sans-serif;
+}
+[data-public-polish="shop"] .course-result:hover, [data-public-polish="shop"] .course-result:focus-visible { background: var(--site-quiet); }
+[data-public-polish="shop"] .course-result small, [data-public-polish="shop"] .course-chosen small { color: var(--text-secondary); font: 500 .84rem/1.3 Archivo, system-ui, sans-serif; }
+[data-public-polish="shop"] .course-chosen {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--site-line);
+  border-radius: 10px;
+  background: var(--site-paper);
+}
+[data-public-polish="shop"] .course-chosen-icon { color: var(--site-link); }
+[data-public-polish="shop"] .course-chosen-text { display: grid; gap: 2px; min-width: 0; color: var(--text-primary); }
+[data-public-polish="shop"] .course-chosen-text strong { overflow-wrap: anywhere; font: 750 .98rem/1.25 Archivo, system-ui, sans-serif; }
 
 /* In-app camera (Marketplace and Lost & Found photos). Black like a phone camera; the club's yellow marks Done. */
 .gv-camera {
