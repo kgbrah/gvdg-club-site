@@ -391,7 +391,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v317`, members `?v=209`, public/events `?v=201`, score `?v=241`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v318`, members `?v=210`, public/events `?v=201`, score `?v=241`,
 home `?v=192` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,

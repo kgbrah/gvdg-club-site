@@ -23,6 +23,7 @@ import { InboxHomeAlert } from "./inbox-home-alert.js";
 import { useInboxSummary } from "./inbox-summary.js";
 import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration } from "../shared/event-calendar.js";
 import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
+import { KarmaChip } from "../shared/karma.js";
 
 const h = React.createElement;
 
@@ -60,7 +61,11 @@ function HomeHero({ context, pdgaState }) {
       ? h("img", { className: "player-avatar", src: photo, alt: "", key: "avatar" })
       : h("div", { className: "player-avatar player-avatar-fallback", key: "avatar" }, initials(context.name)),
     h("div", { className: "player-who", key: "who" }, [
-      h("h2", { key: "name" }, context.name || "Member"),
+      // Your own karma next to your name (the name trims with "…", the chip always shows).
+      h("h2", { key: "name" }, h("span", { className: "karma-line" }, [
+        h("span", { key: "n" }, context.name || "Member"),
+        h(KarmaChip, { key: "karma", memberId: context.sub || "" }),
+      ])),
       meta ? h("p", { key: "meta" }, meta) : null,
       pdgaState.status === "empty" ? h("p", { key: "pdga-empty" }, "No PDGA # is linked yet.") : null,
       pdgaState.status === "missing" ? h("p", { key: "pdga-missing" }, "PDGA ratings are unavailable right now.") : null,
