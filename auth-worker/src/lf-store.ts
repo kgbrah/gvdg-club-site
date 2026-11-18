@@ -36,7 +36,7 @@ export async function postPhotoStates(env: Env, postIds: readonly number[]): Pro
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const rows = (await env.DB.prepare(
-      `SELECT id, post_id, redaction FROM lf_photos WHERE post_id IN (${placeholders(chunk)}) AND redaction IN ('public', 'pending', 'failed')
+      `SELECT id, post_id, redaction FROM lf_photos WHERE post_id IN (${placeholders(chunk)}) AND redaction IN ('public', 'pending', 'hiding', 'verifying', 'failed')
        ORDER BY sort_order, id`,
     ).bind(...chunk).all<{ id: number; post_id: number; redaction: string }>()).results ?? [];
     for (const row of rows) {
@@ -55,7 +55,7 @@ export async function celebrationPhotoStates(env: Env, celebrationIds: readonly 
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const rows = (await env.DB.prepare(
-      `SELECT id, celebration_id, redaction FROM lf_photos WHERE celebration_id IN (${placeholders(chunk)}) AND redaction IN ('public', 'pending', 'failed')
+      `SELECT id, celebration_id, redaction FROM lf_photos WHERE celebration_id IN (${placeholders(chunk)}) AND redaction IN ('public', 'pending', 'hiding', 'verifying', 'failed')
        ORDER BY sort_order, id`,
     ).bind(...chunk).all<{ id: number; celebration_id: number; redaction: string }>()).results ?? [];
     for (const row of rows) {

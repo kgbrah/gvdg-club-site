@@ -5,7 +5,7 @@
 
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
-import { processPhoto, purgePostPhotos } from "./lf-process.js";
+import { purgePostPhotos, readPhoto, verifyPhoto } from "./lf-process.js";
 import {
   CELEBRATION_COLUMNS, KARMA_PER_RETURN, POST_COLUMNS, celebrationCards, getPostRow, logModeration, matchReasonLabels, parseReasons, people,
   postCards, postTitle,
@@ -24,7 +24,7 @@ async function counts(c: MarketCtx) {
   const row = await c.env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM lf_reports WHERE status = 'open') AS reports,
             (SELECT COUNT(*) FROM lf_photos WHERE redaction = 'failed') AS failed,
-            (SELECT COUNT(*) FROM lf_photos WHERE redaction = 'pending' AND created_at <= datetime('now', '-1 hour')) AS waiting`,
+            (SELECT COUNT(*) FROM lf_photos WHERE redaction IN ('pending', 'hiding', 'verifying') AND created_at <= datetime('now', '-1 hour')) AS waiting`,
   ).first<{ reports: number; failed: number; waiting: number }>();
   return { openReports: Number(row?.reports) || 0, failedPhotos: Number(row?.failed) || 0, waitingPhotos: Number(row?.waiting) || 0 };
 }
@@ -73,7 +73,8 @@ async function overview(c: MarketCtx): Promise<Response> {
     `SELECT ph.id, ph.post_id, ph.celebration_id, ph.redaction, ph.attempts, ph.last_error, ph.next_attempt_at, ph.created_at,
             p.brand, p.mold, p.plastic, p.color, p.kind
      FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id
-     WHERE ph.redaction IN ('pending', 'failed') ORDER BY CASE ph.redaction WHEN 'failed' THEN 0 ELSE 1 END, ph.created_at LIMIT 40`,
+     WHERE ph.redaction IN ('pending', 'hiding', 'verifying', 'failed')
+     ORDER BY CASE ph.redaction WHEN 'failed' THEN 0 ELSE 1 END, ph.created_at LIMIT 40`,
   ).all<Row>()).results ?? [];
   const matchRows = (await env.DB.prepare(
     `SELECT m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons, m.ai_verdict, m.status, m.created_at, f.owner_id AS finder_id
@@ -249,20 +250,25 @@ export async function handleLostFoundAdmin(c: MarketCtx, method: string, seg: st
   }
 
   if (seg[2] === "photos" && seg.length === 5 && (action === "retry" || action === "remove")) {
-    const photo = await c.env.DB.prepare("SELECT id, original_key, public_key, redaction FROM lf_photos WHERE id = ?").bind(id)
-      .first<{ id: number; original_key: string | null; public_key: string | null; redaction: string }>();
+    const photo = await c.env.DB.prepare(
+      `SELECT ph.id, ph.original_key, ph.candidate_key, ph.public_key, ph.redaction,
+              (SELECT 1 FROM lf_extractions x WHERE x.photo_id = ph.id AND x.status = 'ok') AS has_read
+       FROM lf_photos ph WHERE ph.id = ?`,
+    ).bind(id).first<{ id: number; original_key: string | null; candidate_key: string | null; public_key: string | null; redaction: string; has_read: number | null }>();
     if (!photo) return fail(c, 404, "not_found");
     if (action === "retry") {
-      if (!["pending", "failed"].includes(photo.redaction) || !photo.original_key) return fail(c, 409, "not_waiting");
-      await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'pending', attempts = 0, next_attempt_at = datetime('now'), last_error = '' WHERE id = ?").bind(id).run();
+      if (!["pending", "hiding", "verifying", "failed"].includes(photo.redaction) || !photo.original_key) return fail(c, 409, "not_waiting");
+      // Start the count again from where the photo got stuck: the read, the poster's copy, or the AI check.
+      const next = photo.candidate_key ? "verifying" : photo.has_read ? "hiding" : "pending";
+      await c.env.DB.prepare("UPDATE lf_photos SET redaction = ?, attempts = 0, next_attempt_at = datetime('now'), last_error = '' WHERE id = ?")
+        .bind(next, id).run();
       await logModeration(c.env, adminId, "photo_retry", "photo", id, reason);
-      const outcome = await processPhoto(c.env, id);
+      const outcome = next === "verifying" ? await verifyPhoto(c.env, id) : next === "pending" ? await readPhoto(c.env, id) : "hiding";
       return ok(c, { ok: true, outcome });
     }
     if (photo.redaction === "removed") return fail(c, 409, "already_removed");
-    if (photo.original_key) await c.env.PHOTOS?.delete(photo.original_key);
-    if (photo.public_key) await c.env.PHOTOS?.delete(photo.public_key);
-    await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, public_key = NULL WHERE id = ?").bind(id).run();
+    for (const key of [photo.original_key, photo.candidate_key, photo.public_key]) if (key) await c.env.PHOTOS?.delete(key);
+    await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, candidate_key = NULL, public_key = NULL WHERE id = ?").bind(id).run();
     await logModeration(c.env, adminId, "photo_remove", "photo", id, reason);
     return ok(c, { ok: true });
   }

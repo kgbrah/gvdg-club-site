@@ -1,5 +1,5 @@
--- Lost & Found: found and lost disc posts, privately stored original photos with server-redacted public
--- copies, AI extractions (private ink text + boxes), suggested matches, claims and returns with a state
+-- Lost & Found: found and lost disc posts, privately stored original photos with public copies whose writing
+-- the poster's browser hid and the AI verified, AI extractions (private ink text + boxes), suggested matches, claims and returns with a state
 -- log, an append-only karma ledger, celebrations with photos, reports and an admin moderation log.
 --
 -- Identities are the marketplace's: an owner id is a roster member id or a verified guest ("mg_<n>",
@@ -7,7 +7,8 @@
 -- market_traders.trader_key, never owner ids or emails.
 --
 -- PRIVACY: lf_posts.private_ink, lf_extractions.ink_json / ink_names / ink_phones and
--- lf_photos.original_key are for matching and redaction only and never leave the Worker.
+-- lf_photos.original_key / candidate_key are for matching and hiding only; an original reaches nobody but its
+-- uploader, and only while the writing is being hidden.
 
 CREATE TABLE IF NOT EXISTS lf_posts (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,20 +47,30 @@ CREATE INDEX IF NOT EXISTS lf_posts_expiry ON lf_posts(status, expires_at);
 CREATE INDEX IF NOT EXISTS lf_posts_course ON lf_posts(course_id, kind, status);
 
 -- One row per uploaded photo (a post's or a celebration's). The original lives under a private R2 key that
--- is never served; public_key is set only after the AI read it and the server blurred the writing.
+-- only its uploader can fetch, and only while the writing is being hidden. The Worker never decodes an image:
+-- the AI returns boxes, the POSTER'S BROWSER paints a solid patch over each one and uploads that copy
+-- (candidate_key, private), and the AI checks it; only a copy that passed the check becomes public_key.
 CREATE TABLE IF NOT EXISTS lf_photos (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id        INTEGER REFERENCES lf_posts(id),
   celebration_id INTEGER,
+  owner_id       TEXT NOT NULL,
   original_key   TEXT,
   original_type  TEXT NOT NULL,
   original_bytes INTEGER NOT NULL,
+  -- Pixel size read from the file header at upload (no decode); the public copy must keep the aspect ratio.
+  width          INTEGER NOT NULL,
+  height         INTEGER NOT NULL,
+  candidate_key  TEXT,
   public_key     TEXT,
   public_bytes   INTEGER,
-  -- pending: no public copy yet (AI unavailable / unsure, retried by cron); public: redacted copy served;
-  -- failed: retries exhausted (admin queue); removed: taken down by its owner or an admin.
-  redaction      TEXT NOT NULL DEFAULT 'pending' CHECK (redaction IN ('pending', 'public', 'failed', 'removed')),
+  -- pending: waiting for the AI read; hiding: boxes ready, waiting for the poster's browser; verifying: the
+  -- poster's copy waits for the AI check; public: verified copy served; failed: retries used up (admin queue);
+  -- removed: taken down.
+  redaction      TEXT NOT NULL DEFAULT 'pending' CHECK (redaction IN ('pending', 'hiding', 'verifying', 'public', 'failed', 'removed')),
   boxes          INTEGER NOT NULL DEFAULT 0,
+  -- Times the AI check found writing still readable; each one widens the patches the browser paints.
+  rejections     INTEGER NOT NULL DEFAULT 0,
   attempts       INTEGER NOT NULL DEFAULT 0,
   next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_error     TEXT NOT NULL DEFAULT '',
@@ -71,8 +82,10 @@ CREATE TABLE IF NOT EXISTS lf_photos (
 CREATE INDEX IF NOT EXISTS lf_photos_post ON lf_photos(post_id, sort_order, id);
 CREATE INDEX IF NOT EXISTS lf_photos_celebration ON lf_photos(celebration_id, sort_order, id);
 CREATE INDEX IF NOT EXISTS lf_photos_queue ON lf_photos(redaction, next_attempt_at);
+CREATE INDEX IF NOT EXISTS lf_photos_owner ON lf_photos(owner_id, redaction);
 
--- One AI extraction per photo (re-run only while the photo is still pending). ink_* are PRIVATE.
+-- One AI extraction per photo (re-run only while the photo is still pending). ink_* are PRIVATE; boxes_json
+-- holds only the normalised rectangles the poster's browser needs (never any text).
 CREATE TABLE IF NOT EXISTS lf_extractions (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   photo_id     INTEGER NOT NULL UNIQUE REFERENCES lf_photos(id),
@@ -89,6 +102,7 @@ CREATE TABLE IF NOT EXISTS lf_extractions (
   ink_json     TEXT NOT NULL DEFAULT '[]',
   ink_names    TEXT NOT NULL DEFAULT '',
   ink_phones   TEXT NOT NULL DEFAULT '',
+  boxes_json   TEXT NOT NULL DEFAULT '[]',
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -172,16 +172,22 @@ export default {
             } catch (error) {
               console.error(JSON.stringify({ message: "market_sweep_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
-            // Lost & Found: retry photos still waiting for a trusted AI read (with backoff), expire 90-day posts,
-            // purge photos of finished posts. Isolated from the import.
+            let importError: unknown = null;
+            try {
+              const result = await runUdiscLayoutImportTick(env);
+              console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
+            } catch (error) {
+              importError = error;
+            }
+            // Lost & Found runs LAST in this branch, so however long its Gemini waits take it can never starve the
+            // market sweep or the UDisc import above. It does I/O only (no image work); expiry and purges first.
             try {
               const lf = await runLostFoundTick(env);
-              if (lf.photos || lf.expired || lf.purged) console.log(JSON.stringify({ message: "lost_found_tick", ...lf }));
+              if (lf.expired || lf.purged || lf.reads || lf.verified) console.log(JSON.stringify({ message: "lost_found_tick", ...lf }));
             } catch (error) {
               console.error(JSON.stringify({ message: "lost_found_tick_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
-            const result = await runUdiscLayoutImportTick(env);
-            console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
+            if (importError) throw importError;
             return;
           }
           if (isPdgaEventCron(controller.cron)) {

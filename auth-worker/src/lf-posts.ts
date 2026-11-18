@@ -9,8 +9,8 @@ import { processPost, purgePostPhotos } from "./lf-process.js";
 import {
   CLAIM_COLUMNS, MATCH_COLUMNS, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards, postStatus, postTitle, strength,
 } from "./lf-store.js";
-import { decodeListingPhoto } from "./market-photos.js";
-import type { DecodedImage } from "./photos.js";
+import { photosFrom, type LfPhoto } from "./lf-image-header.js";
+import { uploaderPhotos } from "./lf-photos.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
 
@@ -106,6 +106,8 @@ export async function postDetail(c: MarketCtx, row: Row) {
       detail.matches = matches.map((match) => ({ id: num(match, "id"), foundId: num(match, "found_id"), strength: strength(num(match, "score")),
         reasons: matchReasonLabels(parseReasons(match.reasons)) }));
     }
+    // The poster's own photos and where the hiding of their writing stands (no text, rectangles only on request).
+    detail.myPhotos = await uploaderPhotos(c, { postId: id });
     detail.canClose = live;
     detail.canTurnIn = isFound && live && card!.holding !== "club_bin";
   } else if (actor) {
@@ -132,15 +134,9 @@ export async function getPost(c: MarketCtx, id: number): Promise<Response> {
   return ok(c, { post: await postDetail(c, row), viewer: await viewerOf(c.env, c.actor) });
 }
 
-function photosFrom(value: unknown, min: number, max: number): DecodedImage[] | null {
-  if (value == null && min === 0) return [];
-  if (!Array.isArray(value) || value.length < min || value.length > max) return null;
-  const images = value.map((item) => decodeListingPhoto(item));
-  return images.every(Boolean) ? images.map((image) => image!) : null;
-}
-
-/** Store originals privately; returns the R2 keys written (for rollback). */
-export async function storeOriginals(c: MarketCtx, owner: { postId?: number; celebrationId?: number }, images: DecodedImage[]): Promise<string[]> {
+/** Store originals privately (only their uploader can fetch them, while the writing is being hidden); returns the
+ *  R2 keys written (for rollback). */
+export async function storeOriginals(c: MarketCtx, owner: { ownerId: string; postId?: number; celebrationId?: number }, images: LfPhoto[]): Promise<string[]> {
   const stored: string[] = [];
   const folder = owner.postId ? "post-" + owner.postId : "celebration-" + owner.celebrationId;
   for (const [index, image] of images.entries()) {
@@ -148,8 +144,10 @@ export async function storeOriginals(c: MarketCtx, owner: { postId?: number; cel
     await c.env.PHOTOS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
     stored.push(key);
     await c.env.DB.prepare(
-      "INSERT INTO lf_photos (post_id, celebration_id, original_key, original_type, original_bytes, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
-    ).bind(owner.postId ?? null, owner.celebrationId ?? null, key, image.contentType, image.bytes.length, index).run();
+      `INSERT INTO lf_photos (post_id, celebration_id, owner_id, original_key, original_type, original_bytes, width, height, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(owner.postId ?? null, owner.celebrationId ?? null, owner.ownerId, key, image.contentType, image.bytes.length,
+      image.size.width, image.size.height, index).run();
   }
   return stored;
 }
@@ -183,7 +181,7 @@ export async function createPost(c: MarketCtx): Promise<Response> {
   if (!id) return fail(c, 500, "server_error");
   let stored: string[] = [];
   try {
-    stored = await storeOriginals(c, { postId: id }, images);
+    stored = await storeOriginals(c, { ownerId: poster.id, postId: id }, images);
   } catch (error) {
     await Promise.all(stored.map((key) => c.env.PHOTOS.delete(key).catch(() => {})));
     await c.env.DB.prepare("DELETE FROM lf_photos WHERE post_id = ?").bind(id).run().catch(() => {});
@@ -191,7 +189,8 @@ export async function createPost(c: MarketCtx): Promise<Response> {
     throw error;
   }
   await logClaim(c.env, { postId: id, actorId: poster.id, action: "post", to: "open", note: v.kind });
-  // AI read, redaction and matching happen after the response (and on the cron if the AI is unavailable).
+  // The AI read and matching happen after the response (and on the cron if the AI is unavailable). The poster's
+  // browser then hides the writing on each photo (lf-photos.ts); nothing here touches pixels.
   const job = processPost(c.env, c.ctx, id);
   try { c.ctx?.waitUntil?.(job); } catch { /* settles on its own */ }
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) }, 201);
@@ -251,12 +250,12 @@ export async function turnInPost(c: MarketCtx, id: number): Promise<Response> {
 export async function removePostPhoto(c: MarketCtx, id: number, photoId: number): Promise<Response> {
   const row = await ownPost(c, id);
   if (row instanceof Response) return row;
-  const photo = await c.env.DB.prepare("SELECT original_key, public_key, redaction FROM lf_photos WHERE id = ? AND post_id = ?")
-    .bind(photoId, id).first<{ original_key: string | null; public_key: string | null; redaction: string }>();
+  const photo = await c.env.DB.prepare("SELECT original_key, candidate_key, public_key, redaction FROM lf_photos WHERE id = ? AND post_id = ?")
+    .bind(photoId, id).first<{ original_key: string | null; candidate_key: string | null; public_key: string | null; redaction: string }>();
   if (!photo || photo.redaction === "removed") return fail(c, 404, "not_found");
-  await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, public_key = NULL WHERE id = ? AND post_id = ?").bind(photoId, id).run();
-  if (photo.original_key) await c.env.PHOTOS?.delete(photo.original_key);
-  if (photo.public_key) await c.env.PHOTOS?.delete(photo.public_key);
+  await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, candidate_key = NULL, public_key = NULL WHERE id = ? AND post_id = ?")
+    .bind(photoId, id).run();
+  for (const key of [photo.original_key, photo.candidate_key, photo.public_key]) if (key) await c.env.PHOTOS?.delete(key);
   await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "photo_remove", note: "photo " + photoId });
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
 }

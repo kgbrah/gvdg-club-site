@@ -1,19 +1,26 @@
-// Lost & Found background work: read each photo with the AI, publish a redacted copy only when the read is
-// trusted, fill in disc details, suggest matches and tell both sides about strong ones. Runs in waitUntil
-// right after a post is created and on the 15-minute cron for retries (with backoff), expiry and cleanup.
-// Never on a public GET.
+// Lost & Found background work. The Worker does I/O only (the club is on the Workers Free plan: 10 ms of CPU per
+// invocation, cron included, and a CPU-limit kill can't be caught): it never decodes or encodes an image.
 //
-// AI cost controls: one extraction per photo (kept once it is trusted), at most MAX_ATTEMPTS tries per photo
-// with growing gaps, a club-wide daily budget of vision calls, posting rate limits per person, and at most
-// MAX_COMPARES photo-pair comparisons per post.
+//   1. read     Gemini reads the disc and boxes any writing; the read is stored (ink text PRIVATE).
+//   2. match    details, matching, the optional photo compare and notices, from the stored reads only.
+//   3. hide     the POSTER'S BROWSER paints a solid patch over each box and uploads that copy (lf-photos.ts).
+//   4. verify   Gemini checks the poster's copy; only a confident "no personal writing is legible" publishes it.
+//
+// Runs in waitUntil after a post (read + match) or an upload (verify), and on the 15-minute cron for retries
+// with backoff (never on a public GET). Every Gemini call claims an attempt with a compare-and-set first; after
+// MAX_ATTEMPTS real failures the photo goes to the admin queue. A free-tier quota answer (429) is "try later":
+// the attempt is handed back, so quota never uses up MAX_ATTEMPTS.
+//
+// AI cost controls: one stored read per photo (never re-asked once trusted), a club-wide daily budget
+// (LF_DAILY_VISION_BUDGET, default 150) and a per-minute cap well under the free tier's ~10 a minute, so
+// tee-sign OCR (same key) always has room; at most MAX_COMPARES optional photo compares per post.
 
 import type { Env } from "./env.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { deliverLfNote } from "./lf-notify.js";
-import { redactImage } from "./lf-redact.js";
 import { rosterNameMatch, scoreMatch, STORE_THRESHOLD, type FoundSide, type LostSide } from "./lf-match.js";
 import { coursesById, getPostRow, postTitle } from "./lf-store.js";
-import { compareDiscPhotos, extractDisc, inkKeys, normalizeName, type InkItem, type InkKeys } from "./lf-vision.js";
+import { compareDiscPhotos, extractDisc, inkKeys, normalizeName, verifyHidden, type InkKeys } from "./lf-vision.js";
 import { isGuestId } from "./market-notify.js";
 import { num, str, type Row } from "./market-store.js";
 import { getMember, listMembers } from "./roster.js";
@@ -23,106 +30,156 @@ type WaitCtx = { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 export const MAX_ATTEMPTS = 6;
 /** Minutes to wait after attempt n (1-based) before trying again. */
 export const BACKOFF_MINUTES = [15, 60, 180, 720, 1440, 2880];
-export const DAILY_AI_BUDGET = 400;
+export const DEFAULT_DAILY_VISION_BUDGET = 150;
+/** Lost & Found's share of the free tier's per-minute limit; the rest is left for tee-sign OCR. */
+export const VISION_PER_MINUTE = 4;
+export const QUOTA_RETRY_MINUTES = 30;
 export const MAX_COMPARES = 3;
-export const TICK_PHOTOS = 6;
+/** Per cron tick: Gemini reads and verifications (each a network wait, not CPU). */
+export const TICK_READS = 4;
+export const TICK_VERIFIES = 4;
 export const CANDIDATE_DAYS = 120;
 
 function sqlNowPlus(minutes: number): string {
   return new Date(Date.now() + minutes * 60_000).toISOString().replace("T", " ").slice(0, 19);
 }
 
-async function overBudget(env: Env): Promise<boolean> {
-  const day = new Date().toISOString().slice(0, 10);
-  return kvRateLimited(env, "lfai:" + day, DAILY_AI_BUDGET, 2 * 86_400);
+export function dailyVisionBudget(env: Env): number {
+  const value = Number((env as unknown as { LF_DAILY_VISION_BUDGET?: string }).LF_DAILY_VISION_BUDGET);
+  return Number.isInteger(value) && value > 0 && value <= 5000 ? value : DEFAULT_DAILY_VISION_BUDGET;
 }
 
-export type PhotoOutcome = "public" | "pending" | "failed" | "skipped";
+/** A slot for one Lost & Found vision call, or the minutes to wait: cool-down after a 429, the per-minute cap,
+ *  then the daily budget. */
+async function visionSlot(env: Env): Promise<number> {
+  if (await env.RATELIMIT.get("lfai:cooldown")) return 5;
+  if (await kvRateLimited(env, "lfai:m:" + Math.floor(Date.now() / 60_000), VISION_PER_MINUTE, 120)) return 2;
+  if (await kvRateLimited(env, "lfai:" + new Date().toISOString().slice(0, 10), dailyVisionBudget(env), 2 * 86_400)) return 60;
+  return 0;
+}
 
-interface PhotoRow { id: number; post_id: number | null; celebration_id: number | null; original_key: string | null; original_type: string; redaction: string; attempts: number }
+export type PhotoOutcome = "read" | "public" | "rejected" | "later" | "pending" | "failed" | "skipped";
 
-/** One attempt at one photo. Fail-closed: anything short of a trusted read keeps the photo private. */
-export async function processPhoto(env: Env, photoId: number): Promise<PhotoOutcome> {
-  const row = await env.DB.prepare(
-    "SELECT id, post_id, celebration_id, original_key, original_type, redaction, attempts FROM lf_photos WHERE id = ?",
+interface PhotoRow {
+  id: number; post_id: number | null; celebration_id: number | null; original_key: string | null; original_type: string;
+  candidate_key: string | null; redaction: string; attempts: number;
+}
+
+async function photoRow(env: Env, photoId: number): Promise<PhotoRow | null> {
+  return env.DB.prepare(
+    "SELECT id, post_id, celebration_id, original_key, original_type, candidate_key, redaction, attempts FROM lf_photos WHERE id = ?",
   ).bind(photoId).first<PhotoRow>();
-  if (!row || row.redaction !== "pending" || !row.original_key || !env.PHOTOS) return "skipped";
-  const existing = await env.DB.prepare("SELECT status, ink_json, source FROM lf_extractions WHERE photo_id = ?")
-    .bind(photoId).first<{ status: string; ink_json: string; source: string }>();
-  const reuse = existing?.status === "ok";
-  if (!reuse && (await overBudget(env))) {
-    await env.DB.prepare("UPDATE lf_photos SET next_attempt_at = ?, last_error = 'ai_budget' WHERE id = ? AND redaction = 'pending'")
-      .bind(sqlNowPlus(60), photoId).run();
-    return "pending";
+}
+
+async function later(env: Env, photoId: number, minutes: number, error: string): Promise<PhotoOutcome> {
+  await env.DB.prepare("UPDATE lf_photos SET next_attempt_at = ?, last_error = ? WHERE id = ?").bind(sqlNowPlus(minutes), error, photoId).run();
+  return "later";
+}
+
+/** Claim the next attempt (compare-and-set) BEFORE calling the AI, so a request and a cron tick never both run it
+ *  and a killed invocation still counts. Past MAX_ATTEMPTS the photo goes to 'failed' (the admin queue). */
+async function claimAttempt(env: Env, row: PhotoRow, status: string): Promise<number | null> {
+  if (row.attempts >= MAX_ATTEMPTS) {
+    // The last attempt never reported back (e.g. the invocation was killed): retire the photo to the admin queue.
+    await env.DB.prepare("UPDATE lf_photos SET redaction = 'failed' WHERE id = ? AND redaction = ? AND attempts = ?").bind(row.id, status, row.attempts).run();
+    return null;
   }
-  // Claim this attempt (compare-and-set on the attempt count) so a cron tick and a request never both run it.
   const attempt = row.attempts + 1;
   const backoff = BACKOFF_MINUTES[Math.min(attempt, BACKOFF_MINUTES.length) - 1]!;
   const claimed = await env.DB.prepare(
-    "UPDATE lf_photos SET attempts = ?, next_attempt_at = ? WHERE id = ? AND redaction = 'pending' AND attempts = ?",
-  ).bind(attempt, sqlNowPlus(backoff), photoId, row.attempts).run();
-  if (!((claimed.meta?.changes ?? 0) > 0)) return "skipped";
-
-  const giveUpOr = async (error: string): Promise<PhotoOutcome> => {
-    const failed = attempt >= MAX_ATTEMPTS;
-    await env.DB.prepare(`UPDATE lf_photos SET redaction = ?, last_error = ? WHERE id = ? AND redaction = 'pending'`)
-      .bind(failed ? "failed" : "pending", error.slice(0, 80), photoId).run();
-    return failed ? "failed" : "pending";
-  };
-
-  const object = await env.PHOTOS.get(row.original_key);
-  if (!object) return giveUpOr("original_missing");
-  const bytes = new Uint8Array(await object.arrayBuffer());
-
-  let status: string;
-  let ink: InkItem[];
-  if (reuse) {
-    status = "ok";
-    ink = parseInk(existing!.ink_json);
-  } else {
-    const read = await extractDisc(env, bytes, row.original_type);
-    status = read.status;
-    ink = read.ink;
-    const keys = inkKeys(read.ink);
-    await env.DB.prepare(
-      `INSERT INTO lf_extractions (photo_id, post_id, source, status, brand, mold, plastic, colors, stamp, ink_json, ink_names, ink_phones)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(photo_id) DO UPDATE SET source = excluded.source, status = excluded.status, brand = excluded.brand, mold = excluded.mold,
-         plastic = excluded.plastic, colors = excluded.colors, stamp = excluded.stamp, ink_json = excluded.ink_json,
-         ink_names = excluded.ink_names, ink_phones = excluded.ink_phones, updated_at = datetime('now')
-       WHERE lf_extractions.status <> 'ok'`,
-    ).bind(photoId, row.post_id, read.source ?? "", read.status, read.brand, read.mold, read.plastic, JSON.stringify(read.colors), read.stamp,
-      JSON.stringify(read.ink), [...keys.names, ...keys.initials.map((value) => "#" + value)].join("|"), keys.phones.join("|")).run();
-  }
-  if (status !== "ok") return giveUpOr(status === "empty" ? "ai_unavailable" : "ai_unsure");
-
-  let redacted;
-  try {
-    redacted = await redactImage(bytes, ink.flatMap((item) => (item.box ? [item.box] : [])));
-  } catch (error) {
-    return giveUpOr("redact_failed:" + (error instanceof Error ? error.message : String(error)).slice(0, 40));
-  }
-  const key = `lost-found/public/${photoId}/${crypto.randomUUID()}.jpg`;
-  await env.PHOTOS.put(key, redacted.bytes, { httpMetadata: { contentType: redacted.contentType } });
-  const published = await env.DB.prepare(
-    `UPDATE lf_photos SET redaction = 'public', public_key = ?, public_bytes = ?, boxes = ?, processed_at = datetime('now'), last_error = ''
-     WHERE id = ? AND redaction = 'pending'`,
-  ).bind(key, redacted.bytes.length, redacted.areas.length, photoId).run();
-  if (!((published.meta?.changes ?? 0) > 0)) {
-    // Removed while we worked: never leave a public copy behind.
-    await env.PHOTOS.delete(key).catch(() => {});
-    return "skipped";
-  }
-  return "public";
+    "UPDATE lf_photos SET attempts = ?, next_attempt_at = ? WHERE id = ? AND redaction = ? AND attempts = ?",
+  ).bind(attempt, sqlNowPlus(backoff), row.id, status, row.attempts).run();
+  return (claimed.meta?.changes ?? 0) > 0 ? attempt : null;
 }
 
-function parseInk(value: string): InkItem[] {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed as InkItem[] : [];
-  } catch {
-    return [];
+/** A free-tier 429 is not a failure: hand the attempt back and cool down for a while. */
+async function refund(env: Env, photoId: number): Promise<PhotoOutcome> {
+  await env.RATELIMIT.put("lfai:cooldown", "1", { expirationTtl: 120 });
+  await env.DB.prepare("UPDATE lf_photos SET attempts = MAX(0, attempts - 1), next_attempt_at = ?, last_error = 'ai_quota' WHERE id = ?")
+    .bind(sqlNowPlus(QUOTA_RETRY_MINUTES), photoId).run();
+  return "later";
+}
+
+async function settle(env: Env, photoId: number, status: string, attempt: number, error: string): Promise<PhotoOutcome> {
+  const failed = attempt >= MAX_ATTEMPTS;
+  await env.DB.prepare("UPDATE lf_photos SET redaction = ?, last_error = ? WHERE id = ? AND redaction = ?")
+    .bind(failed ? "failed" : status, error.slice(0, 80), photoId, status).run();
+  return failed ? "failed" : "pending";
+}
+
+async function objectBytes(env: Env, key: string | null): Promise<Uint8Array | null> {
+  const object = key ? await env.PHOTOS?.get(key) : null;
+  return object ? new Uint8Array(await object.arrayBuffer()) : null;
+}
+
+/** Step 1: the AI read for one photo. A stored trusted read is never asked for again. The read is stored for
+ *  matching whatever its status; a trusted read moves the photo on to 'hiding' (the poster's browser). */
+export async function readPhoto(env: Env, photoId: number): Promise<PhotoOutcome> {
+  const row = await photoRow(env, photoId);
+  if (!row || row.redaction !== "pending" || !row.original_key || !env.PHOTOS) return "skipped";
+  const stored = await env.DB.prepare("SELECT status FROM lf_extractions WHERE photo_id = ?").bind(photoId).first<{ status: string }>();
+  if (stored?.status === "ok") {
+    await env.DB.prepare("UPDATE lf_photos SET redaction = 'hiding' WHERE id = ? AND redaction = 'pending'").bind(photoId).run();
+    return "read";
   }
+  const wait = await visionSlot(env);
+  if (wait) return later(env, photoId, wait, "ai_budget");
+  const attempt = await claimAttempt(env, row, "pending");
+  if (attempt == null) return "skipped";
+  const bytes = await objectBytes(env, row.original_key);
+  if (!bytes) return settle(env, photoId, "pending", attempt, "original_missing");
+  const read = await extractDisc(env, bytes, row.original_type);
+  if (read.status !== "empty") {
+    const keys = inkKeys(read.ink);
+    const boxes = read.ink.flatMap((item) => (item.box ? [item.box] : []));
+    await env.DB.prepare(
+      `INSERT INTO lf_extractions (photo_id, post_id, source, status, brand, mold, plastic, colors, stamp, ink_json, ink_names, ink_phones, boxes_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(photo_id) DO UPDATE SET source = excluded.source, status = excluded.status, brand = excluded.brand, mold = excluded.mold,
+         plastic = excluded.plastic, colors = excluded.colors, stamp = excluded.stamp, ink_json = excluded.ink_json,
+         ink_names = excluded.ink_names, ink_phones = excluded.ink_phones, boxes_json = excluded.boxes_json, updated_at = datetime('now')
+       WHERE lf_extractions.status <> 'ok'`,
+    ).bind(photoId, row.post_id, read.source ?? "", read.status, read.brand, read.mold, read.plastic, JSON.stringify(read.colors), read.stamp,
+      JSON.stringify(read.ink), [...keys.names, ...keys.initials.map((value) => "#" + value)].join("|"), keys.phones.join("|"),
+      JSON.stringify(boxes)).run();
+  }
+  if (read.quota) return refund(env, photoId);
+  if (read.status !== "ok") return settle(env, photoId, "pending", attempt, read.status === "empty" ? "ai_unavailable" : "ai_unsure");
+  await env.DB.prepare(
+    "UPDATE lf_photos SET redaction = 'hiding', boxes = ?, next_attempt_at = datetime('now'), last_error = '' WHERE id = ? AND redaction = 'pending'",
+  ).bind(read.ink.filter((item) => item.box).length, photoId).run();
+  return "read";
+}
+
+/** Step 4: the AI checks the poster's copy. Only a confident "no personal writing is legible" publishes it;
+ *  "still readable" sends it back to the poster (with wider patches next time); "unavailable" retries later. */
+export async function verifyPhoto(env: Env, photoId: number): Promise<PhotoOutcome> {
+  const row = await photoRow(env, photoId);
+  if (!row || row.redaction !== "verifying" || !row.candidate_key || !env.PHOTOS) return "skipped";
+  const wait = await visionSlot(env);
+  if (wait) return later(env, photoId, wait, "ai_budget");
+  const attempt = await claimAttempt(env, row, "verifying");
+  if (attempt == null) return "skipped";
+  const bytes = await objectBytes(env, row.candidate_key);
+  if (!bytes) return settle(env, photoId, "verifying", attempt, "copy_missing");
+  const check = await verifyHidden(env, bytes, "image/jpeg");
+  if (check.quota) return refund(env, photoId);
+  if (!check.verdict) return settle(env, photoId, "verifying", attempt, "ai_unavailable");
+  if (check.verdict === "clear") {
+    const published = await env.DB.prepare(
+      `UPDATE lf_photos SET redaction = 'public', public_key = candidate_key, public_bytes = ?, candidate_key = NULL,
+         processed_at = datetime('now'), last_error = '' WHERE id = ? AND redaction = 'verifying' AND candidate_key = ?`,
+    ).bind(bytes.length, photoId, row.candidate_key).run();
+    return (published.meta?.changes ?? 0) > 0 ? "public" : "skipped";
+  }
+  // Writing still readable (or the AI wasn't sure): the copy never goes public. Back to the poster.
+  await env.PHOTOS.delete(row.candidate_key).catch(() => {});
+  const failed = attempt >= MAX_ATTEMPTS;
+  await env.DB.prepare(
+    `UPDATE lf_photos SET redaction = ?, candidate_key = NULL, rejections = rejections + 1, next_attempt_at = datetime('now'), last_error = ?
+     WHERE id = ? AND redaction = 'verifying'`,
+  ).bind(failed ? "failed" : "hiding", check.verdict === "visible" ? "writing_visible" : "verify_unsure", photoId).run();
+  return failed ? "failed" : "rejected";
 }
 
 /** Fill a post's empty details from what the AI read (marked as AI-read for the UI). */
@@ -275,7 +332,7 @@ export async function compareTopMatches(env: Env, postId: number): Promise<numbe
     const a = originals.find((row) => row.post_id === match.found_id);
     const b = originals.find((row) => row.post_id === match.lost_id);
     if (!a || !b) continue;
-    if (await overBudget(env)) break;
+    if (await visionSlot(env)) break; // optional: only when the budget and the per-minute cap have room
     const claimed = await env.DB.prepare("UPDATE lf_posts SET ai_compares = ai_compares + 1 WHERE id = ? AND ai_compares < ?").bind(postId, MAX_COMPARES).run();
     if (!((claimed.meta?.changes ?? 0) > 0)) break;
     const [objA, objB] = await Promise.all([env.PHOTOS.get(a.original_key), env.PHOTOS.get(b.original_key)]);
@@ -329,41 +386,58 @@ export async function notifyStrongMatches(env: Env, ctx: WaitCtx, postId: number
   return sent;
 }
 
-/** Everything that follows a post being created (or a retry finishing): photos, details, matches, notices. */
+function logFailure(message: string, id: number, error: unknown): void {
+  console.error(JSON.stringify({ message, id, error: error instanceof Error ? error.message : String(error) }));
+}
+
+async function duePhotos(env: Env, column: "post_id" | "celebration_id", id: number, status: string): Promise<number[]> {
+  const rows = (await env.DB.prepare(
+    `SELECT id FROM lf_photos WHERE ${column} = ? AND redaction = ? AND next_attempt_at <= datetime('now') ORDER BY sort_order, id`,
+  ).bind(id, status).all<{ id: number }>()).results ?? [];
+  return rows.map((row) => row.id);
+}
+
+/** Details, matches, the optional photo compare and notices for one post. Uses the stored reads only. */
+export async function matchPost(env: Env, ctx: WaitCtx, postId: number, compare = true): Promise<void> {
+  await applyExtraction(env, postId);
+  await runMatching(env, postId);
+  if (compare) await compareTopMatches(env, postId);
+  await notifyStrongMatches(env, ctx, postId);
+}
+
+/** After a post is created: (1) the AI reads, then (2) details, matching, compare and notices. Hiding the writing
+ *  happens in the poster's browser; matching never waits for it. Each step runs even if the one before failed. */
 export async function processPost(env: Env, ctx: WaitCtx, postId: number): Promise<void> {
   try {
-    const photos = (await env.DB.prepare(
-      "SELECT id FROM lf_photos WHERE post_id = ? AND redaction = 'pending' AND next_attempt_at <= datetime('now') ORDER BY sort_order, id",
-    ).bind(postId).all<{ id: number }>()).results ?? [];
-    for (const photo of photos) await processPhoto(env, photo.id);
-    await applyExtraction(env, postId);
-    await runMatching(env, postId);
-    await compareTopMatches(env, postId);
-    await notifyStrongMatches(env, ctx, postId);
+    for (const photoId of await duePhotos(env, "post_id", postId, "pending")) await readPhoto(env, photoId);
   } catch (error) {
-    console.error(JSON.stringify({ message: "lf_process_failed", postId, error: error instanceof Error ? error.message : String(error) }));
+    logFailure("lf_read_failed", postId, error);
+  }
+  try {
+    await matchPost(env, ctx, postId);
+  } catch (error) {
+    logFailure("lf_match_failed", postId, error);
   }
 }
 
+/** A celebration has no matching: only its reads (the poster's browser hides the writing afterwards). */
 export async function processCelebration(env: Env, celebrationId: number): Promise<void> {
   try {
-    const photos = (await env.DB.prepare(
-      "SELECT id FROM lf_photos WHERE celebration_id = ? AND redaction = 'pending' AND next_attempt_at <= datetime('now') ORDER BY sort_order, id",
-    ).bind(celebrationId).all<{ id: number }>()).results ?? [];
-    for (const photo of photos) await processPhoto(env, photo.id);
+    for (const photoId of await duePhotos(env, "celebration_id", celebrationId, "pending")) await readPhoto(env, photoId);
   } catch (error) {
-    console.error(JSON.stringify({ message: "lf_celebration_process_failed", celebrationId, error: error instanceof Error ? error.message : String(error) }));
+    logFailure("lf_celebration_process_failed", celebrationId, error);
   }
 }
 
 /** Delete a post's photos from R2: originals always; public copies too unless keepPublic. Idempotent. */
 export async function purgePostPhotos(env: Env, postId: number, keepPublic: boolean): Promise<number> {
-  const rows = (await env.DB.prepare("SELECT id, original_key, public_key FROM lf_photos WHERE post_id = ?")
-    .bind(postId).all<{ id: number; original_key: string | null; public_key: string | null }>()).results ?? [];
+  const rows = (await env.DB.prepare("SELECT id, original_key, candidate_key, public_key FROM lf_photos WHERE post_id = ?")
+    .bind(postId).all<{ id: number; original_key: string | null; candidate_key: string | null; public_key: string | null }>()).results ?? [];
   let deleted = 0;
   for (const row of rows) {
-    if (row.original_key) {
-      await env.PHOTOS?.delete(row.original_key);
+    for (const key of [row.original_key, row.candidate_key]) {
+      if (!key) continue;
+      await env.PHOTOS?.delete(key);
       deleted += 1;
     }
     if (!keepPublic && row.public_key) {
@@ -371,33 +445,18 @@ export async function purgePostPhotos(env: Env, postId: number, keepPublic: bool
       deleted += 1;
     }
     await env.DB.prepare(keepPublic
-      ? "UPDATE lf_photos SET original_key = NULL, redaction = CASE WHEN redaction = 'public' THEN 'public' ELSE 'removed' END WHERE id = ?"
-      : "UPDATE lf_photos SET original_key = NULL, public_key = NULL, redaction = 'removed' WHERE id = ?").bind(row.id).run();
+      ? "UPDATE lf_photos SET original_key = NULL, candidate_key = NULL, redaction = CASE WHEN redaction = 'public' THEN 'public' ELSE 'removed' END WHERE id = ?"
+      : "UPDATE lf_photos SET original_key = NULL, candidate_key = NULL, public_key = NULL, redaction = 'removed' WHERE id = ?").bind(row.id).run();
   }
   return deleted;
 }
 
-export interface TickResult { photos: number; published: number; expired: number; purged: number }
+export interface TickResult { expired: number; purged: number; reads: number; matched: number; verified: number; published: number }
 
-/** Cron: retry due photos (bounded), expire posts past 90 days, and purge photos of finished posts. */
+/** Cron, cheapest first: expire 90-day posts and purge photos of finished posts; then the due AI reads and the
+ *  matching and notices they feed; then the due verifications. I/O only, bounded per tick. */
 export async function runLostFoundTick(env: Env): Promise<TickResult> {
-  const result: TickResult = { photos: 0, published: 0, expired: 0, purged: 0 };
-  const due = (await env.DB.prepare(
-    `SELECT id, post_id, celebration_id FROM lf_photos WHERE redaction = 'pending' AND next_attempt_at <= datetime('now')
-     ORDER BY next_attempt_at, id LIMIT ?`,
-  ).bind(TICK_PHOTOS).all<{ id: number; post_id: number | null; celebration_id: number | null }>()).results ?? [];
-  const posts = new Set<number>();
-  for (const photo of due) {
-    const outcome = await processPhoto(env, photo.id);
-    result.photos += 1;
-    if (outcome === "public") result.published += 1;
-    if (photo.post_id) posts.add(photo.post_id);
-  }
-  for (const postId of posts) {
-    await applyExtraction(env, postId);
-    await runMatching(env, postId);
-    await notifyStrongMatches(env, undefined, postId);
-  }
+  const result: TickResult = { expired: 0, purged: 0, reads: 0, matched: 0, verified: 0, published: 0 };
   const expiring = (await env.DB.prepare(
     "SELECT id FROM lf_posts WHERE status = 'open' AND expires_at <= datetime('now') ORDER BY expires_at LIMIT 25",
   ).all<{ id: number }>()).results ?? [];
@@ -415,8 +474,35 @@ export async function runLostFoundTick(env: Env): Promise<TickResult> {
   const finished = (await env.DB.prepare(
     `SELECT DISTINCT p.id, p.status FROM lf_posts p JOIN lf_photos ph ON ph.post_id = p.id
      WHERE p.status IN ('closed', 'expired', 'merged', 'returned')
-       AND (ph.original_key IS NOT NULL OR (p.status <> 'returned' AND ph.public_key IS NOT NULL)) LIMIT 25`,
+       AND (ph.original_key IS NOT NULL OR ph.candidate_key IS NOT NULL OR (p.status <> 'returned' AND ph.public_key IS NOT NULL)) LIMIT 25`,
   ).all<{ id: number; status: string }>()).results ?? [];
   for (const row of finished) result.purged += await purgePostPhotos(env, row.id, row.status === "returned");
+
+  const reads = (await env.DB.prepare(
+    "SELECT id, post_id FROM lf_photos WHERE redaction = 'pending' AND next_attempt_at <= datetime('now') ORDER BY next_attempt_at, id LIMIT ?",
+  ).bind(TICK_READS).all<{ id: number; post_id: number | null }>()).results ?? [];
+  const posts = new Set<number>();
+  for (const photo of reads) {
+    const outcome = await readPhoto(env, photo.id);
+    if (outcome !== "skipped") result.reads += 1;
+    if (photo.post_id && outcome === "read") posts.add(photo.post_id);
+  }
+  for (const postId of posts) {
+    try {
+      await matchPost(env, undefined, postId);
+      result.matched += 1;
+    } catch (error) {
+      logFailure("lf_tick_match_failed", postId, error);
+    }
+  }
+
+  const checks = (await env.DB.prepare(
+    "SELECT id FROM lf_photos WHERE redaction = 'verifying' AND next_attempt_at <= datetime('now') ORDER BY next_attempt_at, id LIMIT ?",
+  ).bind(TICK_VERIFIES).all<{ id: number }>()).results ?? [];
+  for (const photo of checks) {
+    const outcome = await verifyPhoto(env, photo.id);
+    if (outcome !== "skipped") result.verified += 1;
+    if (outcome === "public") result.published += 1;
+  }
   return result;
 }

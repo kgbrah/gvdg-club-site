@@ -35,6 +35,8 @@ export type ExtractionStatus = "ok" | "unsure" | "empty";
 export interface ExtractionResult extends DiscExtraction {
   source: string | null;
   status: ExtractionStatus;
+  /** Gemini was over its quota: only it can box writing, so the photo must be read again later. */
+  quota?: boolean;
 }
 
 export const LF_VISION_PROMPT =
@@ -184,10 +186,19 @@ const DEFAULT_OR_VISION = "nvidia/nemotron-nano-12b-v2-vl:free";
 const DEFAULT_WAI_VISION = "@cf/meta/llama-3.2-11b-vision-instruct";
 const TIMEOUT_MS = 20_000;
 
-function base64Of(bytes: Uint8Array): string {
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
+/** Base64 in 24 KiB pieces (a multiple of 3 bytes, so the pieces join cleanly): no megabyte-long binary string
+ *  is ever built, which keeps a photo's encoding to a few milliseconds of CPU. */
+export function base64Of(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += 24_576) {
+    parts.push(btoa(String.fromCharCode.apply(null, bytes.subarray(i, i + 24_576) as unknown as number[])));
+  }
+  return parts.join("");
+}
+
+/** Gemini said "too many requests" (free-tier quota): try again later without counting it as a failure. */
+export class QuotaError extends Error {
+  constructor() { super("gemini_quota"); }
 }
 
 type GeminiData = { candidates?: { content?: { parts?: { text?: string }[] } }[] };
@@ -203,6 +214,7 @@ async function gemini(env: VisionEnv, parts: unknown[], maxTokens: number): Prom
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
+  if (res.status === 429) throw new QuotaError();
   if (!res.ok) throw new Error("gemini_" + res.status);
   const data = (await res.json()) as GeminiData;
   return data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("\n") ?? "";
@@ -244,13 +256,22 @@ export async function extractDisc(env: VisionEnv, bytes: Uint8Array, contentType
   if (env.VISION_DEV_STUB) {
     return result({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "", ink: [], unreadable: false, confidence: "high", parsed: true }, "dev-stub");
   }
+  let quota = false;
   if (env.GEMINI_API_KEY) {
     try {
       const model = env.GEMINI_VISION_MODEL || DEFAULT_GEMINI_VISION;
       const read = parseDiscExtraction(await gemini(env, [{ text: LF_VISION_PROMPT }, { inlineData: { mimeType: contentType, data: base64Of(bytes) } }], 1200));
       if (read.parsed) return result(read, "gemini:" + model);
-    } catch { /* next provider */ }
+    } catch (error) {
+      quota = error instanceof QuotaError;
+    }
   }
+  // The fallbacks can fill in disc details for matching, but never boxes: the photo waits for Gemini.
+  const fallback = await fallbackRead(env, bytes, contentType);
+  return quota ? { ...fallback, quota: true } : fallback;
+}
+
+async function fallbackRead(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<ExtractionResult> {
   if (env.OPENROUTER_API_KEY) {
     try {
       const read = parseDiscExtraction(await openRouter(env, bytes, contentType));
@@ -278,6 +299,7 @@ export function parseCompare(raw: unknown): "same" | "different" | "unsure" | nu
 export async function compareDiscPhotos(
   env: VisionEnv, a: { bytes: Uint8Array; type: string }, b: { bytes: Uint8Array; type: string },
 ): Promise<"same" | "different" | "unsure" | null> {
+  // Optional and within the Lost & Found daily budget; a quota answer simply means "no verdict".
   if (!env.GEMINI_API_KEY || env.VISION_DEV_STUB) return null;
   try {
     return parseCompare(await gemini(env, [
@@ -287,5 +309,40 @@ export async function compareDiscPhotos(
     ], 60));
   } catch {
     return null;
+  }
+}
+
+export const LF_VERIFY_PROMPT =
+  "This photo is about to be shown PUBLICLY on a disc golf club's lost-and-found page. The finder covered the " +
+  "personal writing with flat patches. Is any PERSONAL writing still legible anywhere in the photo: a name, phone " +
+  "number, initials, address, or other handwriting, marker or engraving? Ignore the printed manufacturer stamp, the " +
+  "mold name, flight numbers and the patches themselves. Do not repeat any text you can read. Return ONLY JSON: " +
+  '{"legible": boolean, "confidence": "high"|"medium"|"low"}.';
+
+export type VerifyVerdict = "clear" | "visible" | "unsure";
+
+/** clear only for a confident "nothing personal is legible"; anything else keeps the copy private. */
+export function parseVerify(raw: unknown): VerifyVerdict | null {
+  if (typeof raw !== "string") return null;
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const data = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    if (data.legible === true) return "visible";
+    if (data.legible === false) return data.confidence === "high" || data.confidence === "medium" ? "clear" : "unsure";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Gemini only (it is the one trusted to judge writing). null = unavailable; quota = over the free-tier limit. */
+export async function verifyHidden(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<{ verdict: VerifyVerdict | null; quota: boolean }> {
+  if (!env.GEMINI_API_KEY || env.VISION_DEV_STUB) return { verdict: null, quota: false };
+  try {
+    return { verdict: parseVerify(await gemini(env, [{ text: LF_VERIFY_PROMPT }, { inlineData: { mimeType: contentType, data: base64Of(bytes) } }], 80)), quota: false };
+  } catch (error) {
+    return { verdict: null, quota: error instanceof QuotaError };
   }
 }
