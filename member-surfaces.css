@@ -573,7 +573,7 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
   overflow-wrap: normal;
   word-break: normal;
 }
-#members :is(.member-list-name, .member-account-copy strong, .member-link-copy strong, .member-person, .player-who h2, .player-event-name, .register-name, .live-round-title, .player-name-cell, .champion-name, .member-name, .player-modal-name, .board-author, .handicap-where, .udisc-history-title, .play-stat-leaders span, .member-search-matches strong, .player-condition-name) {
+#members :is(.member-list-name, .member-account-copy strong, .member-link-copy strong, .member-person, .player-who h2, .player-event-name, .register-name, .live-round-title, .player-name-cell, .champion-name, .member-name, .player-modal-name, .board-author, .handicap-where, .play-stat-leaders span, .member-search-matches strong, .player-condition-name) {
   overflow-wrap: normal;
   word-break: normal;
   white-space: nowrap;
@@ -582,6 +582,8 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
   min-width: 0;
   max-width: 100%;
 }
+/* Imported UDisc rounds show the whole course name, wrapping beside the score instead of running under it. */
+#members .udisc-history-title { overflow-wrap: anywhere; }
 #members :is(.member-list-name, .member-account-copy strong, .member-link-copy strong, .bag-tag-home h3) {
   color: var(--text-primary);
   font: 750 .9rem/1.2 Archivo, system-ui, sans-serif;

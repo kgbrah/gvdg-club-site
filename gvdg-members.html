@@ -169,8 +169,9 @@
         .members-chart-bar:hover { opacity: 0.85; }
         .members-chart-bar::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--dark); color: white; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.75rem; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 10; margin-bottom: 5px; }
         .members-chart-bar:hover::after { opacity: 1; }
-        .members-chart-labels { display: flex; justify-content: space-between; margin-top: 0.75rem; padding: 0 0.5rem; }
-        .members-chart-label { font-size: 0.65rem; color: var(--text-muted); text-align: center; flex: 1; }
+        /* Same columns as the bars above (flex: 1, 3px gap), so a label sits under its year and never pushes the row wider. */
+        .members-chart-labels { display: flex; gap: 3px; margin-top: 0.75rem; padding: 0 0.5rem; }
+        .members-chart-label { font-size: 0.65rem; color: var(--text-muted); flex: 1; min-width: 0; display: flex; justify-content: center; white-space: nowrap; }
         @media (max-width: 640px) { .members-chart-label:nth-child(odd) { visibility: hidden; } }
 
         /* Meeting Minutes */
@@ -535,14 +536,16 @@
                 .udisc-history-note { margin-top: 0.45rem; }
                 .udisc-history-picks { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.55rem; }
                 .udisc-history-picks .player-btn { width: auto; margin-top: 0; }
-                .udisc-history-list { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
+                /* One column that never grows past the panel: a long course name used to widen every row. */
+                .udisc-history-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.55rem; margin-top: 0.7rem; container: udisc-rounds / inline-size; }
                 .udisc-history-row {
                     display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
                     padding: 0.65rem 0.75rem; border: 1px solid var(--border-color); border-radius: 12px;
                     background: var(--bg-primary);
                 }
+                .udisc-history-row > :first-child { flex: 1 1 auto; min-width: 0; }
                 .udisc-history-title { font-weight: 700; line-height: 1.25; }
-                .udisc-history-side { display: grid; justify-items: end; gap: 0.35rem; }
+                .udisc-history-side { flex: none; display: grid; justify-items: end; gap: 0.35rem; }
                 .udisc-history-side .player-btn { width: auto; margin-top: 0; min-height: 44px; padding: 0.35rem 0.7rem; }
                 .udisc-history-score {
                     display: flex; align-items: baseline; gap: 0.35rem;
@@ -551,6 +554,13 @@
                 .udisc-history-score.under { color: var(--under); }
                 .udisc-history-score.even { color: var(--accent); }
                 .udisc-history-score.over { color: var(--team-red); }
+                /* Narrow screens and large text: the score and Remove move under the course name, side by side, so the
+                   name keeps whole words instead of squeezing into a sliver beside them. */
+                @container udisc-rounds (max-width: 17rem) {
+                    .udisc-history-row { flex-wrap: wrap; row-gap: 0.45rem; }
+                    .udisc-history-row > :first-child { flex-basis: 100%; }
+                    .udisc-history-side { flex: 1 1 100%; display: flex; align-items: center; justify-content: space-between; }
+                }
                 .udisc-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.7rem; }
                 .udisc-stat {
                     background: var(--bg-primary); border: 1px solid var(--border-color);
