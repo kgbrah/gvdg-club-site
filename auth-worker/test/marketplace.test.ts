@@ -822,6 +822,93 @@ describe("reports and moderation", () => {
   });
 });
 
+describe("donating part of a sale to the club", () => {
+  async function soldDeal(overrides: Record<string, unknown> = {}) {
+    await setSettings();
+    const listing = await createListing("m_ada", overrides);
+    const bought = await call(`/market/listings/${listing.id}/buy`, "POST", await token("m_bo"));
+    expect(bought.status, JSON.stringify(bought.data)).toBe(201);
+    const done = await call(`/market/deals/${bought.data.deal.id}/complete`, "POST", await token("m_ada"), { outcome: "sold" });
+    expect(done.data.deal.status).toBe("completed");
+    return { listing, dealId: bought.data.deal.id as number };
+  }
+  const myDonation = async (dealId: number) => (await call("/market/me", "GET", await token("m_ada"))).data.recentDeals.find((deal: any) => deal.id === dealId)?.donation;
+
+  it("shows the pledge to buyers and rejects pledges that don't make sense", async () => {
+    await setSettings();
+    const ada = await token("m_ada");
+    expect((await call("/market/listings", "POST", ada, listingBody({ donatePercent: 0 }))).data).toMatchObject({ field: "donatePercent" });
+    expect((await call("/market/listings", "POST", ada, listingBody({ donatePercent: 101 }))).data).toMatchObject({ field: "donatePercent" });
+    expect((await call("/market/listings", "POST", ada, listingBody({ donatePercent: 10, donateCents: 500 }))).data).toMatchObject({ field: "donateCents" });
+    expect((await call("/market/listings", "POST", ada, listingBody({ donateCents: 1900 }))).data).toMatchObject({ field: "donateCents" });
+    const pledged = await createListing("m_ada", { donatePercent: 25 });
+    expect(pledged.clubShare).toEqual({ percent: 25 });
+    const browse = (await call("/market/listings")).data.listings.find((card: any) => card.id === pledged.id);
+    expect(browse.clubShare).toEqual({ percent: 25 });
+    const set = await createListing("m_ada", { donateCents: 500 });
+    expect(set.clubShare).toEqual({ cents: 500 });
+    // A trade-only listing has no sale to share.
+    const trade = await createListing("m_ada", { priceCents: null, openToTrade: true, donatePercent: 50 });
+    expect(trade.clubShare).toBeNull();
+    // Editing can change or drop the pledge.
+    expect((await call("/market/listings/" + set.id, "PATCH", ada, { donateCents: null, donatePercent: 10 })).data.listing.clubShare).toEqual({ percent: 10 });
+    expect((await call("/market/listings/" + set.id, "PATCH", ada, { donatePercent: null })).data.listing.clubShare).toBeNull();
+  });
+
+  it("the seller sends it; only an admin's 'received' gives karma (+1 a whole dollar)", async () => {
+    const { dealId } = await soldDeal({ priceCents: 1800, donatePercent: 25 });
+    expect(await myDonation(dealId)).toEqual({
+      dealId, status: "none", amountCents: null, suggestedCents: 450, pledged: true, karma: 0, maxCents: 1800,
+      payUrl: "https://paypal.me/greenvillediscgolf/4.50", reviewNote: "",
+    });
+    // The buyer's view of the deal carries no donation; the buyer can't send one.
+    expect((await call("/market/me", "GET", await token("m_bo"))).data.recentDeals.find((deal: any) => deal.id === dealId).donation).toBeNull();
+    const send = (bearer: string, amountCents: unknown) => call(`/market/deals/${dealId}/donation`, "POST", bearer, { amountCents });
+    const ada = await token("m_ada");
+    expect((await send(await token("m_bo"), 450)).status).toBe(404);
+    expect((await send(ada, 50)).data.error).toBe("invalid_amount");
+    expect((await send(ada, 1801)).data.error).toBe("invalid_amount");
+    expect((await send(ada, "4.50")).data.error).toBe("invalid_amount");
+    const sent = await send(ada, 550);
+    expect(sent.status, JSON.stringify(sent.data)).toBe(200);
+    expect(sent.data.donation).toMatchObject({ status: "sent", amountCents: 550, payUrl: "https://paypal.me/greenvillediscgolf/5.50" });
+
+    const admin = await token("m_admin");
+    expect((await call("/admin/market/summary", "GET", admin)).data.openReports).toBe(1);
+    const [waiting] = (await call("/admin/market/overview", "GET", admin)).data.donations;
+    expect(waiting).toMatchObject({ dealId, amountCents: 550, karma: 5, listingTitle: "Innova Star Destroyer", seller: { name: "Ada Lovelace" } });
+    const review = (body: Record<string, unknown>) => call(`/admin/market/donations/${waiting.id}/review`, "POST", admin, body);
+    expect((await call(`/admin/market/donations/${waiting.id}/review`, "POST", await token("m_bo"), { decision: "received" })).status).toBe(403);
+    expect((await review({ decision: "not_received" })).data.error).toBe("reason_required");
+    expect((await review({ decision: "not_received", reason: "Nothing in PayPal yet" })).status).toBe(200);
+    expect(await myDonation(dealId)).toMatchObject({ status: "not_received", karma: 0, reviewNote: "Nothing in PayPal yet" });
+    expect(db.raw.prepare("SELECT title FROM member_notices WHERE member_id = 'm_ada' ORDER BY id DESC LIMIT 1").get()).toEqual({ title: "Your club donation didn't arrive" });
+
+    // Sent again; this time it arrived.
+    expect((await send(ada, 550)).data.donation.status).toBe("sent");
+    expect((await review({ decision: "received" })).status).toBe(200);
+    expect(await myDonation(dealId)).toMatchObject({ status: "confirmed", karma: 5, payUrl: null });
+    expect((await review({ decision: "received" })).data.error).toBe("not_open");
+    expect((await send(ada, 1800)).data.error).toBe("already_confirmed");
+    expect(db.raw.prepare("SELECT title FROM member_notices WHERE member_id = 'm_ada' ORDER BY id DESC LIMIT 1").get()).toEqual({ title: "Thank you: +5 karma" });
+    expect((await call("/admin/market/summary", "GET", admin)).data.openReports).toBe(0);
+    // The karma joins the seller's Lost & Found karma; how much they gave isn't published.
+    const mine = (await call("/lost-found/me", "GET", ada)).data;
+    expect(mine.karma).toEqual({ karma: 5, returned: 0 });
+    const log = (await call("/admin/market/overview", "GET", admin)).data.log.map((row: any) => row.action);
+    expect(log).toEqual(expect.arrayContaining(["donation_not_received", "donation_confirmed"]));
+  });
+
+  it("works for an unpledged sale too, but never for a trade", async () => {
+    const { dealId } = await soldDeal({ priceCents: 1200 });
+    expect(await myDonation(dealId)).toMatchObject({ status: "none", suggestedCents: null, pledged: false, payUrl: null });
+    expect((await call(`/market/deals/${dealId}/donation`, "POST", await token("m_ada"), { amountCents: 200 })).data.donation)
+      .toMatchObject({ status: "sent", amountCents: 200, payUrl: "https://paypal.me/greenvillediscgolf/2.00" });
+    db.raw.exec("UPDATE market_deals SET outcome = 'traded' WHERE id = " + dealId);
+    expect((await call(`/market/deals/${dealId}/donation`, "POST", await token("m_ada"), { amountCents: 200 })).data.error).toBe("not_a_sale");
+  });
+});
+
 describe("authz edges", () => {
   it("guest tokens are never accepted as members, and forged guest ids are rejected", async () => {
     const forged = await signMarketGuestSession("m_ada", SECRET, 600);

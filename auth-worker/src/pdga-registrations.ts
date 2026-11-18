@@ -14,7 +14,8 @@
 //
 //   GET /pdga-registrations (member) -> { mine: [event + division + going], club: [events clubmates are going to] }
 //   where going = the other club members on that event's list (names only, for signed-in members).
-import { requireAuth } from "./authz.js";
+//   GET /admin/pdga-registrations/status (admin) -> counts only: is the hourly check running, and what has it found.
+import { adminGate, requireAuth } from "./authz.js";
 import type { D1Like } from "./db-types.js";
 import type { Env } from "./env.js";
 import { json } from "./http.js";
@@ -326,4 +327,26 @@ export async function handlePdgaRegistrations(request: Request, env: Env, origin
     else club.push({ ...event, going });
   }
   return json({ mine, club }, 200, origin, { "Cache-Control": "private, no-store" });
+}
+
+/** GET /admin/pdga-registrations/status: counts per state and the last read, so a deploy check can see the tick ran. */
+export async function handlePdgaRegistrationStatus(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const gate = await adminGate(request, env, origin);
+  if (gate instanceof Response) return gate;
+  const db = env.DB as unknown as D1Like;
+  const states = (await db.prepare(
+    `SELECT state, COUNT(*) AS events, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS read,
+            SUM(CASE WHEN read_error <> '' THEN 1 ELSE 0 END) AS errors, MAX(read_at) AS last_read, MAX(listed_at) AS last_listed
+     FROM pdga_watch_events GROUP BY state ORDER BY state`,
+  ).all<{ state: string; events: number; read: number; errors: number; last_read: string | null; last_listed: string | null }>()).results ?? [];
+  const totals = await db.prepare("SELECT COUNT(*) AS registrations, COUNT(DISTINCT member_id) AS members FROM pdga_registrations")
+    .first<{ registrations: number; members: number }>();
+  return json({
+    states: states.map((row) => ({
+      state: row.state, events: Number(row.events) || 0, read: Number(row.read) || 0, errors: Number(row.errors) || 0,
+      lastRead: row.last_read, lastListed: row.last_listed,
+    })),
+    registrations: Number(totals?.registrations) || 0,
+    members: Number(totals?.members) || 0,
+  }, 200, origin, { "Cache-Control": "private, no-store" });
 }

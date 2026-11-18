@@ -224,10 +224,11 @@ export async function createListing(c: MarketCtx): Promise<Response> {
   await ensureTrader(c.env, seller);
   const created = await c.env.DB.prepare(
     `INSERT INTO market_listings (seller_id, item_kind, gear_type, bag_ref, brand, mold, plastic, disc_type, speed, glide, turn, fade, weight_g,
-       color, condition, condition_notes, price_cents, open_to_trade, trade_for, quantity, location)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+       color, condition, condition_notes, price_cents, open_to_trade, trade_for, quantity, location, donate_percent, donate_cents)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
   ).bind(seller.id, v.itemKind, v.gearType, source.ref, v.brand, v.mold, v.plastic, v.discType, v.speed, v.glide, v.turn, v.fade, v.weightG,
-    v.color, v.condition, v.conditionNotes, v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location).first<{ id: number }>();
+    v.color, v.condition, v.conditionNotes, v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location, v.donatePercent, v.donateCents)
+    .first<{ id: number }>();
   const id = Number(created?.id);
   if (!id) return fail(c, 500, "server_error");
   const stored: string[] = [];
@@ -259,6 +260,7 @@ function inputOf(row: Row): Record<string, unknown> {
     speed: row.speed, glide: row.glide, turn: row.turn, fade: row.fade, weightG: row.weight_g, color: str(row, "color"),
     condition: row.condition, conditionNotes: str(row, "condition_notes"), priceCents: row.price_cents,
     openToTrade: num(row, "open_to_trade") === 1, tradeFor: str(row, "trade_for"), quantity: row.quantity, location: str(row, "location"),
+    donatePercent: row.donate_percent ?? null, donateCents: row.donate_cents ?? null,
   };
 }
 
@@ -286,10 +288,10 @@ export async function editListing(c: MarketCtx, id: number): Promise<Response> {
   const result = await c.env.DB.prepare(
     `UPDATE market_listings SET gear_type = ?, brand = ?, mold = ?, plastic = ?, disc_type = ?, speed = ?, glide = ?, turn = ?, fade = ?,
        weight_g = ?, color = ?, condition = ?, condition_notes = ?, price_cents = ?, open_to_trade = ?, trade_for = ?, quantity = ?,
-       location = ?, updated_at = datetime('now')
+       location = ?, donate_percent = ?, donate_cents = ?, updated_at = datetime('now')
      WHERE id = ? AND seller_id = ? AND status = 'active'`,
   ).bind(v.gearType, v.brand, v.mold, v.plastic, v.discType, v.speed, v.glide, v.turn, v.fade, v.weightG, v.color, v.condition, v.conditionNotes,
-    v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location, id, seller.id).run();
+    v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location, v.donatePercent, v.donateCents, id, seller.id).run();
   if (!changed(result)) return fail(c, 409, "not_active");
   await logDeal(c.env, { listingId: id, actorId: seller.id, action: "edit", from: "active", to: "active" });
   queueListingCheck(c.env, c.ctx, id);

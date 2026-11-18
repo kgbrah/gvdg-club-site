@@ -114,6 +114,9 @@ export function errorMessage(data, fallback = "That didn't work. Please try agai
     unauthorized: "Your session ended. Sign in or verify again.",
     not_found: "That item is no longer available.",
     request_too_large: "Those photos are too large. Try fewer or smaller photos.",
+    invalid_amount: "The donation is at least $1 and no more than the sale price.",
+    already_confirmed: "The club already confirmed this donation. Thank you!",
+    not_a_sale: "Only a completed sale can carry a club donation.",
   };
   return messages[code] || fallback;
 }

@@ -31,7 +31,7 @@ export { LiveEventDO } from "./live.js";
 
 import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
-import { handlePdgaRegistrations, runPdgaRegistrationTick } from "./pdga-registrations.js";
+import { handlePdgaRegistrationStatus, handlePdgaRegistrations, runPdgaRegistrationTick } from "./pdga-registrations.js";
 import { handlePdgaBaselines, isPdgaBaselineRoute } from "./pdga-baseline-routes.js";
 import { runPdgaBaselineTick } from "./pdga-baseline-ingest.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
@@ -125,6 +125,7 @@ export default {
       if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin);
       if (pathname === "/my-registrations" && method === "GET") return await handleMyRegistrations(request, env, origin);
       if (pathname === "/pdga-registrations" && method === "GET") return await handlePdgaRegistrations(request, env, origin);
+      if (pathname === "/admin/pdga-registrations/status" && method === "GET") return await handlePdgaRegistrationStatus(request, env, origin);
       if (pathname === "/set-pin" && method === "POST") return await handleSetPin(request, env, origin);
       if (pathname === "/profile" && method === "POST") return await handleProfile(request, env, origin);
       if (pathname === "/me/dashboard-theme") return await handleDashboardTheme(request, env, origin, method);

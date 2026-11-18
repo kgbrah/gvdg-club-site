@@ -74,6 +74,9 @@ export interface ListingInput {
   tradeFor: string;
   quantity: number;
   location: string;
+  /** A pledge to the club: a percentage of the sale, or a set amount in cents (never both; only with a price). */
+  donatePercent: number | null;
+  donateCents: number | null;
 }
 
 export function parseListing(body: Record<string, unknown>): Ok<ListingInput> | Fail {
@@ -119,12 +122,18 @@ export function parseListing(body: Record<string, unknown>): Ok<ListingInput> | 
   if (quantity == null) return { ok: false, field: "quantity" };
   const location = cleanLine(body.location, 80);
   if (location == null) return { ok: false, field: "location" };
+  const donatePercent = optionalInt(body.donatePercent, 1, 100);
+  if (donatePercent === undefined) return { ok: false, field: "donatePercent" };
+  const donateCents = optionalInt(body.donateCents, 100, PRICE_MAX_CENTS);
+  if (donateCents === undefined || (donatePercent != null && donateCents != null)) return { ok: false, field: "donateCents" };
+  if (donateCents != null && priceCents != null && donateCents > priceCents) return { ok: false, field: "donateCents" };
   return {
     ok: true,
     value: {
       itemKind: itemKind as ItemKind, gearType: String(gearType), brand, mold, plastic, discType: disc ? discType : null,
       speed, glide, turn, fade, weightG, color, condition, conditionNotes,
       priceCents, openToTrade, tradeFor: openToTrade ? tradeFor : "", quantity, location,
+      donatePercent: priceCents == null ? null : donatePercent, donateCents: priceCents == null ? null : donateCents,
     },
   };
 }

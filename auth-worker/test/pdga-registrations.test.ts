@@ -241,4 +241,25 @@ describe("the hourly registration check", () => {
     expect(cy.data.mine).toEqual([]);
     expect(cy.data.club.map((event: any) => [event.eventId, event.going.length])).toEqual([[501, 2], [502, 1]]);
   });
+
+  it("gives admins counts only, so a deploy check can see the hourly check ran", async () => {
+    roster.rows.set("member:m_admin", JSON.stringify({ memberId: "m_admin", name: "Ann Admin", isAdmin: true, pinHash: "x", mustChangePin: false }));
+    pages.set("search:NC:0", searchPage([{ id: 501, name: "Greenville Open", dates: "November 21 - 22, 2026" }]));
+    pages.set("/tour/event/501", eventPage({ MA2: ["80024"], MA40: ["123456"] }));
+    await runPdgaRegistrationTick(env, NOW, fetchText);
+    const status = async (sub: string) => {
+      const response = await worker.fetch(new Request("https://worker.example/admin/pdga-registrations/status", {
+        headers: { Origin: ORIGIN, Authorization: "Bearer " + await signSession({ sub, mustChangePin: false }, SECRET, 900) },
+      }), env, { waitUntil() {} } as unknown as ExecutionContext);
+      return { status: response.status, data: await response.json() as any };
+    };
+    expect((await status("m_80024")).status).toBe(403);
+    const admin = await status("m_admin");
+    expect(admin.status).toBe(200);
+    expect(admin.data).toEqual({
+      states: [{ state: "NC", events: 1, read: 1, errors: 0, lastRead: "2026-11-18 15:00:00", lastListed: expect.any(String) }],
+      registrations: 2, members: 2,
+    });
+    expect(JSON.stringify(admin.data)).not.toMatch(/Ada|Bo|80024|123456/);
+  });
 });

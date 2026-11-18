@@ -1,7 +1,7 @@
 import React from "react";
 
 import {
-  conditionText, flightText, itemKindLabel, listingTitle, money, PENDING_NOTE, priceLine, withdrawnLabel,
+  clubShareText, conditionText, flightText, itemKindLabel, listingTitle, money, PENDING_NOTE, priceLine, withdrawnLabel,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import {
@@ -43,6 +43,7 @@ function Facts({ listing }) {
     ["Color", listing.color],
     ["Flight", flightText(listing.flight)],
     ["Condition", conditionText(listing.condition, listing.itemKind)],
+    ["For the club", clubShareText(listing.clubShare)],
     ["Condition notes", listing.conditionNotes],
     ["Quantity", listing.quantity > 1 ? String(listing.quantity) : ""],
     ["Pickup", listing.location],
@@ -81,7 +82,7 @@ export function SellerDealPanel({ deal, onDone }) {
     deal.offerText ? h("p", { className: "market-quote", key: "text" }, deal.offerText) : null,
     h(OfferedList, { key: "offered", offered: deal.offered }),
     h("div", { className: "market-actions", key: "actions" }, [
-      h("button", { className: "shop-btn", disabled: action.busy, key: "sold", onClick: () => act("complete", { outcome: "sold" }, "Marked sold. Leave feedback in My marketplace."), type: "button" }, "Mark sold"),
+      h("button", { className: "shop-btn", disabled: action.busy, key: "sold", onClick: () => act("complete", { outcome: "sold" }, "Marked sold. Leave feedback (and send any club donation) in My marketplace."), type: "button" }, "Mark sold"),
       h("button", { className: "shop-btn secondary", disabled: action.busy, key: "traded", onClick: () => act("complete", { outcome: "traded" }, "Marked traded. Leave feedback in My marketplace."), type: "button" }, "Mark traded"),
       h("button", { className: "shop-filter-reset", disabled: action.busy, key: "release", onClick: () => act("release", {}, "Released. The listing is active again."), type: "button" }, "Release"),
     ]),

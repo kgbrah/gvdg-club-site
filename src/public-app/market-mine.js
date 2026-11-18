@@ -1,6 +1,9 @@
 import React from "react";
 
-import { cleanHandleInput, listingHref, listingMeta, listingTitle, priceLine, shortDate, validateSettings, wantedHref, SELLER_EMAIL_LABEL, zelleDisplay } from "../shared/market-model.js";
+import {
+  centsToDollarsInput, cleanHandleInput, clubDonationUrl, dollarsToCents, exactMoney, listingHref, listingMeta, listingTitle, priceLine, shortDate,
+  validateSettings, wantedHref, SELLER_EMAIL_LABEL, zelleDisplay,
+} from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import { FeedbackForm, FeedbackItem } from "./market-feedback.js";
 import { BuyerDealPanel, OfferRow, RelistControl, SellerDealPanel } from "./market-listing.js";
@@ -65,6 +68,57 @@ function RecentDeal({ deal, onChange }) {
       theirs ? h(FeedbackItem, { feedback: theirs, key: "theirs", onChange }) : null,
     ]) : null,
   ]);
+}
+
+/**
+ * A completed sale's club donation: send it with the club's PayPal (amount filled in), then "I sent it"; an admin
+ * confirms it arrived and the karma (+1 a whole dollar) lands then.
+ */
+function DonationPanel({ deal, onChange }) {
+  const donation = deal.donation;
+  const [amount, setAmount] = React.useState(() => centsToDollarsInput(donation.amountCents ?? donation.suggestedCents) || "");
+  const action = useAction();
+  const cents = dollarsToCents(amount);
+  const valid = cents != null && cents >= 100 && cents <= donation.maxCents;
+  const head = h("p", { className: "market-deal-who", key: "who" }, [h(DealTitle, { deal, key: "title" }), deal.completedAt ? " · sold " + shortDate(deal.completedAt) : ""]);
+  if (donation.status === "confirmed") {
+    return h("li", { className: "market-deal", "data-market-donation": "confirmed", "data-market-donation-deal": deal.id }, [head,
+      h(Note, { key: "done", tone: "success" }, `The club received your ${exactMoney(donation.amountCents)} donation: +${donation.karma} karma. Thank you!`)]);
+  }
+  if (donation.status === "sent") {
+    return h("li", { className: "market-deal", "data-market-donation": "sent", "data-market-donation-deal": deal.id }, [head,
+      h(Note, { key: "wait" }, `Waiting for the club to confirm your ${exactMoney(donation.amountCents)} donation arrived.`)]);
+  }
+  async function markSent() {
+    await action.run(async () => {
+      const { ok, data } = await marketRequest(`/market/deals/${deal.id}/donation`, { body: { amountCents: cents }, method: "POST" });
+      if (ok) onChange();
+      else action.setMessage({ text: errorMessage(data), tone: "error" });
+    });
+  }
+  const form = [
+    donation.status === "not_received"
+      ? h(Note, { key: "missing", tone: "error" }, `The club couldn't find your ${exactMoney(donation.amountCents)} donation${donation.reviewNote ? " (" + donation.reviewNote + ")" : ""}. Check PayPal, then send it and mark it again.`)
+      : donation.pledged ? h("p", { className: "market-hint", key: "pledged" }, `You pledged ${exactMoney(donation.suggestedCents)} of this sale to the club.`) : null,
+    h("div", { className: "market-form market-donate-form", key: "amount" }, h("div", { className: "market-field" }, [
+      h("label", { htmlFor: "donate-" + deal.id, key: "label" }, "Amount for the club (USD)"),
+      h("input", { id: "donate-" + deal.id, inputMode: "decimal", key: "input", onChange: (event) => setAmount(event.target.value), type: "text", value: amount }),
+    ])),
+    h("div", { className: "market-actions", key: "actions" }, [
+      valid
+        ? h("a", { className: "shop-btn", href: clubDonationUrl(cents), key: "pay", rel: "noopener noreferrer", target: "_blank" }, `Send ${exactMoney(cents)} with PayPal`)
+        : h("button", { className: "shop-btn", disabled: true, key: "pay", type: "button" }, "Send with PayPal"),
+      h("button", { className: "shop-btn secondary", disabled: !valid || action.busy, key: "sent", onClick: () => { void markSent(); }, type: "button" }, action.busy ? "Saving…" : "I sent it"),
+    ]),
+    h("small", { className: "market-hint", key: "hint" }, "It goes to the club's PayPal. Once the club confirms it arrived you get +1 karma for every dollar."),
+    h(StatusLine, { key: "status", message: action.message }),
+  ];
+  const needsAction = donation.pledged || donation.status === "not_received";
+  return h("li", { className: "market-deal", "data-market-donation": donation.status, "data-market-donation-deal": deal.id }, needsAction
+    ? [head, ...form]
+    : [head, h("details", { className: "shop-filter-details market-donate-optional", key: "more" }, [
+      h("summary", { key: "summary" }, "Give part of this sale to the club"), ...form,
+    ])]);
 }
 
 function SettingsForm({ settings, onSaved }) {
@@ -174,6 +228,10 @@ export function MarketMine() {
   const offersOut = list("offersOut");
   const toLeave = list("feedbackToLeave");
   const recent = list("recentDeals");
+  // Sales whose club donation still needs the seller (pledged and not sent, or not received) come first.
+  const donations = recent.filter((deal) => deal.donation);
+  const donationsDue = donations.filter((deal) => deal.donation.status === "not_received" || (deal.donation.status === "none" && deal.donation.pledged));
+  const donationOrder = (deal) => (donationsDue.includes(deal) ? 0 : deal.donation.status === "none" ? 2 : 1);
   const listings = list("listings");
   const wanted = list("wanted");
   const waiting = Number(data.waiting) || 0;
@@ -197,6 +255,9 @@ export function MarketMine() {
       h("ul", { className: "market-deals" }, buying.map((deal) => h("li", { key: deal.id }, h(BuyerDealPanel, { deal, onDone: reload, showTitle: true }))))) : null,
     status === "ready" && offersOut.length ? h(Panel, { id: "offers-out", key: "offers-out", title: "Your trade offers" },
       h("ul", { className: "market-offers" }, offersOut.map((offer) => h(OfferRow, { key: offer.id, offer, onDone: reload, role: "buyer" })))) : null,
+    status === "ready" && donations.length ? h(Panel, { count: donationsDue.length, id: "donations", key: "donations", title: "Club donations" },
+      h("ul", { className: "market-deals" }, [...donations].sort((a, b) => donationOrder(a) - donationOrder(b))
+        .map((deal) => h(DonationPanel, { deal, key: deal.id, onChange: reload })))) : null,
     status === "ready" && toLeave.length ? h(Panel, { count: toLeave.length, id: "feedback-to-leave", key: "to-leave", title: "Feedback to leave" },
       h("ul", { className: "market-deals" }, toLeave.map((deal) => h(FeedbackToLeave, { deal, key: deal.id, onDone: reload })))) : null,
     status === "ready" && recent.length ? h(Panel, { id: "recent", key: "recent", title: "Recent deals" },

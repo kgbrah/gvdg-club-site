@@ -183,6 +183,7 @@ test("bags and accessories list without disc details; the kind filters browse", 
   assert.deepEqual({ ...bag.value }, {
     itemKind: "bag", gearType: "", brand: "Grip", mold: "AX5", plastic: "", discType: null, speed: null, glide: null, turn: null, fade: null,
     weightG: null, color: "", condition: 8, conditionNotes: "", priceCents: 6000, openToTrade: false, tradeFor: "", quantity: 1, location: "",
+    donatePercent: null, donateCents: null,
   });
   assert.deepEqual(model.listingPayload({ ...base, itemKind: "accessory", mold: "Zuca cart" }), { ok: false, field: "gearType", message: "Choose what it is." });
   assert.equal(model.listingPayload({ ...base, itemKind: "accessory", gearType: "cart", mold: "" }).message, "Enter what it is (the make and model).");
@@ -236,4 +237,33 @@ test("Sell this hand-off from My Bag is re-checked when it's read", async () => 
   } finally {
     delete globalThis.sessionStorage;
   }
+});
+
+
+test("giving part of a sale to the club: the pledge, its wording and the club's PayPal link", async () => {
+  const model = await import("../src/shared/market-model.js");
+  const base = { mold: "Destroyer", discType: "driver", condition: "8", price: "18", quantity: "1" };
+  const pick = (draft) => { const parsed = model.listingPayload({ ...base, ...draft }); return parsed.ok ? [parsed.value.donatePercent, parsed.value.donateCents] : parsed.field; };
+  assert.deepEqual(pick({}), [null, null]);
+  assert.deepEqual(pick({ donate: "25" }), [25, null]);
+  assert.deepEqual(pick({ donate: "100" }), [100, null]);
+  assert.deepEqual(pick({ donate: "amount", donateAmount: "5" }), [null, 500]);
+  assert.equal(pick({ donate: "amount", donateAmount: "0.50" }), "donateAmount");
+  assert.equal(pick({ donate: "amount", donateAmount: "19" }), "donateAmount");
+  assert.equal(pick({ donate: "amount", donateAmount: "" }), "donateAmount");
+  // Trade only: nothing to share.
+  assert.deepEqual(pick({ price: "", openToTrade: true, donate: "50" }), [null, null]);
+  assert.deepEqual(pick({ price: "", openToTrade: true, donate: "amount", donateAmount: "5" }), [null, null]);
+  assert.deepEqual(
+    [model.listingDraft({ clubShare: { percent: 25 } }).donate, model.listingDraft({ clubShare: { cents: 500 } }).donate, model.listingDraft({ clubShare: { cents: 500 } }).donateAmount],
+    ["25", "amount", "5"],
+  );
+  assert.equal(model.clubShareText({ percent: 25 }), "25% of this sale goes to the club");
+  assert.equal(model.clubShareText({ percent: 100 }), "All of this sale goes to the club");
+  assert.equal(model.clubShareText({ cents: 500 }), "$5.00 of this sale goes to the club");
+  assert.equal(model.clubShareText(null), "");
+  assert.equal(model.clubShareShort({ percent: 10 }), "10% to the club");
+  assert.equal(model.clubDonationUrl(450), "https://paypal.me/greenvillediscgolf/4.50");
+  const lf = await import("../src/shared/lost-found-model.js");
+  assert.equal(lf.karmaLabel({ karma: 5, returned: 0 }), "Karma 5");
 });
