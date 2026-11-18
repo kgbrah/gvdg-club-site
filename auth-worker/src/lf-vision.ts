@@ -1,20 +1,15 @@
-// Lost & Found disc reading: brand / mold / plastic / colours / stamp, plus any handwriting ("ink") with its
-// type and a bounding box so the server can blur it out of the public photo. Provider chain follows
-// vision.ts: Gemini first (the only provider trusted to box writing), then OpenRouter, then Workers AI.
-// parseDiscExtraction is PURE (unit-tested). The ink text is PRIVATE: it is stored for matching and never
-// returned to any client.
+// Lost & Found disc reading: brand / mold / plastic / colours / stamp, plus any handwriting ("ink") and its
+// type. Provider chain follows vision.ts: Gemini first, then OpenRouter, then Workers AI. parseDiscExtraction
+// is PURE (unit-tested). The ink text is PRIVATE: it is stored for matching (and to nudge the uploader that a
+// photo may show a name or phone number) and never returned to any client.
 
 import type { VisionEnv } from "./vision.js";
 
 export type InkType = "name" | "phone" | "initials" | "other";
 
-/** Normalised box: fractions of the image, x0 < x1, y0 < y1, all within 0..1. */
-export interface Box { x0: number; y0: number; x1: number; y1: number }
-
 export interface InkItem {
   text: string;
   type: InkType;
-  box: Box | null;
 }
 
 export interface DiscExtraction {
@@ -24,7 +19,7 @@ export interface DiscExtraction {
   colors: string[];
   stamp: string;
   ink: InkItem[];
-  /** The model saw writing it could not read or box. */
+  /** The model saw writing it could not read. */
   unreadable: boolean;
   confidence: "high" | "medium" | "low";
   parsed: boolean;
@@ -35,20 +30,20 @@ export type ExtractionStatus = "ok" | "unsure" | "empty";
 export interface ExtractionResult extends DiscExtraction {
   source: string | null;
   status: ExtractionStatus;
-  /** Gemini was over its quota: only it can box writing, so the photo must be read again later. */
+  /** Gemini was over its free-tier quota: read the photo again later (any fallback read is kept meanwhile). */
   quota?: boolean;
 }
 
 export const LF_VISION_PROMPT =
   "This photo is for a disc golf club's lost-and-found. Read the disc and ALL handwriting on it. " +
   'Return ONLY JSON: {"brand":string|null,"mold":string|null,"plastic":string|null,"colors":[string],' +
-  '"stamp":string|null,"ink":[{"text":string,"type":"name"|"phone"|"initials"|"other","box_2d":[ymin,xmin,ymax,xmax]}],' +
+  '"stamp":string|null,"ink":[{"text":string,"type":"name"|"phone"|"initials"|"other"}],' +
   '"unreadable_writing":boolean,"ink_confidence":"high"|"medium"|"low"}. ' +
   "brand/mold/plastic come from the printed stamp (e.g. Innova, Destroyer, Star). colors = the disc colour words. " +
   "ink = every piece of handwriting, marker, sticker or engraving that is NOT the printed factory stamp: names, " +
-  "phone numbers, initials, numbers, notes - on the disc, its rim, or anything else in the photo. box_2d is " +
-  "normalised 0-1000 and must cover the whole piece of writing. If you see writing you cannot read or cannot " +
-  "box, set unreadable_writing true. Use null for anything not clearly visible. No text outside the JSON.";
+  "phone numbers, initials, numbers, notes - on the disc, its rim, or anything else in the photo. If you see " +
+  "writing you cannot read, set unreadable_writing true. Use null for anything not clearly visible. No text " +
+  "outside the JSON.";
 
 export const LF_COMPARE_PROMPT =
   "Both photos show disc golf discs from a club lost-and-found. Are they the SAME physical disc (not just the same " +
@@ -62,15 +57,6 @@ const COLOR_WORDS = [
 function text(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
   return value.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
-}
-
-function boxOf(value: unknown): Box | null {
-  if (!Array.isArray(value) || value.length !== 4) return null;
-  const nums = value.map((v) => Number(v));
-  if (nums.some((n) => !Number.isFinite(n))) return null;
-  const [ymin, xmin, ymax, xmax] = nums.map((n) => Math.max(0, Math.min(1000, n))) as [number, number, number, number];
-  if (ymax <= ymin || xmax <= xmin) return null;
-  return { x0: xmin / 1000, y0: ymin / 1000, x1: xmax / 1000, y1: ymax / 1000 };
 }
 
 export function normalizeColor(value: string): string | null {
@@ -105,9 +91,8 @@ export function parseDiscExtraction(raw: unknown): DiscExtraction {
     const row = item as Record<string, unknown>;
     const words = text(row.text, 80);
     const type: InkType = row.type === "name" || row.type === "phone" || row.type === "initials" ? row.type : "other";
-    const box = boxOf(row.box_2d ?? row.box);
-    if (!words && !box) continue;
-    ink.push({ text: words, type, box });
+    if (!words) continue;
+    ink.push({ text: words, type });
   }
   const confidence = o.ink_confidence === "high" || o.ink_confidence === "medium" ? o.ink_confidence : "low";
   return {
@@ -124,18 +109,24 @@ export function parseDiscExtraction(raw: unknown): DiscExtraction {
   };
 }
 
-/** Only a provider that reliably boxes writing may unlock a public photo. */
+/** Gemini is the provider the club trusts most for reading handwriting. */
 export function trustedSource(source: string | null): boolean {
   return typeof source === "string" && source.startsWith("gemini:");
 }
 
-/** ok = safe to publish a redacted photo; unsure = keep the photo private and retry later. */
+/** ok = a confident Gemini read; unsure = usable but less certain (kept, and it still feeds matching); empty =
+ *  nothing usable came back (read again later). */
 export function extractionStatus(read: DiscExtraction, source: string | null): ExtractionStatus {
   if (!read.parsed) return "empty";
   if (!trustedSource(source)) return "unsure";
   if (read.unreadable || read.confidence === "low") return "unsure";
-  if (read.ink.some((item) => !item.box)) return "unsure";
   return "ok";
+}
+
+/** Whether a read found a name or phone number: the uploader gets a gentle, private nudge (never the text). */
+export function showsPersonalInfo(items: readonly { text: string; type: InkType }[]): boolean {
+  const keys = inkKeys(items);
+  return keys.names.length > 0 || keys.phones.length > 0 || items.some((item) => item.type === "name" || item.type === "phone");
 }
 
 // ---- Normalisation for matching (PRIVATE values) ----
@@ -266,7 +257,7 @@ export async function extractDisc(env: VisionEnv, bytes: Uint8Array, contentType
       quota = error instanceof QuotaError;
     }
   }
-  // The fallbacks can fill in disc details for matching, but never boxes: the photo waits for Gemini.
+  // The fallbacks still fill in disc details and ink for matching; after a quota refusal Gemini is asked again later.
   const fallback = await fallbackRead(env, bytes, contentType);
   return quota ? { ...fallback, quota: true } : fallback;
 }
@@ -309,40 +300,5 @@ export async function compareDiscPhotos(
     ], 60));
   } catch {
     return null;
-  }
-}
-
-export const LF_VERIFY_PROMPT =
-  "This photo is about to be shown PUBLICLY on a disc golf club's lost-and-found page. The finder covered the " +
-  "personal writing with flat patches. Is any PERSONAL writing still legible anywhere in the photo: a name, phone " +
-  "number, initials, address, or other handwriting, marker or engraving? Ignore the printed manufacturer stamp, the " +
-  "mold name, flight numbers and the patches themselves. Do not repeat any text you can read. Return ONLY JSON: " +
-  '{"legible": boolean, "confidence": "high"|"medium"|"low"}.';
-
-export type VerifyVerdict = "clear" | "visible" | "unsure";
-
-/** clear only for a confident "nothing personal is legible"; anything else keeps the copy private. */
-export function parseVerify(raw: unknown): VerifyVerdict | null {
-  if (typeof raw !== "string") return null;
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const data = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
-    if (data.legible === true) return "visible";
-    if (data.legible === false) return data.confidence === "high" || data.confidence === "medium" ? "clear" : "unsure";
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/** Gemini only (it is the one trusted to judge writing). null = unavailable; quota = over the free-tier limit. */
-export async function verifyHidden(env: VisionEnv, bytes: Uint8Array, contentType: string): Promise<{ verdict: VerifyVerdict | null; quota: boolean }> {
-  if (!env.GEMINI_API_KEY || env.VISION_DEV_STUB) return { verdict: null, quota: false };
-  try {
-    return { verdict: parseVerify(await gemini(env, [{ text: LF_VERIFY_PROMPT }, { inlineData: { mimeType: contentType, data: base64Of(bytes) } }], 80)), quota: false };
-  } catch (error) {
-    return { verdict: null, quota: error instanceof QuotaError };
   }
 }

@@ -15,7 +15,6 @@
 import { readJson } from "./http.js";
 import { parseMessage } from "./lf-input.js";
 import { lfUrl, notifyPerson } from "./lf-notify.js";
-import { purgePostPhotos } from "./lf-process.js";
 import {
   KARMA_PER_RETURN, MATCH_COLUMNS, getClaimRow, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards,
   postTitle, strength,
@@ -297,8 +296,6 @@ export async function claimAction(c: MarketCtx, id: number, action: string): Pro
     await c.env.DB.prepare("UPDATE lf_matches SET status = 'dismissed', updated_at = datetime('now') WHERE found_id = ? AND status IN ('suggested', 'notified')")
       .bind(foundId).run();
     await logClaim(c.env, { claimId: id, postId: foundId, actorId: me.id, action: "confirm", from: "returned", to: "confirmed", note: "+" + KARMA_PER_RETURN + " karma" });
-    // The disc is home: the private originals are no longer needed.
-    await purgePostPhotos(c.env, foundId, true).catch(() => 0);
     notifyPerson(c.env, c.ctx, finderId, {
       title: `+${KARMA_PER_RETURN} karma: disc returned`,
       body: `${me.name} confirmed they got the ${title} back. Thanks for returning it! Post a celebration photo if you like.`,

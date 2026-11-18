@@ -1,5 +1,5 @@
-// Shared in-memory Worker harness for the Lost & Found pipeline tests: SQLite with every migration, KV and R2
-// stand-ins, captured email and a scripted Gemini. Each test file builds its own harness.
+// Shared in-memory Worker harness for the Lost & Found tests: SQLite with every migration, KV and R2 stand-ins,
+// captured email, a scripted Gemini and a small JPEG-shaped test photo. Each test file builds its own harness.
 import { readdirSync, readFileSync } from "node:fs";
 import { vi } from "vitest";
 
@@ -9,10 +9,31 @@ import { signSession } from "../src/jwt.js";
 
 export const SECRET = "x".repeat(40);
 export const ORIGIN = "http://localhost:8080";
-export const FIXTURE = new Uint8Array(readFileSync(new URL("./fixtures/lf-ink-disc.jpg", import.meta.url)));
+
+/** A small JPEG-shaped file (the Worker never decodes pixels, it only checks the magic bytes and strips metadata):
+ *  JFIF header, an EXIF segment carrying a GPS position (which must never be served), a frame header, a scan.
+ *  `seed` varies the scan bytes so two photos differ. */
+export function testJpeg(seed = 0): Uint8Array {
+  const exif = new TextEncoder().encode("Exif\0\0GPSLatitude 35.6123N GPSLongitude 77.3712W");
+  const scan = Array.from({ length: 64 }, (_, i) => (i * 31 + seed * 7) % 250);
+  return new Uint8Array([
+    0xff, 0xd8,
+    0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0,
+    0xff, 0xe1, 0, exif.length + 2, ...exif,
+    0xff, 0xc0, 0, 17, 8, 0, 160, 0, 240, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1,
+    0xff, 0xda, 0, 12, 3, 1, 0, 2, 0x11, 3, 0x11, 0, 0x3f, 0, ...scan,
+    0xff, 0xd9,
+  ]);
+}
+
+export function dataUrl(bytes: Uint8Array): string {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return "data:image/jpeg;base64," + btoa(bin);
+}
 export const NO_INK = JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "", ink: [], unreadable_writing: false, ink_confidence: "high" });
 
-export function inkReply(ink: Array<{ text: string; type: string; box_2d?: number[] }>): string {
+export function inkReply(ink: Array<{ text: string; type: string }>): string {
   return JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "", ink, unreadable_writing: false, ink_confidence: "high" });
 }
 
@@ -72,7 +93,7 @@ export async function createHarness() {
   const mail: Array<{ to: string; subject: string; text: string }> = [];
   /** Every outside call in order: "gemini", "email:<subject>". Tests add their own markers too. */
   const events: string[] = [];
-  const gemini = { replies: [] as string[], verify: [] as string[], calls: 0 };
+  const gemini = { replies: [] as string[], calls: 0 };
   const env = {
     ROSTER: kv({ "member:m_bo": member("m_bo", "Bo Burnham"), "member:m_admin": member("m_admin", "Ann Admin", true) }),
     RATELIMIT: kv(), DB: db, PHOTOS: photos, JWT_SECRET: SECRET, SESSION_TTL_SEC: "900", ALLOWED_ORIGINS: ORIGIN,
@@ -90,9 +111,7 @@ export async function createHarness() {
       gemini.calls += 1;
       events.push("gemini");
       const prompt = String(init?.body || "");
-      const text = prompt.includes("SAME physical disc") ? '{"same":"unsure"}'
-        : prompt.includes("about to be shown PUBLICLY") ? gemini.verify.shift() ?? '{"legible": false, "confidence": "high"}'
-          : gemini.replies.shift() ?? NO_INK;
+      const text = prompt.includes("SAME physical disc") ? '{"same":"unsure"}' : gemini.replies.shift() ?? NO_INK;
       return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
     }
     return new Response("not mocked", { status: 500 });
@@ -119,9 +138,7 @@ export async function createHarness() {
   }
 
   const token = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
-  let photo = "data:image/jpeg;base64,";
-  for (const b of FIXTURE) photo += String.fromCharCode(b);
-  photo = "data:image/jpeg;base64," + btoa(photo.slice("data:image/jpeg;base64,".length));
+  const photo = dataUrl(testJpeg());
 
   return { db, env, photos, mail, events, gemini, call, guestToken, token, photo };
 }

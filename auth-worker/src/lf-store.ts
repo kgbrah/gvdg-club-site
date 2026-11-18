@@ -2,7 +2,7 @@
 // IN-list placeholders and WHERE fragments picked from hardcoded literals.
 //
 // PRIVACY FILTER: every public shape below is built from an explicit allow-list of fields. Rows are never
-// spread into a response, so private_ink, ink text, original R2 keys and owner ids cannot leak by accident.
+// spread into a response, so private_ink, ink text, R2 keys, nudges and owner ids cannot leak by accident.
 
 import type { Env } from "./env.js";
 import { discTitle } from "./lf-input.js";
@@ -27,45 +27,31 @@ function placeholders(values: readonly unknown[]): string {
 }
 
 export interface PublicPhoto { id: number; url: string }
-export interface PhotoState { photos: PublicPhoto[]; pending: number }
 
-/** Public (redacted) photos per post, plus how many are still waiting for their redacted copy. */
-export async function postPhotoStates(env: Env, postIds: readonly number[]): Promise<Map<number, PhotoState>> {
-  const out = new Map<number, PhotoState>();
-  const ids = [...new Set(postIds)];
+/** The photos that are up, per post or per celebration (id and URL only). */
+async function publicPhotos(env: Env, column: "post_id" | "celebration_id", ownerIds: readonly number[]): Promise<Map<number, PublicPhoto[]>> {
+  const out = new Map<number, PublicPhoto[]>();
+  const ids = [...new Set(ownerIds)];
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const rows = (await env.DB.prepare(
-      `SELECT id, post_id, redaction FROM lf_photos WHERE post_id IN (${placeholders(chunk)}) AND redaction IN ('public', 'pending', 'hiding', 'verifying', 'failed')
-       ORDER BY sort_order, id`,
-    ).bind(...chunk).all<{ id: number; post_id: number; redaction: string }>()).results ?? [];
+      `SELECT id, ${column} AS owner FROM lf_photos WHERE ${column} IN (${placeholders(chunk)}) AND status = 'public' ORDER BY sort_order, id`,
+    ).bind(...chunk).all<{ id: number; owner: number }>()).results ?? [];
     for (const row of rows) {
-      const state = out.get(row.post_id) ?? { photos: [], pending: 0 };
-      if (row.redaction === "public") state.photos.push({ id: row.id, url: photoUrl(row.id) });
-      else state.pending += 1;
-      out.set(row.post_id, state);
+      const list = out.get(row.owner) ?? [];
+      list.push({ id: row.id, url: photoUrl(row.id) });
+      out.set(row.owner, list);
     }
   }
   return out;
 }
 
-export async function celebrationPhotoStates(env: Env, celebrationIds: readonly number[]): Promise<Map<number, PhotoState>> {
-  const out = new Map<number, PhotoState>();
-  const ids = [...new Set(celebrationIds)];
-  for (let i = 0; i < ids.length; i += 50) {
-    const chunk = ids.slice(i, i + 50);
-    const rows = (await env.DB.prepare(
-      `SELECT id, celebration_id, redaction FROM lf_photos WHERE celebration_id IN (${placeholders(chunk)}) AND redaction IN ('public', 'pending', 'hiding', 'verifying', 'failed')
-       ORDER BY sort_order, id`,
-    ).bind(...chunk).all<{ id: number; celebration_id: number; redaction: string }>()).results ?? [];
-    for (const row of rows) {
-      const state = out.get(row.celebration_id) ?? { photos: [], pending: 0 };
-      if (row.redaction === "public") state.photos.push({ id: row.id, url: photoUrl(row.id) });
-      else state.pending += 1;
-      out.set(row.celebration_id, state);
-    }
-  }
-  return out;
+export function postPhotos(env: Env, postIds: readonly number[]): Promise<Map<number, PublicPhoto[]>> {
+  return publicPhotos(env, "post_id", postIds);
+}
+
+export function celebrationPhotos(env: Env, celebrationIds: readonly number[]): Promise<Map<number, PublicPhoto[]>> {
+  return publicPhotos(env, "celebration_id", celebrationIds);
 }
 
 export interface Karma { karma: number; returned: number }
@@ -130,9 +116,8 @@ export function postTitle(row: Row): string {
 }
 
 /** The public card for a post. Allow-list only. */
-export function postCard(row: Row, photos: Map<number, PhotoState>, person: (id: string) => Person, viewerId: string | null) {
+export function postCard(row: Row, photos: Map<number, PublicPhoto[]>, person: (id: string) => Person, viewerId: string | null) {
   const id = num(row, "id");
-  const state = photos.get(id) ?? { photos: [], pending: 0 };
   const ownerId = str(row, "owner_id");
   return {
     id,
@@ -153,8 +138,7 @@ export function postCard(row: Row, photos: Map<number, PhotoState>, person: (id:
     hidden: num(row, "hidden") === 1,
     createdAt: str(row, "created_at"),
     expiresAt: str(row, "expires_at"),
-    photos: state.photos,
-    photoPending: state.pending,
+    photos: photos.get(id) ?? [],
     poster: person(ownerId),
     mine: viewerId != null && viewerId === ownerId,
   };
@@ -162,7 +146,7 @@ export function postCard(row: Row, photos: Map<number, PhotoState>, person: (id:
 
 export async function postCards(env: Env, rows: Row[], viewerId: string | null) {
   const ids = rows.map((row) => num(row, "id"));
-  const [photos, person] = await Promise.all([postPhotoStates(env, ids), people(env, rows.map((row) => str(row, "owner_id")))]);
+  const [photos, person] = await Promise.all([postPhotos(env, ids), people(env, rows.map((row) => str(row, "owner_id")))]);
   return rows.map((row) => postCard(row, photos, person, viewerId));
 }
 
@@ -213,12 +197,11 @@ export const CELEBRATION_COLUMNS = `e.id, e.claim_id, e.author_id, e.role, e.cap
 export async function celebrationCards(env: Env, rows: Row[], viewerId: string | null) {
   const ids = rows.map((row) => num(row, "id"));
   const [photos, person] = await Promise.all([
-    celebrationPhotoStates(env, ids),
+    celebrationPhotos(env, ids),
     people(env, rows.flatMap((row) => [str(row, "author_id"), str(row, "finder_id")])),
   ]);
   return rows.map((row) => {
     const id = num(row, "id");
-    const state = photos.get(id) ?? { photos: [], pending: 0 };
     return {
       id,
       claimId: num(row, "claim_id"),
@@ -232,8 +215,7 @@ export async function celebrationCards(env: Env, rows: Row[], viewerId: string |
       author: person(str(row, "author_id")),
       // The owner is never named publicly; the finder is, with their karma.
       finder: person(str(row, "finder_id")),
-      photos: state.photos,
-      photoPending: state.pending,
+      photos: photos.get(id) ?? [],
       mine: viewerId != null && viewerId === str(row, "author_id"),
     };
   });
@@ -260,8 +242,8 @@ export async function recentReturns(env: Env, limit = 6, days = 60) {
             (SELECT e.id FROM lf_celebrations e WHERE e.claim_id = c.id AND e.hidden = 0 ORDER BY e.id LIMIT 1) AS celebration_id,
             (SELECT e.caption FROM lf_celebrations e WHERE e.claim_id = c.id AND e.hidden = 0 ORDER BY e.id LIMIT 1) AS caption,
             (SELECT ph.id FROM lf_photos ph JOIN lf_celebrations e ON e.id = ph.celebration_id
-               WHERE e.claim_id = c.id AND e.hidden = 0 AND ph.redaction = 'public' ORDER BY e.id, ph.sort_order, ph.id LIMIT 1) AS celebration_photo,
-            (SELECT ph.id FROM lf_photos ph WHERE ph.post_id = p.id AND ph.redaction = 'public' ORDER BY ph.sort_order, ph.id LIMIT 1) AS post_photo
+               WHERE e.claim_id = c.id AND e.hidden = 0 AND ph.status = 'public' ORDER BY e.id, ph.sort_order, ph.id LIMIT 1) AS celebration_photo,
+            (SELECT ph.id FROM lf_photos ph WHERE ph.post_id = p.id AND ph.status = 'public' ORDER BY ph.sort_order, ph.id LIMIT 1) AS post_photo
      FROM lf_claims c JOIN lf_posts p ON p.id = c.found_id
      WHERE c.status = 'confirmed' AND p.hidden = 0 AND c.confirmed_at >= datetime('now', ?)
        AND NOT EXISTS (SELECT 1 FROM lf_karma k WHERE k.claim_id = c.id AND k.reason = 'admin_reversal')

@@ -1,6 +1,6 @@
-// Lost & Found social side: celebrations after a confirmed return (1-2 photos whose writing is hidden the same
-// way as a post's + a caption), the Returned wall with Top finders, finder profiles (karma), reports, "My posts",
-// and the small summary that rides along the member inbox summary (no extra request on member Home).
+// Lost & Found social side: celebrations after a confirmed return (1-2 photos, public like a post's, + a caption),
+// the Returned wall with Top finders, finder profiles (karma), reports, "My posts" (with the uploader-only photo
+// nudges), and the small summary that rides along the member inbox summary (no extra request on member Home).
 
 import type { Env } from "./env.js";
 import { notifyAdmins } from "./admin-push.js";
@@ -9,11 +9,10 @@ import { discTitle, LF_REPORT_REASONS, MAX_CELEBRATION_PHOTOS, parseCaption } fr
 import { processCelebration } from "./lf-process.js";
 import {
   CELEBRATION_COLUMNS, CLAIM_COLUMNS, MATCH_COLUMNS, POST_COLUMNS, celebrationCards, getClaimRow, karmaOf, matchReasonLabels, parseReasons,
-  people, postCards, recentReturns, strength, topFinders,
+  people, photoUrl, postCards, recentReturns, strength, topFinders,
 } from "./lf-store.js";
-import { LF_BODY_BYTES, requirePerson, storeOriginals } from "./lf-posts.js";
-import { photosFrom } from "./lf-image-header.js";
-import { photoView, uploaderPhotos } from "./lf-photos.js";
+import { LF_BODY_BYTES, requirePerson } from "./lf-posts.js";
+import { ownPhotos, photosFrom, storePhotos } from "./lf-photos.js";
 import { claimView } from "./lf-claims.js";
 import { cleanText } from "./market-input.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
@@ -49,7 +48,7 @@ export async function createCelebration(c: MarketCtx, claimId: number): Promise<
   if (!id) return fail(c, 409, "already_celebrated");
   let stored: string[] = [];
   try {
-    stored = await storeOriginals(c, { ownerId: me.id, celebrationId: id }, images);
+    stored = (await storePhotos(c, { ownerId: me.id, celebrationId: id }, images)).keys;
   } catch (error) {
     await Promise.all(stored.map((key) => c.env.PHOTOS.delete(key).catch(() => {})));
     await c.env.DB.prepare("DELETE FROM lf_photos WHERE celebration_id = ?").bind(id).run().catch(() => {});
@@ -61,7 +60,7 @@ export async function createCelebration(c: MarketCtx, claimId: number): Promise<
   const row = await c.env.DB.prepare(
     `SELECT ${CELEBRATION_COLUMNS} FROM lf_celebrations e JOIN lf_claims c ON c.id = e.claim_id JOIN lf_posts p ON p.id = c.found_id WHERE e.id = ?`,
   ).bind(id).first<Row>();
-  return ok(c, { celebration: (await celebrationCards(c.env, [row!], me.id))[0], myPhotos: await uploaderPhotos(c, { celebrationId: id }) }, 201);
+  return ok(c, { celebration: (await celebrationCards(c.env, [row!], me.id))[0], myPhotos: await ownPhotos(c, { celebrationId: id }) }, 201);
 }
 
 const WALL_WHERE = `e.hidden = 0 AND p.hidden = 0 AND c.status = 'confirmed'
@@ -171,14 +170,13 @@ export async function myLostFound(c: MarketCtx): Promise<Response> {
   const claims = [];
   for (const row of claimRows) claims.push(await claimView(c, row, me));
   const karma = (await karmaOf(env, [me.id])).get(me.id) ?? { karma: 0, returned: 0 };
-  // My photos whose writing is still being hidden ("Finish hiding the writing" when the poster left early).
-  const hidingRows = (await env.DB.prepare(
-    `SELECT ph.id, ph.post_id, ph.celebration_id, ph.width, ph.height, ph.redaction, ph.rejections, ph.attempts, ph.last_error, ph.sort_order,
+  // My photos the private read thinks may show a name or phone number (the nudge; never what was read).
+  const nudgeRows = (await env.DB.prepare(
+    `SELECT ph.id, ph.post_id, ph.celebration_id,
             COALESCE(p.brand, cp.brand) AS brand, COALESCE(p.mold, cp.mold) AS mold, COALESCE(p.plastic, cp.plastic) AS plastic, COALESCE(p.color, cp.color) AS color
      FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id
        LEFT JOIN lf_celebrations e ON e.id = ph.celebration_id LEFT JOIN lf_claims cc ON cc.id = e.claim_id LEFT JOIN lf_posts cp ON cp.id = cc.found_id
-     WHERE ph.owner_id = ? AND ph.redaction IN ('pending', 'hiding', 'verifying', 'failed')
-       AND (p.id IS NULL OR p.status IN ('open', 'claimed', 'returned'))
+     WHERE ph.owner_id = ? AND ph.status = 'public' AND ph.nudge = 'shown' AND (p.id IS NULL OR p.status IN ('open', 'claimed', 'returned'))
      ORDER BY ph.id DESC LIMIT 24`,
   ).bind(me.id).all<Row>()).results ?? [];
   return ok(c, {
@@ -190,15 +188,15 @@ export async function myLostFound(c: MarketCtx): Promise<Response> {
       reasons: matchReasonLabels(parseReasons(row.reasons)), found: foundCards.get(num(row, "found_id")) ?? null,
     })).filter((row) => row.found),
     claims,
-    hiding: hidingRows.map((row) => ({
-      ...photoView(row), postId: row.post_id == null ? null : num(row, "post_id"),
+    nudges: nudgeRows.map((row) => ({
+      id: num(row, "id"), url: photoUrl(num(row, "id")), postId: row.post_id == null ? null : num(row, "post_id"),
       celebrationId: row.celebration_id == null ? null : num(row, "celebration_id"), title: discTitle(row as never),
     })),
   });
 }
 
-/** Member Home: what waits on me in Lost & Found (matches to answer, returns to finish, photos whose writing I
- *  still need to hide) and the latest returns. Cheap: a few small queries. */
+/** Member Home: what waits on me in Lost & Found (matches to answer, returns to finish, photos to check) and the
+ *  latest returns. Cheap: a few small queries. */
 export async function lostFoundSummary(env: Env, memberId: string) {
   const row = await env.DB.prepare(
     `SELECT
@@ -206,7 +204,7 @@ export async function lostFoundSummary(env: Env, memberId: string) {
           WHERE m.candidate_id = ? AND m.status = 'notified' AND f.status IN ('open', 'claimed') AND f.hidden = 0) +
        (SELECT COUNT(*) FROM lf_claims WHERE finder_id = ? AND status = 'open') +
        (SELECT COUNT(*) FROM lf_claims WHERE owner_id = ? AND status = 'returned') +
-       (SELECT COUNT(*) FROM lf_photos WHERE owner_id = ? AND redaction = 'hiding') AS n`,
+       (SELECT COUNT(*) FROM lf_photos WHERE owner_id = ? AND status = 'public' AND nudge = 'shown') AS n`,
   ).bind(memberId, memberId, memberId, memberId).first<{ n: number }>();
   const recent = (await recentReturns(env, 3, 30)).map((item) => ({
     disc: item.disc, finder: { name: item.finder.name, karma: item.finder.karma, returned: item.finder.returned },

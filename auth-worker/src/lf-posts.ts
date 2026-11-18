@@ -1,16 +1,16 @@
 // Lost & Found posts: browse, detail, create (members and verified guests), close, "turned in to the club
-// bin", and serving the REDACTED public photo. Originals are stored under private R2 keys and are never
-// served by any route.
+// bin", and serving the post's photos. Photos are public as uploaded (type-checked, size-capped, metadata
+// stripped); the poster is asked to cover names and phone numbers. The private "what's written on it" and the
+// AI's read of the ink are never in any payload.
 
-import { corsHeaders, readJson } from "./http.js";
+import { readJson } from "./http.js";
 import { MAX_FOUND_PHOTOS, MAX_LOST_PHOTOS, parseBinNote, parsePost, POST_DAYS } from "./lf-input.js";
 import { notifyPerson } from "./lf-notify.js";
 import { processPost, purgePostPhotos } from "./lf-process.js";
 import {
   CLAIM_COLUMNS, MATCH_COLUMNS, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards, postStatus, postTitle, strength,
 } from "./lf-store.js";
-import { photosFrom, type LfPhoto } from "./lf-image-header.js";
-import { uploaderPhotos } from "./lf-photos.js";
+import { ownPhotos, photosFrom, removeOwnPhoto, servePhoto, storePhotos } from "./lf-photos.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
 
@@ -106,8 +106,8 @@ export async function postDetail(c: MarketCtx, row: Row) {
       detail.matches = matches.map((match) => ({ id: num(match, "id"), foundId: num(match, "found_id"), strength: strength(num(match, "score")),
         reasons: matchReasonLabels(parseReasons(match.reasons)) }));
     }
-    // The poster's own photos and where the hiding of their writing stands (no text, rectangles only on request).
-    detail.myPhotos = await uploaderPhotos(c, { postId: id });
+    // The poster's own photos, with the private nudge where the read found a name or phone number (never the text).
+    detail.myPhotos = await ownPhotos(c, { postId: id });
     detail.canClose = live;
     detail.canTurnIn = isFound && live && card!.holding !== "club_bin";
   } else if (actor) {
@@ -132,24 +132,6 @@ export async function getPost(c: MarketCtx, id: number): Promise<Response> {
   const row = await getPostRow(c.env, id);
   if (!row || !postVisible(c, row)) return fail(c, 404, "not_found");
   return ok(c, { post: await postDetail(c, row), viewer: await viewerOf(c.env, c.actor) });
-}
-
-/** Store originals privately (only their uploader can fetch them, while the writing is being hidden); returns the
- *  R2 keys written (for rollback). */
-export async function storeOriginals(c: MarketCtx, owner: { ownerId: string; postId?: number; celebrationId?: number }, images: LfPhoto[]): Promise<string[]> {
-  const stored: string[] = [];
-  const folder = owner.postId ? "post-" + owner.postId : "celebration-" + owner.celebrationId;
-  for (const [index, image] of images.entries()) {
-    const key = `lost-found/private/${folder}/${crypto.randomUUID()}.${image.ext}`;
-    await c.env.PHOTOS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
-    stored.push(key);
-    await c.env.DB.prepare(
-      `INSERT INTO lf_photos (post_id, celebration_id, owner_id, original_key, original_type, original_bytes, width, height, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(owner.postId ?? null, owner.celebrationId ?? null, owner.ownerId, key, image.contentType, image.bytes.length,
-      image.size.width, image.size.height, index).run();
-  }
-  return stored;
 }
 
 export async function createPost(c: MarketCtx): Promise<Response> {
@@ -181,7 +163,7 @@ export async function createPost(c: MarketCtx): Promise<Response> {
   if (!id) return fail(c, 500, "server_error");
   let stored: string[] = [];
   try {
-    stored = await storeOriginals(c, { ownerId: poster.id, postId: id }, images);
+    stored = (await storePhotos(c, { ownerId: poster.id, postId: id }, images)).keys;
   } catch (error) {
     await Promise.all(stored.map((key) => c.env.PHOTOS.delete(key).catch(() => {})));
     await c.env.DB.prepare("DELETE FROM lf_photos WHERE post_id = ?").bind(id).run().catch(() => {});
@@ -189,8 +171,7 @@ export async function createPost(c: MarketCtx): Promise<Response> {
     throw error;
   }
   await logClaim(c.env, { postId: id, actorId: poster.id, action: "post", to: "open", note: v.kind });
-  // The AI read and matching happen after the response (and on the cron if the AI is unavailable). The poster's
-  // browser then hides the writing on each photo (lf-photos.ts); nothing here touches pixels.
+  // The private AI read and matching happen after the response (and on the cron if the AI is unavailable).
   const job = processPost(c.env, c.ctx, id);
   try { c.ctx?.waitUntil?.(job); } catch { /* settles on its own */ }
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) }, 201);
@@ -219,8 +200,8 @@ export async function closePost(c: MarketCtx, id: number): Promise<Response> {
   await c.env.DB.prepare("UPDATE lf_matches SET status = 'dismissed', updated_at = datetime('now') WHERE (found_id = ? OR lost_id = ?) AND status IN ('suggested', 'notified')")
     .bind(id, id).run();
   await logClaim(c.env, { postId: id, actorId: actor.id, action: "close", from: str(row, "status"), to: "closed" });
-  // Photos are deleted with the post: the private originals and the public copies.
-  await purgePostPhotos(c.env, id, false);
+  // Photos are deleted with the post.
+  await purgePostPhotos(c.env, id);
   const title = postTitle(row);
   for (const claim of claims) {
     notifyPerson(c.env, c.ctx, claim.owner_id, {
@@ -246,47 +227,22 @@ export async function turnInPost(c: MarketCtx, id: number): Promise<Response> {
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
 }
 
-/** The poster takes a photo down (e.g. writing the AI missed). Both copies leave R2 at once. */
+/** The poster takes a photo down; it leaves R2 at once. */
 export async function removePostPhoto(c: MarketCtx, id: number, photoId: number): Promise<Response> {
   const row = await ownPost(c, id);
   if (row instanceof Response) return row;
-  const photo = await c.env.DB.prepare("SELECT original_key, candidate_key, public_key, redaction FROM lf_photos WHERE id = ? AND post_id = ?")
-    .bind(photoId, id).first<{ original_key: string | null; candidate_key: string | null; public_key: string | null; redaction: string }>();
-  if (!photo || photo.redaction === "removed") return fail(c, 404, "not_found");
-  await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, candidate_key = NULL, public_key = NULL WHERE id = ? AND post_id = ?")
-    .bind(photoId, id).run();
-  for (const key of [photo.original_key, photo.candidate_key, photo.public_key]) if (key) await c.env.PHOTOS?.delete(key);
-  await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "photo_remove", note: "photo " + photoId });
+  const removed = await removeOwnPhoto(c, photoId, id);
+  if (removed.status !== 200) return removed;
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
 }
 
-/** Only the redacted public copy is ever served, and only while its post or celebration is publicly visible. */
-export async function servePublicPhoto(c: MarketCtx, photoId: number): Promise<Response> {
-  const row = await c.env.DB.prepare(
-    `SELECT ph.public_key, ph.redaction, p.status AS post_status, p.hidden AS post_hidden, p.expires_at,
-            e.hidden AS celebration_hidden, e.id AS celebration_id, cp.hidden AS celebrated_post_hidden,
-            (SELECT 1 FROM lf_karma k WHERE k.claim_id = e.claim_id AND k.reason = 'admin_reversal') AS reversed
-     FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id LEFT JOIN lf_celebrations e ON e.id = ph.celebration_id
-       LEFT JOIN lf_claims cc ON cc.id = e.claim_id LEFT JOIN lf_posts cp ON cp.id = cc.found_id
-     WHERE ph.id = ?`,
-  ).bind(photoId).first<Row>();
-  if (!row || str(row, "redaction") !== "public" || !row.public_key) return fail(c, 404, "not_found");
-  if (row.celebration_id != null) {
-    if (num(row, "celebration_hidden") === 1 || num(row, "celebrated_post_hidden") === 1 || row.reversed) return fail(c, 404, "not_found");
-  } else {
+/** A post's photo for <img>: only while the post itself is publicly visible. */
+export async function servePostOrCelebrationPhoto(c: MarketCtx, photoId: number): Promise<Response> {
+  return servePhoto(c, photoId, (row) => {
+    if (row.celebration_id != null) {
+      return num(row, "celebration_hidden") !== 1 && num(row, "celebrated_post_hidden") !== 1 && !row.reversed;
+    }
     const status = postStatus({ status: row.post_status, expires_at: row.expires_at });
-    if (num(row, "post_hidden") === 1 || !PUBLIC_STATUSES.includes(status)) return fail(c, 404, "not_found");
-  }
-  const obj = await c.env.PHOTOS?.get(str(row, "public_key"));
-  if (!obj) return fail(c, 404, "not_found");
-  return new Response(obj.body, {
-    status: 200,
-    headers: {
-      "Content-Type": "image/jpeg",
-      "Cache-Control": "public, max-age=300",
-      "X-Content-Type-Options": "nosniff",
-      "Content-Security-Policy": "default-src 'none'; sandbox",
-      ...corsHeaders(c.origin),
-    },
+    return num(row, "post_hidden") !== 1 && PUBLIC_STATUSES.includes(status);
   });
 }

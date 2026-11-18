@@ -11,8 +11,8 @@
 import type { Env } from "./env.js";
 import { handleLostFoundAdmin } from "./lf-admin.js";
 import { acceptMatch, claimAction, claimPost, declineMatch, getClaim, getMatch, postClaimMessage } from "./lf-claims.js";
-import { browsePosts, closePost, createPost, getPost, removePostPhoto, servePublicPhoto, turnInPost } from "./lf-posts.js";
-import { photoBoxes, photoOriginal, uploadPublicCopy } from "./lf-photos.js";
+import { browsePosts, closePost, createPost, getPost, removePostPhoto, servePostOrCelebrationPhoto, turnInPost } from "./lf-posts.js";
+import { keepPhoto, removeOwnPhoto, replacePhoto } from "./lf-photos.js";
 import { createCelebration, fileReport, finderProfile, myLostFound, returnedWall } from "./lf-social.js";
 import { startGuest, verifyGuest } from "./market-guest.js";
 import { fail, idOf, ok, type MarketCtx, type WaitCtx } from "./market-http.js";
@@ -31,10 +31,10 @@ export async function handleLostFound(
   const c: MarketCtx = { request, env, origin, ctx, actor: null };
   if (seg[0] === "admin") return handleLostFoundAdmin(c, method, seg);
 
-  // Photos are fetched by <img> without a token; only verified public copies are served on this path.
+  // Photos are fetched by <img> without a token, while their post or celebration is public.
   if (method === "GET" && seg[1] === "photos" && seg.length === 3) {
     const id = idOf(seg[2]);
-    return id ? servePublicPhoto(c, id) : fail(c, 404, "not_found");
+    return id ? servePostOrCelebrationPhoto(c, id) : fail(c, 404, "not_found");
   }
   const [, area, a, b] = seg;
   // The homepage strip reads only public, cache-friendly data; skip the identity lookup.
@@ -56,13 +56,13 @@ export async function handleLostFound(
   if (area === "people" && seg.length === 3 && method === "GET") return finderProfile(c, a || "");
   if (area === "reports" && seg.length === 2 && method === "POST") return fileReport(c);
 
-  // Hiding the writing (uploader only; everyone else gets 404).
-  if (area === "photos" && seg.length === 4) {
+  // The uploader's own photo: keep it, replace it or take it down (everyone else gets 404).
+  if (area === "photos" && seg.length === 4 && method === "POST") {
     const id = idOf(a);
     if (!id) return fail(c, 404, "not_found");
-    if (method === "GET" && b === "boxes") return photoBoxes(c, id);
-    if (method === "GET" && b === "original") return photoOriginal(c, id);
-    if (method === "POST" && b === "public-copy") return uploadPublicCopy(c, id);
+    if (b === "keep") return keepPhoto(c, id);
+    if (b === "replace") return replacePhoto(c, id);
+    if (b === "remove") return removeOwnPhoto(c, id);
     return fail(c, 404, "not_found");
   }
 

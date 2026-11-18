@@ -1,14 +1,14 @@
--- Lost & Found: found and lost disc posts, privately stored original photos with public copies whose writing
--- the poster's browser hid and the AI verified, AI extractions (private ink text + boxes), suggested matches, claims and returns with a state
--- log, an append-only karma ledger, celebrations with photos, reports and an admin moderation log.
+-- Lost & Found: found and lost disc posts, public photos (as uploaded, metadata stripped; posters are asked to
+-- cover names and phone numbers themselves), a PRIVATE AI read of each photo, suggested matches, claims and
+-- returns with a state log, an append-only karma ledger, celebrations with photos, reports and an admin
+-- moderation log.
 --
 -- Identities are the marketplace's: an owner id is a roster member id or a verified guest ("mg_<n>",
 -- market_guests from 0063), so one emailed-code guest identity works for both. Public payloads use
 -- market_traders.trader_key, never owner ids or emails.
 --
--- PRIVACY: lf_posts.private_ink, lf_extractions.ink_json / ink_names / ink_phones and
--- lf_photos.original_key / candidate_key are for matching and hiding only; an original reaches nobody but its
--- uploader, and only while the writing is being hidden.
+-- PRIVACY: lf_posts.private_ink and lf_extractions.ink_json / ink_names / ink_phones are for matching only and
+-- never appear in any payload. lf_photos.nudge is shown to the photo's uploader alone.
 
 CREATE TABLE IF NOT EXISTS lf_posts (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,53 +46,45 @@ CREATE INDEX IF NOT EXISTS lf_posts_owner ON lf_posts(owner_id, status);
 CREATE INDEX IF NOT EXISTS lf_posts_expiry ON lf_posts(status, expires_at);
 CREATE INDEX IF NOT EXISTS lf_posts_course ON lf_posts(course_id, kind, status);
 
--- One row per uploaded photo (a post's or a celebration's). The original lives under a private R2 key that
--- only its uploader can fetch, and only while the writing is being hidden. The Worker never decodes an image:
--- the AI returns boxes, the POSTER'S BROWSER paints a solid patch over each one and uploads that copy
--- (candidate_key, private), and the AI checks it; only a copy that passed the check becomes public_key.
+-- One row per uploaded photo (a post's or a celebration's). A photo is PUBLIC as soon as it is stored (after the
+-- file-type check, the size cap and stripping EXIF / location metadata); the Worker never decodes an image. The
+-- AI then reads it PRIVATELY once (lf_extractions) for disc details, matching and the uploader's nudge.
 CREATE TABLE IF NOT EXISTS lf_photos (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id        INTEGER REFERENCES lf_posts(id),
   celebration_id INTEGER,
   owner_id       TEXT NOT NULL,
-  original_key   TEXT,
-  original_type  TEXT NOT NULL,
-  original_bytes INTEGER NOT NULL,
-  -- Pixel size read from the file header at upload (no decode); the public copy must keep the aspect ratio.
-  width          INTEGER NOT NULL,
-  height         INTEGER NOT NULL,
-  candidate_key  TEXT,
-  public_key     TEXT,
-  public_bytes   INTEGER,
-  -- pending: waiting for the AI read; hiding: boxes ready, waiting for the poster's browser; verifying: the
-  -- poster's copy waits for the AI check; public: verified copy served; failed: retries used up (admin queue);
-  -- removed: taken down.
-  redaction      TEXT NOT NULL DEFAULT 'pending' CHECK (redaction IN ('pending', 'hiding', 'verifying', 'public', 'failed', 'removed')),
-  boxes          INTEGER NOT NULL DEFAULT 0,
-  -- Times the AI check found writing still readable; each one widens the patches the browser paints.
-  rejections     INTEGER NOT NULL DEFAULT 0,
+  -- NULL once the photo is removed (the R2 object is deleted at the same time).
+  photo_key      TEXT,
+  photo_type     TEXT NOT NULL CHECK (photo_type IN ('image/jpeg', 'image/png', 'image/webp')),
+  photo_bytes    INTEGER NOT NULL,
+  status         TEXT NOT NULL DEFAULT 'public' CHECK (status IN ('public', 'removed')),
+  -- The private AI read: pending -> done, or failed once the retries are used up (the photo stays up either way).
+  read_state     TEXT NOT NULL DEFAULT 'pending' CHECK (read_state IN ('pending', 'done', 'failed')),
   attempts       INTEGER NOT NULL DEFAULT 0,
   next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_error     TEXT NOT NULL DEFAULT '',
+  -- The uploader-only nudge: 'shown' when the read found a name or phone number (the uploader sees "may show a
+  -- name or phone number" with Replace photo / Keep it, never what was read); 'kept' once they chose to keep it.
+  nudge          TEXT NOT NULL DEFAULT '' CHECK (nudge IN ('', 'shown', 'kept')),
   sort_order     INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-  processed_at   TEXT,
+  read_at        TEXT,
   CHECK ((post_id IS NULL) <> (celebration_id IS NULL))
 );
 CREATE INDEX IF NOT EXISTS lf_photos_post ON lf_photos(post_id, sort_order, id);
 CREATE INDEX IF NOT EXISTS lf_photos_celebration ON lf_photos(celebration_id, sort_order, id);
-CREATE INDEX IF NOT EXISTS lf_photos_queue ON lf_photos(redaction, next_attempt_at);
-CREATE INDEX IF NOT EXISTS lf_photos_owner ON lf_photos(owner_id, redaction);
+CREATE INDEX IF NOT EXISTS lf_photos_queue ON lf_photos(read_state, next_attempt_at);
+CREATE INDEX IF NOT EXISTS lf_photos_owner ON lf_photos(owner_id, nudge);
 
--- One AI extraction per photo (re-run only while the photo is still pending). ink_* are PRIVATE; boxes_json
--- holds only the normalised rectangles the poster's browser needs (never any text).
+-- One AI read per photo (asked again only after an empty answer or a quota refusal). ink_* are PRIVATE. A
+-- replaced photo's read stays with the post: the writing on the disc still helps find its owner.
 CREATE TABLE IF NOT EXISTS lf_extractions (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   photo_id     INTEGER NOT NULL UNIQUE REFERENCES lf_photos(id),
   post_id      INTEGER,
   source       TEXT NOT NULL DEFAULT '',
-  -- ok: trusted read, every piece of writing boxed; unsure: writing it could not box or read, or an
-  -- untrusted provider; empty: nothing usable came back.
+  -- ok: a confident Gemini read; unsure: writing it could not read, or a fallback provider; empty: nothing usable.
   status       TEXT NOT NULL CHECK (status IN ('ok', 'unsure', 'empty')),
   brand        TEXT NOT NULL DEFAULT '',
   mold         TEXT NOT NULL DEFAULT '',
@@ -102,7 +94,6 @@ CREATE TABLE IF NOT EXISTS lf_extractions (
   ink_json     TEXT NOT NULL DEFAULT '[]',
   ink_names    TEXT NOT NULL DEFAULT '',
   ink_phones   TEXT NOT NULL DEFAULT '',
-  boxes_json   TEXT NOT NULL DEFAULT '[]',
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -197,7 +188,7 @@ CREATE TRIGGER IF NOT EXISTS lf_karma_no_delete BEFORE DELETE ON lf_karma
 BEGIN SELECT RAISE(ABORT, 'lf_karma is append-only'); END;
 
 -- After a confirmed return the finder (and optionally the owner) can post a celebration: a caption and 1-2
--- photos that go through the same redaction pipeline.
+-- photos, public like a post's and read the same way (for the uploader's nudge only).
 CREATE TABLE IF NOT EXISTS lf_celebrations (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   claim_id   INTEGER NOT NULL REFERENCES lf_claims(id),

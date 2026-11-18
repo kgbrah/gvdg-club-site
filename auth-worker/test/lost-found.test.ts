@@ -6,16 +6,13 @@ import type { Env } from "../src/env.js";
 import { signSession } from "../src/jwt.js";
 import { parsePost } from "../src/lf-input.js";
 import { nameMatch, privateKeys, rosterNameMatch, scoreMatch, type FoundSide, type LostSide } from "../src/lf-match.js";
-import { imageSize, sameAspect } from "../src/lf-image-header.js";
-import { padFor } from "../src/lf-photos.js";
-import { DEFAULT_DAILY_VISION_BUDGET, MAX_ATTEMPTS, dailyVisionBudget, runLostFoundTick } from "../src/lf-process.js";
-import { base64Of, extractionStatus, inkKeys, normalizeName, parseCompare, parseDiscExtraction, parseVerify, phoneDigits } from "../src/lf-vision.js";
+import { DEFAULT_DAILY_VISION_BUDGET, MAX_ATTEMPTS, dailyVisionBudget, runLostFoundTick, visionPerMinute } from "../src/lf-process.js";
+import { base64Of, extractionStatus, inkKeys, normalizeName, parseCompare, parseDiscExtraction, phoneDigits, showsPersonalInfo } from "../src/lf-vision.js";
+import { dataUrl, testJpeg } from "./lf-harness.js";
 
 const SECRET = "x".repeat(40);
 const ORIGIN = "http://localhost:8080";
-const FIXTURE = new Uint8Array(readFileSync(new URL("./fixtures/lf-ink-disc.jpg", import.meta.url)));
-// The fixture's handwriting ("ADA 555-0134") sits at about x 70-165, y 70-86 of 240x160.
-const FIXTURE_BOX = [430, 280, 550, 700];
+const FIXTURE = testJpeg();
 
 const member = (memberId: string, name: string, isAdmin = false) =>
   JSON.stringify({ memberId, name, isAdmin, pinHash: "secret-pin", mustChangePin: false });
@@ -80,15 +77,13 @@ let photos: ReturnType<typeof r2>;
 let mail: Array<{ to: string; subject: string; text: string }>;
 /** What the mocked Gemini says next about a disc photo (defaults to "no writing"). */
 let geminiReplies: string[];
-/** What the mocked Gemini says when it checks a poster's copy (defaults to "nothing personal is legible"). */
-let verifyReplies: string[];
 /** Set to 429 to make Gemini answer "too many requests". */
 let geminiStatus: number;
 let geminiCalls: number;
 let openRouterReply: string | null;
 
 const NO_INK = JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "Star Destroyer", ink: [], unreadable_writing: false, ink_confidence: "high" });
-function inkReply(ink: Array<{ text: string; type: string; box_2d?: number[] }>, extra: Record<string, unknown> = {}) {
+function inkReply(ink: Array<{ text: string; type: string }>, extra: Record<string, unknown> = {}) {
   return JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "", ink, unreadable_writing: false, ink_confidence: "high", ...extra });
 }
 
@@ -127,22 +122,12 @@ async function call(path: string, method = "GET", bearer?: string, body?: unknow
   const type = response.headers.get("Content-Type") || "";
   const raw = type.includes("json") ? await response.text() : null;
   const data: any = raw != null ? (raw ? JSON.parse(raw) : null) : new Uint8Array(await response.arrayBuffer());
-  // Background work (AI read, redaction, matching, notices) finishes before the test looks.
+  // Background work (the private AI read, matching, notices) finishes before the test looks.
   while (pending.length) await Promise.all(pending.splice(0));
   return { status: response.status, data, raw: raw ?? "", headers: response.headers };
 }
 
-function b64(bytes: Uint8Array): string {
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-
-const PHOTO = "data:image/jpeg;base64," + b64(FIXTURE);
-
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((value, i) => value === b[i]);
-}
+const PHOTO = dataUrl(FIXTURE);
 
 function hasText(hay: Uint8Array, text: string): boolean {
   const needle = new TextEncoder().encode(text);
@@ -185,18 +170,6 @@ async function getPost(id: number, bearer?: string) {
   return (await call("/lost-found/posts/" + id, "GET", bearer)).data.post;
 }
 
-/** What the poster's browser does: fetch the boxes, paint them over (here the fixture stands in for the patched
- *  copy: same JPEG shape), upload it; the mocked Gemini check then decides. Returns the photo's state after. */
-async function hideWriting(bearer: string, photoId: number, image = PHOTO) {
-  const boxes = await call(`/lost-found/photos/${photoId}/boxes`, "GET", bearer);
-  expect(boxes.status, boxes.raw).toBe(200);
-  expect(boxes.data.photo.status).toBe("hiding");
-  const uploaded = await call(`/lost-found/photos/${photoId}/public-copy`, "POST", bearer, { image });
-  expect(uploaded.status, uploaded.raw).toBe(202);
-  return db.raw.prepare("SELECT redaction, public_key, candidate_key, rejections, attempts, last_error FROM lf_photos WHERE id = ?").get(photoId) as
-    { redaction: string; public_key: string | null; candidate_key: string | null; rejections: number; attempts: number; last_error: string };
-}
-
 function photoIdsOf(postId: number): number[] {
   return (db.raw.prepare("SELECT id FROM lf_photos WHERE post_id = ? ORDER BY sort_order, id").all(postId) as Array<{ id: number }>).map((row) => row.id);
 }
@@ -206,7 +179,6 @@ beforeEach(async () => {
   photos = r2();
   mail = [];
   geminiReplies = [];
-  verifyReplies = [];
   geminiStatus = 200;
   geminiCalls = 0;
   openRouterReply = null;
@@ -223,9 +195,7 @@ beforeEach(async () => {
       geminiCalls += 1;
       if (geminiStatus !== 200) return new Response('{"error":{"status":"RESOURCE_EXHAUSTED"}}', { status: geminiStatus });
       const prompt = String(init?.body || "");
-      const text = prompt.includes("SAME physical disc") ? '{"same":"yes"}'
-        : prompt.includes("about to be shown PUBLICLY") ? verifyReplies.shift() ?? '{"legible": false, "confidence": "high"}'
-          : geminiReplies.shift() ?? NO_INK;
+      const text = prompt.includes("SAME physical disc") ? '{"same":"yes"}' : geminiReplies.shift() ?? NO_INK;
       return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
     }
     if (target.startsWith("https://openrouter.ai/") && openRouterReply != null) {
@@ -242,31 +212,38 @@ afterEach(() => {
 // ---------------------------------------------------------------------------------------------------
 
 describe("lost & found pure helpers", () => {
-  it("parses a Gemini disc read with normalised boxes and validates every field", () => {
+  it("parses a Gemini disc read and validates every field", () => {
     const read = parseDiscExtraction("```json\n" + inkReply([
-      { text: "WENDY SMITH", type: "name", box_2d: [100, 200, 180, 600] },
-      { text: "252 555 0199", type: "phone", box_2d: [200, 210, 260, 620] },
-      { text: "??", type: "weird", box_2d: [500, 500, 400, 600] },
+      { text: "WENDY SMITH", type: "name" },
+      { text: "252 555 0199", type: "phone" },
+      { text: "??", type: "weird" },
+      { text: "", type: "name" },
     ], { colors: ["Orange / Grey", "chartreuse"] }) + "\n```");
     expect(read.parsed).toBe(true);
     expect(read.brand).toBe("Innova");
     expect(read.colors).toEqual(["orange", "gray"]);
-    expect(read.ink[0]).toEqual({ text: "WENDY SMITH", type: "name", box: { x0: 0.2, y0: 0.1, x1: 0.6, y1: 0.18 } });
-    expect(read.ink[2]).toEqual({ text: "??", type: "other", box: null });
+    expect(read.ink).toEqual([{ text: "WENDY SMITH", type: "name" }, { text: "252 555 0199", type: "phone" }, { text: "??", type: "other" }]);
     expect(parseDiscExtraction("no json here").parsed).toBe(false);
     expect(parseDiscExtraction('{"ink": "nope"}').ink).toEqual([]);
   });
 
-  it("only a trusted, fully boxed, confident read unlocks a public photo", () => {
-    const boxed = parseDiscExtraction(inkReply([{ text: "WENDY", type: "name", box_2d: [1, 1, 50, 50] }]));
-    expect(extractionStatus(boxed, "gemini:gemini-2.5-flash")).toBe("ok");
-    expect(extractionStatus(boxed, "openrouter:any")).toBe("unsure");
-    expect(extractionStatus(boxed, null)).toBe("unsure");
-    expect(extractionStatus(parseDiscExtraction(inkReply([{ text: "WENDY", type: "name" }])), "gemini:x")).toBe("unsure");
+  it("rates a read: a confident Gemini read is ok, a fallback or unsure one is kept as unsure, nothing usable is empty", () => {
+    const named = parseDiscExtraction(inkReply([{ text: "WENDY", type: "name" }]));
+    expect(extractionStatus(named, "gemini:gemini-2.5-flash")).toBe("ok");
+    expect(extractionStatus(named, "openrouter:any")).toBe("unsure");
+    expect(extractionStatus(named, null)).toBe("unsure");
     expect(extractionStatus(parseDiscExtraction(inkReply([], { unreadable_writing: true })), "gemini:x")).toBe("unsure");
-    expect(extractionStatus(parseDiscExtraction(inkReply([{ text: "W", type: "initials", box_2d: [1, 1, 9, 9] }], { ink_confidence: "low" })), "gemini:x")).toBe("unsure");
+    expect(extractionStatus(parseDiscExtraction(inkReply([{ text: "W", type: "initials" }], { ink_confidence: "low" })), "gemini:x")).toBe("unsure");
     expect(extractionStatus(parseDiscExtraction(NO_INK), "gemini:x")).toBe("ok");
     expect(extractionStatus(parseDiscExtraction(""), "gemini:x")).toBe("empty");
+  });
+
+  it("nudges the uploader only for a name or a phone number, not initials or notes", () => {
+    expect(showsPersonalInfo([{ text: "WENDY SMITH", type: "name" }])).toBe(true);
+    expect(showsPersonalInfo([{ text: "call 252 555 0199", type: "other" }])).toBe(true);
+    expect(showsPersonalInfo([{ text: "Smith", type: "name" }])).toBe(true);
+    expect(showsPersonalInfo([{ text: "WS", type: "initials" }, { text: "#7", type: "other" }])).toBe(false);
+    expect(showsPersonalInfo([])).toBe(false);
   });
 
   it("normalises phone numbers, names and initials for matching", () => {
@@ -332,35 +309,7 @@ describe("lost & found pure helpers", () => {
   });
 });
 
-describe("lost & found photo helpers (no image decode anywhere)", () => {
-  it("reads pixel sizes from file headers only", () => {
-    expect(imageSize(FIXTURE)).toEqual({ width: 240, height: 160 });
-    const png = new Uint8Array(33);
-    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x0f, 0xc0, 0, 0, 0x0b, 0xd0]);
-    expect(imageSize(png)).toEqual({ width: 4032, height: 3024 });
-    const webp = new Uint8Array(30);
-    webp.set([...new TextEncoder().encode("RIFF"), 0, 0, 0, 0, ...new TextEncoder().encode("WEBPVP8X"), 10, 0, 0, 0, 0, 0, 0, 0, 0xff, 0x04, 0, 0xbf, 0x03, 0]);
-    expect(imageSize(webp)).toEqual({ width: 1280, height: 960 });
-    expect(imageSize(new Uint8Array([1, 2, 3]))).toBeNull();
-    expect(sameAspect({ width: 4032, height: 3024 }, { width: 1280, height: 960 })).toBe(true);
-    expect(sameAspect({ width: 4032, height: 3024 }, { width: 960, height: 1280 })).toBe(false);
-    expect(sameAspect({ width: 241, height: 161 }, { width: 240, height: 160 })).toBe(true);
-  });
-
-  it("parses the AI check strictly: only a confident 'nothing legible' passes", () => {
-    expect(parseVerify('{"legible": false, "confidence": "high"}')).toBe("clear");
-    expect(parseVerify('```json\n{"legible": false, "confidence": "medium"}\n```')).toBe("clear");
-    expect(parseVerify('{"legible": false, "confidence": "low"}')).toBe("unsure");
-    expect(parseVerify('{"legible": true, "confidence": "high"}')).toBe("visible");
-    expect(parseVerify("I can see a name")).toBeNull();
-  });
-
-  it("widens the patches each time the AI check still found writing", () => {
-    expect(padFor(0)).toEqual({ pad: 0.25, minPad: 0.025 });
-    expect(padFor(1)).toEqual({ pad: 0.5, minPad: 0.05 });
-    expect(padFor(9)).toEqual({ pad: 1, minPad: 0.1 });
-  });
-
+describe("lost & found AI cost helpers", () => {
   it("base64-encodes in pieces that join exactly like one call", () => {
     for (const size of [0, 1, 2, 3, 24_575, 24_576, 24_577, 100_001]) {
       const bytes = new Uint8Array(size).map((_, i) => (i * 37) & 255);
@@ -370,11 +319,14 @@ describe("lost & found photo helpers (no image decode anywhere)", () => {
     }
   });
 
-  it("keeps the Lost & Found vision budget configurable, defaulting to 150 a day", () => {
+  it("keeps the Lost & Found vision budget configurable, defaulting to 150 a day and 4 a minute", () => {
     expect(DEFAULT_DAILY_VISION_BUDGET).toBe(150);
     expect(dailyVisionBudget(makeEnv())).toBe(150);
     expect(dailyVisionBudget(makeEnv({ LF_DAILY_VISION_BUDGET: "40" }))).toBe(40);
     expect(dailyVisionBudget(makeEnv({ LF_DAILY_VISION_BUDGET: "lots" }))).toBe(150);
+    expect(visionPerMinute(makeEnv())).toBe(4);
+    expect(visionPerMinute(makeEnv({ LF_VISION_PER_MINUTE: "8" }))).toBe(8);
+    expect(visionPerMinute(makeEnv({ LF_VISION_PER_MINUTE: "0" }))).toBe(4);
   });
 });
 
@@ -411,112 +363,119 @@ describe("lost & found guest identity is the marketplace's", () => {
 });
 
 describe("lost & found photos and privacy", () => {
-  it("a photo goes public only as the poster's copy after a passing AI check; the original never reaches anyone else", async () => {
-    geminiReplies = [inkReply([{ text: "ADA 555-0134", type: "phone", box_2d: FIXTURE_BOX }])];
+  const nudgeOf = (photoId: number) => (db.raw.prepare("SELECT nudge FROM lf_photos WHERE id = ?").get(photoId) as { nudge: string }).nudge;
+
+  it("a photo is public as uploaded, without its metadata; the private read nudges the uploader and nobody else", async () => {
+    geminiReplies = [inkReply([{ text: "ADA 555-0134", type: "phone" }])];
     const finder = await token("m_bo");
     const other = await token("m_cy");
     const created = await createPost(finder, foundBody());
     expect(geminiCalls).toBe(1);
     const [photoId] = photoIdsOf(created.id);
-    // Read, AI filled in empty details and says so; but nothing is public yet.
-    let post = await getPost(created.id);
-    expect(post.title).toBe("Innova Star Destroyer");
-    expect(post.aiFields).toEqual(["brand", "mold", "plastic"]);
-    expect(post.photos).toEqual([]);
-    expect(post.photoPending).toBe(1);
-    expect(db.raw.prepare("SELECT redaction, width, height, owner_id, boxes FROM lf_photos").get())
-      .toEqual({ redaction: "hiding", width: 240, height: 160, owner_id: "m_bo", boxes: 1 });
-    expect((await call("/lost-found/photos/" + photoId)).status).toBe(404);
-
-    // Boxes: rectangles only, to the uploader only.
-    const boxes = await call(`/lost-found/photos/${photoId}/boxes`, "GET", finder);
-    expect(boxes.data.photo).toMatchObject({ status: "hiding", width: 240, height: 160, pad: 0.25, minPad: 0.025,
-      boxes: [{ x0: 0.28, y0: 0.43, x1: 0.7, y1: 0.55 }] });
-    expect(boxes.raw).not.toMatch(/ADA|555|0134|phone|text/i);
-    for (const bearer of [other, undefined]) {
-      expect((await call(`/lost-found/photos/${photoId}/boxes`, "GET", bearer)).status).toBe(404);
-      expect((await call(`/lost-found/photos/${photoId}/original`, "GET", bearer)).status).toBe(404);
-      expect((await call(`/lost-found/photos/${photoId}/public-copy`, "POST", bearer, { image: PHOTO })).status).toBe(404);
-    }
-    // The original: the uploader alone, private and uncached, while the writing is being hidden.
-    const original = await call(`/lost-found/photos/${photoId}/original`, "GET", finder);
-    expect(original.status).toBe(200);
-    expect(original.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(sameBytes(original.data, FIXTURE)).toBe(true);
-    // The poster's copy must be a JPEG of the same shape, at most 1280 px.
-    const png = "data:image/png;base64," + btoa(String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
-      0, 0, 0, 240, 0, 0, 0, 160, 8, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82));
-    expect((await call(`/lost-found/photos/${photoId}/public-copy`, "POST", finder, { image: png })).data.error).toBe("invalid_photo");
-    const tall = Uint8Array.from(FIXTURE);
-    const sof = tall.findIndex((b, i) => b === 0xff && tall[i + 1] === 0xc0);
-    tall[sof + 5] = 0; tall[sof + 6] = 240; tall[sof + 7] = 0; tall[sof + 8] = 160;
-    expect((await call(`/lost-found/photos/${photoId}/public-copy`, "POST", finder, { image: "data:image/jpeg;base64," + b64(tall) })).data.error).toBe("wrong_shape");
-    expect(geminiCalls).toBe(1);
-
-    // Upload -> AI check passes -> public. The public bytes are exactly the poster's copy.
-    const after = await hideWriting(finder, photoId!);
-    expect(after).toMatchObject({ redaction: "public", candidate_key: null, rejections: 0 });
-    expect(geminiCalls).toBe(2);
-    post = await getPost(created.id);
-    expect(post.photos).toHaveLength(1);
-    const served = await call(post.photos[0].url);
+    // Up at once: the stored file is the upload minus its EXIF / GPS segment, and that is what is served.
+    expect(created.photos).toEqual([{ id: photoId, url: "/lost-found/photos/" + photoId }]);
+    const stored = [...photos.objects.values()];
+    expect(stored).toHaveLength(1);
+    expect(hasText(FIXTURE, "GPSLatitude")).toBe(true);
+    expect(hasText(stored[0]!.bytes, "GPSLatitude")).toBe(false);
+    expect(hasText(stored[0]!.bytes, "Exif")).toBe(false);
+    const served = await call("/lost-found/photos/" + photoId);
     expect(served.status).toBe(200);
     expect(served.headers.get("Content-Type")).toBe("image/jpeg");
     expect(served.headers.get("Content-Security-Policy")).toContain("sandbox");
-    expect(sameBytes(served.data, photos.objects.get(after.public_key!)!.bytes)).toBe(true);
-    // Once public, even the uploader can't fetch the original, and no path leads to it.
-    expect((await call(`/lost-found/photos/${photoId}/original`, "GET", finder)).status).toBe(404);
-    for (const path of ["/lost-found/photos/" + photoId + "/originals", "/lost-found/originals/" + photoId]) expect((await call(path)).status).toBe(404);
+    expect(served.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect([...served.data]).toEqual([...stored[0]!.bytes]);
+    expect([...photos.objects.keys()][0]).toMatch(new RegExp(`^lost-found/post-${created.id}/[0-9a-f-]{36}\\.jpg$`));
 
-    // The poster can take a photo down (writing the AI missed); nobody else can.
-    expect((await call(`/lost-found/posts/${created.id}/photos/${photoId}/remove`, "POST", other)).status).toBe(404);
-    const removed = await call(`/lost-found/posts/${created.id}/photos/${photoId}/remove`, "POST", finder);
-    expect(removed.data.post.photos).toEqual([]);
-    expect((await call(post.photos[0].url)).status).toBe(404);
-    expect(photos.objects.size).toBe(0);
+    // The read filled in empty details (and says so), and found a phone number: the uploader is nudged.
+    let post = await getPost(created.id);
+    expect(post.title).toBe("Innova Star Destroyer");
+    expect(post.aiFields).toEqual(["brand", "mold", "plastic"]);
+    expect(db.raw.prepare("SELECT read_state, nudge, attempts FROM lf_photos").get()).toEqual({ read_state: "done", nudge: "shown", attempts: 1 });
+    const own = await call("/lost-found/posts/" + created.id, "GET", finder);
+    expect(own.data.post.myPhotos).toEqual([{ id: photoId, url: "/lost-found/photos/" + photoId, nudge: true }]);
+    const mine = await call("/lost-found/me", "GET", finder);
+    expect(mine.data.nudges).toEqual([{ id: photoId, url: "/lost-found/photos/" + photoId, postId: created.id, celebrationId: null, title: "Innova Star Destroyer" }]);
+    expect((await call("/me/messages/summary", "GET", finder)).data.lostFound.waiting).toBe(1);
+    // ...and never told what was read. Nobody else sees a nudge, a myPhotos list or the ink.
+    for (const res of [own, mine]) expect(res.raw).not.toMatch(/ADA|555|0134|phone|ink/i);
+    for (const res of [await call("/lost-found/posts/" + created.id), await call("/lost-found/posts/" + created.id, "GET", other),
+      await call("/lost-found/posts?kind=found"), await call("/admin/lost-found/overview", "GET", await token("m_admin"))]) {
+      expect(res.status).toBe(200);
+      expect(res.raw).not.toMatch(/nudge|myPhotos|ADA|555|0134|lost-found\/post-/i);
+    }
+    const othersMine = await call("/lost-found/me", "GET", other);
+    expect(othersMine.data.nudges).toEqual([]);
+    expect(othersMine.raw).not.toMatch(/ADA|555|0134|lost-found\/post-/i);
+    expect((await call("/me/messages/summary", "GET", other)).data.lostFound.waiting).toBe(0);
+
+    // Keep it: the uploader only; the nudge goes away and stays away.
+    for (const bearer of [other, undefined]) expect((await call(`/lost-found/photos/${photoId}/keep`, "POST", bearer)).status).toBe(404);
+    expect(nudgeOf(photoId!)).toBe("shown");
+    expect((await call(`/lost-found/photos/${photoId}/keep`, "POST", finder)).data.photo).toEqual({ id: photoId, url: "/lost-found/photos/" + photoId, nudge: false });
+    expect((await call(`/lost-found/photos/${photoId}/keep`, "POST", finder)).status).toBe(409);
+    expect(nudgeOf(photoId!)).toBe("kept");
+    expect((await call("/lost-found/me", "GET", finder)).data.nudges).toEqual([]);
+    post = await getPost(created.id);
+    expect(post.photos).toHaveLength(1);
+
     // A read that puts the writing into a public field (here "mold") is not used for that field.
-    geminiReplies = [inkReply([{ text: "WENDY SMITH", type: "name", box_2d: [1, 1, 50, 50] }], { brand: "Innova", mold: "Wendy Smith", plastic: "Star 2525550199" })];
+    geminiReplies = [inkReply([{ text: "WENDY SMITH", type: "name" }], { brand: "Innova", mold: "Wendy Smith", plastic: "Star 2525550199" })];
     const echoed = await getPost((await createPost(finder, foundBody())).id);
     expect(echoed).toMatchObject({ brand: "Innova", mold: "", plastic: "" });
-    // Ink text never reaches a public payload.
     const list = await call("/lost-found/posts?kind=found");
     expect(list.raw).not.toMatch(/555|0134|ADA|wendy/i);
-    expect(list.raw).not.toContain("original");
   });
 
-  it("a copy the AI says still shows writing stays private; the poster retries with wider patches", async () => {
-    geminiReplies = [inkReply([{ text: "ADA 555-0134", type: "phone", box_2d: FIXTURE_BOX }])];
+  it("Replace photo swaps the file (the old one leaves R2), keeps the old read for matching, and reads the new one", async () => {
+    geminiReplies = [inkReply([{ text: "WENDY SMITH", type: "name" }, { text: "252 555 0199", type: "phone" }])];
     const finder = await token("m_bo");
-    const created = await createPost(finder, foundBody());
-    const [photoId] = photoIdsOf(created.id);
-    verifyReplies = ['{"legible": true, "confidence": "high"}'];
-    const rejected = await hideWriting(finder, photoId!);
-    expect(rejected).toMatchObject({ redaction: "hiding", public_key: null, candidate_key: null, rejections: 1, last_error: "writing_visible" });
-    expect((await getPost(created.id)).photos).toEqual([]);
-    expect([...photos.objects.keys()].every((key) => key.startsWith("lost-found/private/"))).toBe(true);
-    const boxes = await call(`/lost-found/photos/${photoId}/boxes`, "GET", finder);
-    expect(boxes.data.photo).toMatchObject({ pad: 0.5, minPad: 0.05, lastError: "writing_visible", rejections: 1 });
-    // An unsure check is not a pass either.
-    verifyReplies = ['{"legible": false, "confidence": "low"}'];
-    expect(await hideWriting(finder, photoId!)).toMatchObject({ redaction: "hiding", rejections: 2, last_error: "verify_unsure" });
-    // A clear check publishes it.
-    expect(await hideWriting(finder, photoId!)).toMatchObject({ redaction: "public" });
+    const other = await token("m_cy");
+    const created = await createPost(finder, foundBody({ photos: [PHOTO, dataUrl(testJpeg(1))] }));
+    const [first, second] = photoIdsOf(created.id);
+    const oldKey = (db.raw.prepare("SELECT photo_key FROM lf_photos WHERE id = ?").get(first) as { photo_key: string }).photo_key;
+    expect(nudgeOf(first!)).toBe("shown");
+    expect(nudgeOf(second!)).toBe("");
+    // Not theirs, not signed in, or not an image: no.
+    for (const bearer of [other, undefined]) expect((await call(`/lost-found/photos/${first}/replace`, "POST", bearer, { image: PHOTO })).status).toBe(404);
+    expect((await call(`/lost-found/photos/${first}/replace`, "POST", finder, { image: "data:image/svg+xml;base64,PHN2Zz4=" })).data.error).toBe("invalid_photo");
+    // The new photo (the poster covered the writing): it takes the same place, and its read finds nothing.
+    geminiReplies = [NO_INK];
+    const replaced = await call(`/lost-found/photos/${first}/replace`, "POST", finder, { image: dataUrl(testJpeg(2)) });
+    expect(replaced.status, replaced.raw).toBe(201);
+    const newId = replaced.data.photo.id as number;
+    expect(replaced.data).toEqual({ photo: { id: newId, url: "/lost-found/photos/" + newId, nudge: false }, replaced: first });
+    expect(photos.objects.has(oldKey)).toBe(false);
+    expect((await call("/lost-found/photos/" + first)).status).toBe(404);
+    expect((await call("/lost-found/photos/" + newId)).status).toBe(200);
+    expect((await getPost(created.id)).photos.map((row: any) => row.id)).toEqual([newId, second]);
+    expect(db.raw.prepare("SELECT read_state, nudge FROM lf_photos WHERE id = ?").get(newId)).toEqual({ read_state: "done", nudge: "" });
+    // The first read stays with the post: the writing on the disc still helps find its owner.
+    expect(db.raw.prepare("SELECT photo_id, ink_phones FROM lf_extractions WHERE post_id = ? ORDER BY id").all(created.id))
+      .toEqual([{ photo_id: first, ink_phones: "2525550199" }, { photo_id: second, ink_phones: "" }, { photo_id: newId, ink_phones: "" }]);
+    expect((await call(`/lost-found/photos/${first}/replace`, "POST", finder, { image: PHOTO })).status).toBe(404);
+    // A replacement that still shows a name brings the nudge back.
+    geminiReplies = [inkReply([{ text: "WENDY SMITH", type: "name" }])];
+    const again = await call(`/lost-found/photos/${newId}/replace`, "POST", finder, { image: dataUrl(testJpeg(3)) });
+    expect(nudgeOf(again.data.photo.id)).toBe("shown");
+    // Removing: the uploader only; the file leaves R2 at once.
+    expect((await call(`/lost-found/posts/${created.id}/photos/${second}/remove`, "POST", other)).status).toBe(404);
+    expect((await call(`/lost-found/photos/${second}/remove`, "POST", other)).status).toBe(404);
+    const removed = await call(`/lost-found/posts/${created.id}/photos/${second}/remove`, "POST", finder);
+    expect(removed.data.post.photos.map((row: any) => row.id)).toEqual([again.data.photo.id]);
+    expect((await call("/lost-found/photos/" + second)).status).toBe(404);
+    expect(photos.objects.size).toBe(1);
   });
 
-  it("publishes no photo when the AI is unavailable; the cron reads it later and the poster's copy is checked", async () => {
+  it("shows the photo even when the AI is unavailable; the cron reads it later; public GETs never call the AI", async () => {
     env = makeEnv({ GEMINI_API_KEY: "" });
     const finder = await token("m_bo");
     const created = await createPost(finder, foundBody());
     const post = await getPost(created.id);
-    expect(post.photos).toEqual([]);
-    expect(post.photoPending).toBe(1);
-    const photo = db.raw.prepare("SELECT id, redaction, attempts, last_error, public_key FROM lf_photos").get() as any;
-    expect(photo).toMatchObject({ redaction: "pending", attempts: 1, last_error: "ai_unavailable", public_key: null });
-    expect((await call("/lost-found/photos/" + photo.id)).status).toBe(404);
-    // Without a read there are no boxes to hide, so no copy can be uploaded yet.
-    expect((await call(`/lost-found/photos/${photo.id}/public-copy`, "POST", finder, { image: PHOTO })).data.error).toBe("not_hiding");
-    expect([...photos.objects.keys()].every((key) => key.startsWith("lost-found/private/"))).toBe(true);
-    // A public GET never calls the AI.
+    expect(post.photos).toHaveLength(1);
+    const photo = db.raw.prepare("SELECT id, read_state, attempts, last_error FROM lf_photos").get() as any;
+    expect(photo).toMatchObject({ read_state: "pending", attempts: 1, last_error: "ai_unavailable" });
+    expect((await call("/lost-found/photos/" + photo.id)).status).toBe(200);
     const before = geminiCalls;
     await call("/lost-found/posts/" + created.id);
     await call("/lost-found/posts?kind=found");
@@ -524,67 +483,55 @@ describe("lost & found photos and privacy", () => {
     await call("/lost-found/returned?view=strip");
     await call("/lost-found/photos/" + photo.id);
     expect(geminiCalls).toBe(before);
-    // The AI comes back; the next due cron tick reads it and matches. It never publishes on its own.
+    // The AI comes back; the next due cron tick reads the photo and matches the post.
     env = makeEnv();
+    geminiReplies = [inkReply([{ text: "BO BURNHAM", type: "name" }])];
     db.raw.prepare("UPDATE lf_photos SET next_attempt_at = datetime('now', '-1 minute')").run();
-    expect(await runLostFoundTick(env)).toMatchObject({ reads: 1, matched: 1, verified: 0, published: 0 });
-    expect((await getPost(created.id)).photos).toEqual([]);
-    expect(await hideWriting(finder, photo.id)).toMatchObject({ redaction: "public" });
+    expect(await runLostFoundTick(env)).toMatchObject({ reads: 1, matched: 1 });
+    expect(db.raw.prepare("SELECT read_state, nudge FROM lf_photos").get()).toEqual({ read_state: "done", nudge: "shown" });
   });
 
-  it("keeps the photo private when the AI is unsure or only an untrusted provider read it", async () => {
-    geminiReplies = [inkReply([], { unreadable_writing: true })];
-    const unsure = await createPost(await token("m_bo"), foundBody());
-    expect((await getPost(unsure.id)).photos).toEqual([]);
-    // Gemini down, OpenRouter says "no writing": it fills in details, but it can't supply boxes.
+  it("keeps a fallback provider's read, and gives up an unreadable photo after the retries without hiding it", async () => {
+    // Gemini down, OpenRouter answers: it fills in details and is kept (no retry spent on it).
     env = makeEnv({ GEMINI_API_KEY: "", OPENROUTER_API_KEY: "or_test" });
     openRouterReply = NO_INK;
     const fallback = await createPost(await token("m_cy"), foundBody());
-    const post = await getPost(fallback.id);
-    expect(post.photos).toEqual([]);
-    expect(post.mold).toBe("Destroyer");
-    expect(db.raw.prepare("SELECT source, status FROM lf_extractions ORDER BY id").all()).toEqual([
-      { source: "gemini:gemini-2.5-flash", status: "unsure" },
-      { source: "openrouter:nvidia/nemotron-nano-12b-v2-vl:free", status: "unsure" },
-    ]);
-    expect((await call(`/lost-found/photos/${photoIdsOf(fallback.id)[0]}/public-copy`, "POST", await token("m_cy"), { image: PHOTO })).data.error).toBe("not_hiding");
-    // Retries back off and give up into the admin queue; the photo never goes public. (Each loop is "a minute
-    // later" for the per-minute cap.)
+    expect((await getPost(fallback.id)).mold).toBe("Destroyer");
+    expect(db.raw.prepare("SELECT source, status FROM lf_extractions").all()).toEqual([{ source: "openrouter:nvidia/nemotron-nano-12b-v2-vl:free", status: "unsure" }]);
+    expect(db.raw.prepare("SELECT read_state, attempts FROM lf_photos").get()).toEqual({ read_state: "done", attempts: 1 });
+    // No provider at all: the read backs off and gives up; the photo stays up throughout.
+    env = makeEnv({ GEMINI_API_KEY: "" });
+    const unread = await createPost(await token("m_bo"), foundBody());
     for (let i = 0; i < 8; i++) {
       for (const key of [...(env.RATELIMIT as any).rows.keys()]) if (String(key).startsWith("lfai:m:")) env.RATELIMIT.delete(key);
       db.raw.prepare("UPDATE lf_photos SET next_attempt_at = datetime('now', '-1 minute')").run();
       await runLostFoundTick(env);
     }
-    expect(db.raw.prepare("SELECT DISTINCT redaction FROM lf_photos").all()).toEqual([{ redaction: "failed" }]);
-    const admin = await call("/admin/lost-found/summary", "GET", await token("m_admin"));
-    expect(admin.data.failedPhotos).toBe(2);
+    expect(db.raw.prepare("SELECT read_state, attempts FROM lf_photos WHERE post_id = ?").get(unread.id)).toEqual({ read_state: "failed", attempts: MAX_ATTEMPTS });
+    expect((await getPost(unread.id)).photos).toHaveLength(1);
+    const summary = await call("/admin/lost-found/summary", "GET", await token("m_admin"));
+    expect(summary.data).toEqual({ openReports: 0 });
   });
 
   it("a free-tier quota answer is 'try later': it never uses up an attempt", async () => {
     geminiStatus = 429;
     const finder = await token("m_bo");
-    const created = await createPost(finder, foundBody());
-    const [photoId] = photoIdsOf(created.id);
-    expect(db.raw.prepare("SELECT redaction, attempts, last_error FROM lf_photos").get()).toEqual({ redaction: "pending", attempts: 0, last_error: "ai_quota" });
+    await createPost(finder, foundBody());
+    expect(db.raw.prepare("SELECT read_state, attempts, last_error FROM lf_photos").get()).toEqual({ read_state: "pending", attempts: 0, last_error: "ai_quota" });
     // A cool-down follows a 429, then the per-minute cap and the daily budget hold calls back too.
     for (let i = 0; i < MAX_ATTEMPTS + 3; i++) {
       env.RATELIMIT.delete("lfai:cooldown");
       db.raw.prepare("UPDATE lf_photos SET next_attempt_at = datetime('now', '-1 minute')").run();
       await runLostFoundTick(env);
     }
-    expect(db.raw.prepare("SELECT redaction, attempts FROM lf_photos").get()).toEqual({ redaction: "pending", attempts: 0 });
-    const calls = geminiCalls;
-    expect(calls).toBeLessThanOrEqual(5);
-    // Quota is back: the read succeeds; a 429 on the AI check is also handed back.
+    expect(db.raw.prepare("SELECT read_state, attempts FROM lf_photos").get()).toEqual({ read_state: "pending", attempts: 0 });
+    expect(geminiCalls).toBeLessThanOrEqual(5);
+    // Quota is back: the read succeeds.
     geminiStatus = 200;
     for (const key of [...(env.RATELIMIT as any).rows.keys()]) if (String(key).startsWith("lfai:")) env.RATELIMIT.delete(key);
     db.raw.prepare("UPDATE lf_photos SET next_attempt_at = datetime('now', '-1 minute')").run();
     await runLostFoundTick(env);
-    expect(db.raw.prepare("SELECT redaction FROM lf_photos").get()).toEqual({ redaction: "hiding" });
-    geminiStatus = 429;
-    const uploaded = await call(`/lost-found/photos/${photoId}/public-copy`, "POST", finder, { image: PHOTO });
-    expect(uploaded.status).toBe(202);
-    expect(db.raw.prepare("SELECT redaction, attempts, last_error FROM lf_photos").get()).toEqual({ redaction: "verifying", attempts: 1, last_error: "ai_quota" });
+    expect(db.raw.prepare("SELECT read_state, attempts FROM lf_photos").get()).toEqual({ read_state: "done", attempts: 1 });
   });
 
   it("holds Lost & Found to its daily vision budget so tee-sign OCR keeps room", async () => {
@@ -592,8 +539,8 @@ describe("lost & found photos and privacy", () => {
     const finder = await token("m_bo");
     for (let i = 0; i < 3; i++) await createPost(finder, foundBody());
     expect(geminiCalls).toBe(2);
-    const waiting = db.raw.prepare("SELECT attempts, last_error FROM lf_photos ORDER BY id DESC LIMIT 1").get();
-    expect(waiting).toEqual({ attempts: 0, last_error: "ai_budget" });
+    const waiting = db.raw.prepare("SELECT read_state, attempts, last_error FROM lf_photos ORDER BY id DESC LIMIT 1").get();
+    expect(waiting).toEqual({ read_state: "pending", attempts: 0, last_error: "ai_budget" });
   });
 });
 
@@ -603,15 +550,13 @@ describe("lost & found matching, claims, returns and karma", () => {
     const wendy = await guestToken();
     const lostPost = await createPost(wendy.token, lostBody());
     geminiReplies = [inkReply([
-      { text: "WENDY SMITH", type: "name", box_2d: [300, 250, 420, 700] },
-      { text: "252 555 0199", type: "phone", box_2d: [450, 250, 560, 700] },
+      { text: "WENDY SMITH", type: "name" },
+      { text: "252 555 0199", type: "phone" },
     ])];
     const finder = await token("m_bo");
     const foundPost = await createPost(finder, foundBody());
-    // Matching and notices never wait for the photo: they happened before the writing was hidden.
     const match = db.raw.prepare("SELECT * FROM lf_matches").get() as any;
     expect(match?.status).toBe("notified");
-    await hideWriting(finder, photoIdsOf(foundPost.id)[0]!);
     return { wendy, lostPost, foundPost, match, finder };
   }
 
@@ -642,8 +587,10 @@ describe("lost & found matching, claims, returns and karma", () => {
     ];
     for (const res of payloads) {
       expect(res.status, res.raw).toBe(200);
-      expect(res.raw).not.toMatch(/smith|0199|555|private_?ink|ink_json|original_key|lost-found\/private/i);
+      expect(res.raw).not.toMatch(/smith|0199|555|private_?ink|ink_json|ink_names|photo_key|lost-found\/post-/i);
     }
+    // Only the finder's own views carry their photo nudge; nobody else's ever does.
+    for (const res of payloads.filter((_, i) => i !== 5 && i !== 6)) expect(res.raw).not.toMatch(/nudge|myPhotos|nudges/);
     // The lost poster sees their own private text on their own post, and only there.
     const own = await call("/lost-found/posts/" + lostPost.id, "GET", wendy.token);
     expect(own.data.post.privateInk).toBe("Wendy Smith 252-555-0199");
@@ -697,8 +644,8 @@ describe("lost & found matching, claims, returns and karma", () => {
     expect(db.raw.prepare("SELECT person_id, delta, reason FROM lf_karma").all()).toEqual([{ person_id: "m_bo", delta: 10, reason: "return_confirmed" }]);
     expect(db.raw.prepare("SELECT status FROM lf_posts ORDER BY id").all()).toEqual([{ status: "returned" }, { status: "returned" }]);
     expect(db.raw.prepare("SELECT title FROM member_notices WHERE member_id = 'm_bo' ORDER BY id DESC LIMIT 1").get()).toEqual({ title: "+10 karma: disc returned" });
-    // Originals are gone once the disc is home; the redacted copy stays.
-    expect(db.raw.prepare("SELECT original_key, redaction FROM lf_photos WHERE post_id = ?").get(foundPost.id)).toEqual({ original_key: null, redaction: "public" });
+    // The photo stays up once the disc is home (the Returned wall and the homepage use it).
+    expect(db.raw.prepare("SELECT photo_key IS NOT NULL AS kept, status FROM lf_photos WHERE post_id = ?").get(foundPost.id)).toEqual({ kept: 1, status: "public" });
     const profile = await call("/lost-found/people/" + foundPost.poster.key);
     expect(profile.data.person).toMatchObject({ name: "Bo Burnham", karma: 10, returned: 1 });
     expect((await getPost(foundPost.id)).poster).toMatchObject({ karma: 10, returned: 1 });
@@ -743,7 +690,7 @@ describe("lost & found matching, claims, returns and karma", () => {
   });
 
   it("tells a club member whose full name is on a found disc, without telling the finder who", async () => {
-    geminiReplies = [inkReply([{ text: "CY YOUNG", type: "name", box_2d: [300, 250, 420, 700] }])];
+    geminiReplies = [inkReply([{ text: "CY YOUNG", type: "name" }])];
     const finder = await guestToken("finn@example.test", "Finn Finder");
     const post = await createPost(finder.token, foundBody());
     const match = db.raw.prepare("SELECT candidate_id, lost_id, status, reasons FROM lf_matches").get() as any;
@@ -777,15 +724,16 @@ describe("lost & found celebrations and moderation", () => {
     expect((await call(`/lost-found/claims/${claim.id}/celebrations`, "POST", cy, { caption: "x", photos: [PHOTO] })).status).toBe(404);
     expect((await call(`/lost-found/claims/${claim.id}/celebrations`, "POST", bo, { caption: "x", photos: [] })).status).toBe(400);
     expect((await call(`/lost-found/claims/${claim.id}/celebrations`, "POST", bo, { caption: "x", photos: [PHOTO, PHOTO, PHOTO] })).status).toBe(400);
-    geminiReplies = [inkReply([{ text: "ADA 555-0134", type: "phone", box_2d: FIXTURE_BOX }])];
+    geminiReplies = [inkReply([{ text: "ADA 555-0134", type: "phone" }])];
     const made = await call(`/lost-found/claims/${claim.id}/celebrations`, "POST", bo, { caption: "Back where it belongs!", photos: [PHOTO] });
     expect(made.status, made.raw).toBe(201);
-    // The celebration photo's writing is hidden the same way before it shows.
-    expect(made.data.celebration.photos).toEqual([]);
-    // The response comes back before the AI read (waitUntil), which then hands the photo to the poster's browser.
-    expect(made.data.myPhotos).toEqual([expect.objectContaining({ status: "pending", boxes: [] })]);
-    expect((await call(`/lost-found/photos/${made.data.myPhotos[0].id}/boxes`, "GET", ada)).status).toBe(404);
-    expect(await hideWriting(bo, made.data.myPhotos[0].id)).toMatchObject({ redaction: "public" });
+    // Public at once, like a post's photo; the private read (after the response) nudges the author only.
+    const celebrationPhoto = made.data.celebration.photos[0].id as number;
+    expect(made.data.myPhotos).toEqual([{ id: celebrationPhoto, url: "/lost-found/photos/" + celebrationPhoto, nudge: false }]);
+    expect((await call("/lost-found/me", "GET", bo)).data.nudges).toEqual([expect.objectContaining({ id: celebrationPhoto, celebrationId: made.data.celebration.id })]);
+    expect((await call("/lost-found/me", "GET", ada)).data.nudges).toEqual([]);
+    expect((await call(`/lost-found/photos/${celebrationPhoto}/keep`, "POST", ada)).status).toBe(404);
+    expect((await call(`/lost-found/photos/${celebrationPhoto}/keep`, "POST", bo)).status).toBe(200);
     expect((await call(`/lost-found/claims/${claim.id}/celebrations`, "POST", bo, { caption: "again", photos: [PHOTO] })).status).toBe(409);
     expect((await call(`/lost-found/claims/${claim.id}/celebrations`, "POST", ada, { caption: "Thank you Bo!", photos: [PHOTO] })).status).toBe(201);
     const wall = await call("/lost-found/returned");
@@ -811,11 +759,21 @@ describe("lost & found celebrations and moderation", () => {
     const admin = await token("m_admin");
     expect((await call("/admin/lost-found/summary", "GET", admin)).data.openReports).toBe(1);
     const overview = await call("/admin/lost-found/overview", "GET", admin);
-    expect(overview.data.reports[0]).toMatchObject({ kind: "celebration", reason: "privacy", target: { text: "Back where it belongs!" } });
+    expect(overview.data.reports[0]).toMatchObject({ kind: "celebration", reason: "privacy", target: { text: "Back where it belongs!", photos: [{ id: celebrationPhoto }] } });
+    expect(overview.data.photos).toBeUndefined();
+    // An admin can take a photo down (with a reason); it leaves R2 and 404s.
+    expect((await call(`/admin/lost-found/photos/${celebrationPhoto}/remove`, "POST", cy, { reason: "nope" })).status).toBe(403);
+    expect((await call(`/admin/lost-found/photos/${celebrationPhoto}/remove`, "POST", admin, {})).status).toBe(400);
+    expect((await call(`/admin/lost-found/photos/${celebrationPhoto}/remove`, "POST", admin, { reason: "Shows a phone number" })).status).toBe(200);
+    expect((await call(`/admin/lost-found/photos/${celebrationPhoto}/remove`, "POST", admin, { reason: "again" })).status).toBe(409);
+    expect((await call(photoUrl)).status).toBe(404);
+    expect((await call("/lost-found/returned")).data.celebrations.find((row: any) => row.id === celebrationId).photos).toEqual([]);
     expect((await call(`/admin/lost-found/celebrations/${celebrationId}/hide`, "POST", cy, { reason: "nope" })).status).toBe(403);
     expect((await call(`/admin/lost-found/celebrations/${celebrationId}/hide`, "POST", admin, { reason: "Face without consent" })).status).toBe(200);
     expect((await call("/lost-found/returned")).data.celebrations.map((row: any) => row.id)).not.toContain(celebrationId);
-    expect((await call(photoUrl)).status).toBe(404);
+    // The other celebration (and its photo) is untouched.
+    const adaPhoto = (await call("/lost-found/returned")).data.celebrations[0].photos[0].url;
+    expect((await call(adaPhoto)).status).toBe(200);
     expect((await call("/admin/lost-found/summary", "GET", admin)).data.openReports).toBe(0);
   });
 
@@ -833,11 +791,12 @@ describe("lost & found celebrations and moderation", () => {
     expect((await call(`/admin/lost-found/posts/${duplicate.id}/merge`, "POST", admin, { reason: "Duplicate", into: first.id })).status).toBe(200);
     expect((await call("/lost-found/posts/" + duplicate.id)).status).toBe(404);
     expect(db.raw.prepare("SELECT status, merged_into FROM lf_posts WHERE id = ?").get(duplicate.id)).toEqual({ status: "merged", merged_into: first.id });
-    // Owner close: someone else can't (404), the owner can, and both copies leave R2.
+    // Owner close: someone else can't (404), the owner can, and its photos leave R2.
     expect((await call(`/lost-found/posts/${first.id}/close`, "POST", await token("m_cy"))).status).toBe(404);
     expect((await call(`/lost-found/posts/${first.id}/close`, "POST", bo)).status).toBe(200);
     expect([...photos.objects.keys()]).toEqual([]);
     expect(db.raw.prepare("SELECT action FROM lf_mod_log ORDER BY id").all().map((row: any) => row.action)).toEqual(["hide", "unhide", "merge"]);
+    expect(db.raw.prepare("SELECT DISTINCT status FROM lf_photos").all()).toEqual([{ status: "removed" }]);
   });
 
   it("expires posts after 90 days, rate-limits posting and rejects bad input", async () => {
@@ -855,7 +814,6 @@ describe("lost & found celebrations and moderation", () => {
     const tick = await runLostFoundTick(env);
     expect(tick.expired).toBe(1);
     expect(db.raw.prepare("SELECT status FROM lf_posts WHERE id = ?").get(post.id)).toEqual({ status: "expired" });
-    expect(db.raw.prepare("SELECT original_key, public_key, redaction FROM lf_photos WHERE post_id = ?").get(post.id))
-      .toEqual({ original_key: null, public_key: null, redaction: "removed" });
+    expect(db.raw.prepare("SELECT photo_key, status FROM lf_photos WHERE post_id = ?").get(post.id)).toEqual({ photo_key: null, status: "removed" });
   });
 });

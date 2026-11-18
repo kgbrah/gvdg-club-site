@@ -183,7 +183,7 @@ export default {
             // market sweep or the UDisc import above. It does I/O only (no image work); expiry and purges first.
             try {
               const lf = await runLostFoundTick(env);
-              if (lf.expired || lf.purged || lf.reads || lf.verified) console.log(JSON.stringify({ message: "lost_found_tick", ...lf }));
+              if (lf.expired || lf.purged || lf.reads || lf.matched) console.log(JSON.stringify({ message: "lost_found_tick", ...lf }));
             } catch (error) {
               console.error(JSON.stringify({ message: "lost_found_tick_failed", error: error instanceof Error ? error.stack : String(error) }));
             }

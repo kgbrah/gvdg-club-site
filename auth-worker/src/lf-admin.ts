@@ -1,14 +1,14 @@
-// Lost & Found moderation (adminGate only): reports, AI match review, hide / unhide posts and celebrations,
-// close and merge posts, karma reversal, and photos still waiting for a redacted copy. Every action needs a
-// reason and is logged. Admins never see ink text or originals either: match review shows scores and
-// reason codes only.
+// Lost & Found moderation (adminGate only): reports (with the reported item's photos, each removable), AI match
+// review, hide / unhide posts and celebrations, close and merge posts, karma reversal and removing a photo. Every
+// action needs a reason and is logged. Admins never see ink text either: match review shows scores and reason
+// codes only.
 
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
-import { purgePostPhotos, readPhoto, verifyPhoto } from "./lf-process.js";
+import { purgePostPhotos } from "./lf-process.js";
 import {
-  CELEBRATION_COLUMNS, KARMA_PER_RETURN, POST_COLUMNS, celebrationCards, getPostRow, logModeration, matchReasonLabels, parseReasons, people,
-  postCards, postTitle,
+  CELEBRATION_COLUMNS, KARMA_PER_RETURN, POST_COLUMNS, celebrationCards, celebrationPhotos, getPostRow, logModeration, matchReasonLabels,
+  parseReasons, people, postCards, postPhotos, postTitle,
 } from "./lf-store.js";
 import { cleanLine } from "./market-input.js";
 import { changed, fail, idOf, ok, type MarketCtx } from "./market-http.js";
@@ -21,12 +21,8 @@ function reasonOf(body: Record<string, unknown>): string | null {
 }
 
 async function counts(c: MarketCtx) {
-  const row = await c.env.DB.prepare(
-    `SELECT (SELECT COUNT(*) FROM lf_reports WHERE status = 'open') AS reports,
-            (SELECT COUNT(*) FROM lf_photos WHERE redaction = 'failed') AS failed,
-            (SELECT COUNT(*) FROM lf_photos WHERE redaction IN ('pending', 'hiding', 'verifying') AND created_at <= datetime('now', '-1 hour')) AS waiting`,
-  ).first<{ reports: number; failed: number; waiting: number }>();
-  return { openReports: Number(row?.reports) || 0, failedPhotos: Number(row?.failed) || 0, waitingPhotos: Number(row?.waiting) || 0 };
+  const row = await c.env.DB.prepare("SELECT COUNT(*) AS reports FROM lf_reports WHERE status = 'open'").first<{ reports: number }>();
+  return { openReports: Number(row?.reports) || 0 };
 }
 
 async function reportViews(c: MarketCtx, rows: Row[]) {
@@ -53,13 +49,17 @@ async function reportViews(c: MarketCtx, rows: Row[]) {
     targets.set(num(row, "id"), target);
   }
   const person = await people(c.env, [...ownerIds, ...rows.map((row) => str(row, "reporter_id"))]);
+  // The reported item's photos, so an admin can take one down ("Shows private information").
+  const ids = (kind: string) => rows.filter((row) => str(row, "target_kind") === kind).map((row) => num(row, "target_id"));
+  const [postPics, celebrationPics] = await Promise.all([postPhotos(c.env, ids("post")), celebrationPhotos(c.env, ids("celebration"))]);
   return rows.map((row) => {
     const target = targets.get(num(row, "id"));
+    const photos = (str(row, "target_kind") === "post" ? postPics : celebrationPics).get(num(row, "target_id")) ?? [];
     return {
       id: num(row, "id"), kind: str(row, "target_kind"), targetId: num(row, "target_id"), reason: str(row, "reason"),
       details: str(row, "details"), createdAt: str(row, "created_at"), reporter: person(str(row, "reporter_id")),
       target: target ? { title: target.title, status: target.status, hidden: target.hidden, text: target.text, postId: target.postId,
-        owner: person(target.ownerId) } : null,
+        owner: person(target.ownerId), photos } : null,
     };
   });
 }
@@ -68,13 +68,6 @@ async function overview(c: MarketCtx): Promise<Response> {
   const env = c.env;
   const reports = (await env.DB.prepare(
     "SELECT id, target_kind, target_id, reporter_id, reason, details, created_at FROM lf_reports WHERE status = 'open' ORDER BY created_at, id LIMIT 50",
-  ).all<Row>()).results ?? [];
-  const photoRows = (await env.DB.prepare(
-    `SELECT ph.id, ph.post_id, ph.celebration_id, ph.redaction, ph.attempts, ph.last_error, ph.next_attempt_at, ph.created_at,
-            p.brand, p.mold, p.plastic, p.color, p.kind
-     FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id
-     WHERE ph.redaction IN ('pending', 'hiding', 'verifying', 'failed')
-     ORDER BY CASE ph.redaction WHEN 'failed' THEN 0 ELSE 1 END, ph.created_at LIMIT 40`,
   ).all<Row>()).results ?? [];
   const matchRows = (await env.DB.prepare(
     `SELECT m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons, m.ai_verdict, m.status, m.created_at, f.owner_id AS finder_id
@@ -110,12 +103,6 @@ async function overview(c: MarketCtx): Promise<Response> {
   return ok(c, {
     counts: await counts(c),
     reports: await reportViews(c, reports),
-    photos: photoRows.map((row) => ({
-      id: num(row, "id"), postId: row.post_id == null ? null : num(row, "post_id"), celebrationId: row.celebration_id == null ? null : num(row, "celebration_id"),
-      title: row.post_id == null ? "Celebration photo" : (str(row, "kind") === "found" ? "Found: " : "Lost: ") + title(row),
-      status: str(row, "redaction"), attempts: num(row, "attempts"), lastError: str(row, "last_error").split(":")[0],
-      nextAttemptAt: str(row, "next_attempt_at"), createdAt: str(row, "created_at"),
-    })),
     matches: matchRows.map((row) => {
       const found = posts.get(num(row, "found_id"));
       const lost = row.lost_id == null ? null : posts.get(num(row, "lost_id"));
@@ -194,7 +181,7 @@ export async function handleLostFoundAdmin(c: MarketCtx, method: string, seg: st
       if (!changed(result)) return fail(c, 409, "not_open");
       await c.env.DB.prepare("UPDATE lf_claims SET status = 'declined', closed_at = datetime('now') WHERE found_id = ? AND status IN ('open', 'returned')").bind(id).run();
       await c.env.DB.prepare("UPDATE lf_matches SET status = 'dismissed', updated_at = datetime('now') WHERE (found_id = ? OR lost_id = ?) AND status IN ('suggested', 'notified')").bind(id, id).run();
-      await purgePostPhotos(c.env, id, false);
+      await purgePostPhotos(c.env, id);
       await logModeration(c.env, adminId, "close", "post", id, reason);
       await closeReportsFor(c, adminId, "post", id, "closed: " + reason);
       return ok(c, { ok: true });
@@ -212,7 +199,7 @@ export async function handleLostFoundAdmin(c: MarketCtx, method: string, seg: st
       ).bind(into, id).run();
       if (!changed(result)) return fail(c, 409, "not_open");
       await c.env.DB.prepare("UPDATE lf_matches SET status = 'dismissed', updated_at = datetime('now') WHERE (found_id = ? OR lost_id = ?) AND status IN ('suggested', 'notified')").bind(id, id).run();
-      await purgePostPhotos(c.env, id, false);
+      await purgePostPhotos(c.env, id);
       await logModeration(c.env, adminId, "merge", "post", id, `into #${into}: ${reason}`);
       return ok(c, { ok: true });
     }
@@ -249,26 +236,13 @@ export async function handleLostFoundAdmin(c: MarketCtx, method: string, seg: st
     return ok(c, { ok: true });
   }
 
-  if (seg[2] === "photos" && seg.length === 5 && (action === "retry" || action === "remove")) {
-    const photo = await c.env.DB.prepare(
-      `SELECT ph.id, ph.original_key, ph.candidate_key, ph.public_key, ph.redaction,
-              (SELECT 1 FROM lf_extractions x WHERE x.photo_id = ph.id AND x.status = 'ok') AS has_read
-       FROM lf_photos ph WHERE ph.id = ?`,
-    ).bind(id).first<{ id: number; original_key: string | null; candidate_key: string | null; public_key: string | null; redaction: string; has_read: number | null }>();
+  if (seg[2] === "photos" && seg.length === 5 && action === "remove") {
+    const photo = await c.env.DB.prepare("SELECT id, photo_key, status FROM lf_photos WHERE id = ?").bind(id)
+      .first<{ id: number; photo_key: string | null; status: string }>();
     if (!photo) return fail(c, 404, "not_found");
-    if (action === "retry") {
-      if (!["pending", "hiding", "verifying", "failed"].includes(photo.redaction) || !photo.original_key) return fail(c, 409, "not_waiting");
-      // Start the count again from where the photo got stuck: the read, the poster's copy, or the AI check.
-      const next = photo.candidate_key ? "verifying" : photo.has_read ? "hiding" : "pending";
-      await c.env.DB.prepare("UPDATE lf_photos SET redaction = ?, attempts = 0, next_attempt_at = datetime('now'), last_error = '' WHERE id = ?")
-        .bind(next, id).run();
-      await logModeration(c.env, adminId, "photo_retry", "photo", id, reason);
-      const outcome = next === "verifying" ? await verifyPhoto(c.env, id) : next === "pending" ? await readPhoto(c.env, id) : "hiding";
-      return ok(c, { ok: true, outcome });
-    }
-    if (photo.redaction === "removed") return fail(c, 409, "already_removed");
-    for (const key of [photo.original_key, photo.candidate_key, photo.public_key]) if (key) await c.env.PHOTOS?.delete(key);
-    await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, candidate_key = NULL, public_key = NULL WHERE id = ?").bind(id).run();
+    const result = await c.env.DB.prepare("UPDATE lf_photos SET status = 'removed', photo_key = NULL WHERE id = ? AND status = 'public'").bind(id).run();
+    if (!changed(result)) return fail(c, 409, "already_removed");
+    if (photo.photo_key) await c.env.PHOTOS?.delete(photo.photo_key);
     await logModeration(c.env, adminId, "photo_remove", "photo", id, reason);
     return ok(c, { ok: true });
   }
