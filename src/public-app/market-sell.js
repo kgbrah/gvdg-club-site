@@ -8,6 +8,7 @@ import {
 import { errorMessage, marketRequest } from "./market-api.js";
 import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
+import { PhotoAddButtons } from "./photo-add.js";
 
 const h = React.createElement;
 const MAX_PHOTOS = 4;
@@ -40,7 +41,6 @@ export function ConditionGuide() {
 }
 
 function PhotoPicker({ photos, onAdd, onRemove, busy, existing = false }) {
-  const inputId = React.useId();
   const remaining = MAX_PHOTOS - photos.length;
   return h("fieldset", { className: "market-fieldset market-photos" }, [
     h("legend", { key: "legend" }, "Photos (1 to 4)"),
@@ -53,12 +53,9 @@ function PhotoPicker({ photos, onAdd, onRemove, busy, existing = false }) {
         onClick: () => onRemove(photo), type: "button",
       }, "Remove"),
     ]))) : null,
-    remaining > 0 ? h("label", { className: "shop-filter-reset market-photo-add", htmlFor: inputId, key: "add" }, photos.length ? "Add another photo" : "Add photos") : null,
-    h("input", {
-      accept: "image/jpeg,image/png,image/webp,image/*", "aria-label": "Choose disc photos", className: "public-sr-only", disabled: busy || remaining <= 0,
-      id: inputId, key: "input", multiple: true,
-      onChange: (event) => { const files = Array.from(event.target.files || []); event.target.value = ""; onAdd(files.slice(0, remaining)); },
-      type: "file",
+    h(PhotoAddButtons, {
+      cameraHint: "The top, the bottom and any ink or rim dents.", disabled: busy, hasPhotos: photos.length > 0, key: "add",
+      onFiles: (files) => onAdd(files.slice(0, remaining)), remaining,
     }),
     h("small", { className: "market-hint", key: "hint" }, "Show the top, the bottom and any ink or rim dents. Photos are resized on your phone and location data is removed."),
   ]);

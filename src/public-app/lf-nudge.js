@@ -2,12 +2,13 @@
 // you (and nobody else) see "This photo may show a name or phone number, and anyone can see it." with Replace photo
 // and Keep it. Nothing says what was read. Replace uploads a new photo in its place (the old file is deleted).
 import React from "react";
-import { EyeOff } from "lucide-react";
+import { Camera, EyeOff } from "lucide-react";
 
 import { resizeImageFile } from "../shared/image-resize.js";
 import { LF_NUDGE_TEXT, lfErrorMessage } from "../shared/lost-found-model.js";
 import { StatusLine, useAction } from "./market-ui.js";
 import { announceLfChange, LfPhoto, lfRequest } from "./lf-ui.js";
+import { PHOTO_ACCEPT, useCameraCapture, useCameraMode } from "./photo-add.js";
 
 const h = React.createElement;
 const MAX_PHOTO_DATA_URL = 2_000_000;
@@ -15,6 +16,11 @@ const MAX_PHOTO_DATA_URL = 2_000_000;
 function PhotoNudge({ photo, label, href, onChanged }) {
   const action = useAction();
   const input = React.useRef(null);
+  const cameraMode = useCameraMode();
+  const [retake, cameraSheet] = useCameraCapture({
+    chooseFiles: () => input.current?.click(), hint: "Cover the name or phone number with a thumb or a strip of tape.", max: 1, mode: cameraMode,
+    onFiles: (files) => { if (files[0]) void replace(files[0]); },
+  });
   async function post(path, body, done) {
     await action.run(async () => {
       const { ok, data } = await lfRequest(`/lost-found/photos/${photo.id}/${path}`, { body, method: "POST" });
@@ -39,14 +45,20 @@ function PhotoNudge({ photo, label, href, onChanged }) {
       label ? (href ? h("a", { className: "lf-nudge-label", href, key: "label" }, label) : h("strong", { className: "lf-nudge-label", key: "label" }, label)) : null,
       h("p", { className: "lf-nudge-text", key: "text" }, LF_NUDGE_TEXT),
       h("div", { className: "market-actions lf-nudge-actions", key: "actions" }, [
+        cameraMode === "live" || cameraMode === "app"
+          ? h("button", { className: "shop-btn secondary", disabled: action.busy, key: "retake", onClick: retake, type: "button" }, [
+            h(Camera, { "aria-hidden": true, key: "icon", size: 18 }), "Retake photo",
+          ])
+          : null,
         h("button", { className: "shop-btn secondary", disabled: action.busy, key: "replace", onClick: () => input.current?.click(), type: "button" }, "Replace photo"),
         h("button", { className: "shop-filter-reset", disabled: action.busy, key: "keep", onClick: () => post("keep", {}, "Kept."), type: "button" }, "Keep it"),
       ]),
       h("input", {
-        accept: "image/jpeg,image/png,image/webp,image/*", "aria-label": "Choose a new photo", className: "public-sr-only", key: "input", ref: input, tabIndex: -1, type: "file",
+        accept: PHOTO_ACCEPT, "aria-label": "Choose a new photo", className: "public-sr-only", key: "input", ref: input, tabIndex: -1, type: "file",
         onChange: (event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void replace(file); },
       }),
       h(StatusLine, { key: "status", message: action.message }),
+      cameraSheet,
     ]),
   ]);
 }

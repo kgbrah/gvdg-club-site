@@ -205,7 +205,7 @@ export function CelebrateForm({ id }) {
     h("form", { "aria-label": "Post a celebration", className: "market-form market-panel", key: "form", noValidate: true, onSubmit: submit }, [
       h("h2", { className: "my-orders-title", key: "t" }, "Celebrate the return"),
       h(PrivacyNote, { key: "privacy" }, "Celebration photos are public on the Returned wall."),
-      h(PhotoPicker, { key: "photos", legend: "Photos (1 or 2)", max: LF_MAX_PHOTOS.celebration, min: 1, onError: (text) => action.setMessage({ text, tone: "error" }), photos, setPhotos }),
+      h(PhotoPicker, { cameraHint: "The disc back where it belongs.", key: "photos", legend: "Photos (1 or 2)", max: LF_MAX_PHOTOS.celebration, min: 1, onError: (text) => action.setMessage({ text, tone: "error" }), photos, setPhotos }),
       h(Field, { id: "lfCaption", key: "caption", label: "Caption" },
         h("textarea", { id: "lfCaption", key: "input", maxLength: LF_LIMITS.caption, onChange: (event) => setCaption(event.target.value), placeholder: "Back in the bag where it belongs!", rows: 2, value: caption })),
       h("button", { className: "shop-btn market-submit", disabled: action.busy, key: "submit", type: "submit" }, action.busy ? "Posting…" : "Post celebration"),

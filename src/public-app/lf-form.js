@@ -9,6 +9,7 @@ import { LF_LIMITS, LF_MAX_PHOTOS, LF_PHOTO_TIP, lfErrorMessage, postHref, postP
 import { Note, StatusLine, useAction } from "./market-ui.js";
 import { announceLfChange, lfRequest, PrivacyNote, useLfConfig, useLfIdentityGate } from "./lf-ui.js";
 import { useCourses } from "./lf-list.js";
+import { PhotoAddButtons } from "./photo-add.js";
 
 const h = React.createElement;
 const MAX_PHOTO_DATA_URL = 2_000_000;
@@ -27,8 +28,7 @@ export function Field({ id, label, hint, error, children }) {
   ]);
 }
 
-export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, onError }) {
-  const inputId = React.useId();
+export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, cameraHint, onError }) {
   const [busy, setBusy] = React.useState(false);
   const remaining = max - photos.length;
   async function add(files) {
@@ -56,12 +56,8 @@ export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, onError
       h("button", { "aria-label": `Remove photo ${index + 1}`, className: "shop-filter-reset", disabled: busy, key: "remove",
         onClick: () => setPhotos((current) => current.filter((item) => item.key !== photo.key)), type: "button" }, "Remove"),
     ]))) : null,
-    remaining > 0 ? h("label", { className: "shop-filter-reset market-photo-add", htmlFor: inputId, key: "add" }, photos.length ? "Add another photo" : "Add photos") : null,
-    h("input", {
-      accept: "image/jpeg,image/png,image/webp,image/*", "aria-label": "Choose disc photos", className: "public-sr-only", disabled: busy || remaining <= 0,
-      id: inputId, key: "input", multiple: max > 1,
-      onChange: (event) => { const files = Array.from(event.target.files || []); event.target.value = ""; void add(files); },
-      type: "file",
+    h(PhotoAddButtons, {
+      cameraHint, disabled: busy, hasPhotos: photos.length > 0, key: "add", multiple: max > 1, onFiles: (files) => { void add(files); }, remaining,
     }),
     hint ? h("small", { className: "market-hint", key: "hint" }, hint) : null,
   ]);
@@ -119,6 +115,7 @@ export function NewPost({ kind }) {
       h(PhotoPicker, {
         key: "photos", max: LF_MAX_PHOTOS[kind], min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
         hint: found ? "Show the top and the bottom. Photos are resized on your phone and location data is removed." : "Optional: a photo of the same disc or one like it.",
+        cameraHint: found ? "The top of the disc, then the bottom. Cover any name or phone number." : "Your disc, or one just like it.",
         legend: found ? "Photos (1 to 3)" : "Photos (optional, up to 2)",
       }),
       problem?.field === "photos" ? h(Note, { key: "photo-error", tone: "error" }, problem.text) : null,
