@@ -73,3 +73,53 @@ describe("dashboard D1 fallback reads", () => {
     });
   });
 });
+
+describe("pdga-stats per-IP limit", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function statsEnv(cache: { data: string; fetched_at: number } | null) {
+    const writes: unknown[] = [];
+    const db = {
+      prepare: (sql: string) => ({
+        bind: () => ({
+          first: async () => (/SELECT data, fetched_at FROM pdga_cache/.test(sql) ? cache : null),
+          run: async () => { writes.push(sql); return { success: true }; },
+        }),
+      }),
+    };
+    return { RATELIMIT: kv(), ROSTER: kv(), DB: db, JWT_SECRET: SECRET, ALLOWED_ORIGINS: "http://localhost:8080", LIVE: undefined } as unknown as Parameters<typeof worker.fetch>[1];
+  }
+  const stats = (pdga: string) => JSON.stringify({ pdga, name: "Cached Player", official_rating: 912, events: [{ tournament: "T", rounds: [] }], events_count: 1, play_rounds: [], stats_version: 3 });
+  const ask = (e: Parameters<typeof worker.fetch>[1], pdga: string) =>
+    worker.fetch(new Request("https://w/pdga-stats?pdga=" + pdga, { headers: { Origin: "http://localhost:8080", "CF-Connecting-IP": "203.0.113.9" } }), e);
+
+  it("serves fresh cache hits without counting them against the shared IP's limit", async () => {
+    const outbound = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no outbound expected"));
+    const e = statsEnv({ data: stats("273070"), fetched_at: Date.now() });
+    for (let i = 0; i < 40; i++) expect((await ask(e, "273070")).status).toBe(200);
+    expect(outbound).not.toHaveBeenCalled();
+  });
+
+  it("never rate-limits the built-in QA stats", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("pdga unavailable"));
+    const e = statsEnv(null);
+    for (let i = 0; i < 40; i++) expect((await ask(e, "90000001")).status).toBe(200);
+  });
+
+  it("still limits lookups that would reach pdga.com, and serves an older copy instead of an error", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("pdga unavailable"));
+    const miss = statsEnv(null);
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) statuses.push((await ask(miss, "273070")).status);
+    expect(statuses.slice(0, 30).every((status) => status === 200)).toBe(true);
+    expect(statuses[30]).toBe(429);
+
+    const stale = statsEnv({ data: stats("273070"), fetched_at: Date.now() - 2 * 60 * 60 * 1000 });
+    let last: Response | null = null;
+    for (let i = 0; i < 31; i++) last = await ask(stale, "273070");
+    expect(last?.status).toBe(200);
+    await expect(last?.json()).resolves.toMatchObject({ name: "Cached Player" });
+  });
+});
