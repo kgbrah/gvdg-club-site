@@ -144,6 +144,7 @@ export class LiveEventDO {
       return code ? this.sharing(request, code, authMember) : j({ error: "not_found" }, 404);
     }
     if (action === "mine") return this.mine(authMember); // a player's own card (authed read)
+    if (action === "summary" && request.method === "GET") return j(this.summary()); // Admin › Live rounds (Worker-only path)
     if (request.method === "GET") return j({ ...this.snapshot(), observedAt: Date.now() }); // public leaderboard/scorecard (no identity)
     const body = await request.json().catch(() => ({}));
     if (action === "watch-card") return this.watchCard(body as { scope?: WatchScope; deviceId?: string }, authMember);
@@ -167,6 +168,22 @@ export class LiveEventDO {
     if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
     if (action === "finish-card") return this.finishCard(body as { playerIndex?: number; recovery?: unknown }, authMember, authAdmin);
     return j({ error: "not_found" }, 404);
+  }
+
+  /** A small, name-only view for the admin's live round list: no scores, no member ids. */
+  private summary() {
+    const meta = this.meta;
+    if (!meta) return { status: "none" };
+    const players = this.players.filter((player) => !player.removed);
+    const scored = new Set<number>();
+    for (const player of players) {
+      for (const [hole, strokes] of Object.entries(player.scores ?? {})) if (Number.isFinite(Number(strokes))) scored.add(Number(hole));
+    }
+    return {
+      status: meta.status, courseName: meta.courseName ?? "", layoutName: meta.layoutName ?? "", startedAt: meta.startedAt || null,
+      lastActivity: meta.updatedAt ?? meta.startedAt ?? null, players: players.map((player) => player.name),
+      holes: meta.holes.length, holesScored: scored.size,
+    };
   }
 
   private snapshot() {
