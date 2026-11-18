@@ -1,5 +1,6 @@
 import React from "react";
 import { Disc3 } from "lucide-react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { safeExternalUrl } from "../shared/safe-url.js";
 import {
@@ -109,6 +110,7 @@ export function TraderLine({ trader, link = true, showPhoto = false }) {
       ? h("a", { className: "market-trader-name", href: traderHref(trader.key), key: "name" }, trader.name || "Trader")
       : h("strong", { className: "market-trader-name", key: "name" }, trader.name || "Trader"),
     trader.kind === "guest" ? h(GuestBadge, { key: "guest" }) : null,
+    h(KarmaChip, { key: "karma", traderKey: trader.key }),
     trader.feedback ? h(FeedbackText, { key: "feedback", summary: trader.feedback }) : null,
   ]);
 }

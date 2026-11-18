@@ -32,6 +32,7 @@ export { LiveEventDO } from "./live.js";
 import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { handlePdgaRegistrationStatus, handlePdgaRegistrations, runPdgaRegistrationTick } from "./pdga-registrations.js";
+import { handleKarma } from "./karma-directory.js";
 import { handlePdgaBaselines, isPdgaBaselineRoute } from "./pdga-baseline-routes.js";
 import { runPdgaBaselineTick } from "./pdga-baseline-ingest.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
@@ -138,6 +139,7 @@ export default {
       if (pathname === "/tee-signs" && method === "POST") return await handleTeeSignUpload(request, env, origin, ctx);
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
+      if (pathname === "/karma" && method === "GET") return await handleKarma(env, origin);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);
       if (pathname === "/membership/apply" && method === "POST") return await handleMembershipApply(request, env, origin, ctx);
       if (pathname.startsWith("/membership/")) {

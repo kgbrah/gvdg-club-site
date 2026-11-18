@@ -13,6 +13,7 @@ export function normalizeChatMessage(raw) {
   const author = cleanChatText(raw.author_name ?? raw.authorName, EVENT_CHAT_NAME_MAX) || "Fan";
   return {
     authorName: author,
+    karmaKey: typeof raw.karmaKey === "string" ? raw.karmaKey : "",
     body,
     createdAt: raw.created_at ?? raw.createdAt ?? "",
     id: raw.id == null ? "" : String(raw.id),

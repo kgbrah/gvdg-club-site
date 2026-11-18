@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { ChevronRight } from "lucide-react";
 
 import { requestJson } from "./api.js";
@@ -65,7 +66,7 @@ export function BagTagLeagueOrder({ compact = false, skipIds = [] }) {
         h("span", { "aria-hidden": "true", className: "member-account-spacer", key: "spacer" }),
         h("span", { className: "member-account-copy", key: "copy" }, [
           h("strong", { key: "name" }, league.name || "Bag tags"),
-          h("small", { key: "leader" }, leader ? `#${leader.current_place} ${leader.name}` : "Current tag order"),
+          h("small", { key: "leader" }, leader ? [`#${leader.current_place} ${leader.name}`, h(KarmaChip, { key: "karma", memberId: leader.member_id })] : "Current tag order"),
         ]),
         h(ChevronRight, { "aria-hidden": "true", className: "member-account-chevron", key: "open", size: 18 }),
       ]);

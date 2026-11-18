@@ -1,3 +1,4 @@
+import { karmaKey } from "./karma-directory.js";
 import type { Env } from "./env.js";
 import { adminGate, requireAuth } from "./authz.js";
 import { json, readJson, RequestBodyTooLargeError } from "./http.js";
@@ -73,7 +74,8 @@ export async function handleCommunityRoute(
       const viewer = request.headers.has("Authorization") ? await activeMember(request, env) : null;
       const profile = await viewCommunityProfile(env.DB, row, viewer);
       if (!profile || !await getMember(env.ROSTER, row.memberId)) return fail("not_found", 404);
-      return respond({ profile });
+      // Karma shows with the name, so only where the name itself is shown.
+      return respond({ profile: profile.displayName && profile.displayName !== "Member" ? { ...profile, karmaKey: karmaKey(row.memberId) } : profile });
     }
 
     const reviewMatch = /^\/community\/courses\/(\d+)\/reviews$/.exec(pathname);
@@ -133,7 +135,7 @@ export async function handleCommunityRoute(
       if (await limited("directory", actor, 30)) return fail("rate_limited", 429);
       const page = await directoryProfiles(env.DB, actor, filter, offset);
       const profiles = await Promise.all(page.results.map(async ({ memberId, ...candidate }) =>
-        (await getMember(env.ROSTER, memberId)) ? candidate : null));
+        (await getMember(env.ROSTER, memberId)) ? { ...candidate, karmaKey: karmaKey(memberId) } : null));
       return respond({ profiles: profiles.filter(Boolean), more: page.more });
     }
     const connection = /^\/me\/community\/connections\/([^/]+)$/.exec(pathname);

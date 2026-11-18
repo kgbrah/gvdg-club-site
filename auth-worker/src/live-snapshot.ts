@@ -8,6 +8,7 @@ import type { LiveMeta } from "./live-types.js";
 import type { LiveStanding } from "./live-scoring.js";
 import { liveRecoveryId } from "./live-recovery.js";
 import { handicapKey } from "./handicap.js";
+import { karmaKey } from "./karma-directory.js";
 import type { ShotLedgerViews } from "./shot-ledgers.js";
 
 const EMPTY_LOCATIONS: ReadonlyMap<number, LivePlayerLocation> = new Map();
@@ -101,6 +102,8 @@ export function publicSnapshot(
         index,
         cardId: player.cardId ?? null,
         name: player.name,
+        // The anonymous key the karma directory uses (as handicapKeys); never the member id.
+        karmaKey: karmaKey(player.memberId),
         division: player.division ?? null,
         team: player.team ?? null,
         startingHole: player.startingHole ?? null,
@@ -196,6 +199,7 @@ export function mineData(
       index,
       cardId: player.cardId ?? null,
       name: player.name,
+      karmaKey: karmaKey(player.memberId),
       division: player.division ?? null,
       team: player.team ?? null,
       startingHole: player.startingHole ?? null,

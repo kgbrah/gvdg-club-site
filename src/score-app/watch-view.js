@@ -8,7 +8,7 @@ import { HOLE_MAP_WATCH_SIZE } from "../shared/hole-map-model.js";
 import { preloadRoundMaps } from "../shared/satellite-preload.js";
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
-import { LeaderboardTable } from "./leaderboard-sheet.js";
+import { LeaderboardTable, soloKarmaKey } from "./leaderboard-sheet.js";
 import {
   watchFollowOptions,
   watchFollowPlayer,
@@ -439,6 +439,8 @@ export function WatchView(props) {
           key: "talk",
           live: props.status !== "final",
           players: standings.map((standing) => standing && (standing.name || standing.label)).filter(Boolean),
+          karmaKeys: Object.fromEntries(standings.filter((standing) => standing && (standing.name || standing.label))
+            .map((standing) => [standing.name || standing.label, soloKarmaKey(standing)])),
           viewer: "watch",
         }),
       ]),

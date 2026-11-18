@@ -343,8 +343,9 @@ describe("admin event management", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { events: { field?: { name: string; division: string | null; rating: number | null }[] }[] };
     expect(body.events[0]?.field).toEqual([
-      { name: "Jane", division: "MA1", team: null, pdga_no: "273070", rating: 941 },
-      { name: "Pat Guest", division: "MA2", team: null, pdga_no: "12345", rating: 890 },
+      // A member carries the karma directory's anonymous key (never the member id); a guest has none.
+      { name: "Jane", karmaKey: expect.stringMatching(/^[0-9a-f]{16}$/), division: "MA1", team: null, pdga_no: "273070", rating: 941 },
+      { name: "Pat Guest", karmaKey: "", division: "MA2", team: null, pdga_no: "12345", rating: 890 },
     ]);
   });
 

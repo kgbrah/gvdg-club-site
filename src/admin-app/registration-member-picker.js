@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { playersMatch } from "../shared/player-identity.js";
 import { useSettledWhileLoading } from "../shared/settled-state.js";
@@ -181,7 +182,7 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
             onChange: () => toggleMember(member.memberId),
             type: "checkbox",
           }),
-          h("span", { key: "name" }, member.name),
+          h("span", { key: "name" }, [member.name, h(KarmaChip, { key: "karma", memberId: member.memberId })]),
           memberMeta(member) ? h("span", { className: "rg-member-meta", key: "meta" }, memberMeta(member)) : null,
         ]))
         : h("p", { className: "al-note rg-member-empty", key: "empty", role: "status" }, query.trim()

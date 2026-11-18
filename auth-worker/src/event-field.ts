@@ -2,9 +2,12 @@ import type { Env } from "./env.js";
 import type { D1Like } from "./db-types.js";
 import { getMember } from "./roster.js";
 import { playersMatch } from "./player-identity.js";
+import { karmaKey } from "./karma-directory.js";
 
 export type PublicFieldPlayer = {
   name: string;
+  /** The karma directory's anonymous key for this player ("" when not a member). */
+  karmaKey?: string;
   division: string | null;
   team: string | null;
   pdga_no: string | null;
@@ -166,6 +169,7 @@ export async function publicFieldsByEvent(env: Env, eventIds: readonly number[])
     const list = out.get(seed.eventId) || [];
     list.push({
       name: seed.name,
+      karmaKey: karmaKey(seed.memberId),
       division: seed.division,
       team: seed.team,
       pdga_no: pdga,

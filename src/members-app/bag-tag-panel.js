@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip, karmaSuffix, useKarmaDirectory } from "../shared/karma.js";
 import { Tag } from "lucide-react";
 
 import { request } from "./api.js";
@@ -56,7 +57,7 @@ function TagLadder({ holders, mine, label }) {
       key: row.id || row.tag,
     }, [
       h("span", { className: "tag-ladder-num", key: "n" }, "#" + row.tag),
-      h("span", { className: "tag-ladder-name", key: "name" }, row.name),
+      h("span", { className: "tag-ladder-name", key: "name" }, [row.name, h(KarmaChip, { key: "karma", memberId: row.linked || row.you ? row.id : "" })]),
       row.you ? h("span", { className: "tag-ladder-flag", key: "f" }, "You")
         : reachable ? h("span", { className: "tag-ladder-flag quiet", key: "f" }, "Can challenge") : null,
     ]);
@@ -78,6 +79,7 @@ function moveText(move) {
 
 /** Challenge cards, the challenge form, and notices for one ladder (club series or one league). */
 function ChallengeArea({ token, compact, leagueId, leagueName, mine, holders, challenges, closed, onChanged, showForm, part }) {
+  const karma = useKarmaDirectory();
   const [defenderId, setDefenderId] = React.useState("");
   const [scores, setScores] = React.useState({ mine: "", theirs: "" });
   const [message, setMessage] = React.useState("");
@@ -184,7 +186,7 @@ function ChallengeArea({ token, compact, leagueId, leagueName, mine, holders, ch
           }, [
             h("option", { key: "blank", value: "" }, "Pick a better tag"),
             ...targets.map((holder) => h("option", { key: holder.memberId, value: holder.memberId },
-              `#${holder.tagNumber} ${holder.name}`)),
+              `#${holder.tagNumber} ${holder.name}${karmaSuffix(karma, { memberId: holder.memberId })}`)),
           ]),
         ]),
         h("label", { className: "player-card-meta", key: "mine" }, [

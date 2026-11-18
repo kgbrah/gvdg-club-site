@@ -63,6 +63,7 @@ export function normalizeCondition(raw, now = Date.now()) {
     id: raw.id == null ? "" : String(raw.id),
     label: COURSE_CONDITION_LABELS[status],
     memberName: typeof raw.member_name === "string" ? raw.member_name : typeof raw.memberName === "string" ? raw.memberName : "Member",
+    karmaKey: typeof raw.karmaKey === "string" ? raw.karmaKey : "",
     note: typeof raw.note === "string" ? raw.note : "",
     status,
     when: formatConditionWhen(raw.created_at ?? raw.createdAt, now),

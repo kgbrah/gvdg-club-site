@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { request } from "./api.js";
 import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { memberConfirm } from "./member-dialogs.js";
@@ -41,7 +42,7 @@ function field(label, element, props) {
 
 function profilePreview(profile) {
   return [
-    h("h1", { className: "section-title", key: "name" }, profile.displayName || "Club member"),
+    h("h1", { className: "section-title", key: "name" }, [profile.displayName || "Club member", h(KarmaChip, { karmaKey: profile.karmaKey, key: "karma" })]),
     profile.bio ? h("p", { className: "community-body", key: "bio" }, profile.bio) : null,
     profile.progress ? h("p", { className: "dash-note", key: "progress" },
       profile.progress.total + " completed GVDG rounds") : null,
@@ -302,6 +303,7 @@ export function MemberCommunityPage({ token }) {
         contact.relation === "friend" && contact.displayName !== "Member"
           ? h("a", { className: "member-person", href: sharedProfileHref(contact.key), key: "name" }, contact.displayName)
           : h("strong", { className: "member-person", key: "name" }, contact.displayName),
+        h(KarmaChip, { karmaKey: contact.karmaKey, key: "karma" }),
         h("p", { className: "player-card-meta", key: "status" }, contact.relation === "friend" ? "Friend" : contact.relation === "incoming" ? "Incoming request" : "Request sent"),
         h("div", { className: "dashboard-actions", key: "actions" }, [
           contact.relation === "incoming" ? connectionAction("Accept", "accept", pending, (operation) => update(contact.key, operation)) : null,
@@ -331,6 +333,7 @@ export function MemberCommunityPage({ token }) {
         action("Try again", { onClick: reload, key: "retry" }),
       ]) : page.profiles.length ? h("ul", { className: "community-list", key: "profiles" }, page.profiles.map((item) => h("li", { key: item.key }, [
         h("a", { className: "member-person", href: sharedProfileHref(item.key), key: "profile" }, item.displayName),
+        h(KarmaChip, { karmaKey: item.karmaKey, key: "karma" }),
         h("div", { className: "dashboard-actions", key: "actions" }, [
           !relations.has(item.key) && state.profile.audience !== "private" ?
             connectionAction("Send friend request", "request", pending, (operation) => update(item.key, operation)) : null,

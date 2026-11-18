@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { displayMatchStatus } from "../shared/match-status.js";
 
@@ -75,6 +76,8 @@ export function LiveStandings({ snapshot }) {
         h("td", { className: "lb-name", key: "name" }, [
           team ? h("span", { "aria-hidden": "true", className: `team-dot ${team}`, key: "dot" }) : null,
           name,
+          // One player: their karma (a doubles pair shows none).
+          h(KarmaChip, { key: "karma", karmaKey: Array.isArray(standing && standing.handicapKeys) && standing.handicapKeys.length === 1 ? standing.handicapKeys[0] : "" }),
           teamLabel ? h("span", { className: "lb-members", key: "team" }, teamLabel) : null,
           members ? h("span", { className: "lb-members", key: "members" }, members) : null,
         ]),

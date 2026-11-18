@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { ChevronLeft } from "lucide-react";
 
 import {
@@ -247,6 +248,7 @@ function FinalResults({ course, data, event }) {
               h("td", { className: "lb-pos", key: "pos" }, result && result.place != null ? String(result.place) : "-"),
               h("td", { className: "lb-name", key: "name" }, [
                 name,
+                h(KarmaChip, { key: "karma", memberId: result && result.member_id }),
                 scoringLabel ? h("span", { className: "lb-members", key: "group" }, ` · ${scoringLabel}`) : null,
               ]),
               matchplay
@@ -289,7 +291,7 @@ function EventExtras({ extras }) {
         ctp.prize ? String(ctp.prize) : "",
         ctp.winner_name ? `Winner: ${ctp.winner_name}` : "",
       ].filter(Boolean);
-      return h("li", { key: `${ctp.hole}|${index}` }, bits.join(" · "));
+      return h("li", { key: `${ctp.hole}|${index}` }, [bits.join(" · "), ctp.winner_name ? h(KarmaChip, { key: "karma", memberId: ctp.winner_member_id }) : null]);
     })));
   }
 
@@ -299,7 +301,8 @@ function EventExtras({ extras }) {
     else if (acePot.status === "carried") text = `${money(acePot.total_cents)} carried to the next event`;
     else text = `${money(acePot.total_cents)} in the pot${acePot.contributors ? ` (${acePot.contributors} in)` : ""}`;
     blocks.push(h("h3", { className: "roster-title", key: "ace-title" }, "Ace pot"));
-    blocks.push(h("p", { className: "detail-notes", key: "ace" }, text));
+    blocks.push(h("p", { className: "detail-notes", key: "ace" }, [text,
+      acePot.status === "paid_out" && acePot.winner_name ? h(KarmaChip, { key: "karma", memberId: acePot.winner_member_id }) : null]));
   }
 
   return blocks.length ? h(React.Fragment, null, blocks) : null;

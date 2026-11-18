@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { bagTagHolderGroups, collapseBagTagMoves } from "../shared/bag-tag-model.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
@@ -17,7 +18,7 @@ function heldLabel(value) {
 function Holder({ holder, lead = false }) {
   return h("li", { className: `bagtag-holder${lead ? " lead" : ""}` }, [
     h("span", { className: "bagtag-number num", key: "tag" }, [h("span", { "aria-hidden": "true", key: "hash" }, "#"), String(holder.tagNumber)]),
-    h("span", { className: "bagtag-name", key: "name" }, holder.name || "Player"),
+    h("span", { className: "bagtag-name", key: "name" }, [holder.name || "Player", h(KarmaChip, { key: "karma", karmaKey: holder.karmaKey, memberId: holder.memberId })]),
     h("span", { className: "bagtag-since", key: "since" }, heldLabel(holder.heldSince)),
   ]);
 }

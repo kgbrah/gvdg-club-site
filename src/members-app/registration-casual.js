@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { request, requestJson } from "./api.js";
 import { shortDateTime } from "./format.js";
@@ -172,7 +173,10 @@ function CasualRoundCard({ request: round, token, viewerSub, onReload }) {
       when ? h("span", { className: "register-date", key: "date" }, when) : null,
     ]),
     [round.layout_name, round.course_location, round.created_by_name ? `Posted by ${round.created_by_name}` : null].filter(Boolean).length
-      ? h("div", { className: "register-fee", key: "meta" }, [round.layout_name, round.course_location, round.created_by_name ? `Posted by ${round.created_by_name}` : null].filter(Boolean).join(" - "))
+      ? h("div", { className: "register-fee", key: "meta" }, [
+        [round.layout_name, round.course_location, round.created_by_name ? `Posted by ${round.created_by_name}` : null].filter(Boolean).join(" - "),
+        round.created_by_name ? h(KarmaChip, { key: "karma", memberId: round.created_by }) : null,
+      ])
       : null,
     round.notes ? h("div", { className: "casual-register-note", key: "note" }, round.notes) : null,
     h("div", { className: "casual-register-players", key: "players" }, `${count} ${count === 1 ? "player" : "players"} in - ${players}`),

@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { displayEventTitle, formatEventDate, statusLabel } from "../shared/events-model.js";
 import {
@@ -279,7 +280,7 @@ function PlayerStandingsTable({ isMatch, standings }) {
           const totalToPar = Number(standing.total_to_par) || 0;
           return h("tr", { key: [standing.name, String(index)].filter(Boolean).join("|") }, [
             h("td", { className: "lb-pos", key: "pos" }, tags ? cellText(standing.current_place, "—") : String(index + 1)),
-            h("td", { className: "lb-name", key: "name" }, cellText(standing.name, "Player")),
+            h("td", { className: "lb-name", key: "name" }, [cellText(standing.name, "Player"), h(KarmaChip, { key: "karma", memberId: standing.member_id })]),
             tags ? null : h("td", { key: "points" }, cellText(standing.points)),
             h("td", { key: "events" }, cellText(standing.events)),
             h("td", { key: "wins" }, cellText(standing.wins)),

@@ -8,7 +8,7 @@ export interface EventChatInput {
   body: string;
 }
 
-const PUBLIC_COLUMNS = "id, event_id, author_name, body, created_at";
+const PUBLIC_COLUMNS = "id, event_id, member_id, author_name, body, created_at";
 
 export async function listEventChat(db: D1Like, eventId: number, limit = 100) {
   return (await readD1OrFallback(
@@ -30,7 +30,7 @@ export async function listEventChat(db: D1Like, eventId: number, limit = 100) {
 export async function createEventChat(db: D1Like, input: EventChatInput) {
   return db
     .prepare(
-      "INSERT INTO event_chat (event_id, member_id, author_name, body) VALUES (?, ?, ?, ?) RETURNING id, event_id, author_name, body, created_at",
+      "INSERT INTO event_chat (event_id, member_id, author_name, body) VALUES (?, ?, ?, ?) RETURNING id, event_id, member_id, author_name, body, created_at",
     )
     .bind(input.event_id, input.member_id ?? null, input.author_name, input.body)
     .first();
