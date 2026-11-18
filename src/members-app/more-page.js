@@ -18,6 +18,7 @@ import { MemberPhoneActivityPanel } from "./phone-activity-panel.js";
 import { MemberNotificationsPanel } from "./notifications-panel.js";
 import { fieldTestUsed } from "../shared/field-test-gate.js";
 import { FieldTestSwitch, useFieldTestMode } from "../shared/field-test-ui.js";
+import { KarmaChip } from "../shared/karma.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -147,7 +148,10 @@ export function MemberAccountPage() {
       h("div", { className: "member-settings-profile", key: "profile" }, [
         context.photo ? h("img", { src: context.photo, alt: "", key: "photo" }) : h(UserRound, { size: 25, "aria-hidden": true, key: "icon" }),
         h("div", { key: "body" }, [
-          h("h2", { key: "name" }, context.name || "Club membership"),
+          h("h2", { key: "name" }, h("span", { className: "karma-line" }, [
+            h("span", { key: "n" }, context.name || "Club membership"),
+            h(KarmaChip, { key: "karma", memberId: context.sub || "" }),
+          ])),
           h("p", { className: "player-card-meta", key: "meta" }, context.pdgaNo ? "PDGA #" + context.pdgaNo : "Greenville DGC member"),
           membershipAccountLine(context.membership)
             ? h("p", { className: "player-card-meta", key: "dues" }, membershipAccountLine(context.membership))

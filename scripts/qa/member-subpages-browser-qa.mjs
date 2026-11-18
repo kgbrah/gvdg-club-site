@@ -385,6 +385,16 @@ async function verifyDestinations(width, mode) {
         await next.getByText("Also going: Jordan Parker (MA3)", { exact: false }).waitFor();
         await next.locator(".karma-chip[data-karma='40']").waitFor();
         assert.equal(await next.locator(".karma-chip").count(), 1, "only the clubmate with karma gets a chip");
+        // Your own karma, next to your name on the Home card; the chip stays whole however long the name.
+        const own = view.page.locator("[data-react-home-hero] .player-who h2 .karma-chip[data-karma='30']");
+        await own.waitFor();
+        const ownBox = await own.boundingBox();
+        const heroBox = await view.page.locator("[data-react-home-hero] .player-who").boundingBox();
+        assert.ok(ownBox && heroBox && ownBox.x + ownBox.width <= heroBox.x + heroBox.width + 1, width + " own karma chip fits beside the name");
+        if (process.env.GVDG_KARMA_SHOTS) await view.page.locator("[data-react-home-hero]").screenshot({ path: process.env.GVDG_KARMA_SHOTS + "/home-hero-" + width + "-" + mode + ".png" });
+      }
+      if (item.key === "account") {
+        await view.page.locator(".member-settings-profile h2 .karma-chip[data-karma='30']").waitFor();
       }
       await view.page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
       if (readiness[item.key]) await view.page.locator(readiness[item.key]).first().waitFor({ state: "attached" });

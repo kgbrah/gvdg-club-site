@@ -578,6 +578,11 @@ body #crottsReactApp :is(button,textarea,a):focus-visible { outline: 2px solid c
   overflow-wrap: normal;
   word-break: normal;
 }
+/* Your name and your karma chip: on a narrow phone the chip wraps under the name instead of squeezing it to "Tayl…". */
+#members :is(.player-who h2, .member-settings-profile h2) .karma-line { display: flex; flex-wrap: wrap; row-gap: .2rem; }
+#members :is(.player-who h2, .member-settings-profile h2) .karma-line > :first-child { flex: 0 0 auto; max-width: 100%; }
+#members :is(.player-who h2, .member-settings-profile h2) .karma-chip { margin-inline-start: 0; margin-inline-end: .35em; }
+#members :is(.player-who h2, .member-settings-profile h2) .karma-line > :first-child { margin-inline-end: .35em; }
 #members :is(.member-list-name, .member-account-copy strong, .member-link-copy strong, .member-person, .player-who h2, .player-event-name, .register-name, .live-round-title, .player-name-cell, .champion-name, .member-name, .player-modal-name, .board-author, .handicap-where, .play-stat-leaders span, .member-search-matches strong, .player-condition-name) {
   overflow-wrap: normal;
   word-break: normal;
