@@ -236,7 +236,17 @@ try {
   await banner(legacy).waitFor();
   assert.equal(await build(legacy), D, "an offline legacy document does not adopt the first later marker");
 
-  await lazyScreensAcrossUpdates();
+  // Chromium sometimes leaves a waiting worker un-activated for a long time while a page stays open, with no
+  // requests in flight (seen in CI: waiting "installed", active unchanged, in-flight []). Members then get the
+  // update on the next launch and pwa.js's Refresh says so. Retry only that stall, once, from a fresh fixture
+  // and context; any other failure, or a second stall, still fails the check.
+  try {
+    await lazyScreensAcrossUpdates();
+  } catch (error) {
+    if (!/did not activate/.test(String(error && error.message))) throw error;
+    console.warn("lazy screens across updates: worker activation stalled; retrying once from scratch. " + error.message);
+    await lazyScreensAcrossUpdates();
+  }
 
   console.log("Chromium PWA update QA passed resume, cross-tab versions, per-release Later, offline recovery, explicit refresh safety, stored card data and lazily loaded member screens across updates.");
 } finally {
