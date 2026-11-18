@@ -6,6 +6,7 @@ import type { Env } from "../src/env.js";
 import { signMarketGuestSession, signSession, verifySession } from "../src/jwt.js";
 import { payMethods, parseCashtag, parsePaypalMe, parseZelle, parseListing } from "../src/market-input.js";
 import { stripJpeg, stripPng } from "../src/market-photos.js";
+import { finalizeWithdrawals } from "../src/market-sweep.js";
 
 const SECRET = "x".repeat(40);
 const ORIGIN = "http://localhost:8080";
@@ -173,6 +174,10 @@ beforeEach(async () => {
   photos = r2();
   mail = [];
   env = makeEnv();
+  // Sellers need a buyer-alert email before they can list; the email-requirement test removes one.
+  for (const id of ["m_ada", "m_bo", "m_cy", "m_admin"]) {
+    db.raw.prepare("INSERT INTO market_seller_settings (member_id, notify_email) VALUES (?, ?)").run(id, id.slice(2) + "@example.test");
+  }
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     if (String(url).startsWith("https://api.resend.com/")) {
       const body = JSON.parse(String(init?.body));
@@ -329,6 +334,41 @@ describe("listings", () => {
     expect(image.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 
+  it("a member must add a buyer-alert email before listing; saving it sends a confirmation", async () => {
+    db.raw.prepare("DELETE FROM market_seller_settings WHERE member_id = 'm_cy'").run();
+    const cy = await token("m_cy");
+    const blocked = await call("/market/listings", "POST", cy, listingBody());
+    expect(blocked.status).toBe(400);
+    expect(blocked.data).toEqual({ error: "seller_email_required" });
+    expect(photos.objects.size).toBe(0);
+    // Handles alone don't unlock selling.
+    await call("/market/settings", "PUT", cy, { paypalMe: "CyDiscs" });
+    expect((await call("/market/listings", "POST", cy, listingBody())).data.error).toBe("seller_email_required");
+    expect((await call("/market/settings", "PUT", cy, { notifyEmail: "cy@@example" })).data).toEqual({ error: "invalid_settings", field: "notifyEmail" });
+    // Saving just the email keeps the other handles (partial update) and sends one confirmation.
+    const saved = await call("/market/settings", "PUT", cy, { notifyEmail: "Cy@Example.test" });
+    expect(saved.data.settings).toEqual({ paypalMe: "CyDiscs", cashtag: "", zelle: "", notifyEmail: "cy@example.test" });
+    const confirmations = mail.filter((m) => m.to === "cy@example.test");
+    expect(confirmations).toHaveLength(1);
+    expect(confirmations[0]!.text).toContain("You're set up to sell on the GVDG marketplace — buyer alerts will come here.");
+    await call("/market/settings", "PUT", cy, { paypalMe: "CyDiscs2" });
+    expect(mail.filter((m) => m.to === "cy@example.test")).toHaveLength(1);
+    await call("/market/settings", "PUT", cy, { notifyEmail: "cy.new@example.test" });
+    expect(mail.filter((m) => m.to === "cy.new@example.test")).toHaveLength(1);
+    expect((await call("/market/listings", "POST", cy, listingBody())).status).toBe(201);
+    // Never public: not on listings, profiles or the seller's public card.
+    const pub = JSON.stringify([(await call("/market/listings")).data, (await call("/market/wanted")).data]);
+    expect(pub).not.toContain("example.test");
+
+    // Existing listings of a member without an email keep working; they just can't add new ones.
+    const listing = await createListing("m_ada");
+    db.raw.prepare("UPDATE market_seller_settings SET notify_email = '' WHERE member_id = 'm_ada'").run();
+    const ada = await token("m_ada");
+    expect((await call(`/market/listings/${listing.id}`, "PATCH", ada, { priceCents: 1600 })).status).toBe(200);
+    expect((await call(`/market/listings/${listing.id}/buy`, "POST", await token("m_bo"))).status).toBe(201);
+    expect((await call("/market/listings", "POST", ada, listingBody())).data.error).toBe("seller_email_required");
+  });
+
   it("enforces the 1-4 photo limits and the file checks", async () => {
     const ada = await token("m_ada");
     expect((await call("/market/listings", "POST", ada, listingBody({ photos: [] }))).data.error).toBe("invalid_photo");
@@ -358,16 +398,69 @@ describe("listings", () => {
     expect((await call(`/market/listings/${listing.id}/photos`, "POST", await token("m_bo"), { image: PHOTO })).status).toBe(404);
   });
 
-  it("withdraw cleans up photos and hides the listing", async () => {
+  it("withdraw hides the listing but keeps it relistable for 24 hours, then a sweep makes it final", async () => {
     const listing = await createListing();
     const ada = await token("m_ada");
+    const offer = await call(`/market/listings/${listing.id}/offers`, "POST", await token("m_bo"), { text: "Swap for my Buzzz?" });
     expect((await call(`/market/listings/${listing.id}/withdraw`, "POST", await token("m_bo"))).status).toBe(404);
     const withdrawn = await call(`/market/listings/${listing.id}/withdraw`, "POST", ada);
     expect(withdrawn.data.listing.status).toBe("withdrawn");
-    expect(photos.objects.size).toBe(0);
+    expect(withdrawn.data.listing.withdrawal).toBe("pending_final");
+    expect(withdrawn.data.listing.canRelist).toBe(true);
+    expect(withdrawn.data.listing.relistUntil).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
+    // Hidden from everyone else during the window; photos are kept.
+    expect(photos.objects.size).toBe(1);
+    expect((await call("/market/listings")).data.listings).toEqual([]);
     expect((await call(`/market/listings/${listing.id}`)).status).toBe(404);
-    expect((await call(`/market/listings/${listing.id}`, "GET", ada)).status).toBe(200);
     expect((await call(listing.photos[0].url)).status).toBe(404);
+    // The open trade offer was closed and its buyer told.
+    expect(db.raw.prepare("SELECT status FROM market_offers WHERE id = ?").get(offer.data.offer.id)).toEqual({ status: "declined" });
+    expect(mail.some((m) => m.to === "bo@example.test" && /Trade offer closed/.test(m.subject))).toBe(true);
+    const mine = (await call("/market/me", "GET", ada)).data.listings[0];
+    expect(mine.withdrawal).toBe("pending_final");
+    expect(mine.relistUntil).toBe(withdrawn.data.listing.relistUntil);
+    const admin = (await call("/admin/market/overview", "GET", await token("m_admin"))).data;
+    expect(admin.withdrawn.map((card: { id: number }) => card.id)).toEqual([listing.id]);
+
+    // Relist: back to active with the same details and photos.
+    expect((await call(`/market/listings/${listing.id}/relist`, "POST", await token("m_bo"))).status).toBe(404);
+    const relisted = await call(`/market/listings/${listing.id}/relist`, "POST", ada);
+    expect(relisted.data.listing.status).toBe("active");
+    expect(relisted.data.listing.photos).toEqual(listing.photos);
+    expect(relisted.data.listing.priceCents).toBe(1800);
+    expect((await call("/market/listings")).data.listings.map((l: { id: number }) => l.id)).toEqual([listing.id]);
+    expect((await call(`/market/listings/${listing.id}/relist`, "POST", ada)).data.error).toBe("not_withdrawn");
+
+    // After 24 hours the withdrawal is final: the sweep deletes the photos once and relist is refused.
+    await call(`/market/listings/${listing.id}/withdraw`, "POST", ada);
+    expect(await finalizeWithdrawals(env)).toEqual({ finalized: 0, photosDeleted: 0 });
+    db.raw.prepare("UPDATE market_listings SET withdrawn_at = datetime('now', '-25 hours') WHERE id = ?").run(listing.id);
+    expect((await call(`/market/listings/${listing.id}/relist`, "POST", ada)).data.error).toBe("relist_expired");
+    expect(await finalizeWithdrawals(env)).toEqual({ finalized: 1, photosDeleted: 1 });
+    expect(photos.objects.size).toBe(0);
+    expect(await finalizeWithdrawals(env)).toEqual({ finalized: 0, photosDeleted: 0 });
+    const final = (await call(`/market/listings/${listing.id}`, "GET", ada)).data.listing;
+    expect(final.withdrawal).toBe("final");
+    expect(final.canRelist).toBe(false);
+    expect((await call("/admin/market/overview", "GET", await token("m_admin"))).data.withdrawn).toEqual([]);
+    const log = db.raw.prepare("SELECT action FROM market_deal_log WHERE listing_id = ? ORDER BY id").all(listing.id).map((row) => (row as { action: string }).action);
+    expect(log).toEqual(["list", "offer", "withdraw", "relist", "withdraw", "withdraw_final"]);
+  });
+
+  it("the withdrawal sweep is bounded per tick and retries a part-done purge", async () => {
+    const ada = await token("m_ada");
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const listing = await createListing();
+      ids.push(listing.id);
+      await call(`/market/listings/${listing.id}/withdraw`, "POST", ada);
+    }
+    db.raw.exec("UPDATE market_listings SET withdrawn_at = datetime('now', '-2 days')");
+    expect(await finalizeWithdrawals(env, 2)).toEqual({ finalized: 2, photosDeleted: 2 });
+    // A purge that failed part-way: the listing is final but a photo row is left; the next tick finishes it.
+    db.raw.prepare("INSERT INTO market_listing_photos (listing_id, r2_key, content_type, bytes) VALUES (?, 'market/x/left.jpg', 'image/jpeg', 1)").run(ids[0]!);
+    expect(await finalizeWithdrawals(env, 5)).toEqual({ finalized: 1, photosDeleted: 2 });
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM market_listing_photos").get()).toEqual({ n: 0 });
   });
 
   it("edits only the seller's own active listing", async () => {
@@ -745,7 +838,7 @@ describe("authz edges", () => {
     await createListing("m_bo", { mold: "Envy" });
     const mine = (await call("/market/me", "GET", await token("m_bo"))).data;
     expect(mine.listings.map((l: { mold: string }) => l.mold)).toEqual(["Envy"]);
-    expect(mine.settings).toEqual({ paypalMe: "", cashtag: "", zelle: "", notifyEmail: "" });
+    expect(mine.settings).toEqual({ paypalMe: "", cashtag: "", zelle: "", notifyEmail: "bo@example.test" });
     const guest = (await call("/market/me", "GET", (await guestToken()).token)).data;
     expect(guest.settings).toBeNull();
     expect(guest.listings).toEqual([]);

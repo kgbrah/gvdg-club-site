@@ -3,7 +3,9 @@
 //
 // State machine (every transition is a compare-and-set UPDATE and is written to market_deal_log):
 //   listing  active --buy / accept offer--> pending --complete--> sold | traded (or back to active if qty remains)
-//            pending --release (seller) / cancel (buyer)--> active ;  active --withdraw--> withdrawn
+//            pending --release (seller) / cancel (buyer)--> active
+//            active --withdraw--> withdrawn --relist (seller, within 24 h)--> active
+//            withdrawn --(cron, after 24 h)--> withdrawn + final (photos deleted from R2; no relist)
 //   deal     pending --> completed | released | cancelled
 //   offer    open --> accepted | declined | withdrawn
 
@@ -385,7 +387,7 @@ export async function myMarket(c: MarketCtx): Promise<Response> {
   const viewer = await viewerOf(env, me);
   const listingRows = (await env.DB.prepare(
     `SELECT l.id, l.seller_id, l.brand, l.mold, l.plastic, l.disc_type, l.weight_g, l.color, l.condition, l.price_cents, l.open_to_trade,
-            l.quantity, l.location, l.status, l.hidden, l.created_at,
+            l.quantity, l.location, l.status, l.hidden, l.created_at, l.withdrawn_at, l.withdrawal_final,
             (SELECT p.id FROM market_listing_photos p WHERE p.listing_id = l.id ORDER BY p.sort_order, p.id LIMIT 1) AS photo_id
      FROM market_listings l WHERE l.seller_id = ? ORDER BY CASE l.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, l.updated_at DESC
      LIMIT 60`,

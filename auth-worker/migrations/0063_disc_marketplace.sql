@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS market_guest_codes (
 );
 CREATE INDEX IF NOT EXISTS market_guest_codes_email ON market_guest_codes(email_hash, id DESC);
 
--- Seller payment handles (members only). Validated server-side; never URLs.
+-- Seller payment handles (members only). Validated server-side; never URLs. notify_email is required before a
+-- member can create a listing (buyer alerts go there); it is never shown to anyone else.
 CREATE TABLE IF NOT EXISTS market_seller_settings (
   member_id    TEXT PRIMARY KEY,
   paypal_me    TEXT NOT NULL DEFAULT '',
@@ -70,6 +71,9 @@ CREATE TABLE IF NOT EXISTS market_listings (
   location        TEXT NOT NULL DEFAULT '',
   status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'sold', 'traded', 'withdrawn')),
   hidden          INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
+  -- A withdrawal can be undone (relisted) for 24 hours; then a cron sweep makes it final and deletes the photos.
+  withdrawn_at     TEXT,
+  withdrawal_final INTEGER NOT NULL DEFAULT 0 CHECK (withdrawal_final IN (0, 1)),
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
   CHECK (price_cents IS NOT NULL OR open_to_trade = 1)
@@ -81,6 +85,7 @@ CREATE INDEX IF NOT EXISTS market_listings_price ON market_listings(status, pric
 CREATE INDEX IF NOT EXISTS market_listings_condition ON market_listings(status, condition);
 CREATE INDEX IF NOT EXISTS market_listings_weight ON market_listings(status, weight_g);
 CREATE INDEX IF NOT EXISTS market_listings_seller ON market_listings(seller_id, status);
+CREATE INDEX IF NOT EXISTS market_listings_withdrawn ON market_listings(status, withdrawal_final, withdrawn_at);
 
 CREATE TABLE IF NOT EXISTS market_listing_photos (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

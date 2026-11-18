@@ -46,6 +46,8 @@ const EMPTY_SUMMARY: FeedbackSummary = { positive: 0, neutral: 0, negative: 0, c
 const DAY_MS = 86_400_000;
 export const FEEDBACK_WINDOW_DAYS = 60;
 export const FEEDBACK_EDIT_DAYS = 7;
+/** A withdrawn listing can be relisted for this long; after it, the withdrawal is final. */
+export const RELIST_WINDOW_HOURS = 24;
 
 export function str(row: Row | null | undefined, key: string): string {
   const v = row?.[key];
@@ -202,7 +204,7 @@ export async function payInfo(env: Env, sellerId: string, amountCents: number | 
 
 export const LISTING_COLUMNS = `l.id, l.seller_id, l.brand, l.mold, l.plastic, l.disc_type, l.speed, l.glide, l.turn, l.fade,
   l.weight_g, l.color, l.condition, l.condition_notes, l.price_cents, l.open_to_trade, l.trade_for, l.quantity, l.location,
-  l.status, l.hidden, l.created_at, l.updated_at,
+  l.status, l.hidden, l.created_at, l.updated_at, l.withdrawn_at, l.withdrawal_final,
   (SELECT p.id FROM market_listing_photos p WHERE p.listing_id = l.id ORDER BY p.sort_order, p.id LIMIT 1) AS photo_id`;
 
 export async function getListingRow(env: Env, id: number): Promise<Row | null> {
@@ -213,9 +215,18 @@ export function photoUrl(id: number): string {
   return "/market/photos/" + id;
 }
 
+/** Until when a withdrawn listing can still be relisted (SQL UTC time), or null once that is no longer possible. */
+export function relistUntil(row: Row, now = Date.now()): string | null {
+  if (str(row, "status") !== "withdrawn" || num(row, "withdrawal_final") === 1 || !row.withdrawn_at) return null;
+  const until = sqlTime(str(row, "withdrawn_at")) + RELIST_WINDOW_HOURS * 3_600_000;
+  return Number.isFinite(until) && until > now ? new Date(until).toISOString().replace("T", " ").slice(0, 19) : null;
+}
+
 export function listingCard(row: Row, traders: Map<string, TraderLite>, summaries: Map<string, FeedbackSummary>, viewerId: string | null) {
   const sellerId = str(row, "seller_id");
   const photoId = numOrNull(row, "photo_id");
+  const withdrawn = str(row, "status") === "withdrawn";
+  const until = relistUntil(row);
   return {
     id: num(row, "id"),
     title: listingTitle({ brand: str(row, "brand"), plastic: str(row, "plastic"), mold: str(row, "mold") }),
@@ -236,6 +247,9 @@ export function listingCard(row: Row, traders: Map<string, TraderLite>, summarie
     photo: photoId ? { id: photoId, url: photoUrl(photoId) } : null,
     seller: { ...liteOf(traders, sellerId), feedback: summaryOf(summaries, sellerId) },
     mine: viewerId != null && viewerId === sellerId,
+    // Withdrawn listings: "pending_final" while they can still be relisted, then "final".
+    withdrawal: withdrawn ? (until ? "pending_final" : "final") : null,
+    relistUntil: until,
   };
 }
 

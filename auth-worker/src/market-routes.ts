@@ -14,7 +14,7 @@ import { buyListing, dealAction, editFeedback, fileReport, leaveFeedback, myMark
 import { startGuest, verifyGuest } from "./market-guest.js";
 import { idOf, fail, ok, type MarketCtx, type WaitCtx } from "./market-http.js";
 import {
-  addListingPhoto, browseListings, createListing, deleteListingPhoto, editListing, getListing, servePhoto, settingsRoute, withdrawListing,
+  addListingPhoto, browseListings, createListing, deleteListingPhoto, editListing, getListing, relistListing, servePhoto, settingsRoute, withdrawListing,
 } from "./market-listings.js";
 import { emailConfigured } from "./market-notify.js";
 import {
@@ -101,6 +101,7 @@ export async function handleMarket(
       if (b === "buy") return buyListing(c, id);
       if (b === "offers") return proposeTrade(c, id);
       if (b === "withdraw") return withdrawListing(c, id);
+      if (b === "relist") return relistListing(c, id);
       if (b === "photos") return addListingPhoto(c, id);
     }
     if (seg.length === 5 && b === "photos" && method === "DELETE") {

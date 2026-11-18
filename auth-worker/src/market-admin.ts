@@ -6,7 +6,7 @@ import { readJson } from "./http.js";
 import { getMember } from "./roster.js";
 import { cleanLine, dollars, listingTitle, wantedTitle } from "./market-input.js";
 import {
-  LISTING_COLUMNS, WANTED_COLUMNS, isSuspended, listingCards, liteOf, logModeration, num, ownerByKey, str, tradersByOwner,
+  LISTING_COLUMNS, WANTED_COLUMNS, isSuspended, listingCards, liteOf, logModeration, num, ownerByKey, relistUntil, str, tradersByOwner,
   wantedViews, type Row,
 } from "./market-store.js";
 import { changed, fail, idOf, ok, type MarketCtx } from "./market-http.js";
@@ -30,13 +30,15 @@ async function reportTargets(c: MarketCtx, rows: Row[]) {
     let target: { title: string; status: string; hidden: boolean; text: string; ownerId: string } | null = null;
     if (kind === "listing") {
       const l = await c.env.DB.prepare(
-        "SELECT seller_id, brand, plastic, mold, status, hidden, condition, condition_notes, price_cents, open_to_trade, location FROM market_listings WHERE id = ?",
+        "SELECT seller_id, brand, plastic, mold, status, hidden, condition, condition_notes, price_cents, open_to_trade, location, withdrawn_at, withdrawal_final FROM market_listings WHERE id = ?",
       ).bind(id).first<Row>();
       if (l) {
         const price = l.price_cents != null ? "$" + dollars(num(l, "price_cents")) : "Trade only";
         const text = [price + (l.price_cents != null && num(l, "open_to_trade") === 1 ? " or trade" : ""), `Condition ${num(l, "condition")}/10`,
           str(l, "condition_notes"), str(l, "location") ? "Pickup: " + str(l, "location") : ""].filter(Boolean).join(" · ");
-        target = { title: listingTitle({ brand: str(l, "brand"), plastic: str(l, "plastic"), mold: str(l, "mold") }), status: str(l, "status"),
+        const until = relistUntil(l);
+        const status = str(l, "status") === "withdrawn" ? (until ? "withdrawn, relist open until " + until.slice(0, 16) + " UTC" : "withdrawn (final)") : str(l, "status");
+        target = { title: listingTitle({ brand: str(l, "brand"), plastic: str(l, "plastic"), mold: str(l, "mold") }), status,
           hidden: num(l, "hidden") === 1, text, ownerId: str(l, "seller_id") };
       }
     } else if (kind === "wanted") {
@@ -86,6 +88,10 @@ async function overview(c: MarketCtx): Promise<Response> {
   const hiddenWanted = (await c.env.DB.prepare(
     `SELECT ${WANTED_COLUMNS} FROM market_wanted w WHERE w.hidden = 1 ORDER BY w.id DESC LIMIT 30`,
   ).all<Row>()).results ?? [];
+  const withdrawnRows = (await c.env.DB.prepare(
+    `SELECT ${LISTING_COLUMNS} FROM market_listings l WHERE l.status = 'withdrawn' AND l.withdrawal_final = 0
+     ORDER BY l.withdrawn_at DESC, l.id DESC LIMIT 30`,
+  ).all<Row>()).results ?? [];
   const suspensions = (await c.env.DB.prepare(
     "SELECT id, owner_id, reason, created_at, created_by FROM market_suspensions WHERE lifted_at IS NULL ORDER BY id DESC LIMIT 50",
   ).all<Row>()).results ?? [];
@@ -104,6 +110,8 @@ async function overview(c: MarketCtx): Promise<Response> {
       listings: await listingCards(c.env, hiddenListings, null),
       wanted: await wantedViews(c.env, hiddenWanted, null),
     },
+    // Withdrawn by their sellers and still relistable; the cron makes them final (photos deleted) after 24 h.
+    withdrawn: (await listingCards(c.env, withdrawnRows, null)).filter((card) => card.withdrawal === "pending_final"),
     suspensions: suspensions.map((row) => ({
       id: num(row, "id"), trader: liteOf(people, str(row, "owner_id")), reason: str(row, "reason"),
       createdAt: str(row, "created_at"), by: adminNames.get(str(row, "created_by")) ?? "Admin",

@@ -2,11 +2,12 @@
 // payment settings.
 
 import { corsHeaders, readJson } from "./http.js";
-import { DISC_TYPES, MAX_PHOTOS, parseListing, parseSettings } from "./market-input.js";
+import { DISC_TYPES, MAX_PHOTOS, listingTitle, parseEmail, parseListing, parseSettings } from "./market-input.js";
+import { marketUrl, notifyTrader, sendMarketEmail } from "./market-notify.js";
 import { decodeListingPhoto, listingPhotoKey, LISTING_BODY_BYTES, PHOTO_BODY_BYTES } from "./market-photos.js";
 import {
   DEAL_COLUMNS, OFFER_COLUMNS, dealViews, ensureTrader, getListingRow, isSuspended, listingCards, listingPhotos,
-  logDeal, num, offerViews, ownerByKey, payInfo, publicPhoto, sellerSettings, str, type Actor, type Row, viewerOf,
+  logDeal, num, offerViews, ownerByKey, payInfo, publicPhoto, RELIST_WINDOW_HOURS, sellerSettings, str, type Actor, type Row, viewerOf,
   LISTING_COLUMNS,
 } from "./market-store.js";
 import { changed, fail, limited, ok, requireSeller, type MarketCtx } from "./market-http.js";
@@ -137,6 +138,7 @@ export async function listingDetail(c: MarketCtx, row: Row) {
     canBuy: status === "active" && priced && !isSeller && !suspendedViewer && !card!.hidden,
     canOffer: status === "active" && card!.openToTrade && !isSeller && !suspendedViewer && !myOfferRow && !card!.hidden,
     canEdit: isSeller && status === "active",
+    canRelist: isSeller && card!.relistUntil != null && !suspendedViewer,
     canReport: !isSeller && !suspendedViewer,
     myDeal: viewerDeal && viewerDeal.role === "buyer" ? viewerDeal : null,
     pendingDeal: viewerDeal && viewerDeal.role === "seller" ? viewerDeal : null,
@@ -161,6 +163,8 @@ export async function createListing(c: MarketCtx): Promise<Response> {
   const seller = await requireSeller(c);
   if (seller instanceof Response) return seller;
   if (!c.env.PHOTOS) return fail(c, 503, "storage_unavailable");
+  // Buyer alerts go to the seller's email, so a member must add one before listing (never shown publicly).
+  if (!parseEmail((await sellerSettings(c.env, seller.id))?.notifyEmail ?? "", 120)) return fail(c, 400, "seller_email_required");
   const body = (await readJson(c.request, LISTING_BODY_BYTES)) ?? {};
   const parsed = parseListing(body);
   if (!parsed.ok) return fail(c, 400, "invalid_listing", parsed.field);
@@ -283,26 +287,51 @@ export async function deleteListingPhoto(c: MarketCtx, id: number, photoId: numb
   return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }
 
-/** Remove a listing's photos from R2 and the database (withdraw / cleanup). */
-export async function purgeListingPhotos(c: MarketCtx, id: number): Promise<void> {
-  const rows = (await c.env.DB.prepare("SELECT r2_key FROM market_listing_photos WHERE listing_id = ?").bind(id).all<{ r2_key: string }>()).results ?? [];
-  await c.env.DB.prepare("DELETE FROM market_listing_photos WHERE listing_id = ?").bind(id).run();
-  await Promise.all(rows.map((row) => c.env.PHOTOS?.delete(row.r2_key).catch(() => {})));
+/** Withdraw: hidden from everyone else at once, but kept (photos too) for 24 hours so the seller can relist.
+ *  The cron sweep (market-sweep.ts) makes it final and deletes the photos after that. */
+export async function withdrawListing(c: MarketCtx, id: number): Promise<Response> {
+  if (!c.actor) return fail(c, 401, "unauthorized");
+  if (c.actor.kind !== "member") return fail(c, 403, "members_only");
+  const seller = c.actor; // a suspended seller may still take a listing down
+  const row = await ownListing(c, seller, id);
+  if (row instanceof Response) return row;
+  const result = await c.env.DB.prepare(
+    `UPDATE market_listings SET status = 'withdrawn', withdrawn_at = datetime('now'), withdrawal_final = 0, updated_at = datetime('now')
+     WHERE id = ? AND seller_id = ? AND status = 'active'`,
+  ).bind(id, seller.id).run();
+  if (!changed(result)) return fail(c, 409, "not_active");
+  const offers = (await c.env.DB.prepare("SELECT id, buyer_id FROM market_offers WHERE listing_id = ? AND status = 'open'")
+    .bind(id).all<{ id: number; buyer_id: string }>()).results ?? [];
+  await c.env.DB.prepare("UPDATE market_offers SET status = 'declined', responded_at = datetime('now') WHERE listing_id = ? AND status = 'open'")
+    .bind(id).run();
+  await logDeal(c.env, { listingId: id, actorId: seller.id, action: "withdraw", from: "active", to: "withdrawn", note: "relist possible for 24 h" });
+  const title = listingTitle({ brand: str(row, "brand"), plastic: str(row, "plastic"), mold: str(row, "mold") });
+  for (const offer of offers) {
+    notifyTrader(c.env, c.ctx, offer.buyer_id, {
+      title: "Trade offer closed: " + title,
+      body: `${seller.name} took ${title} off the marketplace, so your trade offer was closed.`,
+      refKey: "mkt:offer:" + offer.id + ":withdrawn",
+      hash: "market",
+    });
+  }
+  return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }
 
-export async function withdrawListing(c: MarketCtx, id: number): Promise<Response> {
+/** Relist a withdrawn listing within 24 hours: back to active with the same details and photos. */
+export async function relistListing(c: MarketCtx, id: number): Promise<Response> {
   const seller = await requireSeller(c);
   if (seller instanceof Response) return seller;
   const row = await ownListing(c, seller, id);
   if (row instanceof Response) return row;
+  if (str(row, "status") !== "withdrawn") return fail(c, 409, "not_withdrawn");
   const result = await c.env.DB.prepare(
-    "UPDATE market_listings SET status = 'withdrawn', updated_at = datetime('now') WHERE id = ? AND seller_id = ? AND status = 'active'",
+    `UPDATE market_listings SET status = 'active', withdrawn_at = NULL, updated_at = datetime('now')
+     WHERE id = ? AND seller_id = ? AND status = 'withdrawn' AND withdrawal_final = 0
+       AND withdrawn_at > datetime('now', '-${RELIST_WINDOW_HOURS} hours')
+       AND EXISTS (SELECT 1 FROM market_listing_photos p WHERE p.listing_id = market_listings.id)`,
   ).bind(id, seller.id).run();
-  if (!changed(result)) return fail(c, 409, "not_active");
-  await c.env.DB.prepare("UPDATE market_offers SET status = 'declined', responded_at = datetime('now') WHERE listing_id = ? AND status = 'open'")
-    .bind(id).run();
-  await purgeListingPhotos(c, id);
-  await logDeal(c.env, { listingId: id, actorId: seller.id, action: "withdraw", from: "active", to: "withdrawn" });
+  if (!changed(result)) return fail(c, 409, "relist_expired");
+  await logDeal(c.env, { listingId: id, actorId: seller.id, action: "relist", from: "withdrawn", to: "active" });
   return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }
 
@@ -336,7 +365,12 @@ export async function settingsRoute(c: MarketCtx, method: string): Promise<Respo
   if (method !== "PUT") return fail(c, 404, "not_found");
   const blocked = await limited(c, "mktsettings:" + c.actor.id, 30, 3600);
   if (blocked) return blocked;
-  const parsed = parseSettings((await readJson(c.request)) ?? {});
+  // Fields left out keep their current value, so the sell form can save just the email inline.
+  const current = (await sellerSettings(c.env, c.actor.id)) ?? { paypalMe: "", cashtag: "", zelle: "", notifyEmail: "" };
+  const body = (await readJson(c.request)) ?? {};
+  const merged: Record<string, unknown> = { ...current };
+  for (const key of ["paypalMe", "cashtag", "zelle", "notifyEmail"]) if (key in body) merged[key] = body[key];
+  const parsed = parseSettings(merged);
   if (!parsed.ok) return fail(c, 400, "invalid_settings", parsed.field);
   const v = parsed.value;
   await c.env.DB.prepare(
@@ -345,6 +379,18 @@ export async function settingsRoute(c: MarketCtx, method: string): Promise<Respo
        notify_email = excluded.notify_email, updated_at = datetime('now')`,
   ).bind(c.actor.id, v.paypalMe, v.cashtag, v.zelle, v.notifyEmail).run();
   await ensureTrader(c.env, c.actor);
+  if (v.notifyEmail && v.notifyEmail !== current.notifyEmail) {
+    // Best-effort confirmation so a typo is noticed right away.
+    const job = sendMarketEmail(c.env, v.notifyEmail, "You're set up to sell on the GVDG marketplace", [
+      `Hi ${c.actor.name},`, "",
+      "You're set up to sell on the GVDG marketplace — buyer alerts will come here.",
+      "This address is never shown to buyers or other members.", "",
+      "Your marketplace: " + marketUrl(c.env, "my-market"), "",
+      "If this wasn't you, change the email in My marketplace > Payment settings.", "",
+      "- Greenville Disc Golf Club Pro Shop",
+    ].join("\n")).catch(() => false);
+    try { c.ctx?.waitUntil?.(job); } catch { /* settles on its own */ }
+  }
   return ok(c, { settings: v });
 }
 
