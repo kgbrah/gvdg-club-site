@@ -1,6 +1,7 @@
 // PDGA events club members are registered for (NC, VA and SC, read from pdga.com every hour by the Worker): the
 // member's own in My events and on Home, and the ones clubmates are going to, for carpools and meetups.
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromPdgaRegistration, dateRangeText } from "../shared/event-calendar.js";
@@ -33,6 +34,22 @@ export function goingText(going) {
   return names.join(", ") + (rest > 0 ? ` and ${rest} more` : "");
 }
 
+/** "Also going: Ada Lovelace (MA2) ✦ 10, Bo Burnham (MA40) and 3 more", each name with its karma. */
+export function GoingLine({ going, prefix, className = "pdga-registration-going" }) {
+  const list = Array.isArray(going) ? going : [];
+  const shown = list.slice(0, SHOWN_NAMES);
+  const rest = list.length - shown.length;
+  return h("p", { className }, [
+    prefix,
+    ...shown.flatMap((person, index) => [
+      index ? ", " : null,
+      person.division ? `${person.name} (${person.division})` : person.name,
+      h(KarmaChip, { karmaKey: person.karmaKey, key: "karma-" + index }),
+    ]),
+    rest > 0 ? ` and ${rest} more` : null,
+  ]);
+}
+
 export function pdgaEventMeta(event) {
   return [dateRangeText(event.start, event.end), tierLabel(event.tier), event.location].filter(Boolean).join(" · ");
 }
@@ -49,7 +66,7 @@ export function PdgaRegistrationCard({ event, mine = false }) {
     h("p", { className: "register-date", key: "date" }, dateRangeText(event.start, event.end)),
     h("p", { className: "pdga-event-where", key: "where" }, [tierLabel(event.tier), event.location].filter(Boolean).join(" · ")),
     mine ? h("p", { className: "pdga-registration-you", key: "you" }, "You're registered" + (event.division ? " · " + event.division : "")) : null,
-    going.length ? h("p", { className: "pdga-registration-going", key: "going" }, (mine ? "Also going: " : "Going: ") + goingText(going)) : null,
+    going.length ? h(GoingLine, { going, key: "going", prefix: mine ? "Also going: " : "Going: " }) : null,
     h("div", { className: "register-actions", key: "actions" }, [
       h("a", { className: "passkey-btn", href: event.url, key: "pdga", rel: "noopener noreferrer", target: "_blank" }, "PDGA page"),
       h(AddToCalendarButton, { item: calendarEventFromPdgaRegistration(event), key: "cal" }),

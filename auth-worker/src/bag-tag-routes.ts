@@ -1,3 +1,4 @@
+import { karmaKey } from "./karma-directory.js";
 import type { Env } from "./env.js";
 import { requireAuth } from "./authz.js";
 import { json, readJson } from "./http.js";
@@ -30,6 +31,7 @@ function publicHolder(row: tags.BagHolderRow, includeId: boolean) {
     tagNumber: row.tag_number,
     ...(includeId ? { memberId: row.member_id } : {}),
     name: row.member_name,
+    karmaKey: karmaKey(row.member_id),
     heldSince: row.held_since,
   };
 }

@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { currentAdminRoute, currentAdminAuthGateState } from "./admin-shell-state.js";
 
 import { adminJson, adminRequest } from "./admin-api.js";
@@ -56,7 +57,7 @@ function LeagueAdminSection({ entry, members, busy, run }) {
       ? h("div", { key: "ladder" }, [
         h("h4", { className: "al-h", key: "head" }, "Current ladder"),
         ...holders.map((holder) => h("div", { className: "sc-hole-pager-row", key: holder.tagNumber },
-          h("div", null, `#${holder.tagNumber} ${holder.name}${holder.linked ? "" : " (no member account linked)"}`))),
+          h("div", null, [`#${holder.tagNumber} ${holder.name}`, holder.linked ? h(KarmaChip, { key: "karma", memberId: holder.memberId }) : " (no member account linked)"]))),
       ])
       : null,
     unlinked.length

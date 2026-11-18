@@ -20,6 +20,9 @@ const event = {
   id: 2, type: "tournament", name: "Pitt County Fall Open", status: "scheduled", format: "stroke",
   play_format: "singles", date: fixtureDate, course_id: 1, layout_id: 11, players: [],
   entry_fee_cents: 1500, ctp_fee_cents: 300, divisions: ["MA2", "FA2"],
+  // The registered field: Jordan Parker has karma (a chip after his name), Sam Rivera none.
+  field: [{ name: "Jordan Parker", karmaKey: "9f54821bf08584f9", division: "MA2", team: null, pdga_no: "80024", rating: 912 },
+    { name: "Sam Rivera", karmaKey: "", division: "MA2", team: null, pdga_no: null, rating: null }],
 };
 const league = { league: { id: 4, name: "Ryder Cup" }, standings: [], teamStandings: [], roundWinners: [], events: [],
   board: {
@@ -52,6 +55,7 @@ const fixtures = new Map([
   ["/leagues/4", league],
   ["/shop/wallet", { balance_cents: 2600, orders: [] }],
   ["/payments/config", { enabled: false }],
+  ["/karma", { players: { "9f54821bf08584f9": 40 }, traders: {} }],
 ]);
 const entries = {
   "/index.html": "/src/home-app/main.js",
@@ -277,6 +281,9 @@ async function checkEvents(page, profile) {
   assert.equal(state.registrations.at(-1).method, "DELETE");
 
   await open(page, "/events.html#event/2", ".event-tee-signs", profile);
+  // Karma next to a name in the event's field.
+  await page.locator(".player-row:visible").filter({ hasText: "Jordan Parker" }).locator(".karma-chip[data-karma='40']").first().waitFor();
+  assert.equal(await page.locator(".player-row").filter({ hasText: "Sam Rivera" }).locator(".karma-chip").count(), 0);
   assert.equal(await page.locator(".ts-hole-card").count(), 0);
   await page.locator(".event-tee-signs > summary").press("Enter");
   await page.locator(".ts-hole-card").first().waitFor();

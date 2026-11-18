@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { formatClubDateTime } from "../shared/events-model.js";
 import {
@@ -39,7 +40,7 @@ function postErrorMessage(status) {
 function ChatRow({ message }) {
   return h("div", { className: "live-chat-row" }, [
     h("div", { className: "live-chat-meta", key: "meta" }, [
-      h("span", { className: "live-chat-author", key: "name" }, message.authorName),
+      h("span", { className: "live-chat-author", key: "name" }, [message.authorName, h(KarmaChip, { karmaKey: message.karmaKey, key: "karma" })]),
       message.createdAt ? h("span", { className: "live-chat-when", key: "when" }, formatClubDateTime(message.createdAt) || message.createdAt) : null,
     ]),
     h("div", { className: "live-chat-body", key: "body" }, message.body),

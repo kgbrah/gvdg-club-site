@@ -1,3 +1,4 @@
+import { karmaKey } from "./karma-directory.js";
 import type { D1Like } from "./db.js";
 import { communityRoundTotals } from "./community-progress.js";
 import type { Audience, ConnectionAction, ProfileInput } from "./community-input.js";
@@ -96,12 +97,12 @@ export async function directoryProfiles(db: D1Like, viewer: string, query: strin
   return { results: results.slice(0, 25), more: results.length > 25 };
 }
 
-interface Contact { key: string; displayName: string; state: "pending" | "accepted"; requestedBy: string; audience: Audience }
+interface Contact { key: string; memberId: string; displayName: string; state: "pending" | "accepted"; requestedBy: string; audience: Audience }
 
 export async function communityContacts(db: D1Like, owner: string) {
   const [related, blocked] = await Promise.all([
     db.prepare(`
-      SELECT p.profile_key AS key, p.display_name AS displayName, p.audience, r.state, r.requested_by AS requestedBy
+      SELECT p.profile_key AS key, p.member_id AS memberId, p.display_name AS displayName, p.audience, r.state, r.requested_by AS requestedBy
       FROM community_connections r JOIN community_profiles p
         ON p.member_id = CASE WHEN r.member_low = ? THEN r.member_high ELSE r.member_low END
       WHERE r.member_low = ? OR r.member_high = ?
@@ -114,11 +115,16 @@ export async function communityContacts(db: D1Like, owner: string) {
       .bind(owner).all<{ key: string; displayName: string; audience: Audience }>(),
   ]);
   return {
-    contacts: related.results.map((row) => ({
-      key: row.key,
-      displayName: row.audience === "private" || (row.audience === "friends" && row.state !== "accepted" && row.requestedBy === owner) ? "Member" : row.displayName,
-      relation: row.state === "accepted" ? "friend" : row.requestedBy === owner ? "outgoing" : "incoming",
-    })),
+    contacts: related.results.map((row) => {
+      const hidden = row.audience === "private" || (row.audience === "friends" && row.state !== "accepted" && row.requestedBy === owner);
+      return {
+        key: row.key,
+        displayName: hidden ? "Member" : row.displayName,
+        // Karma shows with the name, so only where the name itself is shown.
+        karmaKey: hidden ? "" : karmaKey(row.memberId),
+        relation: row.state === "accepted" ? "friend" : row.requestedBy === owner ? "outgoing" : "incoming",
+      };
+    }),
     blocked: blocked.results.map(({ key, audience, displayName }) => ({ key, displayName: audience === "club" || audience === "public" ? displayName : "Member" })),
   };
 }

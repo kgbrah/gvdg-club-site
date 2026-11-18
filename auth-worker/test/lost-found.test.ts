@@ -1,3 +1,4 @@
+import { handicapKey } from "../src/handicap.js";
 import { readdirSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -1136,6 +1137,23 @@ describe("lost & found celebrations and moderation", () => {
     await call(`/lost-found/claims/${claim.id}/confirm`, "POST", ada);
     return { ada, bo, post, claim };
   }
+
+  it("publishes karma for every name in the app, keyed anonymously (returns + confirmed club donations)", async () => {
+    const { bo } = await confirmedReturn();
+    expect(bo).toBeTruthy();
+    // A confirmed club donation adds its whole dollars to the same total.
+    db.raw.exec(`INSERT INTO market_listings (id, seller_id, mold, disc_type, condition, price_cents) VALUES (900, 'm_bo', 'Buzzz', 'midrange', 8, 2000)`);
+    db.raw.exec(`INSERT INTO market_deals (id, listing_id, seller_id, buyer_id, kind, price_cents, listing_title, status, outcome) VALUES (900, 900, 'm_bo', 'm_ada', 'buy', 2000, 'Buzzz', 'completed', 'sold')`);
+    db.raw.exec(`INSERT INTO market_donations (deal_id, seller_id, amount_cents, status, karma) VALUES (900, 'm_bo', 500, 'confirmed', 5)`);
+    const res = await call("/karma");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("public, max-age=300");
+    const boKey = (db.raw.prepare("SELECT trader_key FROM market_traders WHERE owner_id = 'm_bo'").get() as any).trader_key;
+    expect(res.data).toEqual({ players: { [handicapKey("m_bo")]: 15 }, traders: { [boKey]: 15 } });
+    expect(res.raw).not.toMatch(/m_bo|m_ada/);
+    // The app computes the same key (tests/karma.test.mjs pins this value too).
+    expect(handicapKey("m_80024")).toBe("9f54821bf08584f9");
+  });
 
   it("lets the finder (and the owner) celebrate a confirmed return on the wall, Home and the homepage strip", async () => {
     const { ada, bo, claim } = await confirmedReturn();

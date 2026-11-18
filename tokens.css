@@ -837,3 +837,26 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
   cursor: pointer;
 }
 .cal-menu-item:hover, .cal-menu-item:focus-visible { background: var(--bg-primary); outline: 2px solid var(--secondary, currentColor); outline-offset: -2px; }
+
+/* Karma next to a player's name (src/shared/karma.js): "✦ 40", read as "40 karma"; nothing for 0. */
+.karma-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .2em;
+  margin-inline-start: .35em;
+  padding: .05em .45em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--text-primary);
+  font: 700 .72em/1.35 Archivo, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  vertical-align: .08em;
+  flex: none;
+}
+.karma-chip-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* A name that trims with "…" and its karma chip, which always shows. */
+.karma-line { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; vertical-align: bottom; }
+.karma-line > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

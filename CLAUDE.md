@@ -366,10 +366,15 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v310`, members `?v=205`, public/events `?v=198`, score `?v=239`,
-home `?v=190` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v312`, members `?v=206`, public/events `?v=199`, score `?v=240`,
+home `?v=191` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
-Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. The **member app is code-split**: Home, the shell and the nav are the entry
+Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
+`.karma-chip` in `tokens.css`): every rendered player name gets `KarmaChip` (by `memberId` / `pdga` / payload `karmaKey` /
+`traderKey`), fed by one public `GET /karma` (`auth-worker/src/karma-directory.ts`: Lost & Found ledger + confirmed donations,
+keyed by `handicapKey(memberId)` like live scoring's `handicapKeys`, or the opaque trader key; cached 5 min per tab).
+Name-only payloads (live snapshot players / cardmates, event field, public bag tags, event chat, course conditions, PDGA
+going, community) carry `karmaKey`; community adds it only where the name itself is visible. The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to
 precache every chunk (kept in `gvdg-member-chunks` for the current and previous release). Chunks import the entry

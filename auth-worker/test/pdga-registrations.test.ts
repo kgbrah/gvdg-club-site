@@ -7,6 +7,7 @@ import { signSession } from "../src/jwt.js";
 import {
   clubDay, EVENTS_PER_TICK, parsePdgaDates, parsePdgaSearch, parseRegisteredPlayers, pdgaSearchUrl, runPdgaRegistrationTick, stateForHour,
 } from "../src/pdga-registrations.js";
+import { handicapKey } from "../src/handicap.js";
 
 const SECRET = "x".repeat(40);
 const ORIGIN = "http://localhost:8080";
@@ -232,9 +233,9 @@ describe("the hourly registration check", () => {
     expect(ada.status).toBe(200);
     expect(ada.data).toEqual({
       mine: [{ eventId: 501, name: "Greenville Open", tier: "C", location: "Greenville, North Carolina", start: "2099-11-21", end: "2099-11-22",
-        url: "https://www.pdga.com/tour/event/501", checkedAt: "2099-11-18 15:00:00", division: "MA2", going: [{ name: "Bo Burnham", division: "MA40" }] }],
+        url: "https://www.pdga.com/tour/event/501", checkedAt: "2099-11-18 15:00:00", division: "MA2", going: [{ name: "Bo Burnham", division: "MA40", karmaKey: handicapKey("m_u_bo") }] }],
       club: [{ eventId: 502, name: "Raleigh Doubles", tier: "C", location: "Raleigh, North Carolina", start: "2099-12-01", end: "2099-12-01",
-        url: "https://www.pdga.com/tour/event/502", checkedAt: null, going: [{ name: "Bo Burnham", division: "MA40" }] }],
+        url: "https://www.pdga.com/tour/event/502", checkedAt: null, going: [{ name: "Bo Burnham", division: "MA40", karmaKey: handicapKey("m_u_bo") }] }],
     });
     expect(JSON.stringify(ada.data)).not.toMatch(/m_u_bo|123456/);
     const cy = await call(await signSession({ sub: "m_cy", mustChangePin: false }, SECRET, 900));

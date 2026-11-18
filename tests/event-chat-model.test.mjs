@@ -8,6 +8,7 @@ test("normalizeChatMessage keeps author and body, drops empties", () => {
   assert.equal(normalizeChatMessage({ author_name: "Pat", body: "   " }), null);
   assert.deepEqual(normalizeChatMessage({ id: 3, author_name: "Pat", body: "  parked it  ", created_at: "2026-09-11 22:00:00" }), {
     authorName: "Pat",
+    karmaKey: "",
     body: "parked it",
     createdAt: "2026-09-11 22:00:00",
     id: "3",

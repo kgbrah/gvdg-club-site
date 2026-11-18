@@ -13,7 +13,7 @@ export interface CourseConditionInput {
 }
 
 const PUBLIC_COLUMNS =
-  "cc.id, cc.course_id, c.name AS course_name, cc.member_name, cc.status, cc.note, cc.created_at";
+  "cc.id, cc.course_id, c.name AS course_name, cc.member_id, cc.member_name, cc.status, cc.note, cc.created_at";
 
 export function isCourseConditionStatus(value: unknown): value is CourseConditionStatus {
   return typeof value === "string" && (COURSE_CONDITION_STATUSES as readonly string[]).includes(value);
@@ -56,7 +56,7 @@ export async function listCourseConditions(db: D1Like, courseId: number, limit =
 export async function createCourseCondition(db: D1Like, input: CourseConditionInput) {
   return db
     .prepare(
-      "INSERT INTO course_conditions (course_id, member_id, member_name, status, note) VALUES (?, ?, ?, ?, ?) RETURNING id, course_id, member_name, status, note, created_at",
+      "INSERT INTO course_conditions (course_id, member_id, member_name, status, note) VALUES (?, ?, ?, ?, ?) RETURNING id, course_id, member_id, member_name, status, note, created_at",
     )
     .bind(input.course_id, input.member_id, input.member_name, input.status, input.note ?? null)
     .first();

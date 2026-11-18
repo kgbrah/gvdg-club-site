@@ -1,3 +1,4 @@
+import { karmaKey } from "./karma-directory.js";
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { requireAuth } from "./authz.js";
@@ -25,6 +26,7 @@ function publicMessage(row: Record<string, unknown> | null) {
   return {
     id: row.id ?? null,
     author_name: author,
+    karmaKey: karmaKey(typeof row.member_id === "string" ? row.member_id : null),
     body,
     created_at: row.created_at ?? null,
   };

@@ -15,6 +15,7 @@
 //   GET /pdga-registrations (member) -> { mine: [event + division + going], club: [events clubmates are going to] }
 //   where going = the other club members on that event's list (names only, for signed-in members).
 //   GET /admin/pdga-registrations/status (admin) -> counts only: is the hourly check running, and what has it found.
+import { karmaKey } from "./karma-directory.js";
 import { adminGate, requireAuth } from "./authz.js";
 import type { D1Like } from "./db-types.js";
 import type { Env } from "./env.js";
@@ -322,7 +323,8 @@ export async function handlePdgaRegistrations(request: Request, env: Env, origin
   const club = [];
   for (const { event, rows: entries } of byEvent.values()) {
     const me = entries.find((row) => row.member_id === claims.sub);
-    const going = entries.filter((row) => row.member_id !== claims.sub).map((row) => ({ name: row.member_name, division: row.division }));
+    const going = entries.filter((row) => row.member_id !== claims.sub)
+      .map((row) => ({ name: row.member_name, division: row.division, karmaKey: karmaKey(row.member_id) }));
     if (me) mine.push({ ...event, division: me.division, going });
     else club.push({ ...event, going });
   }

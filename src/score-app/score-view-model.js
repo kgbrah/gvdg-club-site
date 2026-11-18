@@ -725,7 +725,10 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
       const player = cardmates.find((item) => item && item.index === index);
       return Boolean(player && player.isMe);
     });
+    // A one-player row carries that player's karma key (doubles pairs show no chip).
+    const only = (rowData.playerIndexes || []).length === 1 ? cardmates.find((item) => item && item.index === rowData.playerIndexes[0]) : null;
     return {
+      karmaKey: only && only.karmaKey ? only.karmaKey : "",
       conflictText: conflict ? "Conflict: " + (conflict.values || []).join(" vs ") + " - set yours to match" : "",
       conflictValues: conflict && Array.isArray(conflict.values)
         ? conflict.values.map((value) => Number(value)).filter((value) => Number.isFinite(value))

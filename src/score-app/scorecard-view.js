@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Eye, HandHeart, Link2, ListChecks, Lock, Ruler, Search, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
@@ -443,6 +444,7 @@ function RoundTools(props) {
         key: "talk",
         live: true,
         players: (Array.isArray(props.rows) ? props.rows : []).map((row) => row && row.label).filter(Boolean),
+        karmaKeys: Object.fromEntries((Array.isArray(props.rows) ? props.rows : []).filter((row) => row && row.label).map((row) => [row.label, row.karmaKey || ""])),
         viewer: "card",
         viewerName: ((Array.isArray(props.rows) ? props.rows : []).find((row) => row && row.isMe) || {}).label || "",
       }),
@@ -923,13 +925,15 @@ export function scoreNameParts(label, source) {
 
 function ScorePlayerName({ row }) {
   const parts = scoreNameParts(row.label, row.source);
+  const karma = h(KarmaChip, { karmaKey: row.karmaKey, key: "karma" });
   return h("div", { className: "pname", title: row.label }, parts ? [
     h("span", { className: "score-name-full", key: "full" }, row.label),
     h("span", { className: "score-name-compact", "aria-hidden": "true", key: "compact" }, [
       h("span", { className: "score-name-given", key: "given" }, parts.given),
       h("strong", { className: "score-name-surname", key: "surname" }, parts.surname),
     ]),
-  ] : row.label);
+    karma,
+  ] : [row.label, karma]);
 }
 
 function ScoreRow(props) {

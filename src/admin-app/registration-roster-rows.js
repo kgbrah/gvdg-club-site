@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { adminConfirm } from "./admin-dialogs.js";
 
@@ -128,7 +129,7 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
   return h("article", { className: "admin-roster-card", "data-admin-registration-id": registration.id }, [
     h("div", { className: "admin-roster-face", key: "face" }, [
       h("div", { className: "admin-roster-identity", key: "id" }, [
-        h("strong", { className: "lb-name", key: "name" }, registration.name),
+        h("strong", { className: "lb-name", key: "name" }, [registration.name, h(KarmaChip, { key: "karma", memberId: registration.member_id || registration.memberId })]),
         h("span", { className: "admin-roster-meta", key: "meta" }, meta),
       ]),
       h("div", { className: "admin-roster-actions", key: "actions" }, [

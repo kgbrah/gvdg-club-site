@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { adminConfirm } from "./admin-dialogs.js";
 import { useSettledWhileLoading } from "../shared/settled-state.js";
@@ -136,7 +137,7 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
   const roleTitle = isLastAdmin ? "Can't remove the last admin" : undefined;
 
   return h("div", { className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier, "data-member-lapsed": member.lapsed ? "true" : "false" }, [
-    h("span", { className: "ev-name", key: "name" }, memberSummary(member)),
+    h("span", { className: "ev-name", key: "name" }, [memberSummary(member), h(KarmaChip, { key: "karma", memberId: member.memberId })]),
     h("button", {
       className: "admin-btn secondary", disabled: !member.identifier, key: "wallet", type: "button",
       onClick: () => dispatchRequest("gvdg:admin-tab-request", { tab: "wallets", memberId: member.identifier }),

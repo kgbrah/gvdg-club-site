@@ -1,3 +1,4 @@
+import { karmaKey } from "./karma-directory.js";
 import type { Env } from "./env.js";
 import * as db from "./db.js";
 import { requireAuth } from "./authz.js";
@@ -24,6 +25,8 @@ function publicReport(row: Record<string, unknown> | null, courseName?: string |
     course_id: row.course_id ?? null,
     course_name: name,
     member_name: typeof row.member_name === "string" && row.member_name.trim() ? row.member_name.trim() : "Member",
+    // The karma directory's anonymous key (the member id itself stays server-side).
+    karmaKey: karmaKey(typeof row.member_id === "string" ? row.member_id : null),
     status,
     note,
     created_at: row.created_at ?? null,

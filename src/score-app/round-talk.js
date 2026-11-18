@@ -1,5 +1,6 @@
 import { spectatorHeaders, watchKeyFromLocation } from "../shared/spectator-link.js";
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { createPortal } from "react-dom";
 import { MessageCircle } from "lucide-react";
 
@@ -126,19 +127,20 @@ function useAboveDock(active) {
   return bottom;
 }
 
-function TalkRow({ message }) {
+function TalkRow({ message, karmaKeys }) {
   const who = message.side === "card" ? "On the card" : "Watching";
   const aimed = message.toName ? " to " + message.toName : "";
   return h("div", { className: "round-talk-row " + message.side }, [
     h("div", { className: "round-talk-meta", key: "meta" }, [
-      h("span", { key: "who" }, message.authorName + aimed),
+      // Messages carry names only; within one round a player's name finds their karma key.
+      h("span", { key: "who" }, [message.authorName, h(KarmaChip, { karmaKey: (karmaKeys && karmaKeys[message.authorName]) || "", key: "karma" }), aimed]),
       h("span", { className: "round-talk-side", key: "side" }, who),
     ]),
     h("p", { className: "round-talk-body", key: "body" }, message.body),
   ]);
 }
 
-export function RoundTalk({ inline, live, players, viewer, viewerName }) {
+export function RoundTalk({ inline, live, players, viewer, viewerName, karmaKeys = null }) {
   const path = React.useMemo(() => messagePathFromLocation(window.location), []);
   const key = viewer === "watch" ? watchKeyFromLocation(window.location) : null;
   const api = React.useMemo(() => resolveApiBase({ datasetKeys: ["apiBase"] }), []);
@@ -285,7 +287,7 @@ export function RoundTalk({ inline, live, players, viewer, viewerName }) {
     style: sheetStyle,
   }, [
     h("div", { className: "round-talk-list", key: "list", ref: listRef }, messages.length
-      ? messages.map((message) => h(TalkRow, { key: message.id || message.body, message }))
+      ? messages.map((message) => h(TalkRow, { karmaKeys, key: message.id || message.body, message }))
       : h("p", { className: "muted", key: "empty" }, chatOpen ? "No messages yet." : "Messages open while the round is live.")),
     key ? null : h("form", { className: "round-talk-form", key: "form", onSubmit: (event) => { void send(event); } }, [
       viewer === "watch" && names.length ? h("select", {

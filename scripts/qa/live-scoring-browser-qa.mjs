@@ -4,6 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
+// Ava King has karma (the chip next to her name on the card and the leaderboard); Milo Chen has none.
+const AVA_KARMA_KEY = "9f54821bf08584f9";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const apiBase = "http://127.0.0.1:8788";
@@ -118,6 +121,7 @@ function makePlayer({ index, name, cardId, scores }) {
     index,
     cardId,
     name,
+    karmaKey: name === "Ava King" ? AVA_KARMA_KEY : "",
     division: "MA1",
     startingHole: 1,
     scores: { ...scores },
@@ -165,6 +169,7 @@ function standingsFor(players) {
     const par = scoredHoles.reduce((sum, hole) => sum + hole.par, 0);
     return {
       name: player.name,
+      handicapKeys: [player.karmaKey || ""],
       division: player.division,
       thru: scoredHoles.length,
       total,
@@ -257,6 +262,7 @@ async function installApiRoutes(page) {
     const method = request.method();
 
     if (pathName === "/me") return route.fulfill(json({ sub: "member-1", isAdmin: true, name: "QA Admin" }));
+    if (pathName === "/karma" && method === "GET") return route.fulfill(json({ players: { [AVA_KARMA_KEY]: 25 }, traders: {} }));
     if (pathName === "/login" && method === "POST") return route.fulfill(json({ token: "qa-token", name: "QA Admin" }));
     if (pathName === "/courses" && method === "GET") return route.fulfill(json({ courses }));
     if (pathName === "/courses/1/layouts" && method === "GET") return route.fulfill(json({ layouts }));
@@ -408,11 +414,19 @@ async function runCasualRoundQa(browser, origin) {
 
   await page.getByRole("button", { name: "Increase Ava King on hole 1", exact: true }).click();
   await waitForPageText(page, ".totbar", "1/18", "casual score total");
+  // Karma next to a player's name on the card: Ava has some, Milo none.
+  const avaRow = page.locator(".prow").filter({ hasText: "Ava King" });
+  await avaRow.locator(".karma-chip[data-karma='25']").waitFor();
+  if (await page.locator(".prow").filter({ hasText: "Milo Chen" }).locator(".karma-chip").count()) throw new Error("Milo Chen has no karma");
   await page.locator("#lbBtn").click();
   await page.waitForSelector(".sheet");
   const leaderboard = await page.locator(".sheet").innerText();
   if (!leaderboard.includes("Ava King") || !leaderboard.includes("1")) {
     throw new Error(`Casual leaderboard did not reflect saved score: ${leaderboard}`);
+  }
+  await page.locator(".sheet .lb tr").filter({ hasText: "Ava King" }).locator(".karma-chip").waitFor();
+  if (process.env.GVDG_KARMA_SHOTS) {
+    await page.locator(".sheet").screenshot({ path: process.env.GVDG_KARMA_SHOTS + "/score-leaderboard.png" });
   }
   if (errors.length) throw new Error(errors.join("\n"));
   await context.close();

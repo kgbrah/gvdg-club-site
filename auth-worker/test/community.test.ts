@@ -1,3 +1,4 @@
+import { handicapKey } from "../src/handicap.js";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { D1Like } from "../src/db-types.js";
@@ -84,7 +85,10 @@ describe("community visibility and consent", () => {
     const link = "/community/profiles/" + published.key;
     const publicResponse = await api(link, null);
     expect(publicResponse.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(await publicResponse.json()).toEqual({ profile: { key: published.key, audience: "public", displayName: "Garden Disc", bio: "Putter collector", progress: null } });
+    const publicBody = await publicResponse.json();
+    // karmaKey is the karma directory's anonymous key (as live scoring's handicapKeys), never the member id.
+    expect(publicBody).toEqual({ profile: { key: published.key, audience: "public", displayName: "Garden Disc", bio: "Putter collector", progress: null, karmaKey: handicapKey("m_alex") } });
+    expect(JSON.stringify(publicBody)).not.toContain("m_alex");
     const expiredCopy = { audience: "public", displayName: "Garden Disc", bio: "Putter collector", shareProgress: false, revision: 0 };
     expect((await api("/me/community/profile", "m_alex", "PUT", expiredCopy)).status).toBe(200);
     await profile("m_alex", "private", "Garden Disc", published.revision, true);

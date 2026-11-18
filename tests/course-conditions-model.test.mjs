@@ -30,6 +30,7 @@ test("normalizeCondition keeps allowlisted status and drops junk", () => {
     id: "4",
     label: "Wet",
     memberName: "Jane",
+    karmaKey: "",
     note: "12 is a puddle",
     status: "wet",
     when: "1h ago",

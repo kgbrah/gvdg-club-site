@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "./karma.js";
 
 import { groupPlayersByDivision } from "./events-model.js";
 
@@ -32,6 +33,7 @@ export function EventFieldRoster({ players, compact = false, title }) {
         const rating = player && player.rating != null && player.rating !== "" ? String(player.rating) : null;
         return h("div", { className: "player-row", key: `${name}|${index}` }, [
           h("span", { className: "player-name", key: "name" }, name),
+          h(KarmaChip, { key: "karma", karmaKey: player && player.karmaKey, pdga: player && player.pdga_no }),
           rating ? h("span", { className: "player-rating", key: "rating" }, rating) : null,
           player && player.team ? h("span", { className: "player-team", key: "team" }, String(player.team)) : null,
         ]);

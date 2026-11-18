@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { request, requestJson } from "./api.js";
 import { useSessionToken } from "./session-token.js";
@@ -39,9 +40,9 @@ function ReportRow({ report }) {
       h("div", { className: "course-conditions-course", key: "name" }, report.courseName || "Course"),
       h("div", { className: "course-conditions-meta", key: "meta" }, [
         report.memberName || "Member",
-        report.when ? " · " + report.when : "",
-        note,
-      ].join("")),
+        h(KarmaChip, { key: "karma", karmaKey: report.karmaKey }),
+        [report.when ? " · " + report.when : "", note].join(""),
+      ]),
     ]),
     h(ConditionPill, { condition: report, key: "pill" }),
   ]);

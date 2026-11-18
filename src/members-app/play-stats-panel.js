@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { useMemberContext } from "./member-context.js";
@@ -108,7 +109,7 @@ function StatCard({ compact, row, showLeaders = true, showRank = true }) {
     showLeaders && !compact && row.leaders && row.leaders.length
       ? h("ol", { className: "play-stat-leaders", key: "leaders" }, row.leaders.slice(0, 3).map((leader) =>
         h("li", { key: leader.memberId || leader.name }, [
-          h("span", { key: "name" }, shortName(leader.name)),
+          h("span", { className: "karma-line", key: "name" }, [h("span", { key: "n" }, shortName(leader.name)), h(KarmaChip, { key: "karma", memberId: leader.memberId })]),
           h("b", { key: "pct" }, formatPct(leader.pct)),
         ]),
       ))

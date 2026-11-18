@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { requestJson } from "./api.js";
 import { formatToPar } from "./format.js";
@@ -59,7 +60,7 @@ function LeagueCard({ item }) {
         h("thead", { key: "head" }, standingsHead(players.some((player) => player.current_place != null) ? ["Tag", "Player", "Played", "Wins"] : ["Pos", "Player", "Pts", "Played", "Wins"], 1)),
         h("tbody", { key: "body" }, players.map((player, index) => h("tr", { key: `${player.name || "player"}-${index}` }, [
           numCell("pos", player.current_place != null ? String(player.current_place) : String(index + 1)),
-          nameCell("name", player.name != null ? String(player.name) : "Player"),
+          nameCell("name", [player.name != null ? String(player.name) : "Player", h(KarmaChip, { key: "karma", memberId: player.member_id })]),
           player.current_place != null ? null : numCell("points", String(player.points)),
           numCell("events", String(player.events)),
           numCell("wins", String(player.wins)),
@@ -112,7 +113,8 @@ function LiveEventStandings({ event }) {
       h("thead", { key: "head" }, standingsHead(headings, 1)),
       h("tbody", { key: "body" }, standings.map((standing, index) => h("tr", { key: `${standing.name || "player"}-${index}` }, [
         numCell("pos", String(index + 1)),
-        nameCell("name", standingNameWithTeam(standing)),
+        nameCell("name", [standingNameWithTeam(standing),
+          h(KarmaChip, { key: "karma", karmaKey: Array.isArray(standing.handicapKeys) && standing.handicapKeys.length === 1 ? standing.handicapKeys[0] : "" })]),
         numCell("thru", standing.thru ? String(standing.thru) : "-"),
         matchplay
           ? numCell("match", displayMatchStatus(standing.match))

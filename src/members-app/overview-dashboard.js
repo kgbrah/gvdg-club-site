@@ -22,7 +22,7 @@ import { BagTagPanel } from "./bag-tag-panel.js";
 import { InboxHomeAlert } from "./inbox-home-alert.js";
 import { useInboxSummary } from "./inbox-summary.js";
 import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration } from "../shared/event-calendar.js";
-import { goingText, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
+import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
 
 const h = React.createElement;
 
@@ -161,7 +161,7 @@ function NextPdgaCard({ token }) {
       h("div", { className: "player-event-name", key: "name" }, mine.name),
       h("div", { className: "player-card-meta", key: "meta" }, pdgaEventMeta(mine)),
       h("div", { className: "player-chip-row", key: "chips" }, h("span", { className: "player-chip" }, "You're registered" + (mine.division ? " · " + mine.division : ""))),
-      mine.going?.length ? h("div", { className: "player-card-meta", key: "going" }, "Also going: " + goingText(mine.going)) : null,
+      mine.going?.length ? h(GoingLine, { className: "player-card-meta", going: mine.going, key: "going", prefix: "Also going: " }) : null,
       h("div", { className: "member-action-grid", key: "actions" }, [
         h("a", { className: "player-btn primary", href: mine.url, key: "pdga", rel: "noopener noreferrer", target: "_blank" }, "PDGA page"),
         h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdgaRegistration(mine), key: "cal", label: "Calendar" }),

@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { ChevronLeft, Search } from "lucide-react";
 
 import { requestJson } from "./api.js";
@@ -80,7 +81,10 @@ function PeopleSearch({ token, onPick }) {
       role: "listitem",
       key: person.memberId,
       onClick: () => onPick(person),
-    }, h("span", { className: "member-list-copy" }, h("span", { className: "member-list-name" }, person.name || "Member"))))) : null,
+    }, h("span", { className: "member-list-copy" }, h("span", { className: "karma-line" }, [
+      h("span", { className: "member-list-name", key: "name" }, person.name || "Member"),
+      h(KarmaChip, { key: "karma", memberId: person.memberId }),
+    ]))))) : null,
     status === "ready" && !people.length ? h("p", { className: "player-card-meta", key: "empty" }, query.trim() ? "No member matches that name." : "No other members to message yet.") : null,
   ]);
 }
@@ -131,7 +135,7 @@ function DraftView({ token, person, onBack, onSent }) {
       h(ChevronLeft, { size: 16, "aria-hidden": true, key: "icon" }),
       "Inbox",
     ]),
-    h("h2", { key: "who" }, person.name || "Member"),
+    h("h2", { key: "who" }, [person.name || "Member", h(KarmaChip, { key: "karma", memberId: person.memberId })]),
     h(Composer, { label: "Message", value: text, busy, error, onChange: setText, onSubmit: submit, key: "composer" }),
   ]);
 }
@@ -192,7 +196,7 @@ function ThreadView({ token, threadId, onBack }) {
       h(ChevronLeft, { size: 16, "aria-hidden": true, key: "icon" }),
       "Inbox",
     ]),
-    h("h2", { key: "who" }, missing ? "Conversation unavailable" : name),
+    h("h2", { key: "who" }, missing ? "Conversation unavailable" : [name, h(KarmaChip, { key: "karma", memberId: thread?.with?.memberId })]),
     missing
       ? h("p", { className: "player-card-meta", key: "missing" }, "This conversation isn't available.")
       : h("div", { className: "member-message-log", ref: log, "aria-label": "Messages", key: "log" }, messages.map((message) => h("div", {
@@ -288,7 +292,10 @@ function InboxView({ token, onOpen }) {
         onClick: () => onOpen(String(thread.id)),
       }, [
         h("span", { className: "member-list-copy", key: "copy" }, [
-          h("span", { className: "member-list-name", key: "name" }, thread.with?.name || "Member"),
+          h("span", { className: "karma-line", key: "name" }, [
+            h("span", { className: "member-list-name", key: "name" }, thread.with?.name || "Member"),
+            h(KarmaChip, { key: "karma", memberId: thread.with?.memberId }),
+          ]),
           h("small", { className: "member-list-meta", key: "preview" }, (thread.fromMe ? "You: " : "") + (thread.preview || "")),
         ]),
         h("span", { className: "member-thread-side", key: "side" }, [

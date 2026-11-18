@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { CalendarDays, Search, Star, Trophy, Users } from "lucide-react";
 
 import { memberFullName, memberInitials } from "./club-data.js";
@@ -65,7 +66,7 @@ function MemberCard({ member }) {
   const classNames = ["member-card", member.yearJoined === 2004 ? "founding" : "", member.special ? "special-badge" : ""].filter(Boolean).join(" ");
   return h("div", { className: classNames, "data-badge": member.special || undefined }, [
     h("div", { className: "member-avatar", key: "avatar" }, memberInitials(member)),
-    h("div", { className: "member-name", key: "name" }, fullName),
+    h("div", { className: "member-name", key: "name" }, [fullName, h(KarmaChip, { key: "karma", pdga: member.pdga })]),
     h("div", { className: "member-since", key: "since" }, `Member since ${member.yearJoined}`),
     member.pdga ? h("div", { className: "member-pdga", key: "pdga" }, h("a", {
       href: `https://www.pdga.com/player/${encodeURIComponent(member.pdga)}`,

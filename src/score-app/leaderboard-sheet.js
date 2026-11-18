@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { displayMatchStatus } from "../shared/match-status.js";
@@ -91,6 +92,12 @@ function StandingScorecard({ holes, isPutting, onHole, scorecard, standing }) {
   }));
 }
 
+/** A single player's karma key from a standing (doubles teams show no chip). */
+export function soloKarmaKey(standing) {
+  const keys = Array.isArray(standing && standing.handicapKeys) ? standing.handicapKeys : [];
+  return keys.length === 1 && keys[0] ? keys[0] : "";
+}
+
 export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
   const [toggled, setToggled] = React.useState(() => new Set());
   function isOpen(id, hasCard) {
@@ -141,11 +148,12 @@ export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, is
           onClick: () => toggle(id),
         }, [
           standingName(standing),
+          h(KarmaChip, { karmaKey: soloKarmaKey(standing), key: "karma" }),
           playerClips.length
             ? h("span", { className: "lb-clip-count", key: "clips" }, playerClips.length === 1 ? "1 clip" : playerClips.length + " clips")
             : null,
         ])
-        : h("span", { className: "lb-name-text", key: "label" }, standingName(standing));
+        : h("span", { className: "lb-name-text", key: "label" }, [standingName(standing), h(KarmaChip, { karmaKey: soloKarmaKey(standing), key: "karma" })]);
       return h(React.Fragment, { key: id }, [
         h("tr", { key: "row" }, [
           h("td", { className: "pos", key: "pos" }, String(index + 1)),

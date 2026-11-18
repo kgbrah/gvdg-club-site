@@ -1,4 +1,5 @@
 import React from "react";
+import { KarmaChip } from "../shared/karma.js";
 
 import { request, requestJson } from "./api.js";
 import { MarkdownBlocks } from "./board-markdown.js";
@@ -49,7 +50,10 @@ function BoardPost({ post, authors, isReply, canDelete, onDelete, onReply }) {
     h("div", { className: "board-head", key: "head" }, [
       h(BoardAvatar, { post, authors, key: "avatar" }),
       h("div", { className: "board-meta", key: "meta" }, [
-        h("span", { className: "board-author", key: "author" }, post.author_name || "Member"),
+        h("span", { className: "karma-line", key: "author" }, [
+          h("span", { className: "board-author", key: "name" }, post.author_name || "Member"),
+          h(KarmaChip, { key: "karma", memberId: post.member_id }),
+        ]),
         h("span", { className: "board-when", key: "when" }, post.created_at || ""),
       ]),
     ]),

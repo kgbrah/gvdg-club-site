@@ -1,3 +1,4 @@
+import { handicapKey } from "../../src/shared/handicap.js";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { MEMBER_DESTINATIONS } from "../../src/shared/app-navigation.js";
 
 process.env.VITE_DISABLE_REACT_DEVTOOLS = "1";
 
+const JORDAN_KEY = "9f54821bf08584f9";
 const member = { sub: "m_qa", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: false };
 const now = new Date().toISOString();
 const course = { id: 7, name: "West Meadowbrook Park", location: "Greenville", difficulty: "intermediate", reviewCount: 1, averageRating: 4,
@@ -109,10 +111,12 @@ async function serveFixture(path, query, request, ref, reply) {
     reply({ theme: ref.get("mode") === "blue" ? blue : null });
   }
   else if (path === "/pdga-stats") reply({ name: member.name, official_rating: 905, live_rating: 918, events: [] });
+  // Karma next to names: the signed-in member (board posts) and Jordan Parker (PDGA "going").
+  else if (path === "/karma") reply({ players: empty ? {} : { [handicapKey(member.sub)]: 30, [JORDAN_KEY]: 40 }, traders: {} });
   else if (path === "/pdga-registrations") reply(empty ? { mine: [], club: [] } : {
     mine: [{ eventId: 501, name: "Greenville Winter Classic Presented by the Pitt County Disc Golf Association", tier: "B",
       location: "Greenville, North Carolina", start: "2026-12-12", end: "2026-12-13", url: "https://www.pdga.com/tour/event/501",
-      checkedAt: "2026-11-18 15:00:00", division: "MA2", going: [{ name: "Jordan Parker", division: "MA3" }, { name: "Sam Rivera", division: "MPO" }] }],
+      checkedAt: "2026-11-18 15:00:00", division: "MA2", going: [{ name: "Jordan Parker", division: "MA3", karmaKey: JORDAN_KEY }, { name: "Sam Rivera", division: "MPO" }] }],
     club: [{ eventId: 502, name: "Raleigh Doubles", tier: "C", location: "Raleigh, North Carolina", start: "2027-01-09", end: "2027-01-09",
       url: "https://www.pdga.com/tour/event/502", checkedAt: null, going: [{ name: "Jordan Parker", division: "MA3" }] }],
   });
@@ -377,7 +381,9 @@ async function verifyDestinations(width, mode) {
         // Next PDGA is the member's own registered event, found on PDGA's registration lists.
         const next = view.page.locator("[data-react-home-pdga='registered']");
         await next.getByText("You're registered · MA2").waitFor();
-        await next.getByText("Also going: Jordan Parker (MA3), Sam Rivera (MPO)").waitFor();
+        await next.getByText("Also going: Jordan Parker (MA3)", { exact: false }).waitFor();
+        await next.locator(".karma-chip[data-karma='40']").waitFor();
+        assert.equal(await next.locator(".karma-chip").count(), 1, "only the clubmate with karma gets a chip");
       }
       await view.page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
       if (readiness[item.key]) await view.page.locator(readiness[item.key]).first().waitFor({ state: "attached" });
@@ -388,10 +394,15 @@ async function verifyDestinations(width, mode) {
         // PDGA events the member is registered for join My events; clubmates' others get their own section.
         const pdga = mine.locator("[data-pdga-registration='501'][data-pdga-mine='true']");
         await pdga.getByText("You're registered · MA2").waitFor();
-        await pdga.getByText("Also going: Jordan Parker (MA3), Sam Rivera (MPO)").waitFor();
+        await pdga.getByText("Also going: Jordan Parker (MA3)", { exact: false }).waitFor();
+        assert.equal(await pdga.locator(".karma-chip").getAttribute("title"), "40 karma");
         assert.equal(await pdga.getByRole("link", { name: "PDGA page" }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
         await view.page.locator("[data-pdga-club-going='1'] [data-pdga-registration='502']").getByText("Going: Jordan Parker (MA3)").waitFor();
         await checkCalendarMenu(view.page, pdga, width);
+      }
+      if (item.key === "board") {
+        // Karma next to the post author's name.
+        await view.page.locator(".board-post .karma-chip[data-karma='30']").first().waitFor();
       }
       if (item.key === "standings") {
         await view.page.getByText("No league standings right now.", { exact: false }).waitFor();
