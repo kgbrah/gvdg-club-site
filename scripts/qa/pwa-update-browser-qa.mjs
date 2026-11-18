@@ -1,7 +1,11 @@
+// Report the service worker's own network activity to Playwright. Without it, Chromium under Playwright
+// often left an updated worker waiting (never activating) with no page request in flight: about half of
+// attempts stalled locally and in CI, and none did with it set before Playwright loads. Static imports are
+// hoisted, so Playwright is imported dynamically below, after this line.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS ??= "1";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { mkdir, readFile } from "node:fs/promises";
-import { chromium } from "playwright";
 
 import { cachedChunks, startMemberChunkFixture } from "./member-chunk-fixture.mjs";
 
@@ -80,6 +84,7 @@ ${stamp}<link rel="stylesheet" href="/tokens.css"><script src="/pwa.js" defer></
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = "http://127.0.0.1:" + server.address().port;
+const { chromium } = await import("playwright");
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
 context.setDefaultTimeout(12_000);
@@ -262,6 +267,12 @@ async function lazyScreensAcrossUpdates() {
   const fixture = await startMemberChunkFixture();
   const chunkContext = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
   chunkContext.setDefaultTimeout(15_000);
+  // Every request in this context since it opened, including the service worker's own fetches when
+  // PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=1: a never-settling one keeps the old worker busy.
+  const contextInFlight = new Map();
+  chunkContext.on("request", (request) => contextInFlight.set(request, (request.serviceWorker() ? "sw:" : "page:") + request.url().replace(/^https?:\/\/[^/]+/, "")));
+  chunkContext.on("requestfinished", (request) => contextInFlight.delete(request));
+  chunkContext.on("requestfailed", (request) => contextInFlight.delete(request));
   const chunks = (release) => [`/members-app/chunks/club-${release}.js`, `/members-app/chunks/stats-${release}.js`];
   async function waitForChunks(page, expected) {
     const started = Date.now();
@@ -287,7 +298,8 @@ async function lazyScreensAcrossUpdates() {
     try {
       await activateNewWorker(page);
     } catch (error) {
-      throw new Error(error.message + " in-flight: " + JSON.stringify([...inFlight.values()].map((url) => url.replace(/^https?:\/\/[^/]+/, ""))));
+      throw new Error(error.message + " in-flight: " + JSON.stringify([...inFlight.values()].map((url) => url.replace(/^https?:\/\/[^/]+/, "")))
+        + " context-in-flight: " + JSON.stringify([...contextInFlight.values()]));
     } finally {
       page.off("request", started);
       page.off("requestfinished", settled);
