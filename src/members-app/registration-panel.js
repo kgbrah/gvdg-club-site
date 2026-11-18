@@ -5,6 +5,7 @@ import { useMemberContext } from "./member-context.js";
 import { CasualRoundsSection } from "./registration-casual.js";
 import { CompletedEventSection, EventRegistrationSections } from "./registration-events.js";
 import { PdgaEventsSection } from "./pdga-events-panel.js";
+import { ClubmatesAtPdgaSection } from "./pdga-registrations.js";
 import { useRegistrationData } from "./registration-data.js";
 
 const h = React.createElement;
@@ -38,9 +39,11 @@ export function MemberRegistrationPanel({ eventId } = {}) {
         token,
         paymentsConfig: state.paymentsConfig,
         onReload: reload,
+        pdgaMine: state.pdga.mine,
         key: "events",
       }),
       h(PdgaEventsSection, { key: "pdga" }),
+      h(ClubmatesAtPdgaSection, { events: state.pdga.club, key: "pdga-club" }),
       h(CasualRoundsSection, {
         token,
         requests: state.casualRequests,

@@ -109,6 +109,13 @@ async function serveFixture(path, query, request, ref, reply) {
     reply({ theme: ref.get("mode") === "blue" ? blue : null });
   }
   else if (path === "/pdga-stats") reply({ name: member.name, official_rating: 905, live_rating: 918, events: [] });
+  else if (path === "/pdga-registrations") reply(empty ? { mine: [], club: [] } : {
+    mine: [{ eventId: 501, name: "Greenville Winter Classic Presented by the Pitt County Disc Golf Association", tier: "B",
+      location: "Greenville, North Carolina", start: "2026-12-12", end: "2026-12-13", url: "https://www.pdga.com/tour/event/501",
+      checkedAt: "2026-11-18 15:00:00", division: "MA2", going: [{ name: "Jordan Parker", division: "MA3" }, { name: "Sam Rivera", division: "MPO" }] }],
+    club: [{ eventId: 502, name: "Raleigh Doubles", tier: "C", location: "Raleigh, North Carolina", start: "2027-01-09", end: "2027-01-09",
+      url: "https://www.pdga.com/tour/event/502", checkedAt: null, going: [{ name: "Jordan Parker", division: "MA3" }] }],
+  });
   else if (path === "/pdga-events") reply({ events: empty ? [] : [{ name: "Pitt County Winter Open", date: "Dec 13, 2026",
     location: "Greenville", tier: "C", miles: 7.2, course: course.name, url: "https://www.pdga.com/tour/event/12345" }] });
   else if (path === "/my-results") reply({ results: [], casual: empty ? [] : [score] });
@@ -335,18 +342,56 @@ const readiness = {
   "lost-found": "[data-member-lost-found='ready']",
 };
 
+/** "Add to calendar" opens a menu (not a bare download): Google / Outlook pages filled in, or the .ics file; it fits the
+ *  screen, and Escape closes it and returns focus to the button. */
+async function checkCalendarMenu(page, card, width) {
+  const button = card.getByRole("button", { name: "Add to calendar" });
+  await button.click();
+  const menu = page.getByRole("menu", { name: "Add to calendar" });
+  await menu.waitFor();
+  assert.deepEqual(await menu.getByRole("menuitem").allInnerTexts(), ["Google Calendar", "Outlook", "Other calendar app (.ics file)"]);
+  const google = new URL(await menu.getByRole("menuitem", { name: "Google Calendar" }).getAttribute("href"));
+  assert.deepEqual([google.hostname, google.searchParams.get("dates"), google.searchParams.get("text")],
+    ["calendar.google.com", "20261212/20261214", "Greenville Winter Classic Presented by the Pitt County Disc Golf Association"]);
+  assert.equal(await menu.getByRole("menuitem").first().evaluate((node) => node === document.activeElement), true, "the first choice takes focus");
+  const box = await menu.boundingBox();
+  assert(box && box.x >= 0 && box.x + box.width <= width + 1, "the calendar menu fits the screen at " + width + "px");
+  await page.keyboard.press("Escape");
+  await menu.waitFor({ state: "detached" });
+  assert.equal(await button.evaluate((node) => node === document.activeElement), true, "focus returns to the button");
+  const [download] = await Promise.all([page.waitForEvent("download"), (async () => {
+    await button.click();
+    await menu.getByRole("menuitem", { name: "Other calendar app (.ics file)" }).click();
+  })()]);
+  assert.match(download.suggestedFilename(), /\.ics$/);
+  await menu.waitFor({ state: "detached" });
+}
+
 async function verifyDestinations(width, mode) {
   const view = await pageFor(width, mode, width + "-" + mode);
   try {
     for (const item of MEMBER_DESTINATIONS) {
       await view.go(item.hash);
-      if (item.key === "overview") await view.page.locator("#myDashboard [data-react-live-scoring='ready']").waitFor();
+      if (item.key === "overview") {
+        await view.page.locator("#myDashboard [data-react-live-scoring='ready']").waitFor();
+        // Next PDGA is the member's own registered event, found on PDGA's registration lists.
+        const next = view.page.locator("[data-react-home-pdga='registered']");
+        await next.getByText("You're registered · MA2").waitFor();
+        await next.getByText("Also going: Jordan Parker (MA3), Sam Rivera (MPO)").waitFor();
+      }
       await view.page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
       if (readiness[item.key]) await view.page.locator(readiness[item.key]).first().waitFor({ state: "attached" });
       if (item.key === "events") {
         const mine = view.page.locator("section[aria-label='My events']");
         await mine.waitFor();
         assert.equal(await mine.getByText("Fall Finale Doubles").count(), 0, "finished events leave My events");
+        // PDGA events the member is registered for join My events; clubmates' others get their own section.
+        const pdga = mine.locator("[data-pdga-registration='501'][data-pdga-mine='true']");
+        await pdga.getByText("You're registered · MA2").waitFor();
+        await pdga.getByText("Also going: Jordan Parker (MA3), Sam Rivera (MPO)").waitFor();
+        assert.equal(await pdga.getByRole("link", { name: "PDGA page" }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
+        await view.page.locator("[data-pdga-club-going='1'] [data-pdga-registration='502']").getByText("Going: Jordan Parker (MA3)").waitFor();
+        await checkCalendarMenu(view.page, pdga, width);
       }
       if (item.key === "standings") {
         await view.page.getByText("No league standings right now.", { exact: false }).waitFor();

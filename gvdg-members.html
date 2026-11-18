@@ -12,7 +12,7 @@
     <link rel="icon" type="image/png" href="img/logo-small.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="modulepreload" href="members-app/members-app.js?v=204">
+    <link rel="modulepreload" href="members-app/members-app.js?v=205">
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
@@ -727,7 +727,8 @@
                 }
                 .player-event-name { font-weight: 800; color: var(--text-primary); }
                 .player-card-meta { color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem; line-height: 1.4; }
-                .player-story { display: grid; gap: 0.85rem; }
+                /* One column that never grows past the card: a long event name ellipsizes instead of widening Home. */
+                .player-story { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.85rem; }
                 .player-story-block + .player-story-block { border-top: 1px solid var(--border-color); padding-top: 0.8rem; }
                 .player-story-rating { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; }
                 .player-story-rating b { font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 0.85; color: var(--secondary-text); font-weight: 400; }
@@ -1150,6 +1151,13 @@
                 .pdga-event-card .register-head { justify-content: space-between; }
                 .pdga-event-miles { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--text-primary); }
                 .pdga-event-where { margin: 0.2rem 0 0.65rem; color: var(--text-secondary); font-size: 0.9rem; }
+                /* PDGA events members are registered for: who's in, and clubmates going. */
+                .pdga-registration-card .register-head { justify-content: space-between; gap: 0.5rem; }
+                .pdga-registration-card .register-head .register-name { min-width: 0; }
+                .pdga-registration-card .player-chip { flex: none; }
+                .pdga-registration-you { margin: 0 0 0.35rem; font-weight: 800; color: var(--text-primary); }
+                .pdga-registration-going { margin: 0 0 0.65rem; color: var(--text-secondary); font-size: 0.9rem; overflow-wrap: anywhere; }
+                .pdga-club-going .pdga-registration-card + .pdga-registration-card { margin-top: 0.75rem; }
                 .register-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
                 .register-name { font-weight: 700; color: var(--text-primary); }
                 .register-date { font-size: 0.8rem; color: var(--text-muted); }
@@ -1991,6 +1999,6 @@
 
     <div id="membersReactDialogsApp"></div>
     <div id="crottsReactApp"></div>
-    <script type="module" src="members-app/members-app.js?v=204"></script>
+    <script type="module" src="members-app/members-app.js?v=205"></script>
 </body>
 </html>
