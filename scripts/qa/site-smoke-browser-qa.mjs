@@ -300,6 +300,41 @@ try {
       }
     }
   }
+  // PayPal from inside Facebook: the dues link leaves the in-app browser (Android: an intent:// link for the PayPal app
+  // or the real browser; iPhone: Safari). A normal browser is left alone.
+  const FB_ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/450.0.0.0;]";
+  const FB_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/450.0;FBBV/1;FBDV/iPhone15,2]";
+  for (const [label, userAgent, expected] of [
+    ["facebook android", FB_ANDROID, /^intent:\/\/paypal\.me\/greenvillediscgolf\/15#Intent;scheme=https;/],
+    ["facebook iphone", FB_IOS, /^x-safari-https:\/\/paypal\.me\/greenvillediscgolf\/15$/],
+    ["normal browser", undefined, null],
+  ]) {
+    try {
+      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ...(userAgent ? { userAgent } : {}) });
+      await installRoutes(context);
+      await context.route("https://paypal.me/**", (route) => route.fulfill({ status: 204, body: "" }));
+      const page = await context.newPage();
+      await page.goto(`${server.origin}/index.html`, { waitUntil: "domcontentloaded" });
+      const dues = page.getByRole("link", { name: "Pay with PayPal" }).first();
+      await dues.waitFor();
+      await page.evaluate(() => { window.__left = []; window.addEventListener("beforeunload", () => window.__left.push(location.href)); });
+      const popup = context.waitForEvent("page", { timeout: 1500 }).catch(() => null);
+      await dues.click({ noWaitAfter: true });
+      await page.waitForTimeout(300);
+      const handoff = await page.evaluate(() => document.documentElement.dataset.paypalHandoff || "").catch(() => "");
+      if (expected) {
+        if (!expected.test(handoff)) throw new Error(label + ": expected a hand-off, got " + JSON.stringify(handoff));
+      } else {
+        if (handoff) throw new Error(label + ": a normal browser must keep the plain link, got " + handoff);
+        if (!(await popup)) throw new Error(label + ": the plain link should open as usual");
+      }
+      await context.close();
+      console.log(`PASS paypal ${label}`);
+    } catch (error) {
+      failures.push(`paypal ${label}: ${error.message}`);
+      console.error(`FAIL paypal ${label}: ${error.message}`);
+    }
+  }
 } finally {
   await browser.close();
   await server.close();
