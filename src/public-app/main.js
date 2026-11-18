@@ -43,6 +43,7 @@ const eventsFundraisersMount = document.getElementById("fundraisersSection");
 const eventsMeetingsMount = document.getElementById("meetingsSection");
 const eventsLastUpdatedMount = document.getElementById("eventsLastUpdatedReactApp");
 const eventsViewControllerMount = document.getElementById("eventsViewControllerReactApp");
+const lostFoundMount = document.getElementById("lostFoundReactApp");
 const crottsMount = document.getElementById("crottsReactApp");
 
 if (pageChromeMount) {
@@ -121,6 +122,15 @@ if (eventsLastUpdatedMount) {
 
 if (proShopMount) {
   createRoot(proShopMount).render(h(ProShopApp));
+}
+
+// Lost & Found is its own chunk: no other public page downloads it.
+if (lostFoundMount) {
+  import("./lf-app.js").then(({ LostFoundApp }) => {
+    createRoot(lostFoundMount).render(h(LostFoundApp));
+  }).catch(() => {
+    lostFoundMount.textContent = "Lost & Found didn't load. Check your connection and reload the page.";
+  });
 }
 
 if (crottsMount) {

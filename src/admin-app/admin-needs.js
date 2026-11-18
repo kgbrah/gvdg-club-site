@@ -11,9 +11,11 @@ const EMPTY_NEEDS = {
   applications: 0,
   teeSigns: 0,
   marketReports: 0,
+  lostFoundReports: 0,
+  lostFoundPhotos: 0,
 };
 
-const MORE_TABS = new Set(["bag-tags", "members", "tee-signs"]);
+const MORE_TABS = new Set(["bag-tags", "members", "tee-signs", "lost-found"]);
 
 let adminNeedsState = EMPTY_NEEDS;
 
@@ -40,6 +42,8 @@ export function publishAdminNeeds(partial) {
     applications: countOf(source.applications),
     teeSigns: countOf(source.teeSigns),
     marketReports: countOf(source.marketReports),
+    lostFoundReports: countOf(source.lostFoundReports),
+    lostFoundPhotos: countOf(source.lostFoundPhotos),
   };
   window.dispatchEvent(new CustomEvent("gvdg:admin-needs", { detail: adminNeedsState }));
   return adminNeedsState;
@@ -52,6 +56,8 @@ export function adminNeedsItems(source) {
   const applications = countOf(input.applications);
   const teeSigns = countOf(input.teeSigns);
   const marketReports = countOf(input.marketReports);
+  const lostFoundReports = countOf(input.lostFoundReports);
+  const lostFoundPhotos = countOf(input.lostFoundPhotos);
   const orders = countOf(input.orders);
   const shelf = countOf(input.shelf);
   const shelfName = text(input.shelfName);
@@ -99,6 +105,24 @@ export function adminNeedsItems(source) {
       count: marketReports,
       label: marketReports === 1 ? "Marketplace report" : "Marketplace reports",
       detail: "Review and act",
+    });
+  }
+  if (lostFoundReports) {
+    items.push({
+      id: "lost-found-reports",
+      tab: "lost-found",
+      count: lostFoundReports,
+      label: lostFoundReports === 1 ? "Lost & Found report" : "Lost & Found reports",
+      detail: "Review and act",
+    });
+  }
+  if (lostFoundPhotos) {
+    items.push({
+      id: "lost-found-photos",
+      tab: "lost-found",
+      count: lostFoundPhotos,
+      label: lostFoundPhotos === 1 ? "Photo the AI couldn't check" : "Photos the AI couldn't check",
+      detail: "Retry or remove",
     });
   }
   if (orders) {

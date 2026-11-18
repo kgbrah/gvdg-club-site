@@ -9,6 +9,7 @@ import { HomeAboutSection, HomeHeroSection } from "./hero-about-app.js";
 import { HomePageChrome } from "./page-chrome.js";
 import { HomeBackToTop } from "./page-controls.js";
 import { HomeScoringTeaser } from "./scoring-teaser.js";
+import { HomeReturnedStrip } from "./returned-strip.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
@@ -46,6 +47,11 @@ if (eventsMount) {
 const tournamentsMount = document.getElementById("homeReactTournamentsApp");
 if (tournamentsMount) {
   createRoot(tournamentsMount).render(h(AreaTournamentsFeed));
+}
+
+const returnedMount = document.getElementById("homeReactReturnedApp");
+if (returnedMount) {
+  createRoot(returnedMount).render(h(HomeReturnedStrip));
 }
 
 const coursesMount = document.getElementById("homeReactCoursesApp");

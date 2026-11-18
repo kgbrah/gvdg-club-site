@@ -695,7 +695,7 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
     body.player-theme-glass[data-public-polish] :is(.events-intro, .ryder-intro, .shop-head > :first-child, .page-hero) :is(p, .page-subtitle) { color: var(--text-secondary); }
     body.player-theme-glass[data-public-polish] header .menu-toggle { color: var(--text-primary) !important; }
     /* Home: each section box is one glass container; the cards inside only tint. */
-    body.player-theme-glass[data-public-polish] :is(#scoring-app-teaser, #membership, #courses, #events, #area-tournaments, #about, #contact) {
+    body.player-theme-glass[data-public-polish] :is(#scoring-app-teaser, #membership, #courses, #events, #area-tournaments, #returned-discs, #about, #contact) {
       background: var(--glass-fill);
       border-color: var(--glass-line);
       box-shadow: var(--glass-edge), var(--glass-drop);
@@ -703,7 +703,7 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
       -webkit-backdrop-filter: var(--glass-filter);
       backdrop-filter: var(--glass-filter);
     }
-    body.player-theme-glass[data-public-polish] :is(.course-card, .event-item, .tournament-item, .stat-card, .board-member-card, .contact-box, .membership-step, .no-events, .scoring-teaser-score) {
+    body.player-theme-glass[data-public-polish] :is(.course-card, .event-item, .tournament-item, .returned-item, .stat-card, .board-member-card, .contact-box, .membership-step, .no-events, .scoring-teaser-score) {
       background: var(--glass-chip);
       border-color: var(--glass-line);
       text-shadow: none;

@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, ChevronRight, CircleHelp, ClipboardList, Disc3, ExternalLink, FlaskConical, Globe, KeyRound, Mail, MessageSquare, Palette,
+import { Camera, ChevronRight, CircleHelp, ClipboardList, Disc3, ExternalLink, FlaskConical, Globe, HandHeart, KeyRound, Mail, MessageSquare, Palette,
   ShieldCheck, Smartphone, Tag, Trophy, UserRound, Users, Wallet } from "lucide-react";
 
 import { ToolFinder } from "../shared/tool-finder.js";
@@ -97,6 +97,7 @@ export function MemberMorePage() {
         h(MemberLinkRow, { tab: "tags", title: "Bag tags", detail: "Reserve a tag or manage challenges", icon: Tag, key: "tags" }),
         h(MemberLinkRow, { tab: "standings", title: "Club standings", icon: Trophy, key: "standings" }),
         h(MemberLinkRow, { tab: "tee", title: "Tee signs", detail: "Contribute a tee sign photo", icon: Camera, key: "tee" }),
+        h(MemberLinkRow, { tab: "lost-found", title: "Lost & Found", detail: "Found a disc? Lost one? Help it get home", icon: HandHeart, key: "lost-found" }),
       ]),
       h(MemberLinkSection, { title: "Club sites", key: "sites" }, [
         h(MemberLinkRow, { title: "Pro shop", icon: Tag, href: "pro-shop.html", key: "shop" }),

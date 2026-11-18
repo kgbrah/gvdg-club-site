@@ -942,3 +942,6 @@ body.admin-page.player-theme-active {
 @media (min-width: 720px) {
   .admin-page .course-operator-metrics.pdga-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* Lost & Found moderation: the close / merge tool's two id fields sit side by side when there is room. */
+.admin-lf-post-fields { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
