@@ -163,6 +163,17 @@ A "tee sign" is the sign at each hole that shows the hole number and how far it 
 2. Look at the items (discs, shirts, and more).
 3. Tap what you want and buy it with **PayPal** or your **store credit**.
 
+### 🥏 Buy, sell or trade used discs (the Marketplace)
+The Pro Shop has a **Marketplace** where members sell and trade their used discs. Anyone can look, buy, or post a **WANTED**.
+- **Buy:** open a disc and tap **Buy for $X**. Not a member? Type your name and email, and we email you a **6-digit code** to prove it's you (your email is never shown to anyone). The disc is held for you, and you see the seller's **PayPal**, **Cash App** or **Zelle**. Pay the seller directly and arrange pickup. The club never takes a cut.
+- **Sell (members only):** tap **Sell a disc**, fill in the disc, its condition (10 = new, 1 = beat) and the price or "open to trades", and add 1–4 photos. The first time, you also type an **email for buyer alerts**. It's required to sell, we send you a quick confirmation, and nobody else ever sees it. Add your PayPal.me, Cash App or Zelle in **My marketplace → Payment settings**.
+- **When someone buys:** you get an alert. Once you're paid, tap **Mark sold** (or **Mark traded**). If the buyer backs out, tap **Release** to put it back up.
+- **Changed your mind?** **Withdraw listing** takes it down right away, but for **24 hours** you can tap **Relist** in My marketplace to put it back exactly as it was (same photos). After 24 hours the withdrawal is final and the photos are deleted.
+- **Trades:** tap **Propose a trade** and offer one of your own listed discs or describe what you'd swap. The seller accepts or declines.
+- **WANTED:** looking for a certain disc? Post a WANTED. Members who have one tap **I have one** and you get their message.
+- **Feedback:** after a deal is done, both sides can leave **positive / neutral / negative** feedback within 60 days, like eBay. Each seller shows a score such as "98% positive (51)".
+- **Safety:** payments go straight to the seller. Meet at club events when you can, and use PayPal Goods & Services for shipped discs. Something wrong? Tap **Report**.
+
 ### 🎟️ Your wallet (store credit)
 - Your **wallet** is like a piggy bank of club credit. Helpers can add credit to it (for example, if you win a prize).
 - When you buy something, you can spend your credit instead of real money.
@@ -249,6 +260,7 @@ Admins are club helpers with extra powers. The **Admin** page (`admin.html`) is 
 - **Meetings** — write down **meeting minutes** (notes) and action items so the club remembers what was decided.
 - **Pro Shop** — add and edit the **items** for sale (name, price, picture).
 - **Orders** — see everything people **bought** in the pro shop, so you can hand out the items.
+- **Marketplace** — reports about used-disc listings, WANTED posts or feedback land here (and in **Needs you**). You can **hide** a listing or post, **remove** rude feedback, or **suspend** someone from the marketplace. Every action needs a short reason and is written in the log. You can also see listings their sellers withdrew in the last 24 hours (they can still relist them).
 - **Wallets** — give a member **store credit** (for example, a prize). Type who and how much.
 - **Members** — the people list. Here you can:
    - **Make a new member** — type their name and PDGA/UDisc; the site gives you a **one-time temporary PIN** to hand to them.
