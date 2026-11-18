@@ -12,8 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `wrangler … deploy` is last-write-wins with no safety check — on 2026-07-03 one session clobbered
 another by deploying a commit 19 behind `main`, silently reverting the site.
 
-- **Never `wrangler pages deploy` / `wrangler deploy` by hand.** Deploy **only** through
-  `./scripts/gvdg-deploy.sh` (machine-wide lock + freshness gate + `version.json` marker).
+- **Never `wrangler pages deploy` / `wrangler deploy` by hand.** Release through the GitHub Action
+  **Deploy to staging (gvdgclub.com)** on `main` (`gh workflow run deploy-staging.yml -R kgbrah/gvdg-club-site --ref main`;
+  migrations, Worker, Pages, keys, post-deploy checks), or locally through `./scripts/gvdg-deploy.sh`
+  (machine-wide lock + freshness gate + `version.json` marker).
+- **The club owner ships.** Nothing goes live without the owner's explicit "ship it" for *that* release, and
+  a PR merges only when every check has passed (count == `SUCCESS` count, > 0), pinned with
+  `--match-head-commit`. See [AGENTS.md](AGENTS.md).
 - **Forward-only:** the gate aborts unless your clean, committed `HEAD` *contains* the currently-live
   commit (`gvdgclub.com/version.json`). If it aborts, **reconcile with `origin/main`** — don't
   `GVDG_FORCE=1` past it without human sign-off.
@@ -30,9 +35,15 @@ The website for the **Greenville Disc Golf Club**. Two halves in one repo, deplo
 
 1. **A static frontend** — root HTML shells plus page-owned helper files, with generated Vite/React route
    bundles for the home, public/events, admin, members, live-scoring, and tee-sign preview surfaces.
-2. **A Cloudflare Worker** in `auth-worker/` (TypeScript, ~82 modules). The **only** server-side code:
-   member auth, the club-operations API, live scoring, pro-shop, ratings, and the "Crotts" AI assistant.
-   The static pages reach all dynamic data through it over HTTPS.
+2. **A Cloudflare Worker** in `auth-worker/` (TypeScript, ~200 modules). The **only** server-side code:
+   member auth, the club-operations API, live scoring, pro-shop, the used-disc marketplace, Lost & Found,
+   My Bag extras, voice entry, ratings, and the "Crotts" AI assistant. The static pages reach all dynamic
+   data through it over HTTPS.
+
+**Hosting is the Cloudflare Workers _Free_ plan, by the owner's choice:** about **10 ms of CPU** per
+invocation (cron included); going over kills the invocation. Images are never decoded or re-encoded in the
+Worker (the browser resizes; the Worker validates, strips metadata at the byte level, stores, and calls AI
+services). AI keys are free tiers too (Gemini, Groq). See "Runtime gotchas".
 
 There is **no traditional backend or database server to boot** for the site itself — pages are static.
 
@@ -81,9 +92,11 @@ npm run qa:live-scoring  # Playwright live-scoring browser QA
 npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; needs private QA credentials
 ```
 
-### Deploy (the ONLY sanctioned path — see AGENTS.md)
+### Deploy (the ONLY sanctioned paths — see AGENTS.md)
 
 ```bash
+gh workflow run deploy-staging.yml -R kgbrah/gvdg-club-site --ref main   # the normal release (owner-approved)
+curl -s https://gvdgclub.com/version.json                                 # what's live
 GVDG_AGENT=<name> ./scripts/gvdg-deploy.sh          # Pages + worker (also --pages-only / --worker-only)
 ./scripts/gvdg-deploy.sh --status                   # what's live vs your HEAD (read-only)
 ./scripts/gvdg-deploy.sh --dry-run                  # run every gate, deploy nothing
@@ -93,6 +106,10 @@ scripts/gvdg-deploy-watchdog.sh --status|--install  # systemd --user backstop th
 `gvdg-deploy.sh` runs `npm run qa:staging-live-scoring` after deploy when `GVDG_STAGING_QA_TOKEN` is set, or
 when `GVDG_STAGING_QA_IDENTIFIER` + `GVDG_STAGING_QA_PIN` are set. The QA member must be an admin so the test
 can cancel its temporary casual round. `GVDG_SKIP_STAGING_QA=1` skips only that post-deploy smoke.
+
+Every successful deploy triggers the read-only **Live QA drive** (`.github/workflows/live-qa-drive.yml`), which
+visits every member and admin screen on the live site at four sizes; check its `summary.json` (0 findings)
+before calling a release done.
 
 `.github/workflows/deploy-worker.yml` (push to `main` touching `auth-worker/**`) only **tests** — its
 deploy step is skipped while the top-level config holds `REPLACE_WITH_*` placeholders. The actual gvdgclub
@@ -114,18 +131,26 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
   ├─ KV  ROSTER      members (member:<id> = source of truth incl. pinHash) + idx:pdga/idx:udisc + wa:creds
   ├─ KV  RATELIMIT   login lockout + generic counters + one-time WebAuthn challenges (wa:chal:*)
   ├─ D1  DB          club data: events, courses/layouts, registration, results, board, pro-shop/wallet,
-  │                  ratings, casual rounds  (gvdg-staging; all queries parameterized)
+  │                  ratings, casual rounds, messages, practice + My Bag, marketplace, Lost & Found
+  │                  (gvdg-staging; all queries parameterized)
   ├─ DO  LIVE        LiveEventDO — live scorecard state + WebSocket; writes to D1 only on finalize
-  ├─ R2  PHOTOS      tee-sign images (gvdg-photos-staging)
-  └─ AI  + OpenRouter/Gemini  Crotts assistant + tee-sign OCR vision
-  scheduled()  cron "17 8 * * *"  → daily ratings recompute (never on the fetch path)
+  ├─ R2  PHOTOS      tee-sign images, marketplace listing photos, Lost & Found photos, private bag photos
+  │                  (gvdg-photos-staging)
+  └─ AI  + OpenRouter/Gemini/Groq  Crotts assistant, tee-sign OCR, Lost & Found reads + photo compares,
+                                   Whisper voice entry
+  scheduled()  (never on the fetch path)
+    "17 8 * * *"    → daily ratings recompute + the Dec 1 membership reminder
+    "*/15 * * * *"  → marketplace withdrawal sweep, UDisc layout import, then the Lost & Found tick LAST
+                      (expiry, photo purge, due AI reads, matching incl. bags, bag-photo cleanup)
+    "7 * * * *"     → hourly PDGA events (+ layout baselines); the Sunday UDisc league refresh rides it
 ```
 
 ### The split router (`src/index.ts` + `club-api.ts`)
 
 Two-tier, no framework. `index.ts` `fetch()` runs a fixed pipeline — `withKvFallback` → resolve `origin`
 → CORS/OPTIONS → **fail-closed secret gate** → top-level `if`-chain (member/auth/webauthn/tee-sign/pdga)
-→ `clubApi()` → 404, all wrapped in a `try/catch` that returns a **CORS-bearing** 413/500 (so the browser
+→ `POST /voice/disc` → `handleBag` (`/me/bag/*`) → `handleMarket` (`/market/*`, `/admin/market/*`) →
+`handleLostFound` (`/lost-found/*`, `/admin/lost-found/*`) → `clubApi()` → 404, all wrapped in a `try/catch` that returns a **CORS-bearing** 413/500 (so the browser
 sees the real error, not a CORS failure). `clubApi()` tries domain handlers in **fixed order, first
 non-null Response wins**: `handleClubPublic → handleClubLive → handleCasualRoundRequests →
 handleCasualRounds → handleClubShop → handleClubRegistration → handleClubAdmin`. Each self-guards on the
@@ -159,7 +184,10 @@ register, live score/card writes. **Admin-gated**: all `/admin/*` + event live-s
 | Courses / imports | `layouts.ts`, `distance.ts`, `assign.ts`, `imports.ts` + `imports/{fetch,csv,events,udisc}.ts`, `tee-sign-routes.ts` | SSRF-guarded imports; tee-signs → R2 |
 | Pro-shop / wallet | `shop-db.ts`, `club-shop-routes.ts`, `club-admin-shop.ts`, `order-notify.ts`, `wallet-idempotency.ts` | wallet = append-only ledger |
 | Used-disc marketplace | `market-routes.ts` → `market-{listings,deals,wanted,guest,admin,store,input,photos,notify,crypto,sweep,http}.ts` | `/market/*` + `/admin/market/*`; tables from `0063` |
-| Lost & Found | `lf-routes.ts` → `lf-{posts,photos,claims,social,admin,store,input,process,vision,match,notify}.ts` | `/lost-found/*` + `/admin/lost-found/*`; tables from `0064`; photos public as uploaded |
+| Lost & Found | `lf-routes.ts` → `lf-{posts,photos,claims,social,admin,store,input,process,vision,match,notify}.ts` | `/lost-found/*` + `/admin/lost-found/*`; tables from `0064` (+`0065` weight/hole); photos public as uploaded; `lf-process.ts` also runs the bag matcher (`matchBags`) |
+| My Bag extras | `bag-routes.ts` (photos, switch, lost links); bag discs themselves are practice records (`practice-{input,store,routes}.ts`) | `/me/bag/*`, member only; tables from `0066`; photos owner-only |
+| Listing ↔ lost check | `market-lost-check.ts` | runs on list / edit / relist and on a new lost post; strong only → seller (`deliverLfNote`) + admins (`notifyAdmins`, review list in `market-admin.ts`) |
+| Voice entry | `voice-disc-route.ts` | `POST /voice/disc`: Whisper on Groq (free) → OpenRouter backup; transcript only, audio never stored |
 | Ratings | `ratings.ts` (display), `rating-engine.ts` + `rating-store.ts` + `ratings-recompute*.ts` (PDGA SSA), `pdga.ts` | **two** distinct systems |
 | Integrations | `assistant.ts`+`assistant-route.ts`, `vision.ts`, `photos.ts`, `weather.ts`, `feeds.ts`, `register-notify.ts` | AI, OCR, weather, email, Google-Sheet feeds |
 
@@ -192,13 +220,21 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0025`; next is
-`0026`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0066`; next is
+`0067`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
 export (`0015`), live-scoring metadata (`0018`), scale indexes (`0019-0020`), export endpoints (`0021`),
-ratings (`0022`), event schedule/deadlines (`0024`), event course/layout assignments (`0025`).
+ratings (`0022`), event schedule/deadlines (`0024`), event course/layout assignments (`0025`), course
+conditions / event chat / map marks / nearby + NC + 250-mile course catalogs / UDisc imports + history
+(`0026-0038`), throw clips + recovery (`0039`, `0046`), round messages (`0040`), event teams (`0041`), bag tags +
+requests + league challenges (`0042-0043`, `0059`), admin push (`0044`), live round index (`0045`), watch pairing
+(`0047`), course discovery / maintenance / community discovery (`0048`, `0052`, `0054`), private shot ledgers
+(`0049`), rating repair (`0050`), member practice + My Bag discs (`0051`), offline rounds (`0053`), spectator
+privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membership dues (`0058`), member push
+(`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
+**Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**.
 
 `events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
 must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
@@ -239,7 +275,29 @@ freeform notes.
   lost post's private text or the member's roster name first, then details, course/nearby, date; a roster member whose full name
   is on a disc is told directly. Claims: `open → returned → confirmed`; karma is an **append-only ledger** (`lf_karma`, triggers
   block UPDATE/DELETE; `UNIQUE(claim_id, reason)` = +10 once per return, one admin reversal). The member inbox summary carries
-  `lostFound` (waiting count + recent returns) so Home needs no extra request. QA: `scripts/qa/lost-found-browser-qa.mjs`.
+  `lostFound` (waiting count + recent returns) so Home needs no extra request. Posts carry structured `weight_g` and `hole`
+  (pick-lists; `area` reads "Hole 7 · by the pond"); same course + same hole and close weights add to the score. The post
+  forms use **one-thumb disc entry** (`src/public-app/disc-fields.js` + `src/shared/disc-catalog.js`: brand → its plastics,
+  colour, weight, hole pick-lists with *Other…*; "Say it" → `POST /voice/disc` → transcript parsed on the page, including the
+  course and "where exactly"), the **in-app camera** (`camera-sheet.js`, `photo-add.js`, `camera.css`), and **course search +
+  location** (`course-picker.js`, `src/shared/course-geo.js`: nearest course within 2 km, the hole whose tee-to-basket line is
+  within 150 m; position never leaves the phone). The scoring app's round Tools link to `#new/found|lost?course=&hole=&from=score
+  &return=`; `live-round.js` pins **Return to round** while the viewer is on a live card. QA: `scripts/qa/lost-found-browser-qa.mjs`
+  (real Worker in-process; mocked Gemini / Groq / OpenRouter; Chromium fake camera, mic and geolocation).
+- **My Bag ↔ Lost & Found.** Bag discs are practice records (`member_practice_records`, kind `disc`; optional `color` and
+  private `ink` fields, omitted when blank so old payloads are unchanged). Up to 3 **owner-only** photos per disc
+  (`bag_photos`, R2 `bag/<owner>/…`, `Cache-Control: private, no-store`; orphans swept by the cron). "I lost this disc" hands the
+  disc to the lost-post form via `sessionStorage` (`gvdg_lf_bag_handoff`, never the URL); ticked bag photos are copied
+  server-side onto the post and `lf_posts.bag_disc_id` links them. `matchBags` compares a found disc with same-mold bag discs of
+  members whose `bag_settings.match_found` is on (default) and stores **only strong** matches (ink identity / initials with
+  agreeing details, or a Gemini "same disc" on a bag photo) as `lf_matches` rows with `bag_disc_id` → the usual strong-match
+  notices ("… in your bag"). The finder never learns whose bag.
+- **Marketplace ↔ Lost & Found.** `market-lost-check.ts` pairs active listings and open lost posts of the same mold
+  (`market_lost_checks`, decided once per pair; the listing photo's ink read once into `market_listing_reads`, only when such a
+  lost post exists). Strong only → the **seller** gets a private note linking the public lost post, and **admins** get a push,
+  the nav badge (`/admin/market/summary` counts unreviewed ones) and Admin → Marketplace → *Possible lost discs for sale*
+  (Hide listing / `POST /admin/market/lost-matches/:listingId/:lostId/review`). No AI budget → left undecided for the next
+  trigger.
 - **PayPal** (`payments.ts`) — server-trust: amount always priced server-side, capture trusted only when
   `order.status==COMPLETED && capture.status==COMPLETED && USD && amount>=owed`; registration reserves the
   slot *before* charging and releases on failure.
@@ -290,7 +348,8 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v304`, members `?v=202`, public/events `?v=194`, score `?v=239`,
+home `?v=189` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to
 precache every chunk (kept in `gvdg-member-chunks` for the current and previous release). Chunks import the entry
@@ -316,6 +375,12 @@ first load on a throttled phone profile.
   attacker-controllable host.
 - **Verified (tee-sign) par/distance is server-authoritative and sticky** — clients can't forge it.
 - **Tee-sign R2 blobs** are reclaimed on reject/delete/demote; rejected images 404 (no IDOR enumeration).
+- **Private stays private (marketplace, Lost & Found, My Bag).** Lost-post "what's written on it", AI ink reads, bag
+  photos and bag writing, match reasons tied to someone's bag or lost post, guest emails and member ids never appear in
+  another party's payload; public shapes are built from allow-lists and `test/lost-found.test.ts` greps them. Uploaded
+  photos have EXIF/XMP stripped at the byte level (browsers also re-encode through a canvas). Bag photos are served only
+  to their owner. Strong-match alerts go to the likely owner (bag / lost post) or the seller and admins (listings),
+  never to the finder or the public.
 
 ## Runtime gotchas (fail live, invisible to unit tests)
 
@@ -335,15 +400,28 @@ Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.**
   erroring; `safeFetch` sends a real-browser UA on purpose (removing it breaks imports).
 - **CF Pages caches JS/CSS ~4h**; `_headers` (`must-revalidate`) is required or code changes look "not
   deployed" until the browser cache expires.
+- **Workers Free = ~10 ms CPU per invocation, uncatchable when exceeded.** It kills the whole invocation, including other
+  `waitUntil` work and later cron steps. Keep image work in the browser, run AI-bound jobs last in `scheduled()`, and
+  never add per-request heavy parsing or crypto loops. Network waits (D1, R2, AI calls) are not CPU.
+- **Free AI tiers:** Gemini answers 429 when over quota (treat as "try later"; Lost & Found reads back off on the cron);
+  Groq's free Whisper has per-minute / per-day caps (the route falls back to OpenRouter). Keep `LF_DAILY_VISION_BUDGET`,
+  `LF_VISION_PER_MINUTE` (default 4) and `VOICE_DAILY_BUDGET`; tests that make several AI calls raise the per-minute cap.
+- **KV free tier allows ~1,000 writes a day**, and `kvRateLimited` writes on every call — prefer D1 for anything
+  written often.
 
 ## Config & secrets (`auth-worker/wrangler.toml`)
 
 Bindings (per env — Wrangler does **not** inherit top-level into named envs, so each block redeclares):
 `ROSTER`+`RATELIMIT` (KV), `DB` (D1 `gvdg-staging`), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable
-Object `LiveEventDO`), `ASSISTANT_RL` (unsafe ratelimit, 20/60s), `[triggers] crons=["17 8 * * *", "*/15 * * * *"]`.
+Object `LiveEventDO`), `ASSISTANT_RL` (unsafe ratelimit, 20/60s), `[triggers] crons=["17 8 * * *", "*/15 * * * *", "7 * * * *"]`
+(Cloudflare has rejected extra cron triggers; new periodic work rides an existing tick).
 `[vars]` per env: `ALLOWED_ORIGINS`, `SESSION_TTL_SEC`, model ids, `PAYPAL_ENV`, WebAuthn `RP_ID`/
 `EXPECTED_ORIGIN` (dev `gvdgclub.com` vs prod `greenvillediscgolf.com`), Resend senders. **Secrets** (never
 committed, set via `wrangler secret put` / synced by CI): `JWT_SECRET`, `OPENROUTER_API_KEY`,
-`GEMINI_API_KEY`, `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`.
+`GEMINI_API_KEY`, `GROQ_API_KEY`, `PAYPAL_CLIENT_ID`/`PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`,
+`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`. The deploy workflow uploads `GEMINI_API_KEY`, the VAPID keys and
+`GROQ_API_KEY` from GitHub secrets (logging only Groq's HTTP status for the key). Optional vars read with a cast
+(not in `wrangler.toml`, so typegen is unaffected): `LF_DAILY_VISION_BUDGET`, `LF_VISION_PER_MINUTE`,
+`VOICE_DAILY_BUDGET`, `OPENROUTER_WHISPER_MODEL`.
 `validate-wrangler-config.mjs`
 gates every deploy, aborting on any `REPLACE_WITH_*` in the targeted env.
