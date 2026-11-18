@@ -117,6 +117,14 @@ let orderStatus = "submitted";
 let checkedIn = false;
 let leagueChallengeOpen = true;
 let reviewPending = true;
+// Admin › Scoring › Live casual rounds: a ghost (quiet for a day) and a card out on the course now.
+const freshLiveRounds = () => [
+  { code: "FRESH2", courseName: course.name, layoutName: "Main", startedAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+    lastActivity: new Date(Date.now() - 6 * 60_000).toISOString(), players: ["Taylor Morgan", "Jordan Parker"], holes: 18, holesScored: 7 },
+  { code: "GHOST1", courseName: "All-Terrain Disc Golf Course at Carolina Adventure World", layoutName: "Long tees", startedAt: new Date(Date.now() - 27 * 3600_000).toISOString(),
+    lastActivity: new Date(Date.now() - 26 * 3600_000).toISOString(), players: ["Riley Chen"], holes: 18, holesScored: 2 },
+];
+let liveRounds = freshLiveRounds();
 // Marketplace moderation: one open report against a listing whose long title and seller name stress 320 px.
 const marketOverview = {
   counts: { openReports: 1 },
@@ -150,6 +158,11 @@ const warnings = [];
 function fixture(path, method, query, authorization, body) {
   if (path === "/me") return { sub: "m_taylor", name: people[0].name, pdgaNo: "123456", isAdmin: authorization === "Bearer " + token };
   if (path === "/events") return { events: fixtureMode === "empty" ? [] : events };
+  if (path === "/admin/rounds/active") return { rounds: liveRounds };
+  if (/^\/rounds\/[A-Z0-9]+\/cancel$/.test(path) && method === "POST") {
+    liveRounds = liveRounds.filter((round) => !path.includes("/" + round.code + "/"));
+    return { status: "none" };
+  }
   // A real long live name: course pickers size to their longest option and overflowed phones (live drive, 2026-11-17).
   if (path === "/courses") return { courses: [course, { id: 8, name: "All-Terrain Disc Golf Course at Carolina Adventure World", location: "Winnsboro, SC", udisc_course_id: "24" }] };
   if (/^\/events\/\d+$/.test(path)) return { event: events.find((event) => path.endsWith("/" + event.id)) };
@@ -337,6 +350,7 @@ async function verifyRoutes(variant) {
   orderStatus = "submitted";
   reviewPending = true;
   checkedIn = false;
+  liveRounds = freshLiveRounds();
   try {
     await page.goto(origin + "/admin-preview.html#today", { waitUntil: "commit", timeout: 60_000 });
     await page.getByRole("heading", { name: "Today", level: 1 }).waitFor({ timeout: 60_000 });
@@ -366,7 +380,25 @@ async function verifyRoutes(variant) {
       }
     }
 
-    let pane = await route(page, "events");
+    // Live casual rounds: every open round by code; a quiet one is marked, and an admin ends it after a confirm.
+    let pane = await route(page, "scoring");
+    const liveList = pane.locator("[data-admin-live-rounds='ready']");
+    await liveList.getByRole("heading", { name: "Live casual rounds (2)" }).waitFor();
+    const ghost = liveList.locator("[data-admin-live-round='GHOST1']");
+    await ghost.getByText("Quiet over 1 hour").waitFor();
+    await ghost.getByText("2 of 18 holes scored · last activity 26 h ago").waitFor();
+    assert.equal(await liveList.locator("[data-admin-live-round='FRESH2']").getByText("Quiet over 1 hour").count(), 0);
+    assert.equal(await ghost.getByRole("link", { name: "Watch" }).getAttribute("href"), "score.html?round=GHOST1&watch=1");
+    await ghost.scrollIntoViewIfNeeded();
+    await shot(liveList, "live-rounds-" + variant.name);
+    await ghost.getByRole("button", { name: "End round" }).click();
+    const endDialog = page.getByRole("dialog", { name: "End round GHOST1?" });
+    await endDialog.waitFor();
+    await endDialog.getByRole("button", { name: "End round" }).click();
+    await ghost.waitFor({ state: "detached" });
+    await liveList.getByRole("heading", { name: "Live casual rounds (1)" }).waitFor();
+
+    pane = await route(page, "events");
     await pane.getByRole("button", { name: "More actions for River Park Open" }).click();
     await pane.getByRole("button", { name: "Delete", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Delete event" });

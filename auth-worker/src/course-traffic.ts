@@ -241,10 +241,9 @@ export async function courseTrafficPayload(env: Env, now = Date.now()): Promise<
   const rows = [...keys.values()].slice(0, MAX_ROUNDS);
   const rounds = (await Promise.all(rows.map(async (row) => {
     const started = Date.parse(String(row.started_at || ""));
-    if (Number.isFinite(started) && now - started > MAX_AGE_MS) {
-      await dropLiveRound(env, row.key);
-      return null;
-    }
+    // Too old to be out on the course: leave it off the traffic board, but keep it in the index so Admin › Live
+    // rounds can still find it (a ghost card stays "live" until it's finished or an admin ends it).
+    if (Number.isFinite(started) && now - started > MAX_AGE_MS) return null;
     try {
       const stub = env.LIVE.get(env.LIVE.idFromName(row.key));
       const response = await stub.fetch("https://do/snapshot");

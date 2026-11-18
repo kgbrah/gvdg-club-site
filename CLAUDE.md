@@ -214,6 +214,12 @@ standings are written to D1 (`results` for events, `casual_rounds`/`casual_resul
   force-past-conflict is admin-only.
 - **Removal tombstones, never splices** — the array index *is* the scorer/target key, so splicing would
   silently re-point later scores.
+- **Live casual rounds (admin):** `GET /admin/rounds/active` (`active-rounds.ts`) lists every casual round still live by
+  code: candidates from `live_round_index` plus member-started rounds never saved (`casual_round_sharing` rows with no
+  `casual_rounds` row; ghosts can fall out of the index), each confirmed by the DO's Worker-only `GET do/summary` (names,
+  holes scored, last activity = `meta.updatedAt`; no ids or scores), capped at 35 DO reads. Admin › Scoring shows them with
+  Watch / End round (`POST /rounds/:code/cancel`). Course traffic now *skips* index rows older than 14 h instead of deleting
+  them, so a ghost stays findable until it is ended.
 - **Casual-round *requests*** (`casual-round-requests.ts`, tables from `0014`) are a separate RSVP/planning
   board and are **not** wired to start a live round — don't assume joining one creates a round.
 
@@ -366,7 +372,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v313`, members `?v=207`, public/events `?v=200`, score `?v=241`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v314`, members `?v=207`, public/events `?v=200`, score `?v=241`,
 home `?v=192` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
