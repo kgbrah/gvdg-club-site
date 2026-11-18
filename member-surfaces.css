@@ -1321,3 +1321,9 @@ body.player-theme-glass[data-member-shell="members"] #members :is(.field-tile, .
 #members .bag-lost-status { margin-top: 8px; }
 #members .bag-match-label { display: flex; align-items: center; gap: 8px; color: var(--text-primary); font-weight: 750; cursor: pointer; }
 #members .bag-match-label input { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+#members .bag-whole h3, #members .bag-accessories h3 { margin: 0 0 4px; }
+#members .bag-accessory-list { display: grid; gap: 10px; margin: 8px 0; padding: 0; list-style: none; }
+#members .bag-accessory { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--member-line); }
+#members .bag-accessory-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--text-primary); }
+#members .bag-accessory-form { display: grid; gap: 8px; margin-top: 8px; }
+#members .bag-accessory-add { display: inline-flex; align-items: center; gap: 6px; }

@@ -19,7 +19,7 @@ const records = new Map();
 const bags = new Map();
 const QA_JPEG = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
 function bag(owner) {
-  if (!bags.has(owner)) bags.set(owner, { matchFound: true, photos: [], lost: [], next: 1 });
+  if (!bags.has(owner)) bags.set(owner, { matchFound: true, photos: [], lost: [], accessories: [], next: 1, nextAccessory: 1 });
   return bags.get(owner);
 }
 const operations = new Map();
@@ -77,13 +77,44 @@ const vite = await createServer({
           for await (const chunk of req) chunks.push(chunk);
           const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : null;
           const photoId = Number(/\/photos\/(\d+)$/.exec(path)?.[1]);
-          if (path === "/fixture/me/bag" && req.method === "GET") { reply({ matchFound: mine.matchFound, photos: mine.photos.map(({ id, discId }) => ({ id, discId })), lost: mine.lost }); return; }
+          if (path === "/fixture/me/bag" && req.method === "GET") {
+            reply({
+              matchFound: mine.matchFound, lost: mine.lost,
+              photos: mine.photos.filter((photo) => photo.discId).map(({ id, discId }) => ({ id, discId })),
+              bagPhotos: mine.photos.filter((photo) => photo.bag).map(({ id }) => ({ id })),
+              accessories: mine.accessories.map((item) => ({ ...item, photos: mine.photos.filter((photo) => photo.accessoryId === item.id).map((photo) => photo.id) })),
+            });
+            return;
+          }
+          if (path === "/fixture/me/bag/accessories" && req.method === "POST") {
+            const item = { id: mine.nextAccessory++, kind: body.kind, name: body.name || "", notes: body.notes || "" };
+            mine.accessories.push(item);
+            reply({ accessory: { ...item, photos: [] } }, 201);
+            return;
+          }
+          const accessoryId = Number(/\/accessories\/(\d+)$/.exec(path)?.[1]);
+          if (accessoryId && req.method === "PATCH") {
+            const item = mine.accessories.find((row) => row.id === accessoryId);
+            Object.assign(item, body);
+            reply({ accessory: item });
+            return;
+          }
+          if (accessoryId && req.method === "DELETE") {
+            mine.accessories = mine.accessories.filter((row) => row.id !== accessoryId);
+            mine.photos = mine.photos.filter((photo) => photo.accessoryId !== accessoryId);
+            reply({ ok: true });
+            return;
+          }
           if (path === "/fixture/me/bag/settings" && req.method === "PUT") { mine.matchFound = body.matchFound === true; reply({ matchFound: mine.matchFound }); return; }
           if (path === "/fixture/me/bag/photos" && req.method === "POST") {
             assert.match(body.image, /^data:image\/jpeg;base64,/);
-            assert.ok(db(owner).has(body.discId), "photos only for a saved disc");
-            mine.photos.push({ id: mine.next, discId: body.discId });
-            reply({ photo: { id: mine.next++, discId: body.discId } }, 201);
+            if (body.bag === true) mine.photos.push({ id: mine.next, bag: true });
+            else if (body.accessoryId) mine.photos.push({ id: mine.next, accessoryId: body.accessoryId });
+            else {
+              assert.ok(db(owner).has(body.discId), "photos only for a saved disc");
+              mine.photos.push({ id: mine.next, discId: body.discId });
+            }
+            reply({ photo: { id: mine.next++ } }, 201);
             return;
           }
           if (photoId && req.method === "GET" && mine.photos.some((photo) => photo.id === photoId)) {
@@ -145,25 +176,30 @@ async function bagEntryContext(width, voiceSupported) {
     sessionStorage.setItem("gvdg_member_token", owner);
     localStorage.setItem("theme", wide ? "light" : "dark");
     if (large) document.addEventListener("DOMContentLoaded", () => { document.documentElement.style.fontSize = "20px"; }, { once: true });
-    const mock = { starts: 0, stops: 0, aborts: 0, active: null };
-    class Recognition {
-      start() {
-        mock.starts++;
-        mock.active = this;
-        const onResult = this.onresult;
-        const onEnd = this.onend;
-        mock.finish = (text) => {
-          const result = Object.assign([{ transcript: text }], { isFinal: true });
-          onResult?.({ resultIndex: 0, results: [result] });
-          onEnd?.();
-        };
-        queueMicrotask(() => this.onstart?.());
+    // A fake microphone and recorder: voice entry records until Stop, then the Worker transcribes the clip.
+    const mock = { starts: 0, deny: false, streams: [] };
+    class FakeRecorder {
+      static isTypeSupported(type) { return type === "audio/webm;codecs=opus"; }
+      constructor(stream) { this.stream = stream; this.state = "inactive"; }
+      start() { mock.starts++; this.state = "recording"; }
+      stop() {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        queueMicrotask(() => {
+          this.ondataavailable?.({ data: new Blob([new Uint8Array(2048)], { type: "audio/webm" }) });
+          this.onstop?.();
+        });
       }
-      stop() { mock.stops++; }
-      abort() { mock.aborts++; }
     }
-    Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: voiceSupported ? Recognition : undefined });
-    Object.defineProperty(window, "webkitSpeechRecognition", { configurable: true, value: undefined });
+    Object.defineProperty(window, "MediaRecorder", { configurable: true, value: voiceSupported ? FakeRecorder : undefined });
+    if (navigator.mediaDevices) {
+      navigator.mediaDevices.getUserMedia = async () => {
+        if (mock.deny) throw new DOMException("denied", "NotAllowedError");
+        const track = { stopped: false, stop() { this.stopped = true; } };
+        mock.streams.push(track);
+        return { getTracks: () => [track] };
+      };
+    }
     window.bagVoiceMock = mock;
   }, { owner, wide: width >= 800, large: width === 320, voiceSupported });
   page.setDefaultTimeout(15_000);
@@ -172,6 +208,13 @@ async function bagEntryContext(width, voiceSupported) {
 
 async function checkBagEntry(width, voiceSupported) {
   const { context, page, owner } = await bagEntryContext(width, voiceSupported);
+  // What the Worker's /voice/disc answers next; a held reply lets the test act while it's transcribing.
+  const replies = [];
+  await page.route(/\/voice\/disc$/, async (route) => {
+    const next = replies.shift() ?? { status: 422, body: { error: "empty_transcript" } };
+    if (next.hold) await next.hold;
+    await route.fulfill({ status: next.status ?? 200, contentType: "application/json", body: JSON.stringify(next.body) });
+  });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   async function capture(label) {
@@ -252,13 +295,17 @@ async function checkBagEntry(width, voiceSupported) {
     await page.getByRole("checkbox", { name: "In my bag" }).uncheck();
     await start.click();
     await page.getByText("Listening…", { exact: true }).waitFor();
+    // It keeps recording through a pause (it used to stop at the first one); the clock runs to 30 seconds.
+    await page.waitForTimeout(2300);
+    assert.equal(await page.getByRole("button", { name: "Stop listening" }).count(), 1, "still listening after a pause");
+    assert.match(await page.locator(".bag-disc-voice-clock").innerText(), /^0:0[2-3] \/ 0:30$/);
     await capture("listening");
+    replies.push({ body: { transcript: "brand North Plastic Labs, model Owl X, plastic Soft Blend, weight 167 grams" } });
     await page.getByRole("button", { name: "Stop listening" }).click();
-    await page.getByText("Finishing voice recognition…", { exact: true }).waitFor();
-    await page.evaluate(() => window.bagVoiceMock.finish("brand North Plastic Labs, model Owl X, plastic Soft Blend, weight 167 grams"));
     await transcript.waitFor();
     await page.locator(".bag-disc-voice-details").getByText("North Plastic Labs", { exact: true }).waitFor();
-    await transcript.fill("Innova Star Destroyer, 174.5 grams");
+    await transcript.fill("Innova Star Destroyer, orange, 174.5 grams");
+    await page.locator(".bag-disc-voice-details").getByText("Orange", { exact: true }).waitFor();
     await capture("voice-review");
     await page.getByRole("button", { name: "Fill empty fields" }).click();
     assert.equal(await brand.inputValue(), "Innova");
@@ -275,28 +322,32 @@ async function checkBagEntry(width, voiceSupported) {
 
     if (width === 390) {
       await page.getByRole("button", { name: "Add disc", exact: true }).click();
-      for (const [code, message] of [["not-allowed", "Microphone permission was denied."], ["no-speech", "No speech was detected."]]) {
-        await start.click();
-        await page.evaluate((code) => window.bagVoiceMock.active.onerror({ error: code }), code);
-        await page.getByText(message, { exact: false }).waitFor();
-        assert.equal(await model.isEditable(), true);
-      }
+      // Microphone refused; nothing heard; then cancel, switching discs and a sign-in change all drop the clip.
+      await page.evaluate(() => { window.bagVoiceMock.deny = true; });
+      await start.click();
+      await page.getByText("Microphone permission was denied.", { exact: false }).waitFor();
+      await page.evaluate(() => { window.bagVoiceMock.deny = false; });
+      assert.equal(await model.isEditable(), true);
+      await start.click();
+      await page.getByRole("button", { name: "Stop listening" }).click();
+      await page.getByText("No speech was detected.", { exact: false }).waitFor();
       await start.click();
       await page.getByRole("button", { name: "Cancel voice" }).click();
-      await page.evaluate(() => window.bagVoiceMock.finish("Axiom Envy Electron 170 grams"));
       assert.equal(await transcript.count(), 0);
       assert.equal(await brand.inputValue(), "");
       await start.click();
       await page.getByRole("button", { name: "Edit", exact: true }).first().click();
-      await page.evaluate(() => window.bagVoiceMock.finish("Axiom Envy 170 grams"));
       assert.equal(await transcript.count(), 0);
+      let release;
+      replies.push({ hold: new Promise((resolve) => { release = resolve; }), body: { transcript: "Axiom Envy 170 grams" } });
       await start.click();
-      await page.evaluate(() => {
-        localStorage.setItem("gvdg_member_token", "qa-two");
-        window.bagVoiceMock.finish("Axiom Envy 170 grams");
-      });
-      assert.equal(await transcript.count(), 0);
-      assert((await page.evaluate(() => window.bagVoiceMock.aborts)) >= 4, "Errors, cancellation and record/owner changes abort speech");
+      await page.getByRole("button", { name: "Stop listening" }).click();
+      await page.evaluate(() => localStorage.setItem("gvdg_member_token", "qa-two"));
+      release();
+      await page.waitForTimeout(400);
+      assert.equal(await transcript.count(), 0, "a sign-in change drops the transcript");
+      assert(await page.evaluate(() => window.bagVoiceMock.streams.length >= 4 && window.bagVoiceMock.streams.every((track) => track.stopped)),
+        "every recording turned the microphone off");
 
       const sibling = await context.newPage();
       await sibling.goto(origin + "/img/logo.png");
@@ -307,16 +358,14 @@ async function checkBagEntry(width, voiceSupported) {
         await page.getByRole("button", { name: "Add disc", exact: true }).click();
         await start.click();
         await page.getByText("Listening…", { exact: true }).waitFor();
-        const aborts = await page.evaluate(() => window.bagVoiceMock.aborts);
         await sibling.evaluate((action) => {
           if (action === "replace") localStorage.setItem("gvdg_member_token", "qa-two");
           else if (action === "clear") localStorage.clear();
           else localStorage.removeItem("gvdg_member_token");
         }, change);
         await editor.waitFor({ state: "detached" });
-        await page.evaluate(() => window.bagVoiceMock.finish("Axiom Envy 170 grams"));
         assert.equal(await transcript.count(), 0);
-        assert.equal(await page.evaluate(() => window.bagVoiceMock.aborts), aborts + 1);
+        assert.equal(await page.evaluate(() => window.bagVoiceMock.streams.at(-1).stopped), true, "signing out elsewhere turns the microphone off");
         assert.equal(await page.evaluate(() => sessionStorage.getItem("gvdg_member_token")), null);
         assert.equal(await sibling.evaluate(() => localStorage.getItem("gvdg_member_token")), change === "replace" ? "qa-two" : null);
       }
@@ -453,6 +502,37 @@ async function checkBagExtras(page) {
   await card.locator(".bag-photo-list").waitFor({ state: "detached" });
   assert.equal(bag("qa-one").photos.length, 0);
   await picker.waitFor();
+  // Photos of the whole bag, and an accessory with its own photo: added, edited, deleted.
+  const whole = page.locator("[data-bag-whole]");
+  let pick = page.waitForEvent("filechooser");
+  await whole.getByRole("button", { name: /^(Add photo|Choose photo)$/ }).click();
+  await (await pick).setFiles({ name: "bag.jpg", mimeType: "image/jpeg", buffer: QA_JPEG });
+  await whole.locator(".bag-photo-list img").first().waitFor();
+  assert.equal(bag("qa-one").photos.filter((photo) => photo.bag).length, 1);
+  const accessories = page.locator("[data-bag-accessories]");
+  await accessories.getByText("No accessories yet.").waitFor();
+  await accessories.getByRole("button", { name: "Add accessory" }).click();
+  await accessories.getByLabel("What is it?").selectOption("towel");
+  await accessories.getByLabel("Name (optional)").fill("Club towel");
+  await accessories.getByLabel("Notes (optional)").fill("Green, GVDG logo");
+  await accessories.getByRole("button", { name: "Add accessory" }).click();
+  const towel = accessories.locator("[data-bag-accessory]").filter({ hasText: "Club towel" });
+  await towel.getByText("Green, GVDG logo").waitFor();
+  pick = page.waitForEvent("filechooser");
+  await towel.getByRole("button", { name: /^(Add photo|Choose photo)$/ }).click();
+  await (await pick).setFiles({ name: "towel.jpg", mimeType: "image/jpeg", buffer: QA_JPEG });
+  await towel.locator(".bag-photo-list img").first().waitFor();
+  assert.equal(bag("qa-one").photos.filter((photo) => photo.accessoryId).length, 1);
+  if (bagEvidence) await page.locator("[data-bag-accessories]").screenshot({ path: join(bagEvidence, "bag-accessories-390.png") });
+  await towel.getByRole("button", { name: "Edit", exact: true }).click();
+  await accessories.getByLabel("Name (optional)").fill("Big towel");
+  await accessories.getByRole("button", { name: "Save accessory" }).click();
+  const renamed = accessories.locator("[data-bag-accessory]").filter({ hasText: "Big towel" });
+  await renamed.waitFor();
+  await renamed.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.getByRole("button", { name: "Delete accessory" }).click();
+  await accessories.getByText("No accessories yet.").waitFor();
+  assert.deepEqual([bag("qa-one").accessories.length, bag("qa-one").photos.filter((photo) => photo.accessoryId).length], [0, 0]);
   // The found-disc check: on by default, saved when turned off.
   const toggle = page.getByRole("checkbox", { name: "Check found discs against my bag" });
   assert.equal(await toggle.isChecked(), true);
@@ -477,7 +557,7 @@ async function checkBagExtras(page) {
   assert.equal(await reported.getByRole("link", { name: "View post" }).getAttribute("href"), "lost-found.html#post/41");
   assert.equal(await page.getByRole("button", { name: "I lost this disc" }).count(), 0);
   bag("qa-one").lost = [];
-  console.log("My Bag: colour + private writing saved, private photo up/shown/deleted, I lost this disc hands off, switch saves");
+  console.log("My Bag: colour + private writing saved, private photo up/shown/deleted, bag + accessory photos, accessory add/edit/delete, I lost this disc hands off, switch saves");
 }
 
 try {

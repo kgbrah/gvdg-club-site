@@ -157,7 +157,7 @@ export async function createPost(c: MarketCtx): Promise<Response> {
     bagDiscId = body.bagDiscId;
     const wanted = (Array.isArray(body.bagPhotoIds) ? body.bagPhotoIds : []).filter((id): id is number => Number.isInteger(id) && Number(id) > 0);
     for (const photoId of wanted.slice(0, Math.max(0, MAX_LOST_PHOTOS - images.length))) {
-      const row = await c.env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE id = ? AND owner = ? AND disc_id = ?")
+      const row = await c.env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE id = ? AND owner = ? AND subject = 'disc' AND disc_id = ?")
         .bind(photoId, poster.id, bagDiscId).first<{ photo_key: string; photo_type: string }>();
       const obj = row ? await c.env.PHOTOS.get(row.photo_key) : null;
       if (!row || !obj) return fail(c, 400, "invalid_photo");

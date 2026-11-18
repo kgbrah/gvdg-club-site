@@ -3,7 +3,8 @@ import React from "react";
 import { adminAuthBase, adminToken } from "./admin-api.js";
 
 const h = React.createElement;
-const MAX_SECONDS = 20;
+// Records until the admin taps again (never on a pause), up to MAX_SECONDS with a running clock.
+const MAX_SECONDS = 45;
 
 export function matchCourseId(courses, spoken) {
   const want = String(spoken || "").trim().toLowerCase();
@@ -49,7 +50,7 @@ function audioMime() {
 
 function failureNote(status) {
   if (status === 401 || status === 403) return "Sign in as an admin before using voice.";
-  if (status === 413) return "That recording is too long. Keep it under 20 seconds.";
+  if (status === 413) return "That recording is too long. Keep it under 45 seconds.";
   if (status === 422) return "I didn't catch any words. Try again closer to the phone.";
   if (status === 429) return "Too many voice commands. Give it a minute.";
   return "Voice fill is unavailable right now.";
@@ -61,10 +62,13 @@ export function VoiceFill(props) {
   const recorderRef = React.useRef(null);
   const chunksRef = React.useRef([]);
   const timerRef = React.useRef(0);
+  const clockRef = React.useRef(0);
   const streamRef = React.useRef(null);
+  const [seconds, setSeconds] = React.useState(0);
 
   React.useEffect(() => () => {
     window.clearTimeout(timerRef.current);
+    window.clearInterval(clockRef.current);
     if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
   }, []);
 
@@ -100,6 +104,7 @@ export function VoiceFill(props) {
 
   function stop() {
     window.clearTimeout(timerRef.current);
+    window.clearInterval(clockRef.current);
     const recorder = recorderRef.current;
     if (recorder && recorder.state === "recording") recorder.stop();
   }
@@ -133,6 +138,10 @@ export function VoiceFill(props) {
       recorderRef.current = recorder;
       recorder.start();
       setPhase("listening");
+      const started = Date.now();
+      setSeconds(0);
+      window.clearInterval(clockRef.current);
+      clockRef.current = window.setInterval(() => setSeconds(Math.min(MAX_SECONDS, Math.floor((Date.now() - started) / 1000))), 250);
       timerRef.current = window.setTimeout(stop, MAX_SECONDS * 1000);
     } catch {
       setNote("Microphone permission is needed to fill the form by voice.");
@@ -142,6 +151,7 @@ export function VoiceFill(props) {
 
   const listening = phase === "listening";
   const label = phase === "sending" ? "Filling…" : listening ? "Listening… tap to stop" : "Fill by voice";
+  const clock = (value) => Math.floor(value / 60) + ":" + String(value % 60).padStart(2, "0");
   const hint = props.form === "event" ? "Say the event name, date, and course." : "Say the item name, price, and stock.";
   return h("div", { className: "admin-voice" + (listening ? " is-listening" : ""), "data-admin-voice": props.form }, [
     h("button", {
@@ -151,6 +161,7 @@ export function VoiceFill(props) {
       onClick: listening ? stop : () => { void start(); },
       type: "button",
     }, label),
-    h("p", { className: "admin-voice-note", key: "note" }, note || hint),
+    listening ? h("span", { "aria-hidden": true, className: "admin-voice-clock", key: "clock" }, clock(seconds) + " / " + clock(MAX_SECONDS)) : null,
+    h("p", { className: "admin-voice-note", key: "note" }, listening ? "Take your time; tap again when you're done." : note || hint),
   ]);
 }

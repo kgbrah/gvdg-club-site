@@ -3,6 +3,8 @@ import { ChevronDown, Mic, Square } from "lucide-react";
 
 import { discChoiceKey, parseSpokenDisc, unfilledDiscDetails } from "./bag-disc-catalog.js";
 import { useBagDiscVoice } from "./bag-disc-voice.js";
+import { colorName, parseSpokenDisc as parseSharedDisc } from "../shared/disc-catalog.js";
+import { clockSeconds } from "../shared/voice-clip.js";
 
 const h = React.createElement;
 const LIMIT = 20;
@@ -145,14 +147,21 @@ export function BagDiscWeight({ value, onChange }) {
   ]);
 }
 
-const DETAIL_LABELS = { brand: "Brand", model: "Model", plastic: "Plastic", weightGrams: "Weight" };
+const DETAIL_LABELS = { brand: "Brand", model: "Model", plastic: "Plastic", weightGrams: "Weight", color: "Colour" };
+
+/** What the bag catalog hears (brand, model, plastic, weight; the member's own discs count), plus the colour. */
+function heardDisc(transcript, catalog, form) {
+  const parsed = parseSpokenDisc(transcript, catalog, form);
+  const color = colorName(parseSharedDisc(transcript).color || "");
+  return color ? { ...parsed, color } : parsed;
+}
 
 export function BagDiscVoice({ catalog, form, isCurrentSession, onFill }) {
   const voice = useBagDiscVoice(isCurrentSession);
   const id = React.useId();
   const recording = ["starting", "listening", "processing"].includes(voice.phase);
   const review = voice.phase === "review";
-  const details = review ? unfilledDiscDetails(form, parseSpokenDisc(voice.transcript, catalog, form)) : {};
+  const details = review ? unfilledDiscDetails(form, heardDisc(voice.transcript, catalog, form)) : {};
   const fields = Object.keys(details);
 
   if (!voice.supported) return h("p", { className: "bag-disc-voice-fallback" },
@@ -170,9 +179,12 @@ export function BagDiscVoice({ catalog, form, isCurrentSession, onFill }) {
       recording && h("button", {
         className: "bag-disc-button", disabled: voice.phase !== "listening", key: "stop", type: "button", onClick: voice.stop,
       }, h(Square, { "aria-hidden": true, size: 14 }), " Stop listening"),
+      voice.phase === "listening" ? h("span", { "aria-hidden": true, className: "bag-disc-voice-clock", key: "clock" },
+        clockSeconds(voice.seconds) + " / " + clockSeconds(voice.maxSeconds)) : null,
       recording ? cancel : null,
     ]) : null,
-    !review ? h("p", { id: id + "-hint", key: "hint" }, "Try “Innova Star Destroyer, 175 grams.” Your browser may process audio online.") : null,
+    !review ? h("p", { id: id + "-hint", key: "hint" },
+      `Try “Innova Star Destroyer, orange, 175 grams.” Take your time; tap Stop listening when you’re done (up to ${voice.maxSeconds} seconds). The club’s voice service turns it into text and doesn’t keep the recording.`) : null,
     voice.message ? h("p", { className: "bag-disc-voice-status", key: "status", role: "status" }, voice.message) : null,
     review ? h("div", { className: "bag-disc-voice-review", key: "review" }, [
       h("div", { className: "member-practice-field", key: "transcript" }, [

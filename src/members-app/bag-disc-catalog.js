@@ -201,7 +201,7 @@ export function parseSpokenDisc(transcript, catalog, current) {
 
 export function unfilledDiscDetails(form, suggested) {
   const sameOrEmpty = (field) => !form[field] || !suggested[field] || discChoiceKey(form[field]) === discChoiceKey(suggested[field]);
-  const fields = sameOrEmpty("brand") && sameOrEmpty("model") ? ["brand", "model", "plastic", "weightGrams"] : [];
+  const fields = sameOrEmpty("brand") && sameOrEmpty("model") ? ["brand", "model", "plastic", "weightGrams", "color"] : [];
   return Object.fromEntries(fields.filter((field) => !String(form[field] ?? "").trim() && suggested[field])
     .map((field) => [field, suggested[field]]));
 }

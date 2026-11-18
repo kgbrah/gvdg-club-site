@@ -3,7 +3,7 @@ import React from "react";
 import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { discCatalog, discChoices, unfilledDiscDetails } from "./bag-disc-catalog.js";
 import { BagDiscChoice, BagDiscVoice, BagDiscWeight } from "./bag-disc-inputs.js";
-import { BagDiscLost, BagDiscPhotos, BagMatchSwitch, useBagExtras } from "./bag-extras.js";
+import { BagAccessories, BagDiscLost, BagDiscPhotos, BagMatchSwitch, BagWholePhotos, useBagExtras } from "./bag-extras.js";
 import { DISC_COLOR_NAMES } from "../shared/disc-catalog.js";
 
 import { MoreLink } from "./more-link.js";
@@ -293,6 +293,7 @@ export function MemberBagPage({ workspace }) {
       h(MoreLink, { tab: "practice", label: "Log a practice session", key: "practice" }),
     ]),
     h(SyncStatus, { workspace, key: "sync" }),
+    h(BagWholePhotos, { extras, key: "whole", token }),
     editor?.scope.active && editor.scope.token === bagSessionToken() ? h(DiscForm, {
       initial: editor.initial, key: editor.initial?.id || "new",
       savedDiscs: workspace.data.discs, scope: editor.scope,
@@ -309,6 +310,7 @@ export function MemberBagPage({ workspace }) {
     archived.length ? h("details", { className: "player-card", key: "archived" }, [
       h("summary", { key: "label" }, "Archived discs (" + archived.length + ")"), group(archived),
     ]) : null,
+    h(BagAccessories, { extras, key: "accessories", token }),
     h(BagMatchSwitch, { extras, key: "match", token }),
     h(ExportPractice, { workspace, key: "export" }),
   ]);

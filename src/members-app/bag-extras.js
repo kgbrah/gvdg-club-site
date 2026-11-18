@@ -3,16 +3,24 @@
 // bag. Photos are private: fetched with your sign-in, never a public link. Needs a connection (the bag itself works
 // offline); without one, these controls just don't show.
 import React from "react";
-import { Camera, ImagePlus, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Camera, ImagePlus, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 
 import { authBase, request, requestJson } from "./api.js";
 import { resizeImageFile } from "../shared/image-resize.js";
 import { openPhotoInput, useCameraCapture, useCameraMode } from "../public-app/photo-add.js";
 import { LF_BAG_HANDOFF_KEY } from "../public-app/lf-bag.js";
+import { memberConfirm } from "./member-dialogs.js";
 
 const h = React.createElement;
 export const BAG_PHOTOS_PER_DISC = 3;
-const EMPTY = { status: "loading", matchFound: true, photos: [], lost: [] };
+export const BAG_PHOTOS_OF_BAG = 6;
+export const PHOTOS_PER_ACCESSORY = 3;
+export const ACCESSORY_KINDS = [
+  ["cart", "Cart"], ["towel", "Towel"], ["mini", "Mini marker"], ["rangefinder", "Rangefinder"], ["retriever", "Disc retriever"],
+  ["umbrella", "Umbrella"], ["shoes", "Shoes"], ["rain_gear", "Rain gear"], ["seat", "Seat"], ["light", "Light / headlamp"], ["other", "Other"],
+];
+const KIND_LABEL = Object.fromEntries(ACCESSORY_KINDS);
+const EMPTY = { status: "loading", matchFound: true, photos: [], bagPhotos: [], accessories: [], lost: [] };
 
 /** GET /me/bag, refreshed after a change: { status, matchFound, photos: [{ id, discId }], lost: [{ discId, postId, status }] }. */
 export function useBagExtras(token) {
@@ -25,6 +33,8 @@ export function useBagExtras(token) {
       setState({
         status: "ready", matchFound: data?.matchFound !== false,
         photos: Array.isArray(data?.photos) ? data.photos : [], lost: Array.isArray(data?.lost) ? data.lost : [],
+        bagPhotos: Array.isArray(data?.bagPhotos) ? data.bagPhotos.map((photo) => photo.id) : [],
+        accessories: Array.isArray(data?.accessories) ? data.accessories : [],
       });
     }).catch((error) => {
       if (error?.name !== "AbortError") setState((current) => ({ ...current, status: "offline" }));
@@ -54,10 +64,21 @@ function BagPhoto({ id, token, alt }) {
 
 /** The photo strip on a bag disc card, with Take photo / Choose photo while there's room. */
 export function BagDiscPhotos({ disc, label, token, extras }) {
-  const photos = extras.photos.filter((photo) => photo.discId === disc.id);
+  const photos = extras.photos.filter((photo) => photo.discId === disc.id).map((photo) => photo.id);
+  return h(BagPhotoStrip, {
+    attr: { "data-bag-photos": disc.id }, extras, hint: "The top of the disc, and the bottom with any writing.", label, max: BAG_PHOTOS_PER_DISC, photos,
+    target: { discId: disc.id }, token,
+  });
+}
+
+/**
+ * Private photos of one thing in the bag. `photos`: photo ids. `target`: what the upload is of ({ discId } |
+ * { bag: true } | { accessoryId }). `max`: how many it can have.
+ */
+export function BagPhotoStrip({ photos, target, label, max, token, extras, hint, attr = {} }) {
   const [busy, setBusy] = React.useState(false);
   const [note, setNote] = React.useState("");
-  const room = BAG_PHOTOS_PER_DISC - photos.length;
+  const room = max - photos.length;
   const cameraMode = useCameraMode();
   async function upload(files) {
     setBusy(true);
@@ -66,7 +87,7 @@ export function BagDiscPhotos({ disc, label, token, extras }) {
       for (const file of files.slice(0, Math.max(0, room))) {
         const image = await resizeImageFile(file, 1280);
         if (!image) { setNote("That photo couldn't be used. Try a JPEG or PNG."); continue; }
-        const response = await request("/me/bag/photos", { body: { discId: disc.id, image }, method: "POST", token });
+        const response = await request("/me/bag/photos", { body: { ...target, image }, method: "POST", token });
         if (!response.ok) setNote(response.status === 404 ? "Save the disc first, then add photos." : "The photo didn't upload. Try again in a moment.");
       }
     } finally {
@@ -77,7 +98,7 @@ export function BagDiscPhotos({ disc, label, token, extras }) {
   async function remove(photo) {
     setBusy(true);
     try {
-      await request("/me/bag/photos/" + photo.id, { method: "DELETE", token });
+      await request("/me/bag/photos/" + photo, { method: "DELETE", token });
     } finally {
       setBusy(false);
       extras.refresh();
@@ -85,14 +106,14 @@ export function BagDiscPhotos({ disc, label, token, extras }) {
   }
   const [takePhoto, cameraSheet] = useCameraCapture({
     chooseFiles: () => openPhotoInput({ multiple: room > 1, onFiles: (files) => { void upload(files); } }),
-    hint: "The top of the disc, and the bottom with any writing.", max: Math.max(1, room), mode: cameraMode,
+    hint, max: Math.max(1, room), mode: cameraMode,
     onFiles: (files) => { void upload(files); },
   });
   if (extras.status !== "ready") return null;
   const camera = cameraMode === "live" || cameraMode === "app";
-  return h("div", { className: "bag-photos", "data-bag-photos": disc.id }, [
-    photos.length ? h("ul", { "aria-label": "Photos of " + label, className: "bag-photo-list", key: "list" }, photos.map((photo, index) => h("li", { key: photo.id }, [
-      h(BagPhoto, { alt: `${label}, photo ${index + 1}`, id: photo.id, key: "img", token }),
+  return h("div", { className: "bag-photos", ...attr }, [
+    photos.length ? h("ul", { "aria-label": "Photos of " + label, className: "bag-photo-list", key: "list" }, photos.map((photo, index) => h("li", { key: photo }, [
+      h(BagPhoto, { alt: `${label}, photo ${index + 1}`, id: photo, key: "img", token }),
       h("button", { "aria-label": `Delete photo ${index + 1} of ${label}`, className: "bag-photo-delete", disabled: busy, key: "delete", onClick: () => { void remove(photo); }, type: "button" },
         h(Trash2, { "aria-hidden": true, size: 16 })),
     ]))) : null,
@@ -172,6 +193,118 @@ export function BagMatchSwitch({ token, extras }) {
     ]),
     h("p", { className: "player-card-meta", key: "why" },
       "When someone posts a found disc, we check it against your bag privately and tell you only if it's very likely yours: your name, number or initials are on it, or it matches your photo. Nobody else sees your bag."),
+    error ? h("p", { className: "dash-note", key: "error", role: "alert" }, error) : null,
+  ]);
+}
+
+/** "Photos of my bag": the whole bag, laid out (up to six). */
+export function BagWholePhotos({ token, extras }) {
+  if (extras.status !== "ready") return null;
+  return h("section", { "aria-label": "Photos of my bag", className: "player-card bag-whole", "data-bag-whole": extras.bagPhotos.length }, [
+    h("h3", { key: "title" }, "Photos of my bag"),
+    h("p", { className: "player-card-meta", key: "why" }, "The whole bag, open and laid out. Private: only you see them."),
+    h(BagPhotoStrip, {
+      extras, hint: "Your whole bag, open, with the discs showing.", key: "strip", label: "my bag", max: BAG_PHOTOS_OF_BAG,
+      photos: extras.bagPhotos, target: { bag: true }, token,
+    }),
+  ]);
+}
+
+function accessoryLabel(item) {
+  return item.name || KIND_LABEL[item.kind] || "Accessory";
+}
+
+function AccessoryForm({ initial, token, onDone, onCancel }) {
+  const [form, setForm] = React.useState(() => ({ kind: initial?.kind || "towel", name: initial?.name || "", notes: initial?.notes || "" }));
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const id = React.useId();
+  async function save(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const response = await request(initial ? "/me/bag/accessories/" + initial.id : "/me/bag/accessories", {
+        body: { kind: form.kind, name: form.name.trim(), notes: form.notes.trim() }, method: initial ? "PATCH" : "POST", token,
+      });
+      if (!response.ok) { setError(response.status === 409 ? "That's the most accessories for now." : "That didn't save. Try again in a moment."); return; }
+      onDone();
+    } catch {
+      setError("That didn't save. Check your connection.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  return h("form", { "aria-label": initial ? "Edit accessory" : "Add an accessory", className: "bag-accessory-form", onSubmit: save }, [
+    h("label", { className: "member-practice-field", htmlFor: id + "-kind", key: "kind" }, [
+      h("span", { key: "label" }, "What is it?"),
+      h("select", { className: "form-input", id: id + "-kind", key: "input", onChange: set("kind"), value: form.kind },
+        ACCESSORY_KINDS.map(([value, label]) => h("option", { key: value, value }, label))),
+    ]),
+    h("label", { className: "member-practice-field", htmlFor: id + "-name", key: "name" }, [
+      h("span", { key: "label" }, "Name (optional)"),
+      h("input", { className: "form-input", id: id + "-name", key: "input", maxLength: 60, onChange: set("name"), placeholder: "Zuca cart, club towel…", type: "text", value: form.name }),
+    ]),
+    h("label", { className: "member-practice-field", htmlFor: id + "-notes", key: "notes" }, [
+      h("span", { key: "label" }, "Notes (optional)"),
+      h("input", { className: "form-input", id: id + "-notes", key: "input", maxLength: 200, onChange: set("notes"), placeholder: "Colour, markings, where it lives", type: "text", value: form.notes }),
+    ]),
+    error ? h("p", { className: "dash-note", key: "error", role: "alert" }, error) : null,
+    h("div", { className: "dashboard-actions", key: "actions" }, [
+      h("button", { className: "dashboard-action primary", disabled: busy, key: "save", type: "submit" }, busy ? "Saving…" : initial ? "Save accessory" : "Add accessory"),
+      h("button", { className: "dashboard-action", disabled: busy, key: "cancel", onClick: onCancel, type: "button" }, "Cancel"),
+    ]),
+  ]);
+}
+
+/** Accessories: cart, towel, minis, rangefinder… each with its own private photos. */
+export function BagAccessories({ token, extras }) {
+  const [editing, setEditing] = React.useState(null); // "new" | accessory id
+  const [error, setError] = React.useState("");
+  if (extras.status !== "ready") return null;
+  const done = () => { setEditing(null); extras.refresh(); };
+  async function remove(item) {
+    const confirmed = await memberConfirm({
+      title: "Delete this accessory?", message: "Its photos are deleted too.", confirmText: "Delete accessory", danger: true,
+    });
+    if (!confirmed) return;
+    setError("");
+    try {
+      const response = await request("/me/bag/accessories/" + item.id, { method: "DELETE", token });
+      if (!response.ok) setError("That didn't delete. Try again in a moment.");
+    } catch {
+      setError("That didn't delete. Check your connection.");
+    }
+    extras.refresh();
+  }
+  return h("section", { "aria-label": "Accessories", className: "player-card bag-accessories", "data-bag-accessories": extras.accessories.length }, [
+    h("h3", { key: "title" }, "Accessories"),
+    h("p", { className: "player-card-meta", key: "why" }, "Your cart, towel, minis, rangefinder and the rest, with photos. Private: only you see them."),
+    extras.accessories.length ? h("ul", { className: "bag-accessory-list", key: "list" }, extras.accessories.map((item) => h("li", {
+      className: "bag-accessory", "data-bag-accessory": item.id, key: item.id,
+    }, editing === item.id
+      ? h(AccessoryForm, { initial: item, onCancel: () => setEditing(null), onDone: done, token })
+      : [
+        h("div", { className: "bag-accessory-head", key: "head" }, [
+          h("strong", { key: "name" }, accessoryLabel(item)),
+          item.name ? h("span", { className: "player-card-meta", key: "kind" }, KIND_LABEL[item.kind] || "") : null,
+        ]),
+        item.notes ? h("p", { className: "player-card-meta", key: "notes" }, item.notes) : null,
+        h(BagPhotoStrip, {
+          attr: { "data-bag-accessory-photos": item.id }, extras, hint: "The " + accessoryLabel(item).toLowerCase() + ".", key: "photos",
+          label: accessoryLabel(item), max: PHOTOS_PER_ACCESSORY, photos: item.photos || [], target: { accessoryId: item.id }, token,
+        }),
+        h("div", { className: "dashboard-actions", key: "actions" }, [
+          h("button", { className: "dashboard-action", key: "edit", onClick: () => setEditing(item.id), type: "button" }, "Edit"),
+          h("button", { className: "dashboard-action member-record-delete", key: "delete", onClick: () => { void remove(item); }, type: "button" }, "Delete"),
+        ]),
+      ]))) : h("p", { className: "dash-note", key: "empty" }, "No accessories yet."),
+    editing === "new"
+      ? h(AccessoryForm, { key: "form", onCancel: () => setEditing(null), onDone: done, token })
+      : h("button", { className: "dashboard-action bag-accessory-add", key: "add", onClick: () => setEditing("new"), type: "button" }, [
+        h(Plus, { "aria-hidden": true, key: "icon", size: 16 }), "Add accessory",
+      ]),
     error ? h("p", { className: "dash-note", key: "error", role: "alert" }, error) : null,
   ]);
 }
