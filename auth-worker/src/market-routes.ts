@@ -10,6 +10,7 @@
 
 import type { Env } from "./env.js";
 import { handleMarketAdmin } from "./market-admin.js";
+import { sendDonation } from "./market-donations.js";
 import { buyListing, dealAction, editFeedback, fileReport, leaveFeedback, myMarket, mySummary, offerAction, proposeTrade, replyFeedback } from "./market-deals.js";
 import { startGuest, verifyGuest } from "./market-guest.js";
 import { idOf, fail, ok, type MarketCtx, type WaitCtx } from "./market-http.js";
@@ -118,6 +119,7 @@ export async function handleMarket(
   if (area === "deals" && seg.length === 4 && method === "POST") {
     const id = idOf(a);
     if (id && (b === "complete" || b === "release" || b === "cancel")) return dealAction(c, id, b);
+    if (id && b === "donation") return sendDonation(c, id);
   }
 
   if (area === "feedback") {

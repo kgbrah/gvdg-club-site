@@ -71,6 +71,8 @@ export function karmaLabel(person) {
   const karma = Number(person?.karma) || 0;
   const returned = Number(person?.returned) || 0;
   if (karma <= 0 && returned <= 0) return "";
+  // Karma from club donations alone has no returns to count.
+  if (returned <= 0) return `Karma ${karma}`;
   return `Karma ${karma} · ${returned} ${returned === 1 ? "disc" : "discs"} returned`;
 }
 

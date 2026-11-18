@@ -9,6 +9,7 @@
 //   deal     pending --> completed | released | cancelled
 //   offer    open --> accepted | declined | withdrawn
 
+import { sellerDonations } from "./market-donations.js";
 import { readJson } from "./http.js";
 import { notifyAdmins } from "./admin-push.js";
 import { cleanText, COMMENT_MAX, dollars, listingTitle, parseIdList, RATINGS, REPORT_REASONS, type Rating } from "./market-input.js";
@@ -386,7 +387,8 @@ export async function myMarket(c: MarketCtx): Promise<Response> {
   const suspended = await isSuspended(env, me.id);
   const viewer = await viewerOf(env, me);
   const listingRows = (await env.DB.prepare(
-    `SELECT l.id, l.seller_id, l.brand, l.mold, l.plastic, l.disc_type, l.weight_g, l.color, l.condition, l.price_cents, l.open_to_trade,
+    `SELECT l.id, l.seller_id, l.item_kind, l.gear_type, l.donate_percent, l.donate_cents, l.brand, l.mold, l.plastic, l.disc_type, l.weight_g,
+            l.color, l.condition, l.price_cents, l.open_to_trade,
             l.quantity, l.location, l.status, l.hidden, l.created_at, l.withdrawn_at, l.withdrawal_final,
             (SELECT p.id FROM market_listing_photos p WHERE p.listing_id = l.id ORDER BY p.sort_order, p.id LIMIT 1) AS photo_id
      FROM market_listings l WHERE l.seller_id = ? ORDER BY CASE l.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, l.updated_at DESC
@@ -411,7 +413,9 @@ export async function myMarket(c: MarketCtx): Promise<Response> {
     `SELECT ${WANTED_COLUMNS} FROM market_wanted w WHERE w.poster_id = ? ORDER BY w.id DESC LIMIT 30`,
   ).bind(me.id).all<Row>()).results ?? [];
   const pendingViews = await dealViews(env, pending, me.id, suspended);
-  const recentViews = await dealViews(env, recent, me.id, suspended);
+  // Completed sales: the seller's club donation for each (pledged or not), with where it stands.
+  const donations = await sellerDonations(env, recent, me.id);
+  const recentViews = (await dealViews(env, recent, me.id, suspended)).map((deal) => ({ ...deal, donation: donations.get(deal.id) ?? null }));
   return ok(c, {
     viewer,
     suspended,

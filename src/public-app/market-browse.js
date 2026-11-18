@@ -1,7 +1,7 @@
 import React from "react";
 
 import {
-  activeFilterCount, CONDITION_LEGEND, DISC_TYPES, EMPTY_FILTERS, listingHref, listingMeta, listingsQuery, listingTitle, priceLine,
+  activeFilterCount, clubShareShort, CONDITION_LEGEND, DISC_TYPES, EMPTY_FILTERS, listingHref, listingMeta, listingsQuery, listingTitle, priceLine,
 } from "../shared/market-model.js";
 import { marketRequest } from "./market-api.js";
 import { FeedbackText, GuestBadge, LoadState, MarketPhoto, StatusChip } from "./market-ui.js";
@@ -19,6 +19,7 @@ export function ListingCard({ listing, showSeller = true }) {
     h("div", { className: "product-body", key: "body" }, [
       h("a", { className: "product-name market-card-title", href, key: "name" }, title),
       h("div", { className: "product-meta", key: "meta" }, listingMeta(listing)),
+      listing.clubShare ? h("div", { className: "product-meta market-club-chip", "data-market-club-share": "true", key: "club" }, clubShareShort(listing.clubShare)) : null,
       listing.location ? h("div", { className: "product-meta", key: "where" }, listing.location) : null,
       showSeller && listing.seller ? h("div", { className: "product-meta market-card-seller", key: "seller" }, [
         h("span", { key: "name" }, listing.seller.name || "Seller"),

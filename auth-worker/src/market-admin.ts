@@ -1,6 +1,7 @@
 // Marketplace moderation (adminGate only): the report queue, hide / unhide listings and WANTED posts,
 // remove abusive feedback, suspend or reinstate a trader. Every action needs a reason and is logged.
 
+import { donationsToReview, reviewDonation } from "./market-donations.js";
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
 import { getMember } from "./roster.js";
@@ -17,12 +18,14 @@ function reasonOf(body: Record<string, unknown>): string | null {
   return reason && reason.length >= 3 ? reason : null;
 }
 
-/** What's waiting for an admin (the nav badge): open reports, plus possible lost discs up for sale not yet reviewed. */
+/** What's waiting for an admin (the nav badge): open reports, possible lost discs up for sale not yet reviewed, and
+ *  club donations to confirm. */
 async function openReports(c: MarketCtx): Promise<number> {
   const row = await c.env.DB.prepare(
     `SELECT (SELECT COUNT(*) FROM market_reports WHERE status = 'open')
        + (SELECT COUNT(*) FROM market_lost_checks k JOIN market_listings l ON l.id = k.listing_id
-          WHERE k.verdict = 'strong' AND k.reviewed_at IS NULL AND l.status = 'active' AND l.hidden = 0) AS n`,
+          WHERE k.verdict = 'strong' AND k.reviewed_at IS NULL AND l.status = 'active' AND l.hidden = 0)
+       + (SELECT COUNT(*) FROM market_donations WHERE status = 'sent') AS n`,
   ).first<{ n: number }>();
   return Number(row?.n) || 0;
 }
@@ -137,6 +140,7 @@ async function overview(c: MarketCtx): Promise<Response> {
   return ok(c, {
     reports: await reportTargets(c, reports),
     lostMatches: await lostMatches(c),
+    donations: await donationsToReview(c.env),
     hidden: {
       listings: await listingCards(c.env, hiddenListings, null),
       wanted: await wantedViews(c.env, hiddenWanted, null),
@@ -172,6 +176,13 @@ export async function handleMarketAdmin(c: MarketCtx, method: string, seg: strin
   if (method !== "POST") return fail(c, 404, "not_found");
   const body = (await readJson(c.request)) ?? {};
   const reason = reasonOf(body);
+
+  // POST /admin/market/donations/:id/review { decision, reason? }: an admin checked the club PayPal.
+  if (seg[2] === "donations" && seg.length === 5 && seg[4] === "review") {
+    const id = idOf(seg[3]);
+    if (!id) return fail(c, 404, "not_found");
+    return reviewDonation(c, adminId, id, body);
+  }
 
   // POST /admin/market/lost-matches/:listingId/:lostId/review { reason }: an admin looked at it.
   if (seg[2] === "lost-matches" && seg.length === 6 && seg[5] === "review") {

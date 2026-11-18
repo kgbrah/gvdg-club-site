@@ -2,7 +2,7 @@ import React from "react";
 
 import { resizeImageFile } from "../shared/image-resize.js";
 import {
-  ACCESSORY_KINDS, conditionLegend, DISC_TYPES, ITEM_KINDS, LIMITS, listingDraft, listingHref, listingPayload, MEMBERS_ONLY_LISTING,
+  ACCESSORY_KINDS, CLUB_SHARE_PERCENTS, conditionLegend, DISC_TYPES, ITEM_KINDS, LIMITS, listingDraft, listingHref, listingPayload, MEMBERS_ONLY_LISTING,
   SELLER_EMAIL_HINT, SELLER_EMAIL_LABEL, sellHeading, validEmail,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
@@ -20,7 +20,7 @@ const MAX_PHOTO_DATA_URL = 2_000_000; // ~1.5 MB decoded
 
 const EMPTY_DRAFT = {
   itemKind: "disc", gearType: "", brand: "", mold: "", plastic: "", discType: "", speed: "", glide: "", turn: "", fade: "", weightG: "", color: "",
-  condition: "", conditionNotes: "", price: "", openToTrade: false, tradeFor: "", quantity: "1", location: "",
+  condition: "", conditionNotes: "", price: "", openToTrade: false, tradeFor: "", quantity: "1", location: "", donate: "", donateAmount: "",
 };
 
 function Field({ id, label, hint, children }) {
@@ -74,6 +74,25 @@ function PhotoPicker({ photos, onAdd, onRemove, busy, existing = false, itemKind
       onFiles: (files) => onAdd(files.slice(0, remaining)), remaining,
     }),
     h("small", { className: "market-hint", key: "hint" }, hint + " Photos are resized on your phone and location data is removed."),
+  ]);
+}
+
+/** "Give part of the sale to the club": none, a percentage, or a set amount; buyers see it on the listing. */
+function ClubShare({ draft, set }) {
+  const choices = [["", "No"], ...CLUB_SHARE_PERCENTS.map((percent) => [String(percent), percent === 100 ? "All of it" : percent + "%"]), ["amount", "A set amount"]];
+  // A percentage saved some other way still shows as chosen.
+  if (draft.donate && draft.donate !== "amount" && !choices.some(([value]) => value === draft.donate)) choices.splice(1, 0, [draft.donate, draft.donate + "%"]);
+  return h("fieldset", { className: "market-fieldset market-club-share", "data-market-club-share": draft.donate || "none" }, [
+    h("legend", { key: "legend" }, "Give part of the sale to the club (optional)"),
+    h("div", { className: "market-kind-options", key: "options" }, choices.map(([value, label]) => h("label", { className: "market-check", key: value || "none" }, [
+      h("input", { checked: (draft.donate || "") === value, key: "input", name: "sell-donate", onChange: () => set("donate", value), type: "radio", value }), label,
+    ]))),
+    draft.donate === "amount" ? h(Field, { id: "sell-donateAmount", key: "amount", label: "Amount for the club (USD)" }, h("input", {
+      id: "sell-donateAmount", inputMode: "decimal", key: "input", onChange: (event) => set("donateAmount", event.target.value), placeholder: "5", type: "text",
+      value: draft.donateAmount,
+    })) : null,
+    h("small", { className: "market-hint", key: "hint" },
+      "For a sale with a price. Buyers see it on the listing. Once it sells, send it to the club's PayPal from My marketplace; when the club confirms it arrived you get +1 karma for every dollar."),
   ]);
 }
 
@@ -320,6 +339,7 @@ export function MarketSell({ editId = null, fromBag = false }) {
       draft.openToTrade ? h(Field, { id: "sell-tradeFor", key: "trade-for", label: "What I'd trade for" }, h("textarea", {
         id: "sell-tradeFor", key: "input", maxLength: LIMITS.tradeFor, onChange: (event) => set("tradeFor", event.target.value), placeholder: "A stable fairway around 170g", rows: 2, value: draft.tradeFor,
       })) : null,
+      h(ClubShare, { draft, key: "club", set }),
       h(Field, { id: "sell-location", key: "location", label: "Location or pickup notes" }, textInput("sell-location", draft, set, "location", {
         placeholder: "At Sunday Baggers · Greenville · will ship +$5",
       })),

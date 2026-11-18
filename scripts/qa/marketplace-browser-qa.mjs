@@ -783,9 +783,73 @@ async function runBagSell() {
   console.log("Sell this from My Bag: a disc, the bag and an accessory were listed with their bag photos (copied, the bag kept its own); browse filters by kind");
 }
 
+/** Giving part of a sale to the club: pledged on the sell form, shown on the card, sent from My marketplace with the
+ *  club's PayPal link, confirmed by an admin, and only then +1 karma a whole dollar. */
+async function runDonations() {
+  const P = profiles.light390;
+  const seller = await open(P, { member: tokens.seller });
+  await go(seller.page, "market/sell", "form[aria-label='Sell a disc']");
+  const form = seller.page.locator("form[aria-label='Sell a disc']");
+  await form.getByLabel("Brand", { exact: true }).selectOption("Discraft");
+  await form.getByLabel("Mold", { exact: true }).fill("Buzzz");
+  await form.getByLabel("Disc type", { exact: true }).selectOption("midrange");
+  await form.getByLabel("Condition", { exact: true }).selectOption("9");
+  await form.getByLabel("Price (USD)", { exact: true }).fill("18");
+  const share = form.locator("[data-market-club-share]");
+  await share.getByRole("radio", { name: "A set amount" }).check();
+  await share.getByLabel("Amount for the club (USD)").fill("25");
+  await form.getByLabel("Choose disc photos").setInputFiles(photoFile);
+  await form.locator(".market-photo-thumb").first().waitFor();
+  await form.getByRole("button", { name: "Post listing" }).click();
+  await form.getByText("The club's share is at least $1 and no more than the price.").waitFor();
+  await share.getByRole("radio", { name: "25%" }).check();
+  await assertFits(seller.page, "sell form with a club share");
+  await form.getByRole("button", { name: "Post listing" }).click();
+  await seller.page.waitForURL(/#market\/listing\/\d+$/);
+  const listingId = Number(/listing\/(\d+)$/.exec(seller.page.url())[1]);
+  await seller.page.locator("[data-market-view=listing][data-market-state=ready]").getByText("25% of this sale goes to the club").waitFor();
+  await go(seller.page, "market", "[data-market-view=browse][data-market-state=ready]");
+  await seller.page.locator(`article.market-card[data-market-listing="${listingId}"] [data-market-club-share]`).getByText("25% to the club").waitFor();
+
+  // Sold to a member: the seller sends the club's share and says so.
+  const deal = (await api(`/market/listings/${listingId}/buy`, { method: "POST", token: tokens.buyer })).deal;
+  await api(`/market/deals/${deal.id}/complete`, { method: "POST", token: tokens.seller, body: { outcome: "sold" } });
+  await go(seller.page, "my-market", "[data-market-view=mine][data-market-state=ready]");
+  const panel = seller.page.locator(`[data-market-donation-deal="${deal.id}"]`);
+  await panel.getByText("You pledged $4.50 of this sale to the club.").waitFor();
+  assert.equal(await panel.getByLabel("Amount for the club (USD)").inputValue(), "4.50");
+  assert.equal(await panel.getByRole("link", { name: "Send $4.50 with PayPal" }).getAttribute("href"), "https://paypal.me/greenvillediscgolf/4.50");
+  await assertFits(seller.page, "club donation to send");
+  await panel.screenshot({ path: join(shotsDir, "flow-donation-send-390-light.png"), animations: "disabled" });
+  await panel.getByRole("button", { name: "I sent it" }).click();
+  await seller.page.locator(`[data-market-donation-deal="${deal.id}"][data-market-donation="sent"]`)
+    .getByText("Waiting for the club to confirm your $4.50 donation arrived.").waitFor();
+
+  // An admin checks the club PayPal and confirms: the karma lands then.
+  const admin = await open(P, { member: tokens.admin });
+  await admin.page.goto(origin + "/admin.html#marketplace", { waitUntil: "domcontentloaded" });
+  const card = admin.page.locator("li[data-admin-market-donation]").first();
+  await card.getByText("$4.50 from Taylor Morgan").waitFor();
+  await card.getByText("Received gives them +4 karma.", { exact: false }).waitFor();
+  await assertFits(admin.page, "admin donation to confirm");
+  await card.screenshot({ path: join(shotsDir, "flow-donation-admin-390-light.png"), animations: "disabled" });
+  await card.getByRole("button", { name: "Received", exact: true }).click();
+  await admin.page.getByText("No donations waiting.", { exact: false }).waitFor();
+  assert.deepEqual({ ...db.raw.prepare("SELECT status, karma, amount_cents FROM market_donations WHERE deal_id = ?").get(deal.id) },
+    { status: "confirmed", karma: 4, amount_cents: 450 });
+  await go(seller.page, "my-market", "[data-market-view=mine][data-market-state=ready]");
+  await seller.page.locator(`[data-market-donation-deal="${deal.id}"][data-market-donation="confirmed"]`)
+    .getByText("The club received your $4.50 donation: +4 karma. Thank you!").waitFor();
+  assert.equal((await api("/lost-found/me", { token: tokens.seller })).karma.karma, 4, "the karma joins the seller's karma");
+  await seller.context.close();
+  await admin.context.close();
+  console.log("club donation: pledged 25% on the listing, sent from My marketplace, confirmed by an admin, +4 karma");
+}
+
 try {
   await runFlows();
   await runBagSell();
+  await runDonations();
   if (!process.env.GVDG_MARKET_SKIP_SCREENS) await runScreens();
   await runGlass();
   assert.deepEqual(pageErrors, [], "page errors");

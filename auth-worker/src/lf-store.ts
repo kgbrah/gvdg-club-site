@@ -57,7 +57,8 @@ export function celebrationPhotos(env: Env, celebrationIds: readonly number[]): 
 
 export interface Karma { karma: number; returned: number }
 
-/** Karma = SUM of the append-only ledger; discs returned = confirmed returns that were not reversed. */
+/** Karma = SUM of the append-only ledger, plus the whole dollars of confirmed club donations from marketplace sales;
+ *  discs returned = confirmed returns that were not reversed. */
 export async function karmaOf(env: Env, personIds: readonly string[]): Promise<Map<string, Karma>> {
   const out = new Map<string, Karma>();
   const ids = [...new Set(personIds.filter(Boolean))];
@@ -69,6 +70,14 @@ export async function karmaOf(env: Env, personIds: readonly string[]): Promise<M
        FROM lf_karma WHERE person_id IN (${placeholders(chunk)}) GROUP BY person_id`,
     ).bind(...chunk).all<{ person_id: string; karma: number; returned: number }>()).results ?? [];
     for (const row of rows) out.set(row.person_id, { karma: Number(row.karma) || 0, returned: Math.max(0, Number(row.returned) || 0) });
+    const given = (await env.DB.prepare(
+      `SELECT seller_id AS person_id, SUM(karma) AS karma FROM market_donations
+       WHERE status = 'confirmed' AND seller_id IN (${placeholders(chunk)}) GROUP BY seller_id`,
+    ).bind(...chunk).all<{ person_id: string; karma: number }>()).results ?? [];
+    for (const row of given) {
+      const base = out.get(row.person_id) ?? { karma: 0, returned: 0 };
+      out.set(row.person_id, { ...base, karma: base.karma + (Number(row.karma) || 0) });
+    }
   }
   return out;
 }
@@ -78,6 +87,7 @@ export interface Person extends TraderLite { karma: number; returned: number }
 export function personOf(traders: Map<string, TraderLite>, karma: Map<string, Karma>, id: string): Person {
   const lite = liteOf(traders, id);
   const k = karma.get(id) ?? { karma: 0, returned: 0 };
+  // Karma includes confirmed club donations, but how much someone gave is never published.
   return { key: lite.key, name: lite.name, kind: lite.kind, karma: k.karma, returned: k.returned };
 }
 

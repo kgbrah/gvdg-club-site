@@ -21,6 +21,29 @@ export const ACCESSORY_KINDS = [
   ["umbrella", "Umbrella"], ["shoes", "Shoes"], ["rain_gear", "Rain gear"], ["seat", "Seat"], ["light", "Light / headlamp"], ["other", "Other"],
 ];
 
+// Giving part of a sale to the club: the pledge choices on the sell form, and the club's PayPal (the site's Donate link).
+export const CLUB_SHARE_PERCENTS = [10, 25, 50, 100];
+export const CLUB_PAYPAL_ME = "greenvillediscgolf";
+
+export function clubDonationUrl(cents) {
+  return `https://paypal.me/${CLUB_PAYPAL_ME}/${(Number(cents) / 100).toFixed(2)}`;
+}
+
+/** "25% of this sale goes to the club" / "$5.00 of this sale goes to the club" / "". */
+export function clubShareText(share) {
+  if (share?.percent === 100) return "All of this sale goes to the club";
+  if (share?.percent) return `${share.percent}% of this sale goes to the club`;
+  if (share?.cents) return `${exactMoney(share.cents)} of this sale goes to the club`;
+  return "";
+}
+
+/** "25% to the club" for a card. */
+export function clubShareShort(share) {
+  if (share?.percent) return `${share.percent}% to the club`;
+  if (share?.cents) return `${exactMoney(share.cents)} to the club`;
+  return "";
+}
+
 /** "Sell a disc" / "Sell a bag" / "Sell an accessory". */
 export function sellHeading(itemKind) {
   return itemKind === "bag" ? "Sell a bag" : itemKind === "accessory" ? "Sell an accessory" : "Sell a disc";
@@ -326,12 +349,24 @@ export function listingPayload(draft) {
   if (priceCents == null && !openToTrade) return { ok: false, field: "price", message: "Set a price, mark it open to trades, or both." };
   const quantity = Number(text("quantity") || "1");
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 20) return { ok: false, field: "quantity", message: "Quantity is 1 to 20." };
+  // The club's share: a percentage or a set amount, only on a sale with a price (always sent, so an edit can clear it).
+  let donatePercent = null;
+  let donateCents = null;
+  const donate = text("donate");
+  if (/^\d{1,3}$/.test(donate) && Number(donate) >= 1 && Number(donate) <= 100) donatePercent = Number(donate);
+  else if (donate === "amount" && priceCents != null) {
+    donateCents = dollarsToCents(text("donateAmount"));
+    if (donateCents == null || donateCents < 100 || donateCents > priceCents) {
+      return { ok: false, field: "donateAmount", message: "The club's share is at least $1 and no more than the price." };
+    }
+  }
+  if (priceCents == null) donatePercent = null;
   return {
     ok: true,
     value: {
       itemKind, gearType, brand, mold, plastic: disc ? text("plastic") : "", discType: disc ? discType : null, ...flight, weightG: weight.value, color: text("color"),
       condition, conditionNotes: text("conditionNotes"), priceCents, openToTrade,
-      tradeFor: openToTrade ? text("tradeFor") : "", quantity, location: text("location"),
+      tradeFor: openToTrade ? text("tradeFor") : "", quantity, location: text("location"), donatePercent, donateCents,
     },
   };
 }
@@ -347,6 +382,8 @@ export function listingDraft(listing) {
     conditionNotes: listing?.conditionNotes || "", price: centsToDollarsInput(listing?.priceCents),
     openToTrade: Boolean(listing?.openToTrade), tradeFor: listing?.tradeFor || "",
     quantity: listing?.quantity ? String(listing.quantity) : "1", location: listing?.location || "",
+    donate: listing?.clubShare?.percent ? String(listing.clubShare.percent) : listing?.clubShare?.cents ? "amount" : "",
+    donateAmount: listing?.clubShare?.cents ? centsToDollarsInput(listing.clubShare.cents) : "",
   };
 }
 

@@ -137,6 +137,35 @@ function LostMatchCard({ match, reload }) {
   ]);
 }
 
+const usd = (cents) => "$" + (Number(cents || 0) / 100).toFixed(2);
+
+/** A seller says they sent the club part of a sale: an admin checks the club PayPal; karma only on "Received". */
+function DonationCard({ donation, reload }) {
+  const [reason, setReason] = React.useState("");
+  const { act, busy, message } = useModeration(reload);
+  const path = `/admin/market/donations/${donation.id}/review`;
+  return h("li", { className: "al-section admin-market-report", "data-admin-market-donation": donation.id }, [
+    h("h3", { className: "al-h", key: "title" }, `${usd(donation.amountCents)} from ${who(donation.seller)}`),
+    h("p", { className: "al-note", key: "meta" }, [
+      "From the sale of ", h("a", { href: "pro-shop.html#market/listing/" + donation.listingId, key: "a", rel: "noopener", target: "_blank" }, donation.listingTitle || "a listing"),
+      donation.priceCents ? ` (${usd(donation.priceCents)})` : "", donation.sentAt ? " · sent " + when(donation.sentAt) : "",
+    ]),
+    h("p", { className: "admin-community-review", key: "how" }, `Check the club PayPal (paypal.me/greenvillediscgolf) for ${usd(donation.amountCents)}. Received gives them +${donation.karma} karma.`),
+    h(ReasonField, { id: "market-donation-reason-" + donation.id, key: "reason", onChange: setReason, value: reason }),
+    h("div", { className: "admin-today-actions admin-market-actions", key: "actions" }, [
+      h("button", {
+        className: "admin-btn", disabled: busy, key: "yes", type: "button",
+        onClick: () => act(path, { decision: "received", reason: reason.trim() || "Arrived in the club PayPal" }, "Confirmed. Karma awarded."),
+      }, "Received"),
+      h("button", {
+        className: "admin-btn secondary", disabled: busy, key: "no", type: "button",
+        onClick: () => act(path, { decision: "not_received", reason }, "Marked not received. The seller was told."),
+      }, "Not received"),
+    ]),
+    message ? h("p", { className: "dash-note", key: "message", role: "status" }, message) : null,
+  ]);
+}
+
 function UnhideRow({ kind, item, reload }) {
   const [reason, setReason] = React.useState("");
   const { act, busy, message } = useModeration(reload);
@@ -193,6 +222,7 @@ export function AdminMarketplacePanel() {
   const data = state.data || {};
   const reports = Array.isArray(data.reports) ? data.reports : [];
   const lostMatches = Array.isArray(data.lostMatches) ? data.lostMatches : [];
+  const donations = Array.isArray(data.donations) ? data.donations : [];
   const hiddenListings = Array.isArray(data.hidden?.listings) ? data.hidden.listings : [];
   const hiddenWanted = Array.isArray(data.hidden?.wanted) ? data.hidden.wanted : [];
   const withdrawn = Array.isArray(data.withdrawn) ? data.withdrawn : [];
@@ -207,6 +237,10 @@ export function AdminMarketplacePanel() {
     reports.length
       ? h("ul", { className: "admin-community-list", key: "reports" }, reports.map((report) => h(ReportCard, { key: report.id, reload: load, report })))
       : state.status === "ready" ? h("p", { className: "dash-note", key: "no-reports" }, "No open reports.") : null,
+    h("h2", { className: "admin-pane-kicker", key: "donations-title" }, `Donations to confirm (${donations.length})`),
+    donations.length
+      ? h("ul", { className: "admin-community-list", key: "donations" }, donations.map((donation) => h(DonationCard, { donation, key: donation.id, reload: load })))
+      : state.status === "ready" ? h("p", { className: "dash-note", key: "no-donations" }, "No donations waiting. When a seller says they sent part of a sale to the club, it shows here to confirm.") : null,
     h("h2", { className: "admin-pane-kicker", key: "lost-title" }, `Possible lost discs for sale (${lostMatches.length})`),
     lostMatches.length
       ? h("ul", { className: "admin-community-list", key: "lost" }, lostMatches.map((match) => h(LostMatchCard, { key: match.listing.id + "-" + match.lost.id, match, reload: load })))
