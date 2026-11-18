@@ -20,6 +20,9 @@ const D = "d".repeat(40);
 const E = "e".repeat(40);
 let release = A;
 let documentsAvailable = true;
+// A release whose new service worker never finishes installing (Chromium's stalled waiting worker, or a failed
+// install): Refresh must still reload into the new release.
+let stallWorker = false;
 let markerAvailable = true;
 let holdScoreRefresh = false;
 let scoreHead = null;
@@ -40,7 +43,10 @@ const server = createServer((request, response) => {
     return;
   }
   if (route === "/sw.js") {
-    send("text/javascript", `
+    send("text/javascript", (stallWorker ? `
+      // Stalled: this worker never finishes installing.
+      self.addEventListener("install", event => event.waitUntil(new Promise(() => {})));
+    ` : "") + `
       self.addEventListener("install", event => event.waitUntil(self.skipWaiting()));
       self.addEventListener("activate", event => event.waitUntil(self.clients.claim()));
       self.addEventListener("message", event => {
@@ -98,6 +104,36 @@ await context.addInitScript(() => {
 });
 
 function banner(page) { return page.getByRole("status").filter({ hasText: "Update available" }); }
+
+/** A new release whose service worker never takes over: Refresh still reloads into it (and never says it couldn't). */
+async function stalledWorkerRefresh() {
+  const isolated = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "allow" });
+  try {
+    const page = await isolated.newPage();
+    release = "f".repeat(40);
+    stallWorker = false;
+    await page.goto(origin + "/gvdg-members.html", { waitUntil: "load" });
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, { timeout: 15_000 });
+    release = "9".repeat(40);
+    stallWorker = true;
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update().catch(() => {}));
+    await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration())?.installing), null, { timeout: 15_000 });
+    await resume(page);
+    await banner(page).waitFor({ timeout: 15_000 });
+    await page.evaluate(() => { window.__sameDocument = true; });
+    const started = Date.now();
+    await banner(page).getByRole("button", { name: "Refresh" }).click();
+    await page.waitForFunction(() => !window.__sameDocument, null, { timeout: 20_000, polling: 200 });
+    await page.waitForLoadState("load");
+    assert.equal(await build(page), "9".repeat(40), "Refresh reloads into the new release even though its worker never took over");
+    assert(Date.now() - started < 15_000, "it does not wait out the old 15-second limit");
+    assert.equal(await page.getByText("Couldn’t refresh the app", { exact: false }).count(), 0);
+    console.log("stalled worker: Refresh reloaded into the new release in " + Math.round((Date.now() - started) / 1000) + " s");
+  } finally {
+    stallWorker = false;
+    await isolated.close();
+  }
+}
 function build(page) { return page.locator("#fixture-build").innerText(); }
 async function open(page, url = "/gvdg-members.html") {
   await page.goto(origin + url, { waitUntil: "load" });
@@ -253,7 +289,9 @@ try {
     await lazyScreensAcrossUpdates();
   }
 
-  console.log("Chromium PWA update QA passed resume, cross-tab versions, per-release Later, offline recovery, explicit refresh safety, stored card data and lazily loaded member screens across updates.");
+  await stalledWorkerRefresh();
+
+  console.log("Chromium PWA update QA passed a stalled new service worker, cross-tab versions, per-release Later, offline recovery, explicit refresh safety, stored card data and lazily loaded member screens across updates.");
 } finally {
   if (scoreHead) scoreHead();
   await browser.close();

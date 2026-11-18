@@ -108,7 +108,7 @@ gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="a
 
 - **Next migration number is `0068`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
   and hole, `0066` My Bag photos and the bag / marketplace cross-checks, `0067` whole-bag and accessory photos).
-- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v305`), plus the
+- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v306`), plus the
   `?v=` on the bundle you changed (members `203`, public/events `195`, score `239`, home `189`) and the
   tests that pin them.
 - **Generated bundles conflict on merge.** Delete the generated outputs, `npm run build`, then `git add -A`.
