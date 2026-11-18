@@ -438,9 +438,12 @@ async function checkBagExtras(page) {
   assert.equal(saved.record.color, "Orange");
   assert.equal(saved.record.ink, "QA One 555-0100");
   await card.getByText("Orange · Neutron · 172 g", { exact: false }).waitFor();
-  // A private photo: picked (no camera on this test browser), uploaded, shown from a private fetch, deleted.
+  // A private photo: picked with the photo picker, uploaded, shown from a private fetch, deleted. The picker button
+  // reads "Add photo" where the browser reports no camera and "Choose photo" next to Take photo otherwise (CI's
+  // headless browser lists no devices at all, which counts as "may have a camera").
+  const picker = card.getByRole("button", { name: /^(Add photo|Choose photo)$/ });
   const chooser = page.waitForEvent("filechooser");
-  await card.getByRole("button", { name: "Add photo" }).click();
+  await picker.click();
   await (await chooser).setFiles({ name: "wave.jpg", mimeType: "image/jpeg", buffer: QA_JPEG });
   await card.locator(".bag-photo-list img").first().waitFor();
   assert.equal(bag("qa-one").photos.length, 1);
@@ -449,7 +452,7 @@ async function checkBagExtras(page) {
   await card.getByRole("button", { name: "Delete photo 1 of MVP Wave" }).click();
   await card.locator(".bag-photo-list").waitFor({ state: "detached" });
   assert.equal(bag("qa-one").photos.length, 0);
-  await card.getByRole("button", { name: "Add photo" }).waitFor();
+  await picker.waitFor();
   // The found-disc check: on by default, saved when turned off.
   const toggle = page.getByRole("checkbox", { name: "Check found discs against my bag" });
   assert.equal(await toggle.isChecked(), true);
