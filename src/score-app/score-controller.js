@@ -1115,6 +1115,7 @@ export function startScoreApp(options) {
             const ledgerScore = scorecardState.rows.find((row) => row.source.playerIndexes.includes(scorerIndex));
             renderScoreBody('scorecard', {
                 ...scorecardState,
+                lostFoundCourseId: Number(S.courseId) || null,
                 watchApi: !WATCH && (memberToken() || (ROUND_CODE && readOpenPlayToken())) ? api : null,
                 phoneActivityApi: !WATCH ? phoneActivityApi() : null,
                 phoneOwnerId: decodeJwtPayload(memberToken())?.sub || null,

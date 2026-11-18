@@ -19,6 +19,8 @@ export interface FoundSide extends Where {
   mold: string;
   plastic: string;
   color: string;
+  weightG?: number | null;
+  hole?: number | null;
   aiColors: string[];
   date: string | null;
   ink: InkKeys;
@@ -29,6 +31,8 @@ export interface LostSide extends Where {
   mold: string;
   plastic: string;
   color: string;
+  weightG?: number | null;
+  hole?: number | null;
   date: string | null;
   privateInk: string;
   /** The lost poster's roster name when they are a member; null for guests (a chosen display name proves nothing). */
@@ -168,7 +172,15 @@ export function scoreMatch(found: FoundSide, lost: LostSide): MatchScore {
   if (fc.length && lc.length) {
     if (fc.some((color) => lc.includes(color))) { score += 8; reasons.push("color"); } else { score -= 10; reasons.push("color_mismatch"); }
   }
-  if (found.courseId != null && found.courseId === lost.courseId) { score += 12; reasons.push("course"); }
+  // Weight from the pick-list: stamped weights wander a gram or two and owners remember roughly.
+  if (found.weightG != null && lost.weightG != null) {
+    const grams = Math.abs(found.weightG - lost.weightG);
+    if (grams <= 3) { score += 4; reasons.push("weight"); } else if (grams > 8) { score -= 4; reasons.push("weight_mismatch"); }
+  }
+  if (found.courseId != null && found.courseId === lost.courseId) {
+    score += 12; reasons.push("course");
+    if (found.hole != null && found.hole === lost.hole) { score += 6; reasons.push("hole"); }
+  }
   else {
     const km = distanceKm(found, lost);
     if (km != null && km <= 25) { score += 5; reasons.push("nearby"); }
@@ -205,6 +217,8 @@ export const REASON_LABELS: Record<string, string> = {
   plastic: "Same plastic",
   color: "Same colour",
   course: "Same course",
+  hole: "Same hole",
+  weight: "Same weight",
   nearby: "A nearby course",
   date: "Found soon after it was lost",
 };

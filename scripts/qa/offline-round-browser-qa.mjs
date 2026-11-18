@@ -255,6 +255,16 @@ try {
   assert.equal(await button("Mark lie").getAttribute("aria-pressed"), "false");
   await button("Mark lie").click();
   await expectSavedLie();
+  // Lost & Found from the round: this course and hole go along, plus the way back to this round.
+  await button("Round tools").click();
+  const foundHref = await page.getByRole("link", { name: "Found a disc", exact: true }).getAttribute("href");
+  const foundQuery = new URLSearchParams(foundHref.split("#new/found?")[1] || "");
+  assert.equal(foundQuery.get("course"), "500", foundHref);
+  assert.equal(foundQuery.get("hole"), "1", foundHref);
+  assert.match(foundQuery.get("return") || "", /^score\.html\?/, foundHref);
+  await page.getByRole("link", { name: "Found a disc", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(screenshots, "offline-round-tools-lost-found-phone.png") });
+  await page.keyboard.press("Escape");
   await shots(1);
   await button("Add putt").click();
   await page.getByLabel("Outcome", { exact: true }).selectOption("made");

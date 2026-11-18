@@ -8,6 +8,7 @@ import {
   IdentityStrip, LoadState, Note, ReportControl, StatusLine, TraderLine, useAction, useIdentityGate, useIdentityVersion, useMarketConfig,
 } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
+import { BrandPick, MoldInput, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
 
 const h = React.createElement;
 
@@ -234,6 +235,11 @@ export function MarketWantedNew() {
   const action = useAction();
   const identity = useIdentityGate(config.viewer);
   const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const heard = (fields) => setDraft((current) => {
+    const next = { ...current };
+    for (const key of ["brand", "mold", "plastic"]) if (fields[key]) next[key] = fields[key];
+    return next;
+  });
 
   async function post() {
     const parsed = wantedPayload(draft);
@@ -253,7 +259,6 @@ export function MarketWantedNew() {
 
   const field = (key, label, input) => h("div", { className: "market-field", key }, [h("label", { htmlFor: "wanted-" + key, key: "label" }, label), input]);
   const text = (key, extra = {}) => h("input", { id: "wanted-" + key, key: "input", maxLength: LIMITS[key] || 40, onChange: (event) => set(key, event.target.value), type: "text", value: draft[key], ...extra });
-  const number = (key, extra = {}) => h("input", { id: "wanted-" + key, inputMode: "numeric", key: "input", onChange: (event) => set(key, event.target.value), type: "number", value: draft[key], ...extra });
 
   return h("section", { "data-market-state": config.status === "loading" ? "loading" : "ready", "data-market-view": "wanted-new" }, [
     h("a", { className: "market-back", href: "#wanted", key: "back" }, "← All WANTED posts"),
@@ -263,15 +268,16 @@ export function MarketWantedNew() {
       "aria-label": "Post a WANTED", className: "my-orders-panel market-panel market-form", key: "form", noValidate: true,
       onSubmit: (event) => { event.preventDefault(); identity.require("Verify your email to post a WANTED", post); },
     }, [
+      h(VoiceDiscButton, { example: "Try: “Champion Teebird3.”", key: "voice", onFields: heard }),
       h("div", { className: "market-grid-2", key: "names" }, [
-        field("brand", "Brand", text("brand", { placeholder: "Innova" })),
-        field("mold", "Mold", text("mold", { placeholder: "Destroyer" })),
-        field("plastic", "Plastic", text("plastic", { placeholder: "Star" })),
+        h(BrandPick, { id: "wanted-brand", key: "brand", maxLength: LIMITS.brand, onChange: (value) => set("brand", value), placeholder: "Any brand", value: draft.brand }),
+        h(MoldInput, { brand: draft.brand, id: "wanted-mold", key: "mold", maxLength: LIMITS.mold, onChange: (value) => set("mold", value), placeholder: "Destroyer", value: draft.mold }),
+        h(PlasticPick, { brand: draft.brand, id: "wanted-plastic", key: "plastic", maxLength: LIMITS.plastic, onChange: (value) => set("plastic", value), placeholder: "Any plastic", value: draft.plastic }),
         field("discType", "Disc type", h("select", { id: "wanted-discType", key: "input", onChange: (event) => set("discType", event.target.value), value: draft.discType }, [
           h("option", { key: "any", value: "" }, "Any"), ...DISC_TYPES.map(([value, label]) => h("option", { key: value, value }, label)),
         ])),
-        field("weightMin", "Min weight (g)", number("weightMin", { max: 200, min: 100 })),
-        field("weightMax", "Max weight (g)", number("weightMax", { max: 200, min: 100 })),
+        h(WeightPick, { id: "wanted-weightMin", key: "weightMin", label: "Min weight (g)", onChange: (value) => set("weightMin", value), placeholder: "Any", value: draft.weightMin }),
+        h(WeightPick, { id: "wanted-weightMax", key: "weightMax", label: "Max weight (g)", onChange: (value) => set("weightMax", value), placeholder: "Any", value: draft.weightMax }),
         field("conditionMin", "Condition at least", h("select", { id: "wanted-conditionMin", key: "input", onChange: (event) => set("conditionMin", event.target.value), value: draft.conditionMin }, [
           h("option", { key: "any", value: "" }, "Any"), ...CONDITION_LEGEND.map(([score, label]) => h("option", { key: score, value: String(score) }, `${score} · ${label}`)),
         ])),

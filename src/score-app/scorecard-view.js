@@ -1,6 +1,6 @@
 import React from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Eye, Link2, ListChecks, Lock, Ruler, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ClipboardList, Eye, HandHeart, Link2, ListChecks, Lock, Ruler, Search, Settings2, Share2, UserPlus, Watch, X } from "lucide-react";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { HoleMap } from "../shared/hole-map.js";
 import { addThrow, currentRangeHud, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, lastThrow, lastThrowHud, nextTeeHud, HOLE_MAP_COMPACT_SIZE, remainingFt, resolveMapFocus, undoThrow, withSelfLocation } from "../shared/hole-map-model.js";
@@ -263,6 +263,29 @@ function LiveRoundStats(props) {
   ]);
 }
 
+/** Lost & Found's post form with this course and hole filled in, and a way back to this round. */
+export function lostFoundHref(kind, { courseId, hole, here }) {
+  const params = new URLSearchParams();
+  const course = Number(courseId);
+  if (Number.isInteger(course) && course > 0) {
+    params.set("course", String(course));
+    const number = Number(hole);
+    if (Number.isInteger(number) && number >= 1 && number <= 40) params.set("hole", String(number));
+  }
+  params.set("from", "score");
+  const back = String(here || "");
+  params.set("return", /^score\.html(?:[?#]|$)/.test(back) ? back : "score.html");
+  return "lost-found.html#new/" + (kind === "lost" ? "lost" : "found") + "?" + params.toString();
+}
+
+function LostFoundTools(props) {
+  const here = typeof location === "undefined" ? "score.html" : (location.pathname.split("/").pop() || "score.html") + location.search + location.hash;
+  const where = { courseId: props.lostFoundCourseId, hole: props.hole && props.hole.hole, here };
+  return h("div", { className: "round-tools-direct round-tools-lost-found", role: "group", "aria-label": "Lost & Found" },
+    h("a", { className: "btn secondary", href: lostFoundHref("found", where), "data-round-lost-found": "found" }, icon(HandHeart), "Found a disc"),
+    h("a", { className: "btn secondary", href: lostFoundHref("lost", where), "data-round-lost-found": "lost" }, icon(Search), "Lost a disc"));
+}
+
 function RoundToolActions(props) {
   const showManage = Boolean(props.show);
   const [copied, setCopied] = React.useState(false);
@@ -452,6 +475,7 @@ function RoundTools(props) {
               props.shotLedger && h("button", { type: "button", ref: ledgerButton, className: "btn secondary", onClick: openLedger },
                 icon(ListChecks), "Shot details")),
             h(ScorecardOwner, props),
+            h(LostFoundTools, props),
             (props.onMarkTee || props.onMarkPin) && h("div", { className: "round-tools-direct", role: "group", "aria-label": "Survey this hole" },
               props.onMarkTee && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onMarkTee) }, "Mark tee"),
               props.onMarkPin && h("button", { type: "button", className: "btn secondary", onClick: closeThen(props.onMarkPin) }, "Mark pin")),

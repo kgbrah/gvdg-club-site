@@ -289,6 +289,13 @@ describe("lost & found pure helpers", () => {
     expect(scoreMatch(found({ mold: "Destroyr" }), lost()).reasons).toContain("mold_close");
     expect(scoreMatch(found({ mold: "Firebird" }), lost()).reasons).toContain("mold_mismatch");
     expect(scoreMatch(found({ color: "Blue" }), lost()).reasons).toContain("color_mismatch");
+    // Weight and hole from the pick-lists: close weights and the same hole on the same course add up; far weights subtract.
+    const picked = scoreMatch(found({ weightG: 174, hole: 7 }), lost({ weightG: 175, hole: 7 }));
+    expect(picked.reasons).toEqual(expect.arrayContaining(["weight", "hole"]));
+    expect(picked.score).toBe(scoreMatch(found(), lost()).score + 10);
+    expect(scoreMatch(found({ weightG: 150 }), lost({ weightG: 175 })).reasons).toContain("weight_mismatch");
+    expect(scoreMatch(found({ hole: 7, courseId: 2 }), lost({ hole: 7 })).reasons).not.toContain("hole");
+    expect(scoreMatch(found({ weightG: null }), lost({ weightG: 175 })).reasons).not.toContain("weight");
     // Date windows: found before it was lost is penalised; weeks later counts less.
     const before = scoreMatch(found({ date: "2026-11-01" }), lost({ date: "2026-11-09" }));
     expect(before.reasons).toContain("date_before");
@@ -306,6 +313,11 @@ describe("lost & found pure helpers", () => {
 
   it("validates posts: found needs nothing but a photo, lost needs something to match on", () => {
     expect(parsePost({ kind: "found" }).ok).toBe(true);
+    expect(parsePost({ kind: "found", weightG: "175", hole: 7 })).toMatchObject({ ok: true, value: { weightG: 175, hole: 7 } });
+    expect(parsePost({ kind: "found", weightG: "", hole: null })).toMatchObject({ ok: true, value: { weightG: null, hole: null } });
+    expect(parsePost({ kind: "found", weightG: 99 })).toEqual({ ok: false, field: "weightG" });
+    expect(parsePost({ kind: "found", weightG: 175.5 })).toEqual({ ok: false, field: "weightG" });
+    expect(parsePost({ kind: "found", hole: 41 })).toEqual({ ok: false, field: "hole" });
     expect(parsePost({ kind: "found", holding: "club_bin" })).toEqual({ ok: false, field: "binNote" });
     expect(parsePost({ kind: "lost" })).toEqual({ ok: false, field: "mold" });
     expect(parsePost({ kind: "lost", privateInk: "Wendy" }).ok).toBe(true);
@@ -802,6 +814,18 @@ describe("lost & found celebrations and moderation", () => {
     expect([...photos.objects.keys()]).toEqual([]);
     expect(db.raw.prepare("SELECT action FROM lf_mod_log ORDER BY id").all().map((row: any) => row.action)).toEqual(["hide", "unhide", "merge"]);
     expect(db.raw.prepare("SELECT DISTINCT status FROM lf_photos").all()).toEqual([{ status: "removed" }]);
+  });
+
+  it("keeps the picked weight and hole, shows them on the card and counts them in matching", async () => {
+    const lost = await createPost(await token("m_ada"), lostBody({ weightG: 175, hole: 7, area: "Hole 7 · pond" }));
+    const found = await createPost(await token("m_bo"), foundBody({ weightG: "174", hole: "7" }));
+    expect(found).toMatchObject({ weightG: 174, hole: 7 });
+    expect(await getPost(lost.id)).toMatchObject({ weightG: 175, hole: 7, area: "Hole 7 · pond" });
+    const match = db.raw.prepare("SELECT reasons FROM lf_matches WHERE found_id = ? AND lost_id = ?").get(found.id, lost.id) as any;
+    expect(JSON.parse(match.reasons)).toEqual(expect.arrayContaining(["weight", "hole"]));
+    // An older post without them still reads fine.
+    const plain = await createPost(await token("m_cy"), foundBody());
+    expect(plain).toMatchObject({ weightG: null, hole: null });
   });
 
   it("expires posts after 90 days, rate-limits posting and rejects bad input", async () => {

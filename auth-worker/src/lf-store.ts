@@ -12,7 +12,8 @@ import { liteOf, num, numOrNull, str, tradersByOwner, type Row, type TraderLite 
 export const KARMA_PER_RETURN = 10;
 
 export const POST_COLUMNS = `p.id, p.kind, p.owner_id, p.status, p.brand, p.mold, p.plastic, p.color, p.course_id, p.course_name, p.area,
-  p.event_date, p.holding, p.bin_note, p.reward_note, p.ai_fields, p.hidden, p.merged_into, p.created_at, p.updated_at, p.expires_at, p.closed_at`;
+  p.event_date, p.holding, p.bin_note, p.reward_note, p.ai_fields, p.hidden, p.merged_into, p.created_at, p.updated_at, p.expires_at, p.closed_at,
+  p.weight_g, p.hole`;
 
 export async function getPostRow(env: Env, id: number): Promise<Row | null> {
   return env.DB.prepare(`SELECT ${POST_COLUMNS} FROM lf_posts p WHERE p.id = ?`).bind(id).first<Row>();
@@ -129,6 +130,8 @@ export function postCard(row: Row, photos: Map<number, PublicPhoto[]>, person: (
     color: str(row, "color"),
     course: row.course_id != null ? { id: num(row, "course_id"), name: str(row, "course_name") } : null,
     area: str(row, "area"),
+    weightG: numOrNull(row, "weight_g"),
+    hole: numOrNull(row, "hole"),
     date: row.event_date ? str(row, "event_date") : null,
     holding: row.holding ? str(row, "holding") : null,
     binNote: str(row, "bin_note"),

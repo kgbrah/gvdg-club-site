@@ -477,7 +477,7 @@ function ActiveRound({ round, edit, busy, notice }) {
         h("h2", { className: "section", id: "offline-scorecard-title" }, "Full scorecard"),
         h(RoundSummary, { round }),
         h("button", { className: "btn secondary sheet-close", type: "button", onClick: closeReview }, "Back to round"))), document.body),
-    h(ScorecardView, { ...props, offlineStatus: status, finishing: busy, clipRows, clipRecovery: { scopeKey: "offline-round:" + round.localId, upload: CLOSED_CLIP_UPLOAD },
+    h(ScorecardView, { ...props, lostFoundCourseId: round.source.courseId, offlineStatus: status, finishing: busy, clipRows, clipRecovery: { scopeKey: "offline-round:" + round.localId, upload: CLOSED_CLIP_UPLOAD },
       onNext: () => jump(hole + 1), onPrevious: () => jump(hole - 1), onJumpHole: jump, onScore: setScore,
       onFullScorecard: () => setReview(true), onOpenFinish: () => setFinish(true), onCloseFinish: () => setFinish(false),
       onAgreeFinish: complete, onSaveShots: saveShots,

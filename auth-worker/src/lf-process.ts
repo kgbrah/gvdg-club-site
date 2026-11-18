@@ -21,7 +21,7 @@ import { rosterNameMatch, scoreMatch, STORE_THRESHOLD, type FoundSide, type Lost
 import { coursesById, getPostRow, postTitle } from "./lf-store.js";
 import { compareDiscPhotos, extractDisc, inkKeys, normalizeName, showsPersonalInfo, type InkKeys } from "./lf-vision.js";
 import { isGuestId } from "./market-notify.js";
-import { num, str, type Row } from "./market-store.js";
+import { num, numOrNull, str, type Row } from "./market-store.js";
 import { getMember, listMembers } from "./roster.js";
 
 type WaitCtx = { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
@@ -236,7 +236,7 @@ export async function runMatching(env: Env, postId: number): Promise<Candidate[]
   if (!post || str(post, "status") !== "open" || num(post, "hidden") === 1) return [];
   const isFound = str(post, "kind") === "found";
   const others = (await env.DB.prepare(
-    `SELECT p.id, p.kind, p.owner_id, p.brand, p.mold, p.plastic, p.color, p.course_id, p.event_date, p.private_ink, p.created_at
+    `SELECT p.id, p.kind, p.owner_id, p.brand, p.mold, p.plastic, p.color, p.course_id, p.event_date, p.private_ink, p.created_at, p.weight_g, p.hole
      FROM lf_posts p WHERE p.kind = ? AND ${OPEN_POST} AND p.owner_id <> ? AND p.created_at >= datetime('now', '-${CANDIDATE_DAYS} days')
      ORDER BY p.id DESC LIMIT 200`,
   ).bind(isFound ? "lost" : "found", str(post, "owner_id")).all<Row>()).results ?? [];
@@ -252,11 +252,11 @@ export async function runMatching(env: Env, postId: number): Promise<Candidate[]
   const foundSide = (row: Row): FoundSide => {
     const read = ink.get(num(row, "id"));
     return { ...where(row), brand: str(row, "brand"), mold: str(row, "mold"), plastic: str(row, "plastic"), color: str(row, "color"),
-      aiColors: read?.colors ?? [], date: row.event_date ? str(row, "event_date") : null, ink: read?.keys ?? { names: [], phones: [], initials: [] } };
+      weightG: numOrNull(row, "weight_g"), hole: numOrNull(row, "hole"), aiColors: read?.colors ?? [], date: row.event_date ? str(row, "event_date") : null, ink: read?.keys ?? { names: [], phones: [], initials: [] } };
   };
   const lostSide = async (row: Row): Promise<LostSide> => ({
     ...where(row), brand: str(row, "brand"), mold: str(row, "mold"), plastic: str(row, "plastic"), color: str(row, "color"),
-    date: row.event_date ? str(row, "event_date") : null, privateInk: str(row, "private_ink"), memberName: await memberName(env, str(row, "owner_id")),
+    weightG: numOrNull(row, "weight_g"), hole: numOrNull(row, "hole"), date: row.event_date ? str(row, "event_date") : null, privateInk: str(row, "private_ink"), memberName: await memberName(env, str(row, "owner_id")),
   });
 
   const candidates: Candidate[] = [];

@@ -50,6 +50,7 @@ import { handleMemberArchiveRoute } from "./member-archive-routes.js";
 import { handleMarket } from "./market-routes.js";
 import { finalizeWithdrawals } from "./market-sweep.js";
 import { handleLostFound } from "./lf-routes.js";
+import { handleVoiceDisc } from "./voice-disc-route.js";
 import { runLostFoundTick } from "./lf-process.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
@@ -140,6 +141,7 @@ export default {
         if (membership) return membership;
       }
 
+      if (pathname === "/voice/disc" && method === "POST") return await handleVoiceDisc(request, env, origin);
       const market = await handleMarket(request, env, origin, pathname, method, ctx);
       if (market) return market;
       const lostFound = await handleLostFound(request, env, origin, pathname, method, ctx);

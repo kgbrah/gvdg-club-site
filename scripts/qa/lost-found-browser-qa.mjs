@@ -95,6 +95,11 @@ const photos = memoryR2();
 const mail = [];
 const NO_INK = JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "Star Destroyer", ink: [], unreadable_writing: false, ink_confidence: "high" });
 let geminiQueue = [];
+// Whisper (Groq first, OpenRouter as the backup), mocked: what the next clip "says", what was sent, and a Groq
+// answer to force (e.g. its free-plan 429) for the next call.
+let whisperQueue = [];
+const whisperCalls = [];
+let groqStatusNext = 0;
 let geminiCalls = 0;
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
@@ -103,6 +108,19 @@ globalThis.fetch = async (input, init) => {
     const body = JSON.parse(String(init?.body || "{}"));
     mail.push({ to: body.to?.[0], subject: body.subject, text: body.text });
     return new Response("{}", { status: 200 });
+  }
+  if (url === "https://openrouter.ai/api/v1/audio/transcriptions" || url === "https://api.groq.com/openai/v1/audio/transcriptions") {
+    const form = init?.body;
+    const file = form?.get?.("file");
+    const provider = url.includes("groq") ? "groq" : "openrouter";
+    whisperCalls.push({ provider, model: form?.get?.("model"), language: form?.get?.("language"), prompt: form?.get?.("prompt") ?? null,
+      name: file?.name, type: file?.type, size: file?.size, auth: new Headers(init?.headers).get("Authorization") });
+    if (provider === "groq" && groqStatusNext) {
+      const status = groqStatusNext;
+      groqStatusNext = 0;
+      return Response.json({ error: { message: "limit" } }, { status });
+    }
+    return Response.json({ text: whisperQueue.shift() ?? "" });
   }
   if (url.startsWith("https://generativelanguage.googleapis.com/")) {
     geminiCalls += 1;
@@ -131,7 +149,7 @@ let env = null;
 let origin = "";
 let glassTheme = null;
 const tokenOwners = new Map();
-const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices)(\/|$)/;
+const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
 
 function fixture(path, authorization) {
   if (path === "/me") {
@@ -266,9 +284,10 @@ async function api(path, { method = "GET", token, body } = {}) {
 // Browser helpers
 // ---------------------------------------------------------------------------------------------------
 
+// A simulated camera (Chromium's moving test pattern, permission granted) so the in-app camera can be driven.
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
-  ...(process.env.GVDG_QA_NO_SANDBOX ? { args: ["--no-sandbox"] } : {}),
+  args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", ...(process.env.GVDG_QA_NO_SANDBOX ? ["--no-sandbox"] : [])],
 });
 
 const profiles = {
@@ -406,12 +425,14 @@ async function runFlows() {
   const owner = await open(P, { member: tokens.owner });
   await go(owner.page, "new/lost", "form[aria-label='Post a lost disc']");
   const lostForm = owner.page.locator("form[aria-label='Post a lost disc']");
-  await lostForm.getByLabel("Brand", { exact: true }).fill("Innova");
+  await lostForm.getByLabel("Brand", { exact: true }).selectOption("Innova");
   await lostForm.getByLabel("Mold", { exact: true }).fill("Destroyer");
-  await lostForm.getByLabel("Plastic", { exact: true }).fill("Star");
-  await lostForm.getByLabel("Colour", { exact: true }).fill("Orange");
+  await lostForm.getByLabel("Plastic", { exact: true }).selectOption("Star");
+  await lostForm.getByLabel("Colour", { exact: true }).selectOption("Orange");
+  await lostForm.getByLabel("Weight (if you know it)", { exact: true }).selectOption("175");
   await lostForm.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
-  await lostForm.getByLabel("Hole or area", { exact: true }).fill("Hole 7 by the pond");
+  await lostForm.getByLabel("Hole lost on", { exact: true }).selectOption("7");
+  await lostForm.getByLabel("Where exactly (optional)", { exact: true }).fill("by the pond");
   await lostForm.getByLabel("Reward note (optional, shown)").fill("Cold drink on me");
   await lostForm.getByLabel("What's written on it (private)").fill("Jordan Parker 252-555-0187");
   await lostForm.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
@@ -432,7 +453,8 @@ async function runFlows() {
   await form.getByLabel("Choose disc photos").setInputFiles(ink.file);
   await form.locator(".market-photo-thumb").first().waitFor();
   await form.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
-  await form.getByLabel("Hole or area", { exact: true }).fill("Hole 7 drop zone");
+  await form.getByLabel("Hole found on", { exact: true }).selectOption("7");
+  await form.getByLabel("Where exactly (optional)", { exact: true }).fill("drop zone");
   await form.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
   await form.getByText("Anyone can see the photos you post.", { exact: false }).waitFor();
   assert.equal(await form.getByText(/blur/i).count(), 0, "the form promises no blurring");
@@ -763,6 +785,411 @@ async function runGlass() {
   console.log("glass theme: Lost & Found cards turn to glass when on and stay solid when off");
 }
 
+// ---------------------------------------------------------------------------------------------------
+// In-app camera: Take photo opens a full-screen viewfinder; shots go through the same resize and upload as picked
+// photos. Driven with Chromium's simulated camera; init scripts stand in for a blocked camera, a computer with no
+// camera and a phone browser without the in-app camera.
+// ---------------------------------------------------------------------------------------------------
+
+const CAMERA_SPY = () => {
+  const media = navigator.mediaDevices;
+  if (!media?.getUserMedia) return;
+  const real = media.getUserMedia.bind(media);
+  window.__gvStreams = [];
+  media.getUserMedia = async (constraints) => {
+    window.__gvConstraints = constraints;
+    const stream = await real(constraints);
+    window.__gvStreams.push(stream);
+    return stream;
+  };
+};
+const CAMERA_BLOCKED = () => {
+  navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException("Permission denied", "NotAllowedError"));
+};
+const NO_CAMERA = () => {
+  navigator.mediaDevices.enumerateDevices = async () => [{ kind: "audioinput", deviceId: "", groupId: "", label: "" }];
+};
+const NO_LIVE_CAMERA = () => {
+  Object.defineProperty(MediaDevices.prototype, "getUserMedia", { configurable: true, value: undefined });
+  Object.defineProperty(navigator.mediaDevices, "getUserMedia", { configurable: true, value: undefined });
+};
+
+async function cameraView(profile, who, scripts = [CAMERA_SPY]) {
+  const view = await open(profile, who);
+  for (const script of scripts) await view.context.addInitScript(script);
+  return view;
+}
+
+async function cameraTracks(page) {
+  return page.evaluate(() => (window.__gvStreams || []).flatMap((stream) => stream.getTracks()).map((track) => track.kind + ":" + track.readyState));
+}
+
+async function snapShots(sheet, count) {
+  const shutter = sheet.getByRole("button", { name: "Take photo", exact: true });
+  for (let index = 0; index < count; index++) {
+    await shutter.click();
+    await sheet.locator(".gv-camera-shot").nth(index).waitFor();
+  }
+}
+
+async function runCamera() {
+  const P = profiles.light390;
+
+  // 1. A lost post with two photos from the in-app camera, end to end: viewfinder, two shots, Done, posted, stored.
+  const member = await cameraView(P, { member: tokens.finder2 });
+  await go(member.page, "new/lost", "form[aria-label='Post a lost disc']");
+  const form = member.page.locator("form[aria-label='Post a lost disc']");
+  await form.locator(".photo-add-row[data-photo-camera=live]").waitFor();
+  assert.equal((await form.locator(".market-photo-add").innerText()).trim(), "Choose photos", "the picker reads Choose photos next to Take photo");
+  await assertFits(member.page, "lost form with Take photo");
+  await shot(member.page, "camera-lost-form-390-light");
+  await form.getByRole("button", { name: "Take photo" }).click();
+  const sheet = member.page.locator(".gv-camera[data-gv-camera=ready]");
+  await sheet.waitFor();
+  assert.equal(await sheet.getAttribute("aria-modal"), "true");
+  await sheet.getByText("Your disc, or one just like it.").waitFor();
+  assert.equal((await sheet.locator(".gv-camera-count").innerText()).trim(), "0 of 2");
+  assert.equal(await sheet.getByRole("button", { name: "Done" }).isDisabled(), true, "Done waits for a shot");
+  assert.equal(await member.page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Take photo", "the shutter has focus");
+  const asked = await member.page.evaluate(() => window.__gvConstraints);
+  assert.equal(asked.audio, false, "the camera never asks for the microphone");
+  assert.equal(asked.video.facingMode.ideal, "environment", "the back camera first");
+  await assertFits(member.page, "camera ready 390");
+  await member.page.screenshot({ path: join(shotsDir, "camera-ready-390-light.png"), animations: "disabled" });
+  await snapShots(sheet, 2);
+  assert.equal((await sheet.locator(".gv-camera-count").innerText()).trim(), "2 of 2");
+  assert.equal(await sheet.getByRole("button", { name: /^Take photo \(that's the most/ }).isDisabled(), true, "the shutter stops at the post's limit");
+  await assertFits(member.page, "camera with two shots 390");
+  await member.page.screenshot({ path: join(shotsDir, "camera-two-shots-390-light.png"), animations: "disabled" });
+  await sheet.getByRole("button", { name: "Use 2 photos" }).click();
+  await member.page.locator(".gv-camera").waitFor({ state: "detached" });
+  await form.locator(".market-photo-thumb").nth(1).waitFor();
+  assert.equal(await form.getByRole("button", { name: "Take photo" }).count(), 0, "no Take photo once the post is full");
+  assert.equal(await member.page.evaluate(() => document.documentElement.style.overflow), "", "the page scrolls again");
+  const tracks = await cameraTracks(member.page);
+  assert(tracks.length > 0 && tracks.every((track) => track === "video:ended"), "the camera is off after Done (" + tracks.join(", ") + ")");
+  await form.getByLabel("Mold", { exact: true }).fill("Firebird");
+  await form.getByLabel("Colour", { exact: true }).selectOption("Red");
+  await form.getByRole("button", { name: "Post lost disc" }).click();
+  await member.page.waitForURL(/#post\/\d+$/);
+  const cameraPostId = Number(/post\/(\d+)$/.exec(member.page.url())[1]);
+  await member.page.locator("[data-lf-view=post][data-lf-state=ready] [data-lf-gallery='2']").waitFor();
+  const stored = db.raw.prepare("SELECT photo_key FROM lf_photos WHERE post_id = ? AND status = 'public' ORDER BY id").all(cameraPostId);
+  assert.equal(stored.length, 2, "both camera photos were stored");
+  for (const row of stored) {
+    const bytes = photos.objects.get(row.photo_key)?.bytes;
+    assert(bytes && bytes[0] === 0xff && bytes[1] === 0xd8, "a stored camera photo is a JPEG");
+  }
+  await member.context.close();
+  console.log("in-app camera: two shots on a lost post, posted and stored as JPEGs; the camera turns off after Done");
+
+  // 2. Close and Escape: nothing taken closes at once; a shot asks first; the camera is off afterwards; focus returns.
+  const closer = await cameraView(P, { member: tokens.other });
+  await go(closer.page, "new/found", "form[aria-label='Post a found disc']");
+  const found = closer.page.locator("form[aria-label='Post a found disc']");
+  const take = found.getByRole("button", { name: "Take photo" });
+  await take.click();
+  const closeSheet = closer.page.locator(".gv-camera[data-gv-camera=ready]");
+  await closeSheet.getByText("The top of the disc, then the bottom. Cover any name or phone number.").waitFor();
+  await closer.page.keyboard.press("Escape");
+  await closer.page.locator(".gv-camera").waitFor({ state: "detached" });
+  assert.equal(await closer.page.evaluate(() => document.activeElement?.textContent), "Take photo", "focus goes back to Take photo");
+  // The phone's Back button closes the camera and keeps the form and what's typed; with a shot taken it asks first.
+  await found.getByLabel("Where exactly (optional)", { exact: true }).fill("Hole 9 creek");
+  const formUrl = closer.page.url();
+  await take.click();
+  await closeSheet.waitFor();
+  await closer.page.evaluate(() => history.back());
+  await closer.page.locator(".gv-camera").waitFor({ state: "detached" });
+  assert.equal(closer.page.url(), formUrl, "Back closed the camera, not the form");
+  assert.equal(await found.getByLabel("Where exactly (optional)", { exact: true }).inputValue(), "Hole 9 creek", "what was typed is still there");
+  await take.click();
+  await closeSheet.waitFor();
+  await snapShots(closeSheet, 1);
+  await closer.page.evaluate(() => history.back());
+  await closer.page.locator(".gv-camera [role=alertdialog]").getByText("Discard this photo?").waitFor();
+  await closer.page.locator(".gv-camera [role=alertdialog]").getByRole("button", { name: "Keep shooting" }).click();
+  assert.equal(await closeSheet.locator(".gv-camera-shot").count(), 1, "Back with a shot asks and keeps it");
+  await closeSheet.getByRole("button", { name: "Use 1 photo" }).click();
+  await found.locator(".market-photo-thumb").first().waitFor();
+  await closer.page.waitForTimeout(300);
+  assert.equal(closer.page.url(), formUrl, "Done leaves the form where it was");
+  await found.getByRole("button", { name: "Remove photo 1" }).click();
+  await found.getByLabel("Where exactly (optional)", { exact: true }).fill("");
+  await take.click();
+  await closeSheet.waitFor();
+  await snapShots(closeSheet, 1);
+  await closeSheet.getByRole("button", { name: "Close camera" }).click();
+  const ask = closer.page.locator(".gv-camera [role=alertdialog]");
+  await ask.getByText("Discard this photo?").waitFor();
+  await closer.page.screenshot({ path: join(shotsDir, "camera-discard-390-light.png"), animations: "disabled" });
+  await ask.getByRole("button", { name: "Keep shooting" }).click();
+  await ask.waitFor({ state: "detached" });
+  assert.equal(await closeSheet.locator(".gv-camera-shot").count(), 1, "Keep shooting keeps the shot");
+  await closer.page.keyboard.press("Escape");
+  await ask.getByRole("button", { name: "Discard" }).click();
+  await closer.page.locator(".gv-camera").waitFor({ state: "detached" });
+  assert.equal(await found.locator(".market-photo-thumb").count(), 0, "discarded shots don't reach the form");
+  assert((await cameraTracks(closer.page)).every((track) => track === "video:ended"), "the camera is off after closing");
+
+  // 3. Retake from the "may show a name or phone number" nudge: a found disc posted from the camera, read as inked,
+  // then retaken in place.
+  await take.click();
+  await closeSheet.waitFor();
+  await snapShots(closeSheet, 1);
+  await closeSheet.getByRole("button", { name: "Use 1 photo" }).click();
+  await found.locator(".market-photo-thumb").first().waitFor();
+  geminiQueue.push((await makeInkPhoto(join(workDir, "camera-ink.jpg"), [["RILEY 252-555-0144", 300, 520, 40]])).reply);
+  await found.getByRole("button", { name: "Post found disc" }).click();
+  await closer.page.waitForURL(/#post\/\d+$/);
+  const nudgedId = Number(/post\/(\d+)$/.exec(closer.page.url())[1]);
+  const nudge = closer.page.locator("[data-lf-nudges] [data-lf-nudge]");
+  await nudge.getByRole("button", { name: "Retake photo" }).waitFor();
+  await nudge.getByRole("button", { name: "Replace photo" }).waitFor();
+  await assertFits(closer.page, "nudge with Retake photo");
+  await shot(closer.page, "camera-nudge-retake-390-light");
+  const before = db.raw.prepare("SELECT id FROM lf_photos WHERE post_id = ? AND status = 'public'").get(nudgedId);
+  await nudge.getByRole("button", { name: "Retake photo" }).click();
+  const retake = closer.page.locator(".gv-camera[data-gv-camera=ready]");
+  await retake.getByText("Cover the name or phone number with a thumb or a strip of tape.").waitFor();
+  assert.equal((await retake.locator(".gv-camera-count").innerText()).trim(), "0 of 1");
+  await snapShots(retake, 1);
+  await retake.getByRole("button", { name: "Use 1 photo" }).click();
+  await closer.page.locator("[data-lf-nudges]").waitFor({ state: "detached" });
+  const after = db.raw.prepare("SELECT id FROM lf_photos WHERE post_id = ? AND status = 'public'").get(nudgedId);
+  assert.notEqual(after.id, before.id, "Retake photo replaced the photo");
+  await closer.context.close();
+  console.log("in-app camera: Escape / Close ask before dropping shots; Retake photo replaces a nudged photo");
+
+  // 4. Camera blocked on a phone: say so, then hand off to the phone's camera app or the photo picker.
+  const blocked = await cameraView(P, { member: tokens.other }, [CAMERA_BLOCKED]);
+  await go(blocked.page, "new/found", "form[aria-label='Post a found disc']");
+  const blockedForm = blocked.page.locator("form[aria-label='Post a found disc']");
+  await blockedForm.getByRole("button", { name: "Take photo" }).click();
+  const blockedSheet = blocked.page.locator(".gv-camera[data-gv-camera=error]");
+  await blockedSheet.locator("[data-gv-camera-error=blocked]").getByText("Camera access is off for this site.", { exact: false }).waitFor();
+  await assertFits(blocked.page, "camera blocked 390");
+  await blocked.page.screenshot({ path: join(shotsDir, "camera-blocked-390-light.png"), animations: "disabled" });
+  const sample = await makeInkPhoto(join(workDir, "camera-fallback.jpg"), []);
+  let chooser = blocked.page.waitForEvent("filechooser");
+  await blockedSheet.getByRole("button", { name: "Use the camera app" }).click();
+  let picker = await chooser;
+  assert.equal(await picker.element().getAttribute("capture"), "environment", "the hand-off opens the phone's camera");
+  await picker.setFiles(sample.file);
+  await blockedForm.locator(".market-photo-thumb").first().waitFor();
+  await blockedForm.getByRole("button", { name: "Take photo" }).click();
+  chooser = blocked.page.waitForEvent("filechooser");
+  await blocked.page.locator(".gv-camera[data-gv-camera=error]").getByRole("button", { name: "Choose photos instead" }).click();
+  picker = await chooser;
+  assert.equal(picker.isMultiple(), true, "Choose photos instead opens the regular picker");
+  await picker.setFiles(sample.file);
+  await blockedForm.locator(".market-photo-thumb").nth(1).waitFor();
+  assert.equal(await blocked.page.locator("input[data-gv-photo-input]").count(), 0, "the hand-off input is gone afterwards");
+  await blocked.context.close();
+
+  // 5. A phone browser without the in-app camera: Take photo goes straight to the phone's camera app.
+  const legacy = await cameraView(P, { member: tokens.other }, [NO_LIVE_CAMERA]);
+  await go(legacy.page, "new/found", "form[aria-label='Post a found disc']");
+  const legacyForm = legacy.page.locator("form[aria-label='Post a found disc']");
+  await legacyForm.locator(".photo-add-row[data-photo-camera=app]").waitFor();
+  chooser = legacy.page.waitForEvent("filechooser");
+  await legacyForm.getByRole("button", { name: "Take photo" }).click();
+  picker = await chooser;
+  assert.equal(await picker.element().getAttribute("capture"), "environment");
+  await picker.setFiles(sample.file);
+  await legacyForm.locator(".market-photo-thumb").first().waitFor();
+  await legacy.context.close();
+
+  // 6. A computer with no camera sees the picker exactly as before; one with a camera gets Take photo too.
+  const desk = await cameraView(profiles.light1280, { member: tokens.other }, [NO_CAMERA]);
+  await go(desk.page, "new/found", "form[aria-label='Post a found disc']");
+  const deskForm = desk.page.locator("form[aria-label='Post a found disc']");
+  await deskForm.locator(".photo-add-row[data-photo-camera=none]").waitFor();
+  assert.equal(await deskForm.getByRole("button", { name: "Take photo" }).count(), 0);
+  assert.equal((await deskForm.locator(".market-photo-add").innerText()).trim(), "Add photos", "no camera: the old wording");
+  await desk.context.close();
+  console.log("in-app camera: blocked -> camera app or picker; no in-app camera -> camera app; no camera -> picker as before");
+
+  // 7. The Pro Shop sell form gets the same camera.
+  const seller = await cameraView(P, { member: tokens.finder2 });
+  await seller.page.goto(origin + "/pro-shop.html#market/sell", { waitUntil: "domcontentloaded" });
+  const sell = seller.page.locator("form[aria-label='Sell a disc']");
+  await sell.getByRole("button", { name: "Take photo" }).click();
+  const sellSheet = seller.page.locator(".gv-camera[data-gv-camera=ready]");
+  await sellSheet.getByText("The top, the bottom and any ink or rim dents.").waitFor();
+  assert.equal((await sellSheet.locator(".gv-camera-count").innerText()).trim(), "0 of 4");
+  await snapShots(sellSheet, 2);
+  await sellSheet.getByRole("button", { name: "Use 2 photos" }).click();
+  await sell.locator(".market-photo-thumb").nth(1).waitFor();
+  await assertFits(seller.page, "sell form after camera");
+  await shot(seller.page, "camera-sell-form-390-light");
+  await seller.context.close();
+
+  // 8. The viewfinder at the other sizes: dark, 320 px with large text, desktop.
+  for (const profile of [profiles.dark390, profiles.dark320, profiles.light1280]) {
+    const view = await cameraView(profile, { member: tokens.other });
+    await go(view.page, "new/found", "form[aria-label='Post a found disc']");
+    await view.page.locator("form[aria-label='Post a found disc']").getByRole("button", { name: "Take photo" }).click();
+    const sized = view.page.locator(".gv-camera[data-gv-camera=ready]");
+    await sized.waitFor();
+    await snapShots(sized, 2);
+    const box = await sized.boundingBox();
+    assert(box && Math.abs(box.width - profile.width) <= 1 && Math.abs(box.height - profile.height) <= 1, profile.name + " the camera fills the screen");
+    const bar = await view.page.evaluate(() => [...document.querySelectorAll(".gv-camera-bar > *")].map((node) => { const r = node.getBoundingClientRect(); return [r.left, r.right]; }));
+    assert(bar.every(([left, right], index) => left >= 0 && right <= profile.width && (index === 0 || left >= bar[index - 1][1])), profile.name + " the camera controls don't overlap");
+    const fit = await view.page.evaluate(() => {
+      const stage = document.querySelector(".gv-camera-stage").getBoundingClientRect();
+      const video = document.querySelector(".gv-camera-video");
+      const box = video.getBoundingClientRect();
+      // The picture drawn with object-fit: contain, inside the video box.
+      const scale = Math.min(box.width / video.videoWidth, box.height / video.videoHeight);
+      return { stage: [stage.top, stage.bottom, stage.left, stage.right], box: [box.top, box.bottom, box.left, box.right],
+        picture: [video.videoWidth * scale, video.videoHeight * scale] };
+    });
+    assert(fit.box[0] >= fit.stage[0] - 1 && fit.box[1] <= fit.stage[1] + 1 && fit.box[2] >= fit.stage[2] - 1 && fit.box[3] <= fit.stage[3] + 1,
+      profile.name + " the preview stays inside its area (" + JSON.stringify(fit) + ")");
+    await assertFits(view.page, profile.name + " camera");
+    await view.page.screenshot({ path: join(shotsDir, "camera-two-shots-" + profile.name + ".png"), animations: "disabled" });
+    await view.context.close();
+  }
+  console.log("in-app camera: Pro Shop sell form; viewfinder fits at 390 dark, 320 large text and 1280");
+}
+
+// ---------------------------------------------------------------------------------------------------
+// One-thumb disc details: pick-lists (brand -> its plastics, colour, weight, the course's holes), "Other…" for
+// anything unlisted, the scoring app's "Found a disc" prefill and way back, and "Say it" (a real recording from
+// Chromium's simulated microphone -> the real Worker route -> mocked Whisper on OpenRouter -> the pick-lists).
+// ---------------------------------------------------------------------------------------------------
+
+async function selected(locator) {
+  return locator.evaluate((node) => node.options[node.selectedIndex]?.textContent || "");
+}
+
+async function runPickers() {
+  const P = profiles.light390;
+  const course = db.raw.prepare("SELECT id, name FROM courses ORDER BY id LIMIT 1").get();
+  db.raw.prepare("INSERT INTO course_layouts (course_id, name, holes) VALUES (?, 'QA 21', ?)")
+    .run(course.id, JSON.stringify(Array.from({ length: 21 }, (_, index) => ({ hole: index + 1, par: 3 }))));
+
+  // 1. From the scoring app: course and hole are filled in; "Back to your round" stays through posting.
+  const view = await cameraView(P, { member: tokens.other });
+  await go(view.page, `new/found?course=${course.id}&hole=7&from=score&return=${encodeURIComponent("score.html?round=QA77")}`, "form[aria-label='Post a found disc']");
+  const form = view.page.locator("form[aria-label='Post a found disc']");
+  const back = view.page.locator("[data-lf-round-return]");
+  assert.equal(await back.getAttribute("href"), "score.html?round=QA77");
+  await view.page.waitForFunction((id) => document.querySelector("#lfCourse")?.value === id, String(course.id));
+  const hole = form.getByLabel("Hole found on", { exact: true });
+  await view.page.waitForFunction(() => document.querySelectorAll("#lfHole option").length === 1 + 21 + 1);
+  assert.equal(await hole.inputValue(), "7", "the hole from the round is chosen");
+  assert.equal(await selected(hole), "Hole 7");
+
+  // 2. Brand narrows the plastics; Other… opens a text box; changing brand drops a plastic that no longer fits.
+  const brand = form.getByLabel("Brand", { exact: true });
+  const plastic = form.getByLabel("Plastic", { exact: true });
+  await brand.selectOption("Discraft");
+  const discraft = await plastic.locator("option").allTextContents();
+  assert(discraft.includes("ESP") && !discraft.includes("Star"), "Discraft lists its own plastics");
+  await plastic.selectOption("ESP");
+  await brand.selectOption("Innova");
+  assert.equal(await plastic.inputValue(), "", "ESP isn't an Innova plastic");
+  await plastic.selectOption("Champion");
+  await brand.selectOption("__other__");
+  await form.getByLabel("Brand (not listed)").fill("Yikun");
+  assert.equal(await brand.inputValue(), "__other__");
+  assert.equal(await plastic.inputValue(), "Champion", "an unlisted brand keeps the plastic (every plastic is offered)");
+  await form.getByLabel("Colour", { exact: true }).selectOption("Pink");
+  const weights = await form.getByLabel("Weight (if you know it)", { exact: true }).locator("option").allTextContents();
+  assert.deepEqual([weights[1], weights.at(-1)], ["200 g", "100 g"]);
+  await assertFits(view.page, "found form pick-lists");
+  await shot(view.page, "pickers-found-form-390-light");
+
+  // 3. Say it: record, stop, Whisper hears the disc, the lists fill in (brand, its plastic, colour, weight, hole).
+  env.OPENROUTER_API_KEY = "or_qa";
+  env.GROQ_API_KEY = "gsk_qa";
+  whisperQueue.push("Orange Star Destroyer, 175 grams, found it on hole 12.");
+  const voice = form.locator("[data-disc-voice]");
+  await voice.getByRole("button", { name: "Say the disc details" }).click();
+  await voice.locator("[data-disc-voice=recording]").or(form.locator("[data-disc-voice=recording]")).first().waitFor();
+  await view.page.waitForTimeout(1200);
+  await form.getByRole("button", { name: "Stop recording" }).click();
+  await form.locator(".disc-voice-heard").getByText("Heard: “Orange Star Destroyer, 175 grams, found it on hole 12.”").waitFor();
+  assert.deepEqual(await Promise.all([brand, plastic, form.getByLabel("Colour", { exact: true }), form.getByLabel("Weight (if you know it)", { exact: true }), hole]
+    .map((node) => node.inputValue())), ["Innova", "Star", "Orange", "175", "12"]);
+  assert.equal(await form.getByLabel("Mold", { exact: true }).inputValue(), "Destroyer");
+  await form.locator(".disc-voice-result").getByText("Filled in the brand, mold, plastic, colour, weight and hole. Check them below.").waitFor();
+  const sent = whisperCalls.at(-1);
+  assert.deepEqual([sent.provider, sent.model, sent.auth], ["groq", "whisper-large-v3-turbo", "Bearer gsk_qa"], "Groq's free Whisper goes first");
+  assert.match(sent.prompt || "", /Buzzz/, "with the disc spelling hint");
+  assert(sent.size > 256 && /^audio\//.test(sent.type) && sent.name.startsWith("disc."), "a real clip went to Whisper: " + JSON.stringify(sent));
+  const micTracks = await cameraTracks(view.page);
+  assert(micTracks.length > 0 && micTracks.every((track) => track === "audio:ended"), "voice uses only the microphone, and turns it off (" + micTracks.join(", ") + ")");
+  await assertFits(view.page, "found form after voice");
+  await shot(view.page, "voice-filled-found-form-390-light");
+
+  // Nothing heard / the daily budget: a plain message, the form untouched.
+  whisperQueue.push("um");
+  await voice.getByRole("button", { name: "Say the disc details" }).click();
+  await view.page.waitForTimeout(700);
+  await form.getByRole("button", { name: "Stop recording" }).click();
+  await form.locator(".disc-voice-result").getByText("Nothing matched the lists. Pick them below, or try again.").waitFor();
+  assert.equal(await brand.inputValue(), "Innova");
+
+  // Post it: weight and hole are stored and shown; the way back to the round is still there.
+  await form.getByLabel("Where exactly (optional)", { exact: true }).fill("left of the basket");
+  await form.getByLabel("Choose disc photos").setInputFiles((await makeInkPhoto(join(workDir, "picker-post.jpg"), [])).file);
+  await form.locator(".market-photo-thumb").first().waitFor();
+  await form.getByRole("button", { name: "Post found disc" }).click();
+  await view.page.waitForURL(/#post\/\d+$/);
+  const postId = Number(/post\/(\d+)$/.exec(view.page.url())[1]);
+  const row = db.raw.prepare("SELECT brand, plastic, color, weight_g, hole, area FROM lf_posts WHERE id = ?").get(postId);
+  assert.deepEqual({ ...row }, { brand: "Innova", plastic: "Star", color: "Orange", weight_g: 175, hole: 12, area: "Hole 12 · left of the basket" });
+  const facts = view.page.locator("[data-lf-view=post][data-lf-state=ready] .market-facts");
+  await facts.getByText("175 g").waitFor();
+  await facts.getByText("Hole 12 · left of the basket").waitFor();
+  assert.equal(await view.page.locator("[data-lf-round-return]").getAttribute("href"), "score.html?round=QA77");
+  await view.context.close();
+  console.log("pick-lists: brand -> plastics, Other…, colour, weight, the course's 21 holes; the round prefill and way back");
+  console.log("voice: a recorded clip went through the Worker to Groq's Whisper (mocked) and filled brand, mold, plastic, colour, weight and hole");
+
+  // 4. The Pro Shop sell and WANTED forms: same lists and Say it.
+  whisperQueue.push("Discraft ESP Buzzz, blue, one seventy seven");
+  groqStatusNext = 429; // Groq's free-plan limit: this clip falls back to OpenRouter
+  const seller = await cameraView(P, { member: tokens.finder2 });
+  await seller.page.goto(origin + "/pro-shop.html#market/sell", { waitUntil: "domcontentloaded" });
+  const sell = seller.page.locator("form[aria-label='Sell a disc']");
+  await sell.getByRole("button", { name: "Say the disc details" }).click();
+  await seller.page.waitForTimeout(900);
+  await sell.getByRole("button", { name: "Stop recording" }).click();
+  await sell.locator(".disc-voice-heard").waitFor();
+  assert.deepEqual(whisperCalls.slice(-2).map((call) => call.provider), ["groq", "openrouter"], "a Groq limit falls back to OpenRouter");
+  assert.deepEqual(await Promise.all(["Brand", "Plastic", "Color", "Weight (g)", "Mold"].map((label) => sell.getByLabel(label, { exact: true }).inputValue())),
+    ["Discraft", "ESP", "Blue", "177", "Buzzz"]);
+  await assertFits(seller.page, "sell form after voice");
+  await shot(seller.page, "voice-filled-sell-form-390-light");
+  await seller.page.goto(origin + "/pro-shop.html#wanted/new", { waitUntil: "domcontentloaded" });
+  const wanted = seller.page.locator("[data-market-view=wanted-new] form");
+  await wanted.getByLabel("Brand", { exact: true }).selectOption("MVP");
+  assert((await wanted.getByLabel("Plastic", { exact: true }).locator("option").allTextContents()).includes("Neutron"));
+  await wanted.getByLabel("Min weight (g)").selectOption("170");
+  await assertFits(seller.page, "wanted form pick-lists");
+  await seller.context.close();
+  delete env.OPENROUTER_API_KEY;
+  delete env.GROQ_API_KEY;
+
+  // 5. The pick-lists at the other sizes.
+  for (const profile of [profiles.dark390, profiles.dark320, profiles.light1280]) {
+    const sized = await cameraView(profile, { member: tokens.other });
+    await go(sized.page, "new/lost", "form[aria-label='Post a lost disc']");
+    const lost = sized.page.locator("form[aria-label='Post a lost disc']");
+    await lost.getByLabel("Brand", { exact: true }).selectOption("__other__");
+    await lost.getByLabel("Brand (not listed)").fill("Yikun");
+    await assertFits(sized.page, profile.name + " lost form pick-lists");
+    await shot(sized.page, "pickers-lost-form-" + profile.name);
+    await sized.context.close();
+  }
+  console.log("pick-lists and Say it on the Pro Shop sell and WANTED forms; fit at 390 dark, 320 large text and 1280");
+}
+
 // The public menu: Lost & Found sits next to Pro Shop on every page that renders it (public pages and the
 // homepage share src/shared/site-nav.js). Desktop widths keep one line; at 1024 and below the menu opens as a
 // panel; phones include 320 px with large text. Nothing wraps, overflows or clips.
@@ -845,6 +1272,8 @@ try {
   await runBuiltCheck();
   if (!process.env.GVDG_LF_SKIP_SCREENS) await runScreens();
   await runGlass();
+  await runCamera();
+  await runPickers();
   // The background cron path works too: nothing due right now, and a tick reads nothing.
   const tick = await lfProcess.runLostFoundTick(env);
   assert.equal(tick.reads, 0);

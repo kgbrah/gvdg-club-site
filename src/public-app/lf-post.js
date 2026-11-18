@@ -31,7 +31,7 @@ export function Gallery({ photos, title }) {
 export function Facts({ post }) {
   const found = post.kind === "found";
   const rows = [
-    ["Brand", post.brand], ["Mold", post.mold], ["Plastic", post.plastic], ["Colour", post.color],
+    ["Brand", post.brand], ["Mold", post.mold], ["Plastic", post.plastic], ["Colour", post.color], ["Weight", post.weightG ? post.weightG + " g" : ""],
     ["Course", post.course?.name], ["Hole or area", post.area], [found ? "Found" : "Lost", shortDay(post.date)],
     ["Where it is now", found && (post.status === "open" || post.status === "claimed") ? holdingText(post) : ""],
     ["Reward", post.status === "open" || post.status === "claimed" ? post.rewardNote : ""],
