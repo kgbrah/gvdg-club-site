@@ -24,6 +24,8 @@ export interface Viewer {
   key: string | null;
   name: string | null;
   isAdmin: boolean;
+  /** May list discs for sale: club members and admins, not the Guest tier (they buy, trade and post WANTED). */
+  canList: boolean;
 }
 
 export interface FeedbackSummary {
@@ -112,8 +114,9 @@ export async function ensureTrader(env: Env, actor: Pick<Actor, "id" | "kind" | 
 }
 
 export async function viewerOf(env: Env, actor: Actor | null): Promise<Viewer> {
-  if (!actor) return { kind: "public", key: null, name: null, isAdmin: false };
-  return { kind: actor.kind, key: await ensureTrader(env, actor), name: actor.name, isAdmin: actor.isAdmin };
+  if (!actor) return { kind: "public", key: null, name: null, isAdmin: false, canList: false };
+  const canList = actor.kind === "member" && (await getMember(env.ROSTER, actor.id).catch(() => null))?.guest !== true;
+  return { kind: actor.kind, key: await ensureTrader(env, actor), name: actor.name, isAdmin: actor.isAdmin, canList };
 }
 
 export async function ownerByKey(env: Env, key: string): Promise<{ ownerId: string; kind: TraderKind; name: string } | null> {

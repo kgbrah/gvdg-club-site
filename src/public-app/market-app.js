@@ -9,7 +9,7 @@ import { MarketListing } from "./market-listing.js";
 import { MarketMine } from "./market-mine.js";
 import { MarketSell } from "./market-sell.js";
 import { MarketTrader } from "./market-trader.js";
-import { GuestBadge, useIdentityVersion, useMarketConfig } from "./market-ui.js";
+import { GuestBadge, useIdentityVersion, useMarketConfig, canList } from "./market-ui.js";
 import { MarketWantedDetail, MarketWantedList, MarketWantedNew } from "./market-wanted.js";
 
 const h = React.createElement;
@@ -48,7 +48,8 @@ export function MarketIdentityPanel() {
       h("div", { className: "wallet-balance", key: "value" }, waiting ? `${waiting} waiting on you` : guest ? viewer.name || "Guest" : "All caught up"),
       h("p", { className: "wallet-note", key: "note" }, guest
         ? [h(GuestBadge, { key: "badge" }), waiting ? " " + (viewer.name || "Guest") : "", " · ", h("button", { className: "market-text-btn", key: "out", onClick: clearGuest, type: "button" }, "Not you?")]
-        : [h("a", { href: "#market/sell", key: "sell" }, "Sell a disc"), " · ", h("a", { href: "#my-market", key: "mine" }, "My marketplace")]),
+        : canList(viewer) ? [h("a", { href: "#market/sell", key: "sell" }, "Sell a disc"), " · ", h("a", { href: "#my-market", key: "mine" }, "My marketplace")]
+          : [h("a", { href: "#my-market", key: "mine" }, "My marketplace")]),
     ]);
   }
   return h("aside", { className: "wallet-panel market-identity-panel", "data-market-identity-panel": "public" }, [

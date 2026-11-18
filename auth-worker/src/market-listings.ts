@@ -13,7 +13,7 @@ import {
   logDeal, num, offerViews, ownerByKey, payInfo, publicPhoto, RELIST_WINDOW_HOURS, sellerSettings, str, type Actor, type Row, viewerOf,
   LISTING_COLUMNS,
 } from "./market-store.js";
-import { changed, fail, limited, ok, requireSeller, type MarketCtx } from "./market-http.js";
+import { changed, fail, limited, ok, requireListingSeller, requireSeller, type MarketCtx } from "./market-http.js";
 
 const PAGE = 24;
 const NOT_SUSPENDED = (column: string) =>
@@ -203,7 +203,7 @@ async function bagSource(c: MarketCtx, sellerId: string, body: Record<string, un
 }
 
 export async function createListing(c: MarketCtx): Promise<Response> {
-  const seller = await requireSeller(c);
+  const seller = await requireListingSeller(c);
   if (seller instanceof Response) return seller;
   if (!c.env.PHOTOS) return fail(c, 503, "storage_unavailable");
   // Buyer alerts go to the seller's email, so a member must add one before listing (never shown publicly).
@@ -374,7 +374,7 @@ export async function withdrawListing(c: MarketCtx, id: number): Promise<Respons
 
 /** Relist a withdrawn listing within 24 hours: back to active with the same details and photos. */
 export async function relistListing(c: MarketCtx, id: number): Promise<Response> {
-  const seller = await requireSeller(c);
+  const seller = await requireListingSeller(c);
   if (seller instanceof Response) return seller;
   const row = await ownListing(c, seller, id);
   if (row instanceof Response) return row;

@@ -810,7 +810,8 @@ export function startAdminController() {
             if (r.ok) {
                 const j = await r.json().catch(() => ({}));
                 showTempPin(j.member, j.tempPin);
-                adminMsg('Member created', true);
+                // Already on the club's sheets: what came over from their held account.
+                adminMsg(j.carriedOver ? 'Member created. ' + j.carriedOver : 'Member created', true);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: true, requestId } }));
                 adminMembersQuietRefresh = true;
                 adminLoadMembers();
@@ -1520,6 +1521,34 @@ export function startAdminController() {
                     adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
                 }
             });
+            // Account tiers (Admin / Member / Guest), linking a held account from the sheets, lapsed members to Guest.
+            window.addEventListener('gvdg:admin-member-tier-request', async (event) => {
+                const detail = event.detail || {};
+                const member = detail.member;
+                if (!member || !member.memberId || !detail.tier) return;
+                const r = await adminApi('/admin/members/set-tier', { method: 'POST', body: { memberId: member.memberId, tier: detail.tier } });
+                if (r.ok) {
+                    adminMsg(member.name + ' is now ' + (detail.tier === 'admin' ? 'an admin' : detail.tier === 'guest' ? 'a guest' : 'a member'), true);
+                } else {
+                    let err = {}; try { err = await r.json(); } catch (e) {}
+                    adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Tier change failed (' + r.status + ')'), false);
+                }
+                adminLoadMembers();
+            });
+            window.addEventListener('gvdg:admin-member-link-held-request', async (event) => {
+                const detail = event.detail || {};
+                if (!detail.heldId || !detail.memberId) return;
+                const r = await adminApi('/admin/members/link-held', { method: 'POST', body: { heldId: detail.heldId, memberId: detail.memberId } });
+                const j = r.ok ? await r.json().catch(() => ({})) : {};
+                adminMsg(r.ok ? (j.carriedOver || 'Linked') : ('Link failed (' + r.status + ')'), r.ok);
+                adminLoadMembers();
+            });
+            window.addEventListener('gvdg:admin-members-lapsed-to-guest-request', async () => {
+                const r = await adminApi('/admin/members/lapsed-to-guest', { method: 'POST', body: {} });
+                const j = r.ok ? await r.json().catch(() => ({})) : {};
+                adminMsg(r.ok ? ('Moved ' + (j.moved || 0) + ' lapsed ' + (j.moved === 1 ? 'member' : 'members') + ' to Guest') : ('Move failed (' + r.status + ')'), r.ok);
+                adminLoadMembers();
+            });
             window.addEventListener('gvdg:admin-member-renew-request', async (event) => {
                 const member = event.detail && event.detail.member;
                 if (!member || !member.memberId) return;
@@ -1614,7 +1643,9 @@ export function startAdminController() {
                 const id = event.detail && event.detail.id;
                 if (!id) return;
                 const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
-                adminMsg(r.ok ? ('Approved ' + (event.detail.name || 'applicant')) : 'Approve failed', r.ok);
+                const approved = r.ok ? await r.json().catch(() => ({})) : {};
+                // Already on the club's sheets: say what came over from their held account.
+                adminMsg(r.ok ? ('Approved ' + (event.detail.name || 'applicant') + (approved.carriedOver ? '. ' + approved.carriedOver : '')) : 'Approve failed', r.ok);
                 if (r.ok) adminLoadMembers();
             });
             window.addEventListener('gvdg:admin-membership-mark-paid-request', async (event) => {

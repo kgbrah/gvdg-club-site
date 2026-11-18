@@ -245,7 +245,7 @@ export async function handleMemberMessages(
     const query = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || "";
     if (query.length > 40) return json({ error: "invalid_query" }, 400, origin);
     const people = (await listMembers(env.ROSTER))
-      .filter((person) => person.memberId !== self && (!query || person.name.toLowerCase().includes(query)))
+      .filter((person) => person.memberId !== self && person.held !== true && (!query || person.name.toLowerCase().includes(query)))
       .slice(0, 8)
       .map((person) => ({ memberId: person.memberId, name: person.name }));
     return json({ people }, 200, origin);

@@ -129,7 +129,7 @@ async function refreshRatingAnchors(env: Env, doFetch: typeof fetch): Promise<Re
     try {
       const member = await getMember(env.ROSTER, key.name.slice("member:".length));
       const pdga = member?.pdgaNo?.replace(/\D/g, "");
-      if (!member || !pdga || !/^[0-9]{1,8}$/.test(pdga)) continue;
+      if (!member || member.held === true || !pdga || !/^[0-9]{1,8}$/.test(pdga)) continue;
       // Read the authoritative overview only. The dashboard may contain demo data and the
       // complete PDGA stats fetch fans out into events unrelated to establishing an anchor.
       const response = await doFetch(`https://www.pdga.com/api/v1/feat/members/${pdga}/overview`, {

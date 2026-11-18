@@ -273,7 +273,7 @@ export async function runMatching(env: Env, postId: number): Promise<Candidate[]
   if (isFound) {
     const names = ink.get(postId)?.keys.names ?? [];
     if (names.length) {
-      const memberId = rosterNameMatch(names, await listMembers(env.ROSTER).catch(() => []));
+      const memberId = rosterNameMatch(names, (await listMembers(env.ROSTER).catch(() => [])).filter((m) => m.held !== true));
       if (memberId && memberId !== str(post, "owner_id") && !candidates.some((row) => row.candidateId === memberId)) {
         candidates.push({ found: post, lost: null, candidateId: memberId, score: 70, reasons: ["member_name"] });
       }

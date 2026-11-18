@@ -7,6 +7,7 @@ import { createMember, resolveMember, getMember, putMember, type KVListLike } fr
 import { duesCents, duesFor, duesOnline, linkDuesMember, membershipConfig, markManualDues, publicPayment, type PublicPayment } from "./membership-dues-db.js";
 import { sendApplicationReceived, sendApprovalPush, sendWelcome } from "./membership-notify.js";
 import { notifyAdmins } from "./admin-push.js";
+import { carriedOverText, claimHeldFor } from "./held-accounts.js";
 
 const PDGA_RE = /^\d{1,12}$/;
 const UDISC_RE = /^[A-Za-z0-9._-]{1,50}$/;
@@ -191,6 +192,8 @@ export async function handleAdminMembershipApplications(
         isAdmin: false,
       }, row.pinHash);
       if (!result.ok) return json({ error: "member_" + result.reason }, result.reason === "invalid" ? 400 : 409, origin);
+      // Already on the club's sheets: their held account (store credit, dues, bag tag) comes across.
+      const carried = await claimHeldFor(env, result.member, adminId);
       await deleteApplication(kv, row);
       // One-time welcome card flag for the member's first sign-in (cleared by POST /me/welcome-seen).
       const created = await getMember(kv, result.member.memberId);
@@ -212,6 +215,7 @@ export async function handleAdminMembershipApplications(
           isAdmin: false,
           mustChangePin: true,
         },
+        carriedOver: carriedOverText(carried) || null,
       }, 200, origin);
     }
   }

@@ -17,9 +17,11 @@ export interface MembershipView {
   renewalYear: number | null;
   /** December, and they are not yet renewed for the coming year. */
   remind: boolean;
+  /** A guest account (tier set by an admin): not a dues-paying member, so never lapsed or reminded. */
+  guest: boolean;
 }
 
-type YearMember = { memberThroughYear?: number | null; isAdmin?: boolean };
+type YearMember = { memberThroughYear?: number | null; isAdmin?: boolean; guest?: boolean; held?: boolean };
 
 function part(now: Date, type: Intl.DateTimeFormatPartTypes): number {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -52,13 +54,17 @@ export function membershipStatus(member: YearMember | null | undefined, now = ne
   const current = throughYear >= currentYear;
   const renewalYear = throughYear < currentYear ? currentYear : throughYear < currentYear + 1 ? currentYear + 1 : null;
   const month = easternMonthDay(now).month;
+  if (member?.guest === true && member.isAdmin !== true) {
+    return { throughYear, currentYear, current: false, lapsed: false, renewalYear: null, remind: false, guest: true };
+  }
   return {
     throughYear,
     currentYear,
     current,
     lapsed: !current,
     renewalYear,
-    remind: renewalYear != null && month === 12,
+    remind: renewalYear != null && month === 12 && member?.held !== true,
+    guest: false,
   };
 }
 
@@ -66,7 +72,7 @@ export function publicMembership(member: YearMember | null | undefined, now = ne
   return membershipStatus(member, now);
 }
 
-/** Lapsed members cannot open a new event registration. Admins and guests are not blocked. */
+/** Lapsed members cannot open a new event registration. Admins and guests (walk-ups or guest accounts) are not blocked. */
 export function registrationBlocked(member: YearMember | null | undefined, now = new Date()): boolean {
   if (!member || member.isAdmin === true) return false;
   return membershipStatus(member, now).lapsed;

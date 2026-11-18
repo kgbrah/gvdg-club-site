@@ -480,7 +480,7 @@ test('admin members list is rendered by React from direct loader events', () => 
   assert.match(membersList, /export function AdminMembersList/);
   assert.match(membersList, /gvdg:admin-members-list/);
   assert.match(membersList, /gvdg:admin-member-reset-pin-request/);
-  assert.match(membersList, /gvdg:admin-member-role-request/);
+  assert.match(membersList, /gvdg:admin-member-tier-request/);
   assert.doesNotMatch(membersList, /currentAdminState\("membersList"|function currentState\(\)/);
   assert.match(membersList, /data-react-admin-members-list/);
   assert.match(membersList, /className: "admin-evrow"/);

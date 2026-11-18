@@ -33,9 +33,13 @@ function normalizeMember(member) {
     name: normalizeText(source.name, "Unnamed member"),
     renewalYear: Number.isInteger(source.renewalYear) ? source.renewalYear : null,
     throughYear: Number.isInteger(source.memberThroughYear) ? source.memberThroughYear : null,
-    lapsed: source.membershipCurrent === false,
+    tier: source.tier === "admin" || source.tier === "guest" ? source.tier : source.isAdmin === true ? "admin" : "member",
+    held: source.held === true,
+    lapsed: source.membershipCurrent === false && source.tier !== "guest" && source.held !== true,
   };
 }
+
+const TIER_LABEL = { admin: "Admin", member: "Member", guest: "Guest" };
 
 function normalizeState(state) {
   return {
@@ -57,10 +61,13 @@ function dispatchRequest(name, detail) {
 }
 
 function memberSummary(member) {
-  const badges = [
+  const badges = member.held ? [
+    "held: no sign-in yet",
+    member.tier === "guest" ? "guest" : member.throughYear ? `through ${member.throughYear}` : "",
+  ].filter(Boolean) : [
     member.identifier || member.memberId || "no id",
-    member.isAdmin ? "admin" : "",
-    member.lapsed ? "lapsed" : member.throughYear ? `through ${member.throughYear}` : "",
+    member.tier === "admin" ? "admin" : member.tier === "guest" ? "guest" : "",
+    member.tier === "guest" ? "" : member.lapsed ? "lapsed" : member.throughYear ? `through ${member.throughYear}` : "",
     member.mustChangePin ? "PIN not set" : "",
   ].filter(Boolean);
   return `${member.name} - ${badges.join(" - ")}`;
@@ -73,7 +80,52 @@ function memberPinLabel(member) {
     : member.memberId || member.identifier || "member id unavailable";
 }
 
-function AdminMemberRow({ adminCount, currentMemberId, member }) {
+function TierPicker({ member, isSelf, isLastAdmin }) {
+  async function choose(tier) {
+    if (tier === member.tier) return;
+    const leavingAdmin = member.tier === "admin";
+    const confirmed = await adminConfirm({
+      title: `Make ${member.name} ${tier === "admin" ? "an admin" : tier === "guest" ? "a guest" : "a member"}?`,
+      message: tier === "admin" ? "Admins can manage everything in the club's admin."
+        : tier === "guest" ? "Guests sign in, play, register for events and buy, but can't list discs for sale and don't pay dues."
+          : "Members are dues-paying club members.",
+      confirmText: `Make ${TIER_LABEL[tier].toLowerCase()}`,
+      danger: leavingAdmin && isSelf,
+    });
+    if (confirmed) dispatchRequest("gvdg:admin-member-tier-request", { member: member.source, tier });
+  }
+  const id = "member-tier-" + (member.memberId || member.identifier);
+  return h("label", { className: "admin-member-tier", htmlFor: id, key: "tier" }, [
+    h("select", {
+      "aria-label": `Tier for ${member.name}`, disabled: !member.memberId || isLastAdmin, id, key: "s", onChange: (event) => { void choose(event.target.value); },
+      title: isLastAdmin ? "Can't remove the last admin" : undefined, value: member.tier,
+    }, ["admin", "member", "guest"].filter((tier) => !(member.held && tier === "admin")).map((tier) => h("option", { key: tier, value: tier }, TIER_LABEL[tier]))),
+  ]);
+}
+
+/** A held account from the club's sheets is someone already in the app: move it onto them. */
+function LinkHeld({ member, members }) {
+  const id = "member-link-" + member.memberId;
+  const choices = members.filter((other) => !other.held && other.memberId);
+  async function choose(memberId) {
+    const target = choices.find((other) => other.memberId === memberId);
+    if (!target) return;
+    const confirmed = await adminConfirm({
+      title: `Link to ${target.name}?`,
+      message: `${member.name}'s store credit, dues and bag tag from the sheets move to ${target.name}, and the held account goes away.`,
+      confirmText: "Link",
+    });
+    if (confirmed) dispatchRequest("gvdg:admin-member-link-held-request", { heldId: member.memberId, memberId });
+  }
+  return h("label", { className: "admin-member-tier", htmlFor: id, key: "link" }, [
+    h("select", { "aria-label": `Link ${member.name} to a member already in the app`, id, key: "s", onChange: (event) => { void choose(event.target.value); }, value: "" }, [
+      h("option", { key: "none", value: "" }, "Link to member…"),
+      ...choices.map((other) => h("option", { key: other.memberId, value: other.memberId }, other.name)),
+    ]),
+  ]);
+}
+
+function AdminMemberRow({ adminCount, currentMemberId, member, members = [] }) {
   const isLastAdmin = member.isAdmin && adminCount <= 1;
   const isSelf = currentMemberId && currentMemberId === member.memberId;
   const removeBlocked = isSelf || isLastAdmin;
@@ -92,23 +144,6 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
     });
     if (!confirmed) return;
     dispatchRequest("gvdg:admin-member-reset-pin-request", { identifier: member.identifier, member: member.source });
-  }
-
-  async function requestRoleChange() {
-    const promoting = !member.isAdmin;
-    const message = promoting
-      ? `Grant admin rights to ${member.name}?`
-      : isSelf
-        ? "Remove your OWN admin access? You'll lose this panel."
-        : `Remove admin rights from ${member.name}?`;
-    const confirmed = await adminConfirm({
-      title: promoting ? "Grant admin rights" : "Remove admin rights",
-      message,
-      confirmText: promoting ? "Grant admin" : "Remove admin",
-      danger: !promoting,
-    });
-    if (!confirmed) return;
-    dispatchRequest("gvdg:admin-member-role-request", { isAdmin: promoting, member: member.source });
   }
 
   async function requestRenew() {
@@ -133,31 +168,25 @@ function AdminMemberRow({ adminCount, currentMemberId, member }) {
     dispatchRequest("gvdg:admin-member-remove-request", { member: member.source });
   }
 
-  const roleLabel = member.isAdmin ? "Remove admin" : "Make admin";
-  const roleTitle = isLastAdmin ? "Can't remove the last admin" : undefined;
-
-  return h("div", { className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier, "data-member-lapsed": member.lapsed ? "true" : "false" }, [
+  return h("div", {
+    className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier, "data-member-lapsed": member.lapsed ? "true" : "false",
+    "data-member-tier": member.tier, "data-member-held": member.held ? "true" : "false",
+  }, [
     h("span", { className: "ev-name", key: "name" }, [memberSummary(member), h(KarmaChip, { key: "karma", memberId: member.memberId })]),
     h("button", {
       className: "admin-btn secondary", disabled: !member.identifier, key: "wallet", type: "button",
       onClick: () => dispatchRequest("gvdg:admin-tab-request", { tab: "wallets", memberId: member.identifier }),
     }, "Wallet"),
-    h("button", {
+    member.held ? null : h("button", {
       className: "admin-btn",
       disabled: !member.identifier,
       key: "pin",
       onClick: requestPinReset,
       type: "button",
     }, "Reissue PIN"),
-    h("button", {
-      className: "admin-btn",
-      disabled: isLastAdmin || !member.memberId,
-      key: "role",
-      onClick: requestRoleChange,
-      title: roleTitle,
-      type: "button",
-    }, roleLabel),
-    member.renewalYear ? h("button", {
+    h(TierPicker, { isLastAdmin, isSelf, key: "tier", member }),
+    member.held ? h(LinkHeld, { key: "link", member, members }) : null,
+    member.renewalYear && member.tier !== "guest" && !member.held ? h("button", {
       className: "admin-btn",
       key: "renew",
       onClick: requestRenew,
@@ -392,12 +421,28 @@ export function AdminMembersList() {
   }
 
   const adminCount = view.members.filter((member) => member.isAdmin).length;
-  return h("div", { "data-react-admin-members-list": "ready" }, view.members.map((member, index) => (
-    h(AdminMemberRow, {
-      adminCount,
-      currentMemberId: view.currentMemberId,
-      key: member.memberId || member.identifier || `${member.name}-${index}`,
-      member,
-    })
-  )));
+  const lapsed = view.members.filter((member) => member.lapsed && member.tier === "member").length;
+  const held = view.members.filter((member) => member.held).length;
+  async function moveLapsed() {
+    const confirmed = await adminConfirm({
+      title: `Move ${lapsed} lapsed ${lapsed === 1 ? "member" : "members"} to Guest?`,
+      message: "They keep signing in, playing and buying, but stop counting as club members until they renew (an admin makes them a member again).",
+      confirmText: "Move to Guest",
+    });
+    if (confirmed) dispatchRequest("gvdg:admin-members-lapsed-to-guest-request", {});
+  }
+  return h("div", { "data-react-admin-members-list": "ready" }, [
+    lapsed ? h("button", { className: "admin-btn secondary", "data-admin-lapsed-to-guest": lapsed, key: "lapsed", onClick: () => { void moveLapsed(); }, type: "button" },
+      `Move ${lapsed} lapsed ${lapsed === 1 ? "member" : "members"} to Guest`) : null,
+    held ? h("p", { className: "al-note", key: "held" }, `${held} held ${held === 1 ? "account" : "accounts"} from the club's sheets: they carry over when that player signs up, or link one to a member already here.`) : null,
+    ...view.members.map((member, index) => (
+      h(AdminMemberRow, {
+        adminCount,
+        currentMemberId: view.currentMemberId,
+        key: member.memberId || member.identifier || `${member.name}-${index}`,
+        member,
+        members: view.members,
+      })
+    )),
+  ]);
 }

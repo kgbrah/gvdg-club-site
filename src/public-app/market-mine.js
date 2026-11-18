@@ -8,7 +8,7 @@ import { errorMessage, marketRequest } from "./market-api.js";
 import { FeedbackForm, FeedbackItem } from "./market-feedback.js";
 import { BuyerDealPanel, OfferRow, RelistControl, SellerDealPanel } from "./market-listing.js";
 import {
-  GuestGate, IdentityStrip, LoadState, MarketPhoto, Note, StatusChip, StatusLine, TraderLine, useAction, useIdentityVersion, useMarketConfig,
+  GuestGate, IdentityStrip, LoadState, MarketPhoto, Note, StatusChip, StatusLine, TraderLine, useAction, useIdentityVersion, useMarketConfig, canList, GUEST_TIER_NOTE,
 } from "./market-ui.js";
 import { CloseWantedButton, WantedReplies } from "./market-wanted.js";
 
@@ -205,7 +205,7 @@ export function MarketMine() {
   const head = [
     h("div", { className: "shop-catalog-bar", key: "bar" }, [
       h("h2", { key: "title" }, "My marketplace"),
-      viewer.kind === "member" ? h("a", { className: "shop-cart-link", href: "#market/sell", key: "sell" }, "Sell a disc") : null,
+      canList(viewer) ? h("a", { className: "shop-cart-link", href: "#market/sell", key: "sell" }, "Sell a disc") : null,
     ]),
     h(IdentityStrip, { key: "identity", viewer }),
   ];
@@ -264,7 +264,8 @@ export function MarketMine() {
       h("ul", { className: "market-deals" }, recent.map((deal) => h(RecentDeal, { deal, key: deal.id, onChange: reload })))) : null,
     status === "ready" && viewer.kind === "member" ? h(Panel, { id: "listings", key: "listings", title: "My listings" }, listings.length
       ? h("ul", { className: "market-my-listings" }, listings.map((listing) => h(MyListingRow, { key: listing.id, listing, onChange: reload })))
-      : h(Note, null, ["You haven't listed a disc yet. ", h("a", { className: "market-link", href: "#market/sell", key: "sell" }, "Sell a disc")])) : null,
+      : canList(viewer) ? h(Note, null, ["You haven't listed a disc yet. ", h("a", { className: "market-link", href: "#market/sell", key: "sell" }, "Sell a disc")])
+        : h(Note, { "data-market-guest-tier": "true" }, GUEST_TIER_NOTE)) : null,
     status === "ready" ? h(Panel, { id: "wanted", key: "wanted", title: "My WANTED posts" }, wanted.length
       ? h("ul", { className: "market-deals" }, wanted.map((post) => h("li", { className: "market-deal", "data-market-my-wanted": post.id, key: post.id }, [
         h("p", { className: "market-deal-who", key: "title" }, [

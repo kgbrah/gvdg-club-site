@@ -179,7 +179,22 @@ function fixture(path, method, query, authorization, body) {
   if (path.endsWith("/layouts")) return { layouts };
   if (path.endsWith("/positions")) return { positions: [{ id: 1, label: "Blue 1 tee", kind: "tee", lat: 35.631, lng: -77.319 }] };
   if (path === "/admin/members" && method === "POST") return { member: { memberId: "m_new", name: body.name, pdgaNo: body.pdgaNo }, tempPin: "6831" };
-  if (path === "/admin/members") return { members: people };
+  // Tiers: a lapsed member (move to Guest), a guest, and a held account from the club's sheets (link to a member).
+  if (path === "/admin/members") return { members: [...people.map((person) => ({ ...person, tier: person.isAdmin ? "admin" : "member", memberThroughYear: 2026, membershipCurrent: true })),
+    { memberId: "m_casey", name: "Casey Lapsed", pdgaNo: "456789", tier: "member", memberThroughYear: 2025, membershipCurrent: false, renewalYear: 2026 },
+    { memberId: "m_drew", name: "Drew Visitor", udisc: "drewv", tier: "guest", memberThroughYear: 2026, membershipCurrent: false, renewalYear: null },
+    { memberId: "m_h_nsamlee", name: "Sam Lee", tier: "member", held: true, memberThroughYear: 2026, membershipCurrent: true }] };
+  if (path === "/admin/members/set-tier" || path === "/admin/members/link-held") return { member: { memberId: body.memberId || body.heldId }, carriedOver: path.endsWith("link-held") ? "Matched Sam Lee from the club's sheets: $12.50 store credit came over." : undefined };
+  if (path === "/admin/members/lapsed-to-guest") return { moved: 1 };
+  // The club's Google Sheets: Jordan matches by name (a change), Sam is new, "Avery Brooke" is new with a suggestion.
+  if (path === "/admin/sheet-import/plan") {
+    const rows = (body.rows || []).map((row) => row.name === "Jordan Reyes"
+      ? { line: row.line, name: row.name, match: { memberId: "m_jordan", name: "Jordan Reyes", how: "name", held: false, tier: "member" }, action: "update", before: "$5.00", after: "$20.00", notes: [], suggestions: [] }
+      : { line: row.line, name: row.name, match: null, action: "new", before: "", after: "$" + (row.value / 100).toFixed(2), notes: ["New member account, held until they sign up."],
+        suggestions: row.name === "Avery Brooke" ? [{ memberId: "m_avery", name: "Avery Brooks" }] : [] });
+    return { kind: body.kind, rows, releases: [], counts: { update: 1, new: rows.length - 1, same: 0, skip: 0 } };
+  }
+  if (path === "/admin/sheet-import/apply") return { results: (body.rows || []).map((row) => ({ line: row.line, memberId: row.memberId || "m_h_new", status: "done" })) };
   if (path === "/admin/members/applications") return { applications: [application] };
   if (path === "/admin/orders") return { unfulfilled: 1, orders: !query.get("status") || query.get("status") === orderStatus ? [{ ...order, status: orderStatus }] : [] };
   if (path === "/admin/orders/6" && method === "PATCH") { orderStatus = body.status; return { ok: true }; }
@@ -442,6 +457,47 @@ async function verifyRoutes(variant) {
     await pin.getByRole("button", { name: "Copy PIN" }).click();
     await pin.getByRole("button", { name: "Copied" }).waitFor();
     await pin.getByRole("button", { name: "Done" }).click();
+
+    // Account tiers: lapsed members to Guest in one go, a tier picker per person, and linking a held account.
+    const members = pane.locator("[data-react-admin-members-list='ready']");
+    await members.locator("[data-member-tier='guest']").getByText(/Drew Visitor - drewv - guest/).waitFor();
+    await members.getByRole("button", { name: "Move 1 lapsed member to Guest" }).click();
+    await page.getByRole("dialog", { name: "Move 1 lapsed member to Guest?" }).getByRole("button", { name: "Move to Guest" }).click();
+    await members.getByRole("combobox", { name: "Tier for Jordan Reyes" }).selectOption("guest");
+    await page.getByRole("dialog", { name: "Make Jordan Reyes a guest?" }).getByRole("button", { name: "Make guest" }).click();
+    const heldRow = members.locator("[data-member-held='true']");
+    await heldRow.getByText("Sam Lee - held: no sign-in yet - through 2026").waitFor();
+    assert.equal(await heldRow.getByRole("button", { name: "Reissue PIN" }).count(), 0, "a held account has no sign-in to reset");
+    await heldRow.scrollIntoViewIfNeeded();
+    await shot(heldRow, "member-held-" + variant.name);
+    await heldRow.getByRole("combobox", { name: "Link Sam Lee to a member already in the app" }).selectOption("m_jordan");
+    await page.getByRole("dialog", { name: "Link to Jordan Reyes?" }).getByRole("button", { name: "Link" }).click();
+    await page.getByText("Matched Sam Lee from the club's sheets: $12.50 store credit came over.").waitFor();
+    assert.ok(requested.some((call) => call.path === "/admin/members/lapsed-to-guest"));
+    assert.ok(requested.some((call) => call.path === "/admin/members/set-tier" && call.body?.memberId === "m_jordan" && call.body?.tier === "guest"));
+    assert.ok(requested.some((call) => call.path === "/admin/members/link-held" && call.body?.heldId === "m_h_nsamlee" && call.body?.memberId === "m_jordan"));
+
+    // The club's Google Sheets: paste the cells, check the guessed columns, review, pick who "Avery Brooke" is, apply.
+    pane = await route(page, "import");
+    const sheet = pane.locator("[data-admin-sheet-import]");
+    await sheet.getByRole("radio", { name: "Store credit balances" }).click();
+    await sheet.getByLabel("Or paste the cells (select the sheet, copy, paste here)").fill("Player\tStore credit\nJordan Reyes\t$20.00\nSam Lee\t$12.50\nAvery Brooke\t$3.00\n");
+    await sheet.getByRole("button", { name: "Use these cells" }).click();
+    await sheet.getByText("Columns · 3 rows").waitFor();
+    assert.equal(await sheet.getByLabel("Name", { exact: true }).inputValue(), "0");
+    assert.equal(await sheet.getByLabel("Balance", { exact: true }).inputValue(), "1");
+    await sheet.getByRole("button", { name: "Check against the app" }).click();
+    await sheet.getByText("1 to change · 2 new held accounts · 0 already match").waitFor();
+    await sheet.locator("[data-sheet-row='2']").getByText("Changes · Matched Jordan Reyes by name · $5.00 → $20.00").waitFor();
+    await sheet.getByLabel("Who is this?").selectOption("m_avery");
+    await sheet.locator("[data-sheet-plan]").scrollIntoViewIfNeeded();
+    await shot(sheet, "sheet-import-review-" + variant.name);
+    await fit(page, variant.name + " sheet import review");
+    await sheet.getByRole("button", { name: "Apply 3 changes" }).click();
+    await page.getByRole("dialog", { name: "Apply 3 changes?" }).getByRole("button", { name: "Apply" }).click();
+    await sheet.getByText("Done: 3 changes from the sheet applied.").waitFor();
+    const applied = requested.filter((call) => call.path === "/admin/sheet-import/apply").pop();
+    assert.deepEqual(applied.body.rows.map((row) => [row.name, row.value, row.memberId]), [["Jordan Reyes", 2000, "m_jordan"], ["Sam Lee", 1250, ""], ["Avery Brooke", 300, "m_avery"]]);
 
     pane = await route(page, "layouts");
     const table = pane.getByRole("region", { name: "Layout hole table" });

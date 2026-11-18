@@ -134,7 +134,7 @@ async function discoverFromMembers(env: Env, doFetch: typeof fetch, now: string,
   for (const key of batch) {
     summary.membersChecked += 1;
     const member = await getMember(env.ROSTER, key.name.slice("member:".length)).catch(() => null);
-    const pdga = member?.pdgaNo?.replace(/\D/g, "");
+    const pdga = member?.held === true ? "" : member?.pdgaNo?.replace(/\D/g, ""); // held accounts aren't in the app yet
     if (!pdga || !/^[0-9]{1,8}$/.test(pdga)) continue;
     summary.fetches += 1;
     const detail = await getJson(doFetch, `${PDGA_MEMBER_API}/${pdga}/rating-detail`);
