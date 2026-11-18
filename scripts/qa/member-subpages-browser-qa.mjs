@@ -140,7 +140,15 @@ async function serveFixture(path, query, request, ref, reply) {
   }
   else if (path === "/me/udisc-history") {
     const imported = { id: 12, courseName: course.name, layoutName: layout.name, playedAt: "2026-11-12T15:20:00", total: 55, toPar: 1 };
-    reply(request.method === "GET" ? { rounds: empty ? [] : [imported] } : { saved: 1 });
+    // Long course and layout names, and a big over-par score, as real UDisc exports have: none may push a row
+    // (or, through the shared grid column, every row) past the screen edge.
+    const long = [
+      { id: 13, courseName: "ECU - North Recreational Complex", layoutName: "Pirates Walk", playedAt: "2026-05-03T10:15:00", total: 47, toPar: -7 },
+      { id: 14, courseName: "Farmville DiscGolfPark", layoutName: "White Pads to B-Pins Championship Long Layout", playedAt: "2026-05-28T18:50:00", total: 55, toPar: 1 },
+      { id: 15, courseName: "West Meadowbrook Park", layoutName: "Gold Layout", playedAt: "2025-12-14T14:04:00", total: 81, toPar: 27 },
+      { id: 16, courseName: "ThisIsAnUnbrokenCourseNameFromAnExportWithNoSpaces", layoutName: "Kings Cup Amateur", playedAt: "2026-02-06T09:43:00", total: 104, toPar: 50 },
+    ];
+    reply(request.method === "GET" ? { rounds: empty ? [] : [imported, ...long] } : { saved: 1 });
   }
   else if (path === "/shop/wallet") reply({ balance_cents: empty ? 0 : 3250,
     transactions: empty ? [] : [{ id: 1, amount_cents: 3250, source: "event_payout", created_at: now }] });
@@ -291,6 +299,26 @@ async function pageFor(width, mode, run, extra = "") {
           + " " + style.whiteSpace + " max " + style.maxWidth + ")";
       }));
     assert.deepEqual(clipped, [], name + " has clipped action labels");
+    // Nothing on screen may sit past the screen edge. A clipping ancestor (overflow: hidden / clip) stops the page
+    // from scrolling sideways, so the width check above passes while scores and buttons are cut off at the edge.
+    const offscreen = await page.evaluate(() => [...document.querySelectorAll("#members *")]
+      .filter((element) => {
+        if (element.closest("[hidden], [aria-hidden='true'], [inert], dialog:not([open])")) return false;
+        const box = element.getBoundingClientRect();
+        if (!box.width || !box.height || box.bottom < 0 || box.top > innerHeight * 4) return false;
+        if (getComputedStyle(element).visibility === "hidden") return false;
+        if (box.right <= innerWidth + 1 && box.left >= -1) return false;
+        // Sideways scrollers (tab rows, wide tables) are meant to run past the edge.
+        for (let up = element.parentElement; up && up !== document.body; up = up.parentElement) {
+          if (/auto|scroll/.test(getComputedStyle(up).overflowX)) return false;
+        }
+        // Report the outermost escaping element only.
+        const parent = element.parentElement?.getBoundingClientRect();
+        return !parent || parent.right <= innerWidth + 1;
+      })
+      .map((element) => "." + String(element.className || element.tagName).split(" ")[0] + " \"" + (element.textContent || "").trim().slice(0, 30)
+        + "\" right " + Math.round(element.getBoundingClientRect().right) + " > " + innerWidth));
+    assert.deepEqual(offscreen, [], name + " has content past the screen edge");
     await page.screenshot({ path: join(screenshotDir, name + ".png"), animations: "disabled" });
   }
   return { page, context, errors, url, go, screen };
