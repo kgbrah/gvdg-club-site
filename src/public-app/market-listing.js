@@ -1,7 +1,7 @@
 import React from "react";
 
 import {
-  conditionText, discTypeLabel, flightText, listingTitle, money, PENDING_NOTE, priceLine,
+  conditionText, discTypeLabel, flightText, listingTitle, money, PENDING_NOTE, priceLine, withdrawnLabel,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import {
@@ -16,7 +16,8 @@ export function announceMarketChange() {
 }
 
 function Gallery({ listing }) {
-  const photos = Array.isArray(listing.photos) && listing.photos.length ? listing.photos : [null];
+  // A withdrawn listing's photos are kept for relisting but are not served while it's down.
+  const photos = listing.status !== "withdrawn" && Array.isArray(listing.photos) && listing.photos.length ? listing.photos : [null];
   const [index, setIndex] = React.useState(0);
   const current = photos[Math.min(index, photos.length - 1)];
   const title = listingTitle(listing);
@@ -204,6 +205,28 @@ function TradeOfferForm({ listing, viewer, onSent, onClose }) {
   ]);
 }
 
+export function RelistControl({ listing, onDone }) {
+  const action = useAction();
+  const label = withdrawnLabel(listing);
+  async function relist() {
+    await action.run(async () => {
+      const { ok, data } = await marketRequest(`/market/listings/${listing.id}/relist`, { body: {}, method: "POST" });
+      if (ok) {
+        action.setMessage({ text: "Relisted. It's back on the marketplace.", tone: "success" });
+        announceMarketChange();
+        onDone?.();
+      } else action.setMessage({ text: errorMessage(data), tone: "error" });
+    });
+  }
+  return h("div", { className: "market-relist", "data-market-relist": listing.id }, [
+    h("p", { className: "market-note", key: "label" }, label),
+    listing.withdrawal === "pending_final" && label !== "Withdrawn"
+      ? h("button", { className: "shop-btn secondary", disabled: action.busy, key: "relist", onClick: relist, type: "button" }, action.busy ? "Relisting…" : "Relist")
+      : null,
+    h(StatusLine, { key: "status", message: action.message }),
+  ]);
+}
+
 function SellerTools({ listing, onChange }) {
   const action = useAction();
   const [confirming, setConfirming] = React.useState(false);
@@ -211,7 +234,7 @@ function SellerTools({ listing, onChange }) {
     await action.run(async () => {
       const { ok, data } = await marketRequest(`/market/listings/${listing.id}/withdraw`, { body: {}, method: "POST" });
       if (ok) {
-        action.setMessage({ text: "Listing withdrawn.", tone: "success" });
+        action.setMessage({ text: "Listing withdrawn. You can relist it within 24 hours.", tone: "success" });
         announceMarketChange();
         onChange?.();
       } else action.setMessage({ text: errorMessage(data), tone: "error" });
@@ -224,6 +247,7 @@ function SellerTools({ listing, onChange }) {
       listing.offers.map((offer) => h(OfferRow, { key: offer.id, offer, onDone: onChange }))) : null,
     !listing.pendingDeal && listing.status === "active" && !(listing.offers || []).length
       ? h(Note, { key: "idle" }, "No buyers yet. Buyers who tap Buy show up here and in My marketplace.") : null,
+    listing.status === "withdrawn" ? h(RelistControl, { key: "relist", listing, onDone: onChange }) : null,
     listing.canEdit ? h("div", { className: "market-actions", key: "edit" }, confirming ? [
       h("button", { className: "shop-btn secondary", disabled: action.busy, key: "yes", onClick: withdraw, type: "button" }, "Yes, withdraw"),
       h("button", { className: "shop-filter-reset", key: "no", onClick: () => setConfirming(false), type: "button" }, "Keep it listed"),

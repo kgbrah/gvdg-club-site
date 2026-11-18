@@ -5,7 +5,7 @@ import test from "node:test";
 import {
   buildPayUrl, cleanHandleInput, conditionText, CONDITION_LEGEND, dollarsToCents, exactMoney, feedbackLabel, flightText,
   listingPayload, listingsQuery, money, parseShopRoute, safePayUrl, traderHref, validCashtag, validateSettings, validPaypalMe,
-  validZelle, wantedPayload, zelleDisplay, SAFETY_NOTE, GUEST_UNAVAILABLE, MEMBERS_ONLY_LISTING, PENDING_NOTE,
+  validZelle, wantedPayload, zelleDisplay, relistHoursLeft, withdrawnLabel, SELLER_EMAIL_LABEL, SAFETY_NOTE, GUEST_UNAVAILABLE, MEMBERS_ONLY_LISTING, PENDING_NOTE,
 } from "../src/shared/market-model.js";
 import { ADMIN_DESTINATIONS, MEMBER_DESTINATIONS } from "../src/shared/app-navigation.js";
 
@@ -161,3 +161,15 @@ test("the marketplace is reachable from the member app and the admin app, and st
 function pick(route) {
   return { section: route.section, view: route.view, id: route.id, key: route.key };
 }
+
+test("a withdrawn listing reads as relistable for the hours left in its 24-hour window", () => {
+  const now = Date.parse("2026-11-17T12:00:00Z");
+  assert.equal(relistHoursLeft("2026-11-18 11:00:00", now), 23);
+  assert.equal(relistHoursLeft("2026-11-17 12:20:00", now), 1, "part of an hour still counts");
+  assert.equal(relistHoursLeft("2026-11-17 11:59:59", now), 0);
+  assert.equal(relistHoursLeft(null, now), 0);
+  assert.equal(withdrawnLabel({ status: "withdrawn", withdrawal: "pending_final", relistUntil: "2026-11-18 11:00:00" }, now), "Withdrawn — relist within 23 h");
+  assert.equal(withdrawnLabel({ status: "withdrawn", withdrawal: "final", relistUntil: null }, now), "Withdrawn");
+  assert.equal(withdrawnLabel({ status: "active" }, now), null);
+  assert.equal(SELLER_EMAIL_LABEL, "Email for buyer alerts (required to sell)");
+});

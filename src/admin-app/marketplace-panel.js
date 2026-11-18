@@ -23,6 +23,12 @@ function when(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function whenTime(value) {
+  const text = String(value || "");
+  const date = new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text) ? text.replace(" ", "T") + "Z" : text);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 function who(trader) {
   if (!trader) return "Unknown";
   return (trader.name || "Trader") + (trader.kind === "guest" ? " (guest)" : "") + (trader.suspended ? " · suspended" : "");
@@ -159,6 +165,7 @@ export function AdminMarketplacePanel() {
   const reports = Array.isArray(data.reports) ? data.reports : [];
   const hiddenListings = Array.isArray(data.hidden?.listings) ? data.hidden.listings : [];
   const hiddenWanted = Array.isArray(data.hidden?.wanted) ? data.hidden.wanted : [];
+  const withdrawn = Array.isArray(data.withdrawn) ? data.withdrawn : [];
   const suspensions = Array.isArray(data.suspensions) ? data.suspensions : [];
   const log = Array.isArray(data.log) ? data.log : [];
   return h("div", { "data-admin-marketplace": state.status === "loading" ? "loading" : "ready" }, [
@@ -177,6 +184,13 @@ export function AdminMarketplacePanel() {
         ...hiddenWanted.map((item) => h(UnhideRow, { item, key: "w" + item.id, kind: "wanted", reload: load })),
       ])
       : h("p", { className: "dash-note", key: "no-hidden" }, "Nothing is hidden."),
+    h("h2", { className: "admin-pane-kicker", key: "withdrawn-title" }, "Withdrawn, relist window open"),
+    withdrawn.length
+      ? h("ul", { className: "admin-community-list", key: "withdrawn" }, withdrawn.map((item) => h("li", { className: "al-section", "data-admin-market-withdrawn": item.id, key: item.id }, [
+        h("h3", { className: "al-h", key: "title" }, "Listing: " + (item.title || "Untitled")),
+        h("p", { className: "al-note", key: "meta" }, "Owner: " + who(item.seller) + (item.relistUntil ? " · final after " + whenTime(item.relistUntil) : "")),
+      ])))
+      : h("p", { className: "dash-note", key: "no-withdrawn" }, "No listings are waiting to become final."),
     h("h2", { className: "admin-pane-kicker", key: "susp-title" }, "Suspended from the marketplace"),
     suspensions.length
       ? h("ul", { className: "admin-community-list", key: "suspensions" }, suspensions.map((suspension) => h(SuspensionRow, { key: suspension.id, reload: load, suspension })))

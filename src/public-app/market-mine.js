@@ -1,9 +1,9 @@
 import React from "react";
 
-import { cleanHandleInput, listingHref, listingMeta, listingTitle, priceLine, shortDate, validateSettings, wantedHref, zelleDisplay } from "../shared/market-model.js";
+import { cleanHandleInput, listingHref, listingMeta, listingTitle, priceLine, shortDate, validateSettings, wantedHref, SELLER_EMAIL_LABEL, zelleDisplay } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import { FeedbackForm, FeedbackItem } from "./market-feedback.js";
-import { BuyerDealPanel, OfferRow, SellerDealPanel } from "./market-listing.js";
+import { BuyerDealPanel, OfferRow, RelistControl, SellerDealPanel } from "./market-listing.js";
 import {
   GuestGate, IdentityStrip, LoadState, MarketPhoto, Note, StatusChip, StatusLine, TraderLine, useAction, useIdentityVersion, useMarketConfig,
 } from "./market-ui.js";
@@ -18,13 +18,14 @@ function Panel({ id, title, count, children }) {
   ]);
 }
 
-function MyListingRow({ listing }) {
+function MyListingRow({ listing, onChange }) {
+  const withdrawn = listing.status === "withdrawn";
   return h("li", { className: "market-my-listing", "data-market-my-listing": listing.id, "data-status": listing.status }, [
-    h(MarketPhoto, { alt: "", className: "market-my-thumb", key: "photo", photo: listing.photo }),
+    h(MarketPhoto, { alt: "", className: "market-my-thumb", key: "photo", photo: withdrawn ? null : listing.photo }),
     h("span", { className: "market-my-copy", key: "copy" }, [
       h("a", { className: "market-link", href: listingHref(listing.id), key: "title" }, listingTitle(listing)),
       h("small", { className: "product-meta", key: "meta" }, [priceLine(listing), listingMeta(listing)].filter(Boolean).join(" · ")),
-      h(StatusChip, { hidden: listing.hidden, key: "status", status: listing.status }),
+      withdrawn ? h(RelistControl, { key: "relist", listing, onDone: onChange }) : h(StatusChip, { hidden: listing.hidden, key: "status", status: listing.status }),
     ]),
   ]);
 }
@@ -108,10 +109,10 @@ function SettingsForm({ settings, onSaved }) {
     field("zelle", "Zelle email or phone", "", h("input", {
       autoCapitalize: "none", id: "settings-zelle", key: "input", maxLength: 120, onChange: (event) => set("zelle", event.target.value), type: "text", value: draft.zelle,
     })),
-    field("notifyEmail", "Email me about deals (optional)", "", h("input", {
+    field("notifyEmail", SELLER_EMAIL_LABEL, "", h("input", {
       autoComplete: "email", id: "settings-notifyEmail", inputMode: "email", key: "input", maxLength: 120, onChange: (event) => set("notifyEmail", event.target.value), type: "email", value: draft.notifyEmail,
     })),
-    h("small", { className: "market-hint", key: "private" }, "Your notification email is never shown to anyone."),
+    h("small", { className: "market-hint", key: "private" }, "Needed before you list a disc. Buyer alerts go there; it's never shown to anyone."),
     h("button", { className: "shop-btn", disabled: action.busy, key: "save", type: "submit" }, action.busy ? "Saving…" : "Save payment settings"),
     h(StatusLine, { key: "status", message: action.message }),
   ]);
@@ -201,7 +202,7 @@ export function MarketMine() {
     status === "ready" && recent.length ? h(Panel, { id: "recent", key: "recent", title: "Recent deals" },
       h("ul", { className: "market-deals" }, recent.map((deal) => h(RecentDeal, { deal, key: deal.id, onChange: reload })))) : null,
     status === "ready" && viewer.kind === "member" ? h(Panel, { id: "listings", key: "listings", title: "My listings" }, listings.length
-      ? h("ul", { className: "market-my-listings" }, listings.map((listing) => h(MyListingRow, { key: listing.id, listing })))
+      ? h("ul", { className: "market-my-listings" }, listings.map((listing) => h(MyListingRow, { key: listing.id, listing, onChange: reload })))
       : h(Note, null, ["You haven't listed a disc yet. ", h("a", { className: "market-link", href: "#market/sell", key: "sell" }, "Sell a disc")])) : null,
     status === "ready" ? h(Panel, { id: "wanted", key: "wanted", title: "My WANTED posts" }, wanted.length
       ? h("ul", { className: "market-deals" }, wanted.map((post) => h("li", { className: "market-deal", "data-market-my-wanted": post.id, key: post.id }, [

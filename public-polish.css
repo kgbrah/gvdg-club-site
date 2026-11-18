@@ -1217,3 +1217,13 @@
 [data-public-polish="shop"] .market-my-listing .product-fallback { width: 64px; height: 64px; aspect-ratio: auto; border-radius: 8px; }
 [data-public-polish="shop"] .market-my-listing .product-fallback svg { width: 28px; height: 28px; }
 [data-public-polish="shop"] .market-my-copy { display: grid; gap: 3px; min-width: 0; }
+/* Marketplace: the buyer-alert email asked for inline on the sell form, and the relist control. */
+[data-public-polish="shop"] .market-seller-email {
+  padding: 12px;
+  border: 1px solid var(--site-line);
+  border-left: 4px solid var(--site-link);
+  border-radius: 10px;
+  background: var(--site-quiet);
+}
+[data-public-polish="shop"] .market-relist { display: grid; gap: 6px; justify-items: start; margin-top: 4px; }
+[data-public-polish="shop"] .market-relist .market-note { margin: 0; font-weight: 650; color: var(--text-primary); }

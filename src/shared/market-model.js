@@ -40,6 +40,23 @@ export const FEEDBACK_RATINGS = [
 export const SAFETY_NOTE = "Payments go directly to the seller. Meet at club events when you can. Use PayPal Goods & Services for shipped discs.";
 export const GUEST_UNAVAILABLE = "Guest checkout is unavailable right now. Members can sign in.";
 export const MEMBERS_ONLY_LISTING = "Only members can list discs. Members can sign in.";
+export const SELLER_EMAIL_LABEL = "Email for buyer alerts (required to sell)";
+export const SELLER_EMAIL_HINT = "Buyer alerts go here. We'll send a confirmation. It's never shown to anyone.";
+
+/** Whole hours left to relist a withdrawn listing (rounded up), or 0 when the window has closed. */
+export function relistHoursLeft(relistUntil, now = Date.now()) {
+  const text = String(relistUntil || "");
+  const at = Date.parse(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? text.replace(" ", "T") + "Z" : text);
+  if (!Number.isFinite(at) || at <= now) return 0;
+  return Math.max(1, Math.ceil((at - now) / 3_600_000));
+}
+
+/** "Withdrawn — relist within 23 h" while a withdrawn listing can still come back; null otherwise. */
+export function withdrawnLabel(listing, now = Date.now()) {
+  if (!listing || listing.status !== "withdrawn") return null;
+  const hours = listing.withdrawal === "pending_final" ? relistHoursLeft(listing.relistUntil, now) : 0;
+  return hours ? `Withdrawn — relist within ${hours} h` : "Withdrawn";
+}
 export const PENDING_NOTE = "Pending — another buyer is finishing this";
 
 export const LISTING_STATUS_LABELS = {

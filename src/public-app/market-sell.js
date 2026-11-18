@@ -2,7 +2,8 @@ import React from "react";
 
 import { resizeImageFile } from "../shared/image-resize.js";
 import {
-  CONDITION_LEGEND, DISC_TYPES, LIMITS, listingDraft, listingHref, listingPayload, MEMBERS_ONLY_LISTING,
+  CONDITION_LEGEND, DISC_TYPES, LIMITS, listingDraft, listingHref, listingPayload, MEMBERS_ONLY_LISTING, SELLER_EMAIL_HINT,
+  SELLER_EMAIL_LABEL, validEmail,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig } from "./market-ui.js";
@@ -70,6 +71,9 @@ export function MarketSell({ editId = null }) {
   const [photos, setPhotos] = React.useState([]);
   const [loadState, setLoadState] = React.useState(editId ? "loading" : "ready");
   const [settingsMissing, setSettingsMissing] = React.useState(false);
+  // A member needs a buyer-alert email before listing; asked for right here when it's missing.
+  const [emailNeeded, setEmailNeeded] = React.useState(false);
+  const [sellerEmail, setSellerEmail] = React.useState("");
   const [photoBusy, setPhotoBusy] = React.useState(false);
   const action = useAction();
   const editing = editId != null;
@@ -79,7 +83,10 @@ export function MarketSell({ editId = null }) {
     const controller = new AbortController();
     marketRequest("/market/settings", { signal: controller.signal }).then(({ ok, data }) => {
       const settings = data.settings || {};
-      if (ok) setSettingsMissing(!settings.paypalMe && !settings.cashtag && !settings.zelle);
+      if (ok) {
+        setSettingsMissing(!settings.paypalMe && !settings.cashtag && !settings.zelle);
+        setEmailNeeded(!settings.notifyEmail);
+      }
     }).catch(() => {});
     return () => controller.abort();
   }, [viewer.kind]);
@@ -151,12 +158,31 @@ export function MarketSell({ editId = null }) {
       action.setMessage({ text: "Add at least one photo.", tone: "error" });
       return;
     }
+    if (!editing && emailNeeded && !validEmail(sellerEmail)) {
+      action.setMessage({ text: "Add an email for buyer alerts so you hear when someone buys.", tone: "error" });
+      document.getElementById("sell-sellerEmail")?.focus();
+      return;
+    }
     await action.run(async () => {
+      if (!editing && emailNeeded) {
+        const saved = await marketRequest("/market/settings", { body: { notifyEmail: sellerEmail.trim() }, method: "PUT" });
+        if (!saved.ok) {
+          action.setMessage({ text: saved.data.error === "invalid_settings" ? "Check the email for buyer alerts." : errorMessage(saved.data), tone: "error" });
+          document.getElementById("sell-sellerEmail")?.focus();
+          return;
+        }
+        setEmailNeeded(false);
+      }
       const body = editing ? parsed.value : { ...parsed.value, photos: photos.map((photo) => photo.dataUrl) };
       const { ok, data } = await marketRequest(editing ? "/market/listings/" + editId : "/market/listings", { body, method: editing ? "PATCH" : "POST" });
       if (ok && data.listing) {
         announceMarketChange();
         window.location.hash = listingHref(data.listing.id).slice(1);
+        return;
+      }
+      if (data.error === "seller_email_required") {
+        setEmailNeeded(true);
+        action.setMessage({ text: errorMessage(data), tone: "error" });
         return;
       }
       if (data.error === "invalid_listing" && data.field) {
@@ -190,6 +216,11 @@ export function MarketSell({ editId = null }) {
       " so buyers can pay you directly.",
     ]) : null,
     h("form", { "aria-label": editing ? "Edit listing" : "Sell a disc", className: "my-orders-panel market-panel market-form market-sell-form", key: "form", noValidate: true, onSubmit: submit }, [
+      !editing && emailNeeded ? h("div", { className: "market-seller-email", "data-market-seller-email": "required", key: "seller-email" },
+        h(Field, { hint: SELLER_EMAIL_HINT, id: "sell-sellerEmail", label: SELLER_EMAIL_LABEL }, h("input", {
+          autoCapitalize: "none", autoComplete: "email", id: "sell-sellerEmail", inputMode: "email", key: "input", maxLength: 120,
+          onChange: (event) => setSellerEmail(event.target.value), required: true, type: "email", value: sellerEmail,
+        }))) : null,
       h("div", { className: "market-grid-2", key: "names" }, [
         h(Field, { id: "sell-brand", key: "brand", label: "Brand" }, textInput("sell-brand", draft, set, "brand", { placeholder: "Innova" })),
         h(Field, { id: "sell-mold", key: "mold", label: "Mold" }, textInput("sell-mold", draft, set, "mold", { placeholder: "Destroyer", required: true })),
