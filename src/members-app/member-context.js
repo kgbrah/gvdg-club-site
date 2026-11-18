@@ -11,6 +11,8 @@ function membershipFrom(value) {
     currentYear: Number.isInteger(value.currentYear) ? value.currentYear : null,
     // A guest account (tier set by an admin): not a dues-paying member, so never lapsed.
     guest: value.guest === true,
+    // Round history and stats (members, admins, promo guests). Absent from older payloads = allowed.
+    history: value.history !== false,
     lapsed: value.guest !== true && (value.lapsed === true || value.current === false),
     remind: value.remind === true,
     renewalYear: Number.isInteger(value.renewalYear) ? value.renewalYear : null,

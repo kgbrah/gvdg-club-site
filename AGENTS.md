@@ -106,10 +106,10 @@ gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="a
 
 ## Conventions that bite if missed
 
-- **Next migration number is `0072`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
+- **Next migration number is `0073`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
   and hole, `0066` My Bag photos and the bag / marketplace cross-checks, `0067` whole-bag and accessory photos,
   `0068` bags and accessories in the marketplace + "Sell this" links, `0069` members' PDGA registrations, `0070` club donations
-  from marketplace sales, `0071` the round karma watch: flags and admin karma adjustments).
+  from marketplace sales, `0071` the round karma watch: flags and admin karma adjustments, `0072` guest promo spots).
 - **A new place that shows a player's name gets their karma chip** (`KarmaChip` from `src/shared/karma.js`, by
   `memberId`, `pdga`, a payload's `karmaKey`, or a marketplace `traderKey`). Name-only payloads add
   `karmaKey: karmaKey(memberId)` (`auth-worker/src/karma-directory.ts`); never send the member id itself.
@@ -119,8 +119,8 @@ gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="a
 - **Changing a CHECK constraint means rebuilding the table.** Do it the way `0068` does: `PRAGMA defer_foreign_keys = on`,
   create the new table, copy every row with its id, drop the old, rename, recreate the indexes, `PRAGMA defer_foreign_keys = off`,
   and replay it on a seeded database inside a transaction with foreign keys on (`auth-worker/test/market-gear-migration.test.ts`).
-- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v315`), plus the
-  `?v=` on the bundle you changed (members `208`, public/events `201`, score `241`, home `192`) and the
+- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v316`), plus the
+  `?v=` on the bundle you changed (members `209`, public/events `201`, score `241`, home `192`) and the
   tests that pin them.
 - **Generated bundles conflict on merge.** Delete the generated outputs, `npm run build`, then `git add -A`.
 - **Private stays private.** Lost & Found writing ("what's written on it"), AI reads, My Bag photos and

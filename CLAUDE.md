@@ -226,6 +226,13 @@ standings are written to D1 (`results` for events, `casual_rounds`/`casual_resul
   member; `POST /admin/members/set-tier` (last-admin guarded), `POST /admin/members/lapsed-to-guest`. Guests: membership
   view `guest: true` (never lapsed), registration not blocked, and `requireListingSeller` refuses new listings, relists and
   Wanted offers (`guests_cannot_list`; the market viewer carries `canList`).
+- **Guest accounts** (`guest-accounts.ts`): `POST /membership/apply` with `kind: "guest"` needs a valid email and phone
+  (`parsePhone` → `+1…`), PDGA/UDisc optional; approval creates `guest: true` with `email`/`phone` on the record and an
+  `idx:email:` login index (`resolveMember` checks `@` first, so an email is never read as a PDGA #; member id
+  `m_e_<hash>` when there's no PDGA/UDisc). The first `GUEST_PROMO_LIMIT` (100) approved guests get `guestPromo`
+  (atomic `INSERT … WHERE COUNT < 100` into `guest_promo`, `0072`); `hasHistoryAccess()` / `historyGate` answer
+  `membership_required` on `/my-results`, `/my-play-history`, `/my-play-export`, `/my-ratings` for other guests, and
+  `membership.history` tells the app (members-app `MembershipNeeded`). `GET /membership/guest-spots` → `{ limit, left }`.
 - **Live casual rounds (admin):** `GET /admin/rounds/active` (`active-rounds.ts`) lists every casual round still live by
   code: candidates from `live_round_index` plus member-started rounds never saved (`casual_round_sharing` rows with no
   `casual_rounds` row; ghosts can fall out of the index), each confirmed by the DO's Worker-only `GET do/summary` (names,
@@ -242,8 +249,8 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0071`; next is
-`0072`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0072`; next is
+`0073`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
@@ -258,7 +265,7 @@ privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membe
 (`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
 **Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`), bags + accessories in the
 marketplace and "Sell this" links (`0068`: `market_listings` rebuilt with the same ids under `PRAGMA defer_foreign_keys`; see
-`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data), members' PDGA registrations (`0069`), club donations from marketplace sales (`0070`), the round karma watch (`0071`).
+`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data), members' PDGA registrations (`0069`), club donations from marketplace sales (`0070`), the round karma watch (`0071`), guest promo spots (`0072`).
 
 `events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
 must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
@@ -384,7 +391,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v315`, members `?v=208`, public/events `?v=201`, score `?v=241`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v316`, members `?v=209`, public/events `?v=201`, score `?v=241`,
 home `?v=192` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,

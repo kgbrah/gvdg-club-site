@@ -35,6 +35,17 @@ export interface Member {
    * (held-accounts.ts).
    */
   held?: boolean;
+  /** Guest accounts sign in with their email (idx:email) and must give a phone; private, admin-only. */
+  email?: string;
+  phone?: string;
+  /** One of the first 100 approved guest applications (guest_promo): round history and stats like a member. */
+  guestPromo?: boolean;
+}
+
+/** Round history and stats: members and admins, and guests who got a promo spot. */
+export function hasHistoryAccess(m: Pick<Member, "isAdmin" | "guest" | "guestPromo"> | null | undefined): boolean {
+  if (!m) return false;
+  return m.isAdmin === true || m.guest !== true || m.guestPromo === true;
 }
 
 export type MemberTier = "admin" | "member" | "guest";
@@ -119,6 +130,15 @@ export type UpdateResult = { ok: true; member: Member } | { ok: false; conflict:
 const RECORD = (id: string) => `member:${id}`;
 const IDX_PDGA = (n: string) => `idx:pdga:${normPdga(n)}`;
 const IDX_UDISC = (u: string) => `idx:udisc:${normUdisc(u)}`;
+const IDX_EMAIL = (e: string) => `idx:email:${normEmail(e)}`;
+
+function normEmail(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+function isEmail(s: string): boolean {
+  return s.includes("@");
+}
 
 function normPdga(s: string): string {
   return s.replace(/\D/g, "");
@@ -134,6 +154,7 @@ function normUdisc(s: string): string {
  * so an attacker can't reset the per-identifier lockout by mutating the raw identifier string.
  */
 export function canonicalLoginKey(identifier: string): string {
+  if (isEmail(identifier)) return `email:${normEmail(identifier)}`;
   const digits = normPdga(identifier);
   return digits ? `pdga:${digits}` : `udisc:${normUdisc(identifier)}`;
 }
@@ -141,8 +162,10 @@ export function canonicalLoginKey(identifier: string): string {
 /** Write a member record and its login indexes. Used by the admin seeding script. */
 export async function putMember(kv: KVLike, m: Member): Promise<void> {
   await kv.put(RECORD(m.memberId), JSON.stringify(m));
+  if (m.held === true) return; // a held account has no sign-in
   if (m.pdgaNo) await kv.put(IDX_PDGA(m.pdgaNo), m.memberId);
   if (m.udisc) await kv.put(IDX_UDISC(m.udisc), m.memberId);
+  if (m.email) await kv.put(IDX_EMAIL(m.email), m.memberId);
 }
 
 export async function getMember(kv: KVLike, memberId: string): Promise<Member | null> {
@@ -162,6 +185,11 @@ export async function getMember(kv: KVLike, memberId: string): Promise<Member | 
 export async function resolveMember(kv: KVLike, identifier: string): Promise<Member | null> {
   const id = identifier.trim();
   if (!id) return null;
+  // An email signs in by its own index only (an email with digits must never be read as a PDGA #).
+  if (isEmail(id)) {
+    const byEmail = await kv.get(IDX_EMAIL(id));
+    return byEmail ? getMember(kv, byEmail) : null;
+  }
 
   const pdgaDigits = normPdga(id);
   if (pdgaDigits) {
@@ -266,17 +294,23 @@ export interface KVListLike extends KVLike {
 }
 
 /** Stable memberId from identity: prefers PDGA# (`m_<digits>`), else UDisc (`m_u_<lowercase>`). */
-export function memberIdFor(input: { pdgaNo?: string | null; udisc?: string | null }): string | null {
+export function memberIdFor(input: { pdgaNo?: string | null; udisc?: string | null; email?: string | null }): string | null {
   const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
   if (pdga) return `m_${pdga}`;
   const udisc = input.udisc ? normUdisc(input.udisc) : "";
   if (udisc) return `m_u_${udisc}`;
+  const email = input.email ? normEmail(input.email) : "";
+  if (email) return `m_e_${fnv64(email)}`;
   return null;
 }
 
-export type CreateMemberInput = { name: string; pdgaNo?: string | null; udisc?: string | null; isAdmin?: boolean };
+export type CreateMemberInput = {
+  name: string; pdgaNo?: string | null; udisc?: string | null; isAdmin?: boolean;
+  /** Guest accounts: sign in by email, must give a phone. */
+  email?: string | null; phone?: string | null; guest?: boolean;
+};
 export type CreateResult = { ok: true; member: Member } | { ok: false; reason: "exists" | "conflict" | "invalid" };
-export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear" | "guest" | "held">;
+export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear" | "guest" | "held" | "email" | "phone" | "guestPromo">;
 
 /** Create a NEW member with an admin-issued temporary PIN (mustChangePin: true). Fails with `exists`
  *  if the member id is taken, or `conflict` if a PDGA#/UDisc index already points at someone else —
@@ -289,12 +323,17 @@ export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash
   const udisc = input.udisc ? normUdisc(input.udisc) : "";
   if (pdga) { const o = await kv.get(IDX_PDGA(pdga)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
   if (udisc) { const o = await kv.get(IDX_UDISC(udisc)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
+  const email = input.email ? normEmail(input.email) : "";
+  if (email) { const o = await kv.get(IDX_EMAIL(email)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
   const m: Member = {
     memberId,
     name: input.name.trim(),
     ...(pdga ? { pdgaNo: pdga } : {}),
     ...(udisc ? { udisc: input.udisc!.trim() } : {}),
     ...(input.isAdmin ? { isAdmin: true } : {}),
+    ...(email ? { email } : {}),
+    ...(input.phone ? { phone: input.phone } : {}),
+    ...(input.guest && !input.isAdmin ? { guest: true } : {}),
     pinHash,
     mustChangePin: true,
     memberThroughYear: easternCalendarYear(),
@@ -323,7 +362,7 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
     const page = await kv.list({ prefix: "member:", cursor });
     for (const k of page.keys) {
       const m = await getMember(kv, k.name.slice("member:".length));
-      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true });
+      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true, email: m.email, phone: m.phone, guestPromo: m.guestPromo === true });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
@@ -344,6 +383,7 @@ export async function deleteMember(kv: KVLike, memberId: string): Promise<Member
   await kv.delete(RECORD(m.memberId));
   if (m.pdgaNo && (await kv.get(IDX_PDGA(m.pdgaNo))) === m.memberId) await kv.delete(IDX_PDGA(m.pdgaNo));
   if (m.udisc && (await kv.get(IDX_UDISC(m.udisc))) === m.memberId) await kv.delete(IDX_UDISC(m.udisc));
+  if (m.email && (await kv.get(IDX_EMAIL(m.email))) === m.memberId) await kv.delete(IDX_EMAIL(m.email));
   return m;
 }
 

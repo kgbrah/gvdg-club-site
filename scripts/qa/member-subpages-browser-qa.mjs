@@ -600,12 +600,12 @@ async function verifyAuth() {
     await application.getByRole("button", { name: "Submit application" }).click();
     assert.equal((await submitted).status(), 201);
     await page.getByText("Application sent. After an admin approves you, log in with this PIN.", { exact: true }).waitFor();
-    await page.getByLabel("PDGA # or UDisc Username").fill("bad");
+    await page.getByLabel("PDGA #, UDisc username or email").fill("bad");
     await page.getByLabel("PIN", { exact: true }).fill("0000");
     await page.getByRole("button", { name: "Log In", exact: true }).click();
     await page.locator('[data-react-auth-error="login"][data-react-auth-error-state="shown"]').waitFor();
     await screen("sign-in-error-390");
-    await page.getByLabel("PDGA # or UDisc Username").fill("123456");
+    await page.getByLabel("PDGA #, UDisc username or email").fill("123456");
     await page.getByLabel("PIN", { exact: true }).fill("1234");
     await page.getByRole("button", { name: "Log In", exact: true }).click();
     await page.locator("[data-react-auth-gate='pin']").waitFor();

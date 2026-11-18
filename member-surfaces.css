@@ -499,6 +499,11 @@ body .login-gate .login-btn {
 }
 body .login-gate .login-btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); }
 body .login-gate .login-btn-secondary:hover { background: var(--bg-tertiary); }
+/* Apply: Club member or Guest account. */
+body .login-gate .auth-kind { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border-radius: 999px; background: var(--bg-tertiary); }
+body .login-gate .auth-kind button { min-height: 44px; padding: 0 .75rem; border: 0; border-radius: 999px; background: transparent; color: var(--text-secondary); font: 700 .9rem/1.2 inherit; cursor: pointer; }
+body .login-gate .auth-kind button[aria-checked="true"] { background: var(--bg-secondary); color: var(--text-primary); box-shadow: 0 0 0 1px var(--border-color); }
+body .login-gate .auth-kind button:focus-visible { outline: 2px solid var(--secondary); outline-offset: 1px; }
 body .login-gate .back-link { display: inline-flex; align-items: center; min-height: 44px; }
 body .login-gate .member-auth-alternate {
   display: flex;
