@@ -66,6 +66,10 @@ h1 span { color: var(--primary); }
 .signature-grid article { display: flex; flex-direction: column; padding: 28px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-top: 4px solid var(--secondary-text); border-radius: 0 0 12px 12px; scroll-margin-top: 100px; }
 .signature-grid article:nth-child(2) { border-top-color: var(--primary); }
 .signature-grid article:nth-child(3) { border-top-color: var(--accent); }
+/* "New this season": six cards keep the same color rhythm, a row at a time. */
+.new-features .signature-grid article:nth-child(5) { border-top-color: var(--primary); }
+.new-features .signature-grid article:nth-child(6) { border-top-color: var(--accent); }
+.hero-comparison.hero-new { display: block; width: fit-content; max-width: 100%; margin-top: 8px; }
 .signature-grid .feature-number { margin: 0 0 20px; }
 .signature-grid h3 { font-size: 2.2rem; }
 .signature-grid p:not(.feature-number) { font-size: .86rem; color: var(--text-secondary); }
