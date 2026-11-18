@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  canonicalChoice, colorName, DISC_BRANDS, DISC_COLOR_NAMES, DISC_WEIGHTS, moldsFor, parseSpokenDisc, plasticsFor, spokenNumbersToDigits,
+  canonicalChoice, colorName, DISC_BRANDS, DISC_COLOR_NAMES, DISC_WEIGHTS, moldsFor, parseSpokenDisc, parseSpokenSpot, plasticsFor, spokenNumbersToDigits,
 } from "../src/shared/disc-catalog.js";
 
 test("every brand lists plastics, and names are unique within a brand", () => {
@@ -55,7 +55,7 @@ test("a full description fills every field", () => {
 });
 
 test("everyday words don't fill the form without a brand", () => {
-  assert.deepEqual(parseSpokenDisc("found it off the drive, pure luck, the gold one by the river"), { color: "Gold" });
+  assert.deepEqual(parseSpokenDisc("found it off the drive, pure luck, the gold one by the river"), { color: "Gold", area: "By the river" });
   assert.deepEqual(parseSpokenDisc("mint condition, hole 30"), {}, "mint isn't Mint Discs; hole 30 doesn't exist");
   assert.deepEqual(parseSpokenDisc("Discraft Drive"), { mold: "Drive", brand: "Discraft" });
   assert.deepEqual(parseSpokenDisc(""), {});
@@ -64,4 +64,18 @@ test("everyday words don't fill the form without a brand", () => {
 test("holes stay inside the course", () => {
   assert.equal(parseSpokenDisc("hole 19", { holes: 18 }).hole, undefined);
   assert.equal(parseSpokenDisc("hole 9", { holes: 9 }).hole, 9);
+});
+
+test("where exactly: the place said in passing, without the hole or the course", () => {
+  assert.equal(parseSpokenSpot("Orange Star Destroyer, 175 grams, found it on hole 7, in the pond left of the fairway."), "In the pond left of the fairway");
+  assert.equal(parseSpokenSpot("found it on hole 7 by the pond"), "By the pond");
+  assert.equal(parseSpokenSpot("Blue Buzzz in the woods behind the basket on hole 12"), "In the woods behind the basket");
+  assert.equal(parseSpokenSpot("lost it near the creek at Elm Street"), "Near the creek");
+  assert.equal(parseSpokenSpot("it was next to the parking lot"), "Next to the parking lot");
+  assert.equal(parseSpokenSpot("left of the fairway past the big oak tree on 9"), "Left of the fairway past the big oak tree on 9");
+  assert.equal(parseSpokenSpot("Star Destroyer in Champion plastic, hole 7"), "", "no place word: nothing");
+  assert.equal(parseSpokenSpot("orange destroyer on hole 7"), "");
+  assert.equal(parseSpokenSpot(""), "");
+  assert(parseSpokenSpot("in the " + "very ".repeat(20) + "deep pond").length <= 48);
+  assert.equal(parseSpokenDisc("Orange Star Destroyer, hole 7, in the pond").area, "In the pond");
 });

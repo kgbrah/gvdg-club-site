@@ -268,7 +268,7 @@ export function MarketWantedNew() {
       "aria-label": "Post a WANTED", className: "my-orders-panel market-panel market-form", key: "form", noValidate: true,
       onSubmit: (event) => { event.preventDefault(); identity.require("Verify your email to post a WANTED", post); },
     }, [
-      h(VoiceDiscButton, { example: "Try: “Champion Teebird3.”", key: "voice", onFields: heard }),
+      h(VoiceDiscButton, { example: "Try: “Champion Teebird3.”", fields: ["brand", "mold", "plastic"], key: "voice", onFields: heard }),
       h("div", { className: "market-grid-2", key: "names" }, [
         h(BrandPick, { id: "wanted-brand", key: "brand", maxLength: LIMITS.brand, onChange: (value) => set("brand", value), placeholder: "Any brand", value: draft.brand }),
         h(MoldInput, { brand: draft.brand, id: "wanted-mold", key: "mold", maxLength: LIMITS.mold, onChange: (value) => set("mold", value), placeholder: "Destroyer", value: draft.mold }),

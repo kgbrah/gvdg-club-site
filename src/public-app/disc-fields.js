@@ -94,10 +94,14 @@ export function heardFields(fields) {
   if (fields.color) out.color = colorName(fields.color) || fields.color;
   if (fields.weightG) out.weightG = String(fields.weightG);
   if (fields.hole) out.hole = String(fields.hole);
+  if (fields.area) out.area = String(fields.area);
   return out;
 }
 
-const FIELD_NAMES = { brand: "brand", mold: "mold", plastic: "plastic", color: "colour", weightG: "weight", hole: "hole" };
+/** The order "Filled in the …" reads in, and each field's name there. */
+const FIELD_NAMES = [["brand", "brand"], ["mold", "mold"], ["plastic", "plastic"], ["color", "colour"], ["weightG", "weight"], ["courseId", "course"],
+  ["hole", "hole"], ["area", "where exactly"]];
+export const DISC_VOICE_FIELDS = ["brand", "mold", "plastic", "color", "weightG"];
 
 function recorderMime() {
   if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") return "";
@@ -122,9 +126,10 @@ function voiceError(status, code) {
 
 /**
  * "Say it": tap, describe the disc, tap Stop (or wait 15 s). `onFields(fields)` gets what was heard, already spelled
- * like the pick-lists. `holes` limits "hole N" to the course. Hidden where the browser can't record audio.
+ * like the pick-lists, limited to `fields` (the ones this form has). `holes` limits "hole N" to the course;
+ * `extraParse(transcript)` adds the form's own matches (Lost & Found: the course). Hidden where audio can't be recorded.
  */
-export function VoiceDiscButton({ onFields, holes = 27, example }) {
+export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_VOICE_FIELDS, extraParse }) {
   const [phase, setPhase] = React.useState("idle");
   const [note, setNote] = React.useState(null);
   const [seconds, setSeconds] = React.useState(0);
@@ -159,8 +164,12 @@ export function VoiceDiscButton({ onFields, holes = 27, example }) {
       setPhase("idle");
       return;
     }
-    const heard = heardFields(parseSpokenDisc(data.transcript, { holes }));
-    const filled = Object.keys(heard).map((key) => FIELD_NAMES[key]).filter(Boolean);
+    let extra = {};
+    try { extra = (extraParse && extraParse(data.transcript)) || {}; } catch { extra = {}; }
+    const all = { ...heardFields(parseSpokenDisc(data.transcript, { holes: extra.courseId ? 40 : holes })), ...extra };
+    const heard = {};
+    for (const key of fields) if (all[key]) heard[key] = all[key];
+    const filled = FIELD_NAMES.filter(([key]) => heard[key]).map(([, name]) => name);
     if (filled.length) onFields(heard);
     setNote({
       heard: data.transcript, tone: filled.length ? "success" : "error",

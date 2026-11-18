@@ -3,6 +3,7 @@ import React from "react";
 
 import { discTitle, holdingText, postHref, postMeta, POST_STATUS_LABELS } from "../shared/lost-found-model.js";
 import { LfLoad, LfPhoto, lfRequest, PersonLine, useLfVersion } from "./lf-ui.js";
+import { CoursePicker, useHere } from "./course-picker.js";
 
 const h = React.createElement;
 
@@ -43,7 +44,8 @@ export function useCourses() {
     if (!coursesPromise) {
       coursesPromise = lfRequest("/courses").then(({ ok, data }) => (ok && Array.isArray(data.courses) ? data.courses : []))
         .then((rows) => rows.filter((row) => row && Number(row.id) > 0 && typeof row.name === "string")
-          .map((row) => ({ id: Number(row.id), name: row.name })).sort((a, b) => a.name.localeCompare(b.name)))
+          .map((row) => ({ id: Number(row.id), name: row.name, location: typeof row.location === "string" ? row.location : "", lat: row.lat ?? null, lng: row.lng ?? null }))
+          .sort((a, b) => a.name.localeCompare(b.name)))
         .catch(() => { coursesPromise = null; return []; });
     }
     coursesPromise.then((rows) => { if (live) setCourses(rows); });
@@ -54,6 +56,7 @@ export function useCourses() {
 
 export function PostList({ kind, route }) {
   const courses = useCourses();
+  const here = useHere();
   const [q, setQ] = React.useState(() => route.query.get("q") || "");
   const [course, setCourse] = React.useState(() => route.query.get("course") || "");
   const search = useDebounced(q.trim(), 250);
@@ -87,14 +90,16 @@ export function PostList({ kind, route }) {
     ]),
     h("div", { "aria-label": found ? "Found disc filters" : "Lost disc filters", className: "filters shop-filters market-filters lf-filters", key: "filters" }, [
       h("div", { className: "shop-search-row", key: "row" }, [
-        h("label", { className: "public-sr-only", htmlFor: "lfSearch", key: "search-label" }, found ? "Search found discs" : "Search lost discs"),
-        h("input", { id: "lfSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value), placeholder: "Search discs", type: "search", value: q }),
-        h("label", { className: "public-sr-only", htmlFor: "lfCourse", key: "course-label" }, "Course"),
-        h("select", { id: "lfCourse", key: "course", onChange: (event) => setCourse(event.target.value), value: course }, [
-          h("option", { key: "any", value: "" }, "Any course"),
-          ...courses.map((row) => h("option", { key: row.id, value: String(row.id) }, row.name)),
-        ]),
+        h("label", { className: "lf-filter-label", htmlFor: "lfSearch", key: "search-label" }, "Disc"),
+        h("input", {
+          "aria-label": found ? "Search found discs" : "Search lost discs", id: "lfSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value),
+          placeholder: "Brand, mold, colour…", type: "search", value: q,
+        }),
       ]),
+      h(CoursePicker, {
+        clearLabel: "All courses", courses, here, id: "lfFilterCourse", key: "course", label: "Course", locateLabel: "Courses near me",
+        onChange: setCourse, value: course,
+      }),
     ]),
     state.status !== "ready" ? h(LfLoad, { key: "load", loading: found ? "Loading found discs…" : "Loading lost discs…", onRetry: () => setAttempt((value) => value + 1), state })
       : h("div", { className: "product-grid market-grid lf-grid", key: "grid" }, posts.length
