@@ -108,6 +108,35 @@ function ReportCard({ report, reload }) {
   ]);
 }
 
+/** A listing that strongly matches a disc someone reported lost (its seller was told too). */
+function LostMatchCard({ match, reload }) {
+  const [reason, setReason] = React.useState("");
+  const { act, busy, message } = useModeration(reload);
+  const listing = match.listing;
+  const key = listing.id + "-" + match.lost.id;
+  const btn = (label, onClick, primary = false) => h("button", {
+    className: primary ? "admin-btn" : "admin-btn secondary", disabled: busy, key: label, onClick, type: "button",
+  }, label);
+  return h("li", { className: "al-section admin-market-report", "data-admin-market-lost": key }, [
+    h("h3", { className: "al-h", key: "title" }, "Listing: " + (listing.title || "Untitled")),
+    h("p", { className: "al-note", key: "meta" }, [
+      "Seller: ", who(listing.seller), match.createdAt ? " · flagged " + when(match.createdAt) : "",
+    ].join("")),
+    h("p", { className: "al-note", key: "lost" }, [
+      "Looks like the lost ", h("a", { href: match.lost.href, key: "a", rel: "noopener", target: "_blank" }, match.lost.title),
+      match.lost.course ? " (" + match.lost.course + ")" : "", " · ",
+      h("a", { href: "pro-shop.html#market/listing/" + listing.id, key: "b", rel: "noopener", target: "_blank" }, "Open the listing"),
+    ]),
+    match.reasons?.length ? h("p", { className: "admin-community-review", key: "why" }, "Why: " + match.reasons.join(" · ")) : null,
+    h(ReasonField, { id: "market-lost-reason-" + key, key: "reason", onChange: setReason, value: reason }),
+    h("div", { className: "admin-today-actions admin-market-actions", key: "actions" }, [
+      btn("Hide listing", () => act(`/admin/market/listings/${listing.id}/hide`, { reason }, "Hidden."), true),
+      btn("Mark reviewed", () => act(`/admin/market/lost-matches/${listing.id}/${match.lost.id}/review`, { reason }, "Marked reviewed.")),
+    ]),
+    message ? h("p", { className: "dash-note", key: "message", role: "status" }, message) : null,
+  ]);
+}
+
 function UnhideRow({ kind, item, reload }) {
   const [reason, setReason] = React.useState("");
   const { act, busy, message } = useModeration(reload);
@@ -163,6 +192,7 @@ export function AdminMarketplacePanel() {
   if (!active) return null;
   const data = state.data || {};
   const reports = Array.isArray(data.reports) ? data.reports : [];
+  const lostMatches = Array.isArray(data.lostMatches) ? data.lostMatches : [];
   const hiddenListings = Array.isArray(data.hidden?.listings) ? data.hidden.listings : [];
   const hiddenWanted = Array.isArray(data.hidden?.wanted) ? data.hidden.wanted : [];
   const withdrawn = Array.isArray(data.withdrawn) ? data.withdrawn : [];
@@ -177,6 +207,10 @@ export function AdminMarketplacePanel() {
     reports.length
       ? h("ul", { className: "admin-community-list", key: "reports" }, reports.map((report) => h(ReportCard, { key: report.id, reload: load, report })))
       : state.status === "ready" ? h("p", { className: "dash-note", key: "no-reports" }, "No open reports.") : null,
+    h("h2", { className: "admin-pane-kicker", key: "lost-title" }, `Possible lost discs for sale (${lostMatches.length})`),
+    lostMatches.length
+      ? h("ul", { className: "admin-community-list", key: "lost" }, lostMatches.map((match) => h(LostMatchCard, { key: match.listing.id + "-" + match.lost.id, match, reload: load })))
+      : state.status === "ready" ? h("p", { className: "dash-note", key: "no-lost" }, "No listings look like a reported lost disc.") : null,
     h("h2", { className: "admin-pane-kicker", key: "hidden-title" }, "Hidden items"),
     hiddenListings.length || hiddenWanted.length
       ? h("ul", { className: "admin-community-list", key: "hidden" }, [

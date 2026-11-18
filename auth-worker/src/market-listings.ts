@@ -5,6 +5,7 @@ import { corsHeaders, readJson } from "./http.js";
 import { DISC_TYPES, MAX_PHOTOS, listingTitle, parseEmail, parseListing, parseSettings } from "./market-input.js";
 import { marketUrl, notifyTrader, sendMarketEmail } from "./market-notify.js";
 import { decodeListingPhoto, listingPhotoKey, LISTING_BODY_BYTES, PHOTO_BODY_BYTES } from "./market-photos.js";
+import { queueListingCheck } from "./market-lost-check.js";
 import {
   DEAL_COLUMNS, OFFER_COLUMNS, dealViews, ensureTrader, getListingRow, isSuspended, listingCards, listingPhotos,
   logDeal, num, offerViews, ownerByKey, payInfo, publicPhoto, RELIST_WINDOW_HOURS, sellerSettings, str, type Actor, type Row, viewerOf,
@@ -199,6 +200,8 @@ export async function createListing(c: MarketCtx): Promise<Response> {
     throw error;
   }
   await logDeal(c.env, { listingId: id, actorId: seller.id, action: "list", to: "active" });
+  // Privately: could this be a disc someone reported lost? Only the seller hears, and only on a strong match.
+  queueListingCheck(c.env, c.ctx, id);
   const row = await getListingRow(c.env, id);
   return ok(c, { listing: await listingDetail(c, row!) }, 201);
 }
@@ -240,6 +243,7 @@ export async function editListing(c: MarketCtx, id: number): Promise<Response> {
     v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location, id, seller.id).run();
   if (!changed(result)) return fail(c, 409, "not_active");
   await logDeal(c.env, { listingId: id, actorId: seller.id, action: "edit", from: "active", to: "active" });
+  queueListingCheck(c.env, c.ctx, id);
   return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }
 
@@ -332,6 +336,7 @@ export async function relistListing(c: MarketCtx, id: number): Promise<Response>
   ).bind(id, seller.id).run();
   if (!changed(result)) return fail(c, 409, "relist_expired");
   await logDeal(c.env, { listingId: id, actorId: seller.id, action: "relist", from: "withdrawn", to: "active" });
+  queueListingCheck(c.env, c.ctx, id);
   return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }
 

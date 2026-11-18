@@ -116,6 +116,17 @@ describe("private member practice", () => {
     expect(sqlite.prepare("SELECT count(*) AS n FROM member_practice_records").get()?.n).toBe(1);
   });
 
+  it("keeps a bag disc's optional colour and private writing, and older records exactly as they were", () => {
+    const withExtras = parsePracticeMutation(payload(1, 100, "disc", { ...DISC, color: "Orange", ink: "Ada L 252-555-0101" }), OWNER)!;
+    expect(withExtras.record).toMatchObject({ color: "Orange", ink: "Ada L 252-555-0101" });
+    const plain = parsePracticeMutation(payload(1, 101, "disc", DISC), OWNER)!;
+    expect(Object.keys(plain.record!).sort()).toEqual(Object.keys(DISC).sort());
+    expect(parsePracticeMutation(payload(1, 102, "disc", { ...DISC, color: "", ink: "" }), OWNER)!.record).toEqual(DISC);
+    expect(parsePracticeMutation(payload(1, 103, "disc", { ...DISC, ink: "x".repeat(121) }), OWNER)).toBeNull();
+    expect(parsePracticeMutation(payload(1, 104, "disc", { ...DISC, color: 7 }), OWNER)).toBeNull();
+    expect(parsePracticeMutation(payload(1, 105, "disc", { ...DISC, photo: "x" }), OWNER)).toBeNull();
+  });
+
   it("rolls back a partial write and retries the same request", async () => {
     const { db, sqlite, failWrites } = await fixture();
     const mutation = parsePracticeMutation(payload(1, 100, "disc", DISC), OWNER)!;

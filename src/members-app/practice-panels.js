@@ -3,6 +3,8 @@ import React from "react";
 import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { discCatalog, discChoices, unfilledDiscDetails } from "./bag-disc-catalog.js";
 import { BagDiscChoice, BagDiscVoice, BagDiscWeight } from "./bag-disc-inputs.js";
+import { BagDiscLost, BagDiscPhotos, BagMatchSwitch, useBagExtras } from "./bag-extras.js";
+import { DISC_COLOR_NAMES } from "../shared/disc-catalog.js";
 
 import { MoreLink } from "./more-link.js";
 import { memberConfirm } from "./member-dialogs.js";
@@ -12,7 +14,7 @@ import {
 } from "./practice-model.js";
 
 const h = React.createElement;
-const EMPTY_DISC = { brand: "", model: "", plastic: "", weightGrams: "", notes: "", inBag: true, archived: false };
+const EMPTY_DISC = { brand: "", model: "", plastic: "", weightGrams: "", notes: "", inBag: true, archived: false, color: "", ink: "" };
 
 function field(label, settings) {
   const { options, rows, ...props } = settings;
@@ -126,7 +128,9 @@ function bagSessionToken() {
 }
 
 function DiscForm({ initial, onSave, onClose, savedDiscs, scope }) {
-  const [form, setForm] = React.useState(() => initial ? { ...initial.record, weightGrams: initial.record.weightGrams ?? "" } : EMPTY_DISC);
+  const [form, setForm] = React.useState(() => initial
+    ? { ...initial.record, weightGrams: initial.record.weightGrams ?? "", color: initial.record.color ?? "", ink: initial.record.ink ?? "" } : EMPTY_DISC);
+  const inkId = React.useId();
   const [error, setError] = React.useState("");
   const notesId = React.useId();
   const catalog = discCatalog(savedDiscs);
@@ -138,8 +142,11 @@ function DiscForm({ initial, onSave, onClose, savedDiscs, scope }) {
     if (!isCurrentSession()) return;
     const record = {
       ...form, brand: form.brand.trim(), model: form.model.trim(), plastic: form.plastic.trim(), notes: form.notes.trim(),
-      weightGrams: form.weightGrams === "" ? null : Number(form.weightGrams),
+      weightGrams: form.weightGrams === "" ? null : Number(form.weightGrams), color: form.color.trim(), ink: form.ink.trim(),
     };
+    // Colour and writing are optional extras: left out when blank, so older discs stay exactly as they were.
+    if (!record.color) delete record.color;
+    if (!record.ink) delete record.ink;
     if (!record.brand || !record.model) { setError("Enter the disc’s brand and model."); return; }
     setError(onSave(record, initial) || "");
   }
@@ -165,6 +172,17 @@ function DiscForm({ initial, onSave, onClose, savedDiscs, scope }) {
         key: "weight", value: form.weightGrams,
         onChange: (value) => setForm((current) => ({ ...current, weightGrams: value })),
       }),
+    ]),
+    field("Colour", {
+      name: "color", value: form.color, onChange: (event) => setForm((current) => ({ ...current, color: event.target.value })),
+      options: [["", "Choose a colour"], ...(form.color && !DISC_COLOR_NAMES.includes(form.color) ? [[form.color, form.color]] : []),
+        ...DISC_COLOR_NAMES.map((name) => [name, name])],
+    }),
+    h("div", { className: "member-practice-field", key: "ink" }, [
+      h("label", { htmlFor: inkId, key: "label" }, "What's written on it (private)"),
+      h("input", { className: "form-input", id: inkId, key: "input", maxLength: 120, placeholder: "Your name, phone number, initials…",
+        onChange: (event) => setForm((current) => ({ ...current, ink: event.target.value })), type: "text", value: form.ink }),
+      h("small", { className: "player-card-meta", key: "hint" }, "Only used to match a found disc to you. Never shown to anyone."),
     ]),
     h("div", { className: "member-practice-field", key: "notes" }, [
       h("label", { htmlFor: notesId, key: "label" }, "Notes"),
@@ -250,6 +268,8 @@ export function MemberBagPage({ workspace }) {
     editorScope.current = scope;
     setEditor({ initial, scope });
   }
+  const token = bagSessionToken();
+  const extras = useBagExtras(token);
   const term = query.trim().toLowerCase();
   const records = workspace.data.discs.filter(({ record }) => [record.brand, record.model, record.plastic].join(" ").toLowerCase().includes(term))
     .sort((a, b) => Number(b.record.inBag) - Number(a.record.inBag) || DiscLabel(a.record).localeCompare(DiscLabel(b.record)));
@@ -258,11 +278,14 @@ export function MemberBagPage({ workspace }) {
   const group = (items) => h("div", { className: "member-practice-records", key: "list" }, items.map((row) => h("article", { className: "player-card", key: row.id }, [
     h("h3", { key: "label" }, DiscLabel(row.record)),
     h("p", { className: "player-card-meta", key: "variant" }, [
-      row.record.plastic, row.record.weightGrams == null ? "" : row.record.weightGrams + " g",
+      row.record.color, row.record.plastic, row.record.weightGrams == null ? "" : row.record.weightGrams + " g",
       row.record.archived ? "Archived" : row.record.inBag ? "In bag" : "Out of bag", draftLabel(row),
     ].filter(Boolean).join(" · ")),
     row.record.notes ? h("p", { className: "player-card-meta", key: "notes" }, row.record.notes) : null,
+    // Server extras need the disc saved (synced) first: not for a draft that only lives on this phone.
+    !row.draftState ? h(BagDiscPhotos, { disc: row, extras, key: "photos", label: DiscLabel(row.record), token }) : null,
     discActions(row, workspace, openEditor, setError),
+    !row.draftState ? h(BagDiscLost, { disc: row, extras, key: "lost", record: row.record }) : null,
   ])));
   return h("div", { className: "react-play-page player-play member-practice", "data-member-bag": "ready" }, [
     h("div", { className: "member-practice-toolbar", key: "toolbar" }, [
@@ -286,6 +309,7 @@ export function MemberBagPage({ workspace }) {
     archived.length ? h("details", { className: "player-card", key: "archived" }, [
       h("summary", { key: "label" }, "Archived discs (" + archived.length + ")"), group(archived),
     ]) : null,
+    h(BagMatchSwitch, { extras, key: "match", token }),
     h(ExportPractice, { workspace, key: "export" }),
   ]);
 }

@@ -4,6 +4,7 @@
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
 import { getMember } from "./roster.js";
+import { matchReasonLabels, parseReasons, postTitle as lfPostTitle } from "./lf-store.js";
 import { cleanLine, dollars, listingTitle, wantedTitle } from "./market-input.js";
 import {
   LISTING_COLUMNS, WANTED_COLUMNS, isSuspended, listingCards, liteOf, logModeration, num, ownerByKey, relistUntil, str, tradersByOwner,
@@ -16,8 +17,13 @@ function reasonOf(body: Record<string, unknown>): string | null {
   return reason && reason.length >= 3 ? reason : null;
 }
 
+/** What's waiting for an admin (the nav badge): open reports, plus possible lost discs up for sale not yet reviewed. */
 async function openReports(c: MarketCtx): Promise<number> {
-  const row = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM market_reports WHERE status = 'open'").first<{ n: number }>();
+  const row = await c.env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM market_reports WHERE status = 'open')
+       + (SELECT COUNT(*) FROM market_lost_checks k JOIN market_listings l ON l.id = k.listing_id
+          WHERE k.verdict = 'strong' AND k.reviewed_at IS NULL AND l.status = 'active' AND l.hidden = 0) AS n`,
+  ).first<{ n: number }>();
   return Number(row?.n) || 0;
 }
 
@@ -78,6 +84,30 @@ async function reportTargets(c: MarketCtx, rows: Row[]) {
   });
 }
 
+/** Strong listing / lost-post matches for an active listing that no admin has reviewed yet. */
+async function lostMatches(c: MarketCtx) {
+  const rows = (await c.env.DB.prepare(
+    `SELECT k.listing_id, k.lost_id, k.reasons, k.created_at, p.brand, p.plastic, p.mold, p.color, p.course_name, p.status AS lost_status
+     FROM market_lost_checks k JOIN market_listings l ON l.id = k.listing_id JOIN lf_posts p ON p.id = k.lost_id
+     WHERE k.verdict = 'strong' AND k.reviewed_at IS NULL AND l.status = 'active' AND l.hidden = 0
+     ORDER BY k.created_at, k.listing_id LIMIT 30`,
+  ).all<Row>()).results ?? [];
+  if (!rows.length) return [];
+  const listingRows = (await c.env.DB.prepare(
+    `SELECT ${LISTING_COLUMNS} FROM market_listings l WHERE l.id IN (${rows.map(() => "?").join(",")})`,
+  ).bind(...rows.map((row) => num(row, "listing_id"))).all<Row>()).results ?? [];
+  const cards = new Map((await listingCards(c.env, listingRows, null)).map((card) => [card.id, card]));
+  return rows.map((row) => ({
+    listing: cards.get(num(row, "listing_id")) ?? null,
+    lost: {
+      id: num(row, "lost_id"), title: lfPostTitle(row), course: str(row, "course_name") || null, status: str(row, "lost_status"),
+      href: "lost-found.html#post/" + num(row, "lost_id"),
+    },
+    reasons: matchReasonLabels(parseReasons(row.reasons)),
+    createdAt: str(row, "created_at"),
+  })).filter((row) => row.listing);
+}
+
 async function overview(c: MarketCtx): Promise<Response> {
   const reports = (await c.env.DB.prepare(
     "SELECT id, target_kind, target_id, reporter_id, reason, details, status, created_at FROM market_reports WHERE status = 'open' ORDER BY created_at, id LIMIT 50",
@@ -106,6 +136,7 @@ async function overview(c: MarketCtx): Promise<Response> {
   }
   return ok(c, {
     reports: await reportTargets(c, reports),
+    lostMatches: await lostMatches(c),
     hidden: {
       listings: await listingCards(c.env, hiddenListings, null),
       wanted: await wantedViews(c.env, hiddenWanted, null),
@@ -141,6 +172,21 @@ export async function handleMarketAdmin(c: MarketCtx, method: string, seg: strin
   if (method !== "POST") return fail(c, 404, "not_found");
   const body = (await readJson(c.request)) ?? {};
   const reason = reasonOf(body);
+
+  // POST /admin/market/lost-matches/:listingId/:lostId/review { reason }: an admin looked at it.
+  if (seg[2] === "lost-matches" && seg.length === 6 && seg[5] === "review") {
+    const listingId = idOf(seg[3]);
+    const lostId = idOf(seg[4]);
+    if (!listingId || !lostId) return fail(c, 404, "not_found");
+    if (!reason) return fail(c, 400, "reason_required");
+    const result = await c.env.DB.prepare(
+      `UPDATE market_lost_checks SET reviewed_at = datetime('now'), reviewed_by = ?, review = ?
+       WHERE listing_id = ? AND lost_id = ? AND verdict = 'strong' AND reviewed_at IS NULL`,
+    ).bind(adminId, reason, listingId, lostId).run();
+    if (!changed(result)) return fail(c, 409, "not_open");
+    await logModeration(c.env, adminId, "lost_match_reviewed", "listing", listingId, reason);
+    return ok(c, { ok: true });
+  }
 
   if (seg[2] === "reports" && seg.length === 4) {
     const id = idOf(seg[3]);

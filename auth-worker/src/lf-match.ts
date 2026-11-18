@@ -208,6 +208,7 @@ export function rosterNameMatch(inkNames: readonly string[], members: readonly {
 
 export const REASON_LABELS: Record<string, string> = {
   ink_phone: "The phone number on the disc matches",
+  photo_same: "The photos look like the same disc",
   ink_name: "The name on the disc matches",
   member_name: "The name on the disc matches a club member",
   ink_initials: "The initials on the disc match",

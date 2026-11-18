@@ -112,6 +112,11 @@ export function sqlMs(value: string): number {
   return Date.parse(value.replace(" ", "T") + (/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? "" : "Z"));
 }
 
+/** "an Innova Star Destroyer", "a Discraft ESP Buzzz". */
+export function withArticle(title: string): string {
+  return (/^[aeiou]/i.test(title) ? "an " : "a ") + title;
+}
+
 export function postTitle(row: Row): string {
   return discTitle({ brand: str(row, "brand"), plastic: str(row, "plastic"), mold: str(row, "mold"), color: str(row, "color") });
 }
@@ -155,7 +160,7 @@ export async function postCards(env: Env, rows: Row[], viewerId: string | null) 
 
 // ---- Matches ----
 
-export const MATCH_COLUMNS = `m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons, m.ai_verdict, m.status, m.created_at, m.updated_at`;
+export const MATCH_COLUMNS = `m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons, m.ai_verdict, m.status, m.created_at, m.updated_at, m.bag_disc_id`;
 
 export function parseReasons(value: unknown): string[] {
   if (typeof value !== "string") return [];
