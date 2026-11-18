@@ -9,7 +9,7 @@ import { sendMemberDirectMessage } from "./member-messages.js";
 import {
   WANTED_COLUMNS, ensureTrader, isSuspended, num, str, viewerOf, wantedReplies, wantedStatus, wantedViews, type Row,
 } from "./market-store.js";
-import { changed, fail, limited, ok, requireSeller, requireTrader, type MarketCtx } from "./market-http.js";
+import { changed, fail, limited, ok, requireListingSeller, requireSeller, requireTrader, type MarketCtx } from "./market-http.js";
 
 const PAGE = 30;
 export const WANTED_DAYS = 60;
@@ -94,7 +94,7 @@ export async function closeWanted(c: MarketCtx, id: number): Promise<Response> {
 }
 
 export async function replyWanted(c: MarketCtx, id: number): Promise<Response> {
-  const seller = await requireSeller(c);
+  const seller = await requireListingSeller(c);
   if (seller instanceof Response) return seller;
   const row = await getWantedRow(c, id);
   if (!row || !(await wantedVisible(c, row)) || num(row, "hidden") === 1) return fail(c, 404, "not_found");

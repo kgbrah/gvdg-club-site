@@ -26,6 +26,91 @@ export interface Member {
   welcomePending?: boolean;
   /** Last calendar year (America/New_York) this membership covers. Absent = paid through 2026. */
   memberThroughYear?: number;
+  /** Account tier "guest" (set by an admin): signs in and plays, but isn't a dues-paying club member. */
+  guest?: boolean;
+  /**
+   * A held account: someone on the club's Google Sheets who hasn't set up a sign-in yet. It holds their imported
+   * store credit, dues and bag tag. It has no PIN and no login index, so it can never sign in; when the player
+   * sets up their account (an approved application, or an admin adding them) it's matched and carried over
+   * (held-accounts.ts).
+   */
+  held?: boolean;
+}
+
+export type MemberTier = "admin" | "member" | "guest";
+
+export function memberTier(m: Pick<Member, "isAdmin" | "guest"> | null | undefined): MemberTier {
+  if (m?.isAdmin === true) return "admin";
+  return m?.guest === true ? "guest" : "member";
+}
+
+/** "Jordan Parker" for "jordan  parker", "Parker, Jordan" or "Jordan Parker Jr."-style punctuation. */
+export function normalizePersonName(name: string | null | undefined): string {
+  let text = String(name ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const comma = text.match(/^([^,]+),\s*([^,]+)$/);
+  if (comma) text = `${comma[2]} ${comma[1]}`;
+  return text.replace(/[^a-z0-9' -]+/g, " ").replace(/['-]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function fnv64(text: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(text)) hash = BigInt.asUintN(64, (hash ^ BigInt(byte)) * 0x100000001b3n);
+  return hash.toString(16).padStart(16, "0");
+}
+
+/** A held account's id: from its PDGA # or UDisc name when the sheet has one, else its name (so re-importing finds it). */
+export function heldMemberIdFor(input: { name: string; pdgaNo?: string | null; udisc?: string | null }): string {
+  const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
+  if (pdga) return `m_h_p${pdga}`;
+  const udisc = input.udisc ? normUdisc(input.udisc) : "";
+  if (udisc) return `m_h_u${udisc}`;
+  return `m_h_n${fnv64(normalizePersonName(input.name))}`;
+}
+
+export function isHeldMemberId(memberId: string): boolean {
+  return memberId.startsWith("m_h_");
+}
+
+/** Create (or find) the held account for someone on the sheets. No PIN, no login index: it can't sign in. */
+export async function createHeldMember(
+  kv: KVLike,
+  input: { name: string; pdgaNo?: string | null; udisc?: string | null; guest?: boolean },
+): Promise<{ member: Member; created: boolean }> {
+  const memberId = heldMemberIdFor(input);
+  const existing = await getMember(kv, memberId);
+  if (existing) return { member: existing, created: false };
+  const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
+  const udisc = input.udisc ? String(input.udisc).trim() : "";
+  const m: Member = {
+    memberId,
+    name: input.name.trim(),
+    ...(pdga ? { pdgaNo: pdga } : {}),
+    ...(udisc ? { udisc } : {}),
+    ...(input.guest ? { guest: true } : {}),
+    held: true,
+    pinHash: "",
+    mustChangePin: true,
+    memberThroughYear: easternCalendarYear(),
+  };
+  await kv.put(RECORD(memberId), JSON.stringify(m));
+  return { member: m, created: true };
+}
+
+/** Write a member record as is (no index changes). For admin edits of fields that aren't login identifiers. */
+export async function saveMemberRecord(kv: KVLike, m: Member): Promise<void> {
+  await kv.put(RECORD(m.memberId), JSON.stringify(m));
+}
+
+/** Set an account's tier. The caller guards the last admin. */
+export async function setMemberTier(kv: KVLike, memberId: string, tier: MemberTier): Promise<Member | null> {
+  const m = await getMember(kv, memberId);
+  if (!m) return null;
+  if (tier === "admin") m.isAdmin = true;
+  else delete m.isAdmin;
+  if (tier === "guest") m.guest = true;
+  else delete m.guest;
+  await kv.put(RECORD(memberId), JSON.stringify(m));
+  return m;
 }
 
 export type ProfilePatch = { pdgaNo?: string | null; udisc?: string | null; photo?: string | null };
@@ -191,7 +276,7 @@ export function memberIdFor(input: { pdgaNo?: string | null; udisc?: string | nu
 
 export type CreateMemberInput = { name: string; pdgaNo?: string | null; udisc?: string | null; isAdmin?: boolean };
 export type CreateResult = { ok: true; member: Member } | { ok: false; reason: "exists" | "conflict" | "invalid" };
-export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear">;
+export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear" | "guest" | "held">;
 
 /** Create a NEW member with an admin-issued temporary PIN (mustChangePin: true). Fails with `exists`
  *  if the member id is taken, or `conflict` if a PDGA#/UDisc index already points at someone else —
@@ -238,7 +323,7 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
     const page = await kv.list({ prefix: "member:", cursor });
     for (const k of page.keys) {
       const m = await getMember(kv, k.name.slice("member:".length));
-      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear });
+      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);

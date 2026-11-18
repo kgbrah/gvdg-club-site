@@ -3,6 +3,7 @@
 // a disc, the bag or an accessory (opens a marketplace listing filled in from the bag, with its photos), and the switch
 // for checking found discs against your bag. Photos are private: fetched with your sign-in, never a public link. Needs a connection (the bag itself works
 // offline); without one, these controls just don't show.
+import { useMemberContext } from "./member-context.js";
 import React from "react";
 import { Camera, ImagePlus, Plus, Search, ShieldCheck, Tag, Trash2 } from "lucide-react";
 
@@ -169,8 +170,11 @@ export function BagDiscLost({ disc, record, extras }) {
  * instead (with a link). `item()`: what to fill in ({ ref, brand, mold, … , photos }).
  */
 export function BagSell({ itemRef, item, extras, label = "Sell this" }) {
+  const context = useMemberContext();
   if (extras.status !== "ready") return null;
   const listing = extras.listings.find((row) => row.ref === itemRef);
+  // Guest accounts buy but don't list (they can still see a listing they made before becoming a guest).
+  if (!listing && context.membership?.guest) return null;
   if (listing) {
     return h("p", { className: "player-card-meta bag-sale-status", "data-bag-for-sale": itemRef }, [
       h("strong", { key: "status" }, listing.status === "pending" ? "Sale pending" : "For sale"), " · ",

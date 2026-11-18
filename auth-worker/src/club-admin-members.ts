@@ -2,7 +2,8 @@ import type { Env } from "./env.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
-import { createMember, listMembers, resetMemberPin, getMember, setMemberAdmin, countAdmins, deleteMember, setMemberThroughYear, putMember, type AdminMember, type KVListLike, type Member } from "./roster.js";
+import { createMember, listMembers, resetMemberPin, getMember, setMemberAdmin, countAdmins, deleteMember, setMemberThroughYear, putMember, memberTier, setMemberTier, type AdminMember, type KVListLike, type Member, type MemberTier } from "./roster.js";
+import { absorbHeld, carriedOverText, claimHeldFor } from "./held-accounts.js";
 import { handleAdminMembershipApplications } from "./membership-apply.js";
 import { membershipStatus } from "./membership-year.js";
 
@@ -26,6 +27,8 @@ function pub(m: Member | AdminMember) {
     memberThroughYear: status.throughYear,
     membershipCurrent: status.current,
     renewalYear: status.renewalYear,
+    tier: memberTier(m),
+    held: m.held === true,
   };
 }
 
@@ -62,7 +65,10 @@ export async function handleAdminMembers(
     const tempPin = generatePin();
     const result = await createMember(env.ROSTER, { name, pdgaNo, udisc, isAdmin }, await hashPin(tempPin, env.PIN_PEPPER));
     if (!result.ok) return json({ error: "member_" + result.reason }, result.reason === "invalid" ? 400 : 409, origin);
-    return json({ tempPin, member: pub(result.member) }, 201, origin);
+    // Someone already on the club's sheets: their held account (store credit, dues, bag tag) comes across.
+    const carried = await claimHeldFor(env, result.member, adminId);
+    const member = carried ? (await getMember(env.ROSTER, result.member.memberId)) ?? result.member : result.member;
+    return json({ tempPin, member: pub(member), carriedOver: carriedOverText(carried) || null }, 201, origin);
   }
 
   // POST /admin/members/reset-pin — reissue a temporary PIN for an EXISTING member
@@ -75,6 +81,53 @@ export async function handleAdminMembers(
     const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin, env.PIN_PEPPER));
     if (!m) return json({ error: "not_found" }, 404, origin);
     return json({ tempPin, member: pub(m) }, 200, origin);
+  }
+
+  // POST /admin/members/set-tier — Admin, Member or Guest (assigned by an admin; last-admin protected). Not for held
+  // accounts: they get a tier when the player sets up their account.
+  if (method === "POST" && seg.length === 3 && seg[2] === "set-tier") {
+    const b = (await readJson(request)) ?? {};
+    const memberId = asStr(b.memberId, 80);
+    const tier = b.tier === "admin" || b.tier === "member" || b.tier === "guest" ? b.tier as MemberTier : null;
+    if (!memberId) return json({ error: "member_required" }, 400, origin);
+    if (!tier) return json({ error: "invalid_tier" }, 400, origin);
+    const target = await getMember(env.ROSTER, memberId);
+    if (!target) return json({ error: "not_found" }, 404, origin);
+    if (target.held === true && tier === "admin") return json({ error: "held_account" }, 409, origin);
+    const was = memberTier(target);
+    if (was === tier) return json({ member: pub(target) }, 200, origin);
+    if (was === "admin" && (await countAdmins(env.ROSTER as unknown as KVListLike)) <= 1) return json({ error: "last_admin" }, 409, origin);
+    const updated = await setMemberTier(env.ROSTER, memberId, tier);
+    if (!updated) return json({ error: "not_found" }, 404, origin);
+    if (was === "admin" && (await countAdmins(env.ROSTER as unknown as KVListLike)) === 0) {
+      await setMemberTier(env.ROSTER, memberId, "admin");
+      return json({ error: "last_admin" }, 409, origin);
+    }
+    console.log(JSON.stringify({ evt: "tier_change", actor: adminId, target: memberId, from: was, to: tier, at: Date.now() }));
+    return json({ member: pub(updated) }, 200, origin);
+  }
+
+  // POST /admin/members/lapsed-to-guest — move every lapsed member (not admins, not held accounts) to the Guest tier.
+  if (method === "POST" && seg.length === 3 && seg[2] === "lapsed-to-guest") {
+    const lapsed = (await listMembers(env.ROSTER as unknown as KVListLike))
+      .filter((m) => m.isAdmin !== true && m.held !== true && m.guest !== true && membershipStatus(m).lapsed);
+    for (const m of lapsed) await setMemberTier(env.ROSTER, m.memberId, "guest");
+    console.log(JSON.stringify({ evt: "lapsed_to_guest", actor: adminId, count: lapsed.length, at: Date.now() }));
+    return json({ moved: lapsed.length }, 200, origin);
+  }
+
+  // POST /admin/members/link-held — a held account (from the sheets) is a member already in the app under another
+  // name: move its store credit, dues and bag tag onto that member and remove it.
+  if (method === "POST" && seg.length === 3 && seg[2] === "link-held") {
+    const b = (await readJson(request)) ?? {};
+    const heldId = asStr(b.heldId, 80);
+    const memberId = asStr(b.memberId, 80);
+    if (!heldId || !memberId) return json({ error: "member_required" }, 400, origin);
+    const target = await getMember(env.ROSTER, memberId);
+    if (!target || target.held === true) return json({ error: "not_found" }, 404, origin);
+    const carried = await absorbHeld(env, heldId, target, adminId);
+    if (!carried) return json({ error: "not_held" }, 409, origin);
+    return json({ member: pub((await getMember(env.ROSTER, memberId)) ?? target), carriedOver: carriedOverText(carried) }, 200, origin);
   }
 
   // POST /admin/members/set-role — promote/demote an existing member (last-admin protected)

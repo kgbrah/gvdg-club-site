@@ -6,7 +6,7 @@ import {
   SELLER_EMAIL_HINT, SELLER_EMAIL_LABEL, sellHeading, validEmail,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
-import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig } from "./market-ui.js";
+import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig, canList, GUEST_TIER_NOTE } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
 import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
@@ -262,6 +262,12 @@ export function MarketSell({ editId = null, fromBag = false }) {
   ]);
 
   if (config.status === "loading") return shell([h(LoadState, { key: "load", state: "loading" })]);
+  if (viewer.kind === "member" && !canList(viewer)) {
+    return shell([h("div", { className: "my-orders-panel market-panel", "data-market-guest-tier": "true", key: "guest" }, [
+      h(Note, { key: "note" }, GUEST_TIER_NOTE),
+      h("a", { className: "shop-btn secondary", href: "#market", key: "browse" }, "Browse the marketplace"),
+    ])]);
+  }
   if (viewer.kind !== "member") {
     return shell([h("div", { className: "my-orders-panel market-panel", "data-market-members-only": "true", key: "members" }, [
       h(Note, { key: "note" }, MEMBERS_ONLY_LISTING),

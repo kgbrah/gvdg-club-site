@@ -90,6 +90,7 @@ export function errorMessage(data, fallback = "That didn't work. Please try agai
     network: "Couldn't reach the shop. Check your connection and try again.",
     rate_limited: "Too many tries. Wait a few minutes and try again.",
     members_only: "Only club members can do that. Members can sign in.",
+    guests_cannot_list: "Guest accounts can buy, trade and post WANTED. Listing discs is for club members.",
     suspended: "Your marketplace access is paused. Contact a club admin.",
     own_listing: "That's your own listing.",
     not_available: "Someone else is already buying this disc.",

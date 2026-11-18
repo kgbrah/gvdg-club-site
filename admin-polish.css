@@ -315,6 +315,9 @@ body.admin-page #adminPanel { padding: 0; border: 0; background: transparent; bo
 .admin-page .orders-badge { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--admin-hairline); min-width: 1.45em; padding-inline: .32em; font-variant-numeric: tabular-nums; }
 .admin-page .admin-events-toolbar { flex-wrap: wrap; }
 .admin-page .admin-seg { display: flex; width: 100%; max-width: 29rem; gap: .12rem; border: 1px solid var(--admin-hairline); background: var(--admin-paper); }
+/* Admin › Import › The club's Google Sheets: four kinds of sheet, two to a row, labels wrap. */
+.admin-page .admin-seg.admin-sheet-kinds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 36rem; }
+.admin-page .admin-seg.admin-sheet-kinds button { white-space: normal; line-height: 1.2; padding-block: .4rem; }
 .admin-page .admin-seg button {
   flex: 1 1 0;
   min-width: 0;

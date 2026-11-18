@@ -37,7 +37,7 @@ export async function sendMembershipRenewalReminders(env: Env, now = new Date())
 
   const due = new Set(
     (await listMembers(kv))
-      .filter((member) => membershipStatus(member, now).renewalYear != null)
+      .filter((member) => member.held !== true && membershipStatus(member, now).renewalYear != null)
       .map((member) => member.memberId),
   );
   // Claim before sending so a cron retry cannot double-notify the same phones.

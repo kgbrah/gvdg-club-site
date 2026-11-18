@@ -5,7 +5,7 @@ import {
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import {
-  IdentityStrip, LoadState, Note, ReportControl, StatusLine, TraderLine, useAction, useIdentityGate, useIdentityVersion, useMarketConfig,
+  IdentityStrip, LoadState, Note, ReportControl, StatusLine, TraderLine, useAction, useIdentityGate, useIdentityVersion, useMarketConfig, canList, GUEST_TIER_NOTE,
 } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
 import { BrandPick, MoldInput, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
@@ -215,8 +215,9 @@ export function MarketWantedDetail({ id }) {
         h(WantedReplies, { key: "replies", replies: wanted.replies }),
         wanted.status === "open" ? h(CloseWantedButton, { key: "close", onDone: reload, wanted }) : null,
       ]) : wanted.status === "open"
-        ? (viewer.kind === "member"
+        ? (canList(viewer)
           ? h(HaveOne, { key: "reply", onSent: reload, wanted })
+          : viewer.kind === "member" ? h(Note, { key: "guest-tier" }, GUEST_TIER_NOTE)
           : h("div", { className: "market-reply-locked", key: "locked" }, [
             h(Note, { key: "note" }, "Have one? Club members can reply with a listed disc. Members can sign in."),
             h("a", { className: "shop-btn secondary", href: "gvdg-members.html", key: "sign-in" }, "Members sign in"),

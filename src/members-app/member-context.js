@@ -9,7 +9,9 @@ function membershipFrom(value) {
   return {
     current: value.current !== false,
     currentYear: Number.isInteger(value.currentYear) ? value.currentYear : null,
-    lapsed: value.lapsed === true || value.current === false,
+    // A guest account (tier set by an admin): not a dues-paying member, so never lapsed.
+    guest: value.guest === true,
+    lapsed: value.guest !== true && (value.lapsed === true || value.current === false),
     remind: value.remind === true,
     renewalYear: Number.isInteger(value.renewalYear) ? value.renewalYear : null,
     throughYear: value.throughYear,

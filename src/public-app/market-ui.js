@@ -320,6 +320,13 @@ export function useIdentityGate(viewer, gateOptions = null) {
   return { gate, require };
 }
 
+/** Club members and admins list discs; the Guest tier buys, trades and posts WANTED. */
+export function canList(viewer) {
+  return viewer?.kind === "member" && viewer.canList !== false;
+}
+
+export const GUEST_TIER_NOTE = "Guest accounts can buy, propose trades and post WANTED. Listing discs is for club members: ask a club admin about membership.";
+
 export function IdentityStrip({ viewer }) {
   if (viewer?.kind === "member") {
     return h("p", { className: "market-identity", "data-market-identity": "member" }, ["Signed in as ", h("strong", { key: "name" }, viewer.name || "Member")]);
