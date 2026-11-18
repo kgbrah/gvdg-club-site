@@ -147,6 +147,7 @@ export function AdminLostFoundPanel() {
   const matches = Array.isArray(data.matches) ? data.matches : [];
   const karma = Array.isArray(data.karma) ? data.karma : [];
   const flags = Array.isArray(data.karmaFlags) ? data.karmaFlags : [];
+  const penalties = Array.isArray(data.karmaPenalties) ? data.karmaPenalties : [];
   const hiddenPosts = Array.isArray(data.hidden?.posts) ? data.hidden.posts : [];
   const hiddenCelebrations = Array.isArray(data.hidden?.celebrations) ? data.hidden.celebrations : [];
   const log = Array.isArray(data.log) ? data.log : [];
@@ -168,6 +169,14 @@ export function AdminLostFoundPanel() {
       text: `Every round finished in the app earns +1 karma. If they're gaming it, take back that day's ${flag.removes} karma and give 3x that (${flag.penalty}) as a penalty.`,
       title: flag.name,
     }), "karma-flags"),
+    penalties.length ? h("h2", { className: "admin-pane-kicker", key: "penalties-title" }, "Karma penalties (last 60 days)") : null,
+    penalties.length ? list(penalties, "", (row) => h(Card, {
+      actions: [["Undo penalty", `/admin/lost-found/karma-flags/${row.id}/undo`, {}, "Karma given back. They've been told."]],
+      data: { "data-admin-karma-penalty": row.id }, key: row.id, reasonId: "karma-penalty-" + row.id, reload: load,
+      meta: [`${row.rounds} rounds on ${row.dayLabel || row.day}`, `−${row.taken} karma`, `by ${row.admin}`, row.reviewedAt ? when(row.reviewedAt) : ""].filter(Boolean).join(" · "),
+      text: row.note,
+      title: row.name,
+    }), "karma-penalties") : null,
 
     h("h2", { className: "admin-pane-kicker", key: "reports-title" }, `Open reports (${reports.length})`),
     list(reports, "No open reports.", (report) => {

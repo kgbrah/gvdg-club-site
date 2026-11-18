@@ -1365,6 +1365,36 @@ describe("round karma: +1 for every round finished in the app, and the gaming wa
     // Future rounds still earn karma back.
     casualRound("2026-11-16 15:00:00", [["m_bo", 1]]);
     expect(await karmaFor("m_bo")).toBe(-14);
+
+    // Undo: the penalty is listed for 60 days; one entry gives back everything it took, and Bo is told.
+    const penalties = (await call("/admin/lost-found/overview", "GET", admin)).data.karmaPenalties;
+    expect(penalties).toEqual([expect.objectContaining({ id: flagId, name: "Bo Burnham", dayLabel: "Sat, Nov 14", rounds: 5, taken: 20, admin: "Ann Admin", note: "Five 1-minute rounds in one evening" })]);
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", await token("m_ada"), { reason: "x" })).status).toBe(403);
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, {})).status).toBe(400);
+    const undone = await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "It was a putting league" });
+    expect(undone.status, undone.raw).toBe(200);
+    expect(undone.data).toEqual({ ok: true, restored: 20 });
+    expect(await karmaFor("m_bo")).toBe(6);
+    expect(db.raw.prepare("SELECT title, body FROM member_notices WHERE member_id = 'm_bo' AND title = 'Karma restored'").get()).toEqual({
+      title: "Karma restored",
+      body: "A club admin took another look at your rounds on Sat, Nov 14 and gave back the 20 karma that was removed. Sorry about that!",
+    });
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "again" })).status).toBe(409);
+    expect((await call("/admin/lost-found/overview", "GET", admin)).data.karmaPenalties).toEqual([]);
+    // The day stays decided: the next sweep doesn't flag it again.
+    await runKarmaWatch(env, NOW);
+    expect(adminPushes).toHaveLength(1);
+  });
+
+  it("can't undo a flag that was never penalized", async () => {
+    for (let i = 0; i < 4; i++) casualRound(`2026-11-15 1${i}:00:00`, [["m_ada", 1]]);
+    await runKarmaWatch(env, NOW);
+    const admin = await token("m_admin");
+    const flagId = (await call("/admin/lost-found/overview", "GET", admin)).data.karmaFlags[0].id;
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "still open" })).status).toBe(409);
+    await call(`/admin/lost-found/karma-flags/${flagId}/clear`, "POST", admin, { reason: "fine" });
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "was cleared" })).status).toBe(409);
+    expect(await karmaFor("m_ada")).toBe(4);
   });
 
   it("counts offline rounds on the day they reached the server, so back-dated uploads still trip the watch", async () => {

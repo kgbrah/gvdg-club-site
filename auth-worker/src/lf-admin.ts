@@ -3,7 +3,7 @@
 // action needs a reason and is logged. Admins never see ink text either: match review shows scores and reason
 // codes only.
 
-import { openKarmaFlagCount, openKarmaFlags, reviewKarmaFlag } from "./karma-watch.js";
+import { openKarmaFlagCount, openKarmaFlags, recentKarmaPenalties, reviewKarmaFlag, undoKarmaPenalty } from "./karma-watch.js";
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
 import { purgePostPhotos } from "./lf-process.js";
@@ -104,6 +104,7 @@ async function overview(c: MarketCtx): Promise<Response> {
   return ok(c, {
     counts: await counts(c),
     karmaFlags: await openKarmaFlags(env),
+    karmaPenalties: await recentKarmaPenalties(env),
     reports: await reportViews(c, reports),
     matches: matchRows.map((row) => {
       const found = posts.get(num(row, "found_id"));
@@ -221,6 +222,7 @@ export async function handleLostFoundAdmin(c: MarketCtx, method: string, seg: st
   if (seg[2] === "karma-flags" && seg.length === 5 && (action === "clear" || action === "penalize")) {
     return reviewKarmaFlag(c, adminId, id, action, reason);
   }
+  if (seg[2] === "karma-flags" && seg.length === 5 && action === "undo") return undoKarmaPenalty(c, adminId, id, reason);
   if (seg[2] === "karma" && seg.length === 5 && action === "reverse") {
     const award = await c.env.DB.prepare("SELECT person_id FROM lf_karma WHERE claim_id = ? AND reason = 'return_confirmed'").bind(id)
       .first<{ person_id: string }>();

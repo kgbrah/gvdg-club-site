@@ -674,7 +674,16 @@ async function runFlows() {
   // The decided card leaves the list (like every other admin card here).
   await admin.page.getByText("Nobody has finished more than 3 rounds in a day.").waitFor();
   assert.equal(await myKarma(), before + 4 - 4 - 12, "4 taken back, 12 penalty");
-  console.log("unusual karma: flagged, alerted, removed + 3x penalty from the admin list");
+  // Undo: the penalty is listed with who decided and why; one tap (with a reason) gives it all back.
+  const penalty = admin.page.locator("li[data-admin-karma-penalty]");
+  await penalty.getByText("Riley Chen", { exact: true }).waitFor();
+  await penalty.getByText("−16 karma · by Avery Brooks", { exact: false }).waitFor();
+  await penalty.getByLabel("Reason (logged)").fill("Checked with Riley: a putting drill");
+  if (process.env.GVDG_KARMA_SHOTS) await penalty.screenshot({ path: join(process.env.GVDG_KARMA_SHOTS, "admin-karma-undo.png") });
+  await penalty.getByRole("button", { name: "Undo penalty" }).click();
+  await penalty.waitFor({ state: "detached" });
+  assert.equal(await myKarma(), before + 4, "the penalty undone gives back all 16");
+  console.log("unusual karma: flagged, alerted, removed + 3x penalty, then undone from the admin list");
 
   // Seed more data for the screenshots: open found posts (one with the AI down: its photo is up anyway), more lost
   // posts, a nudge on Taylor's post, and a possible match for the admin review list.

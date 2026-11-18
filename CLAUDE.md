@@ -379,7 +379,8 @@ member finished in the app, counted live from stored rounds (`roundKarmaSql`: fi
 results of final events not imported (`source` not `udisc` / `ryder-import`), member-owned offline rounds; never imports, guests or DNFs; nothing to backfill).
 **Karma watch** (`karma-watch.ts`, `0071`, 15-minute cron): more than 3 finished rounds in one club day (America/New_York)
 opens one `karma_flags` row and pushes the admins; Admin › Lost & Found › Unusual karma either clears it or takes that day's
-round karma back plus 3x as a penalty (append-only `karma_adjustments`), and tells the member. Totals can go below zero
+round karma back plus 3x as a penalty (append-only `karma_adjustments`), and tells the member. A penalty stays listed
+for 60 days with **Undo penalty** (one `penalty_undone` entry gives it all back; the flag closes as `undone`). Totals can go below zero
 (chip "✦ −15", outlined). The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to

@@ -7,6 +7,7 @@
 // runKarmaWatch runs on the 15-minute cron and looks back two days (an offline round can sync a little late).
 //   POST /admin/lost-found/karma-flags/:id/clear     { reason }
 //   POST /admin/lost-found/karma-flags/:id/penalize  { reason }
+//   POST /admin/lost-found/karma-flags/:id/undo      { reason }   (a penalty: gives it all back)
 import { notifyAdmins } from "./admin-push.js";
 import { IMPORTED_RESULT_SOURCES } from "./karma-directory.js";
 import type { Env } from "./env.js";
@@ -108,6 +109,48 @@ export async function openKarmaFlags(env: Env) {
       removes: row.rounds, penalty: row.rounds * PENALTY_MULTIPLIER,
     };
   }));
+}
+
+/** Penalties of the last 60 days, newest first, so an admin can undo one. */
+export async function recentKarmaPenalties(env: Env) {
+  const rows = (await env.DB.prepare(
+    `SELECT f.id, f.member_id, f.day, f.rounds, f.reviewed_at, f.reviewed_by, f.review_note,
+            (SELECT -SUM(a.delta) FROM karma_adjustments a WHERE a.flag_id = f.id) AS taken
+     FROM karma_flags f WHERE f.status = 'penalized' AND f.reviewed_at >= datetime('now', '-60 days')
+     ORDER BY f.reviewed_at DESC, f.id DESC LIMIT 20`,
+  ).all<{ id: number; member_id: string; day: string; rounds: number; reviewed_at: string; reviewed_by: string; review_note: string; taken: number }>()).results ?? [];
+  return Promise.all(rows.map(async (row) => {
+    const [member, admin] = await Promise.all([
+      getMember(env.ROSTER, row.member_id).catch(() => null), getMember(env.ROSTER, row.reviewed_by).catch(() => null),
+    ]);
+    return {
+      id: row.id, name: member?.name || "Member", day: row.day, dayLabel: dayLabel(row.day), rounds: row.rounds,
+      taken: Number(row.taken) || 0, reviewedAt: row.reviewed_at, admin: admin?.name || "Admin", note: row.review_note,
+    };
+  }));
+}
+
+/** Undo a penalty: one entry gives back everything the flag took (the rounds and the penalty), and the member is told. */
+export async function undoKarmaPenalty(c: MarketCtx, adminId: string, id: number, reason: string): Promise<Response> {
+  const flag = await c.env.DB.prepare("SELECT id, member_id, day FROM karma_flags WHERE id = ? AND status = 'penalized'")
+    .bind(id).first<{ id: number; member_id: string; day: string }>();
+  if (!flag) return fail(c, 409, "not_penalized");
+  const taken = Number((await c.env.DB.prepare("SELECT -SUM(delta) AS taken FROM karma_adjustments WHERE flag_id = ?").bind(id)
+    .first<{ taken: number }>())?.taken) || 0;
+  const result = await c.env.DB.prepare(
+    "UPDATE karma_flags SET status = 'undone', reviewed_at = datetime('now'), reviewed_by = ?, review_note = ? WHERE id = ? AND status = 'penalized'",
+  ).bind(adminId, reason.slice(0, 200), id).run();
+  if (!Number(result.meta?.changes)) return fail(c, 409, "not_penalized");
+  if (taken > 0) {
+    await c.env.DB.prepare("INSERT INTO karma_adjustments (member_id, delta, reason, flag_id, admin_id, note) VALUES (?, ?, 'penalty_undone', ?, ?, ?)")
+      .bind(flag.member_id, taken, id, adminId, reason.slice(0, 200)).run();
+    notifyPerson(c.env, c.ctx, flag.member_id, {
+      title: "Karma restored",
+      body: `A club admin took another look at your rounds on ${dayLabel(flag.day)} and gave back the ${taken} karma that was removed. Sorry about that!`,
+      refKey: "karma-flag:" + id + ":undone", hash: "mine",
+    });
+  }
+  return ok(c, { ok: true, restored: taken });
 }
 
 export async function openKarmaFlagCount(env: Env): Promise<number> {
