@@ -3,20 +3,22 @@
 // The API is the REAL Worker (auth-worker/src/index.ts, loaded through Vite SSR) running in-process over an
 // in-memory SQLite database with every migration applied, in-memory KV and R2, a captured Resend (the
 // guest's 6-digit code is read from the captured email) and a MOCKED Gemini that "reads" the ink on a photo
-// drawn in a canvas (it returns the real boxes of the words it wrote). Redaction is the real photon WASM.
+// drawn in a canvas. Photos are public as uploaded; the read is private.
 //
-// Flows (390 light): a guest verifies by email and posts a found disc whose photo has a name and phone
-// written on it; the public photo is the server-redacted copy (the ink region visibly changes, the rest does
-// not) and the original is never served; a member's lost post carries the same name and phone as PRIVATE
-// text; the match notice reaches the member; "Is this yours?" -> That's mine -> relayed contact -> the finder
-// marks Returned -> the owner confirms -> +10 karma; the finder posts a celebration (its photo redacted too)
-// that shows on the Returned wall, the member Home card and the homepage strip; another member reports it
-// and the report reaches the admin Lost & Found queue. Then the key screens are checked at 390 light /
-// 390 dark / 320 large-text dark / 1280 light for horizontal overflow and clipped labels, screenshotted, and
-// glass on/off is checked on the lists and the wall.
+// Flows: the public menu shows Lost & Found next to Pro Shop at 1280 / 1100 / 1025 and in the 1024 / 768 / 390 /
+// 320 large-text menus without wrapping. Then (390 light): every post form says photos are public, with the tip; a
+// member's lost post carries a name and phone as PRIVATE text; a guest verifies by email and posts a found disc
+// whose photo shows that name and phone: the photo is up at once, the guest (only) sees "This photo may show a
+// name or phone number" with Replace photo / Keep it, nobody else does, and no payload carries the ink; Replace
+// photo swaps the file (the old one 404s and leaves storage); the match notice reaches the member; "Is this
+// yours?" -> That's mine -> relayed contact -> Returned -> confirmed -> +10 karma; the finder's celebration shows
+// on the Returned wall (its nudge kept from My posts), member Home and the homepage strip; a report reaches the
+// admin queue with the reported photo and Remove photo. Then the key screens are checked at 390 light / 390 dark /
+// 320 large-text dark / 1280 light for overflow and clipped labels, screenshotted, and glass on/off is checked.
 //
 // Usage: CHROMIUM_PATH=/usr/bin/chromium GVDG_QA_NO_SANDBOX=1 node scripts/qa/lost-found-browser-qa.mjs
-// Env: GVDG_LF_SHOTS=<dir> (default: a temp dir), GVDG_LF_PORT, GVDG_LF_SKIP_SCREENS=1 (flows + glass only).
+// Env: GVDG_LF_SHOTS=<dir> (default: a temp dir), GVDG_LF_PORT, GVDG_LF_SKIP_SCREENS=1 (flows + glass only),
+// GVDG_LF_MENU_ONLY=1 (just the menu fit checks and screenshots).
 
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
@@ -189,9 +191,9 @@ const vite = await createServer({
         response.end(await readFile(url.pathname.slice(1)));
         return;
       }
-      if (url.pathname === "/proof.html") {
+      if (url.pathname === "/blank.html") {
         response.writeHead(200, { "Content-Type": "text/html" });
-        response.end(proofHtml);
+        response.end("<!doctype html><meta charset=utf-8><title>canvas</title>");
         return;
       }
       const entry = entries[url.pathname];
@@ -217,7 +219,7 @@ const vite = await createServer({
           method: request.method, headers, body: chunks.length ? Buffer.concat(chunks) : undefined,
         }), env, { waitUntil: (promise) => pending.push(promise) });
         const body = Buffer.from(await result.arrayBuffer());
-        // Background work (AI read, redaction, matching, notices) finishes before the page sees the answer.
+        // Background work (the private AI read, matching, notices) finishes before the page sees the answer.
         while (pending.length) await Promise.allSettled(pending.splice(0));
         const out = {};
         result.headers.forEach((value, key) => { out[key] = value; });
@@ -239,10 +241,11 @@ const lfProcess = await vite.ssrLoadModule("/auth-worker/src/lf-process.ts");
 env = {
   ROSTER: memoryKv(roster), RATELIMIT: memoryKv(), DB: db, PHOTOS: photos, JWT_SECRET: secret, SESSION_TTL_SEC: "43200",
   ALLOWED_ORIGINS: origin, RESEND_API_KEY: "re_qa", GEMINI_API_KEY: "gk_qa", EXPECTED_ORIGIN: "https://gvdgclub.com",
+  // The QA makes more reads a minute than a real club; the free-tier pacing is covered by the Worker tests.
+  LF_VISION_PER_MINUTE: "1000",
 };
 const tokens = {};
 for (const [key, person] of Object.entries(people)) tokens[key] = await memberToken(person);
-let proofHtml = "<p>no proof yet</p>";
 
 /** Call the in-process Worker directly (seeding / assertions), as the browser would. */
 async function api(path, { method = "GET", token, body } = {}) {
@@ -348,10 +351,10 @@ async function guestCode(email) {
   return /code is (\d{6})/.exec(message.text)[1];
 }
 
-/** A disc photo with a name and phone number written on it, plus the true boxes of that writing. */
+/** A disc photo with (optionally) a name and phone number written on it, and the mocked Gemini read of it. */
 async function makeInkPhoto(file, lines) {
   const { context, page } = await open(profiles.light390);
-  await page.goto(origin + "/proof.html");
+  await page.goto(origin + "/blank.html");
   const result = await page.evaluate(async (lines) => {
     const canvas = document.createElement("canvas");
     canvas.width = 960; canvas.height = 720;
@@ -367,45 +370,30 @@ async function makeInkPhoto(file, lines) {
     g.fillStyle = "rgba(255,255,255,.88)"; g.textAlign = "center"; g.font = "bold 58px sans-serif"; g.fillText("DESTROYER", 480, 290);
     g.font = "26px sans-serif"; g.fillText("INNOVA  ·  STAR", 480, 330);
     g.textAlign = "left"; g.fillStyle = "#151515";
-    const boxes = [];
     for (const [text, x, y, size] of lines) {
       g.font = `italic bold ${size}px "Comic Sans MS", cursive, sans-serif`;
       g.fillText(text, x, y);
-      const m = g.measureText(text);
-      boxes.push({ text, x0: x, x1: x + m.width, y0: y - m.actualBoundingBoxAscent, y1: y + m.actualBoundingBoxDescent });
     }
-    return { url: canvas.toDataURL("image/jpeg", 0.9), boxes };
+    return canvas.toDataURL("image/jpeg", 0.9);
   }, lines);
   await context.close();
-  await writeFile(file, Buffer.from(result.url.split(",")[1], "base64"));
-  const ink = result.boxes.map((box) => ({
-    text: box.text, type: /\d{3}/.test(box.text) ? "phone" : "name",
-    // Gemini's format: [ymin, xmin, ymax, xmax] normalised to 0-1000.
-    box_2d: [Math.round(box.y0 / 0.72), Math.round(box.x0 / 0.96), Math.round(box.y1 / 0.72), Math.round(box.x1 / 0.96)],
-  }));
-  return { file, boxes: result.boxes, reply: JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "Star Destroyer",
+  await writeFile(file, Buffer.from(result.split(",")[1], "base64"));
+  const ink = lines.map(([text]) => ({ text, type: /\d{3}/.test(text) ? "phone" : "name" }));
+  return { file, reply: JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "Star Destroyer",
     ink, unreadable_writing: false, ink_confidence: "high" }) };
 }
 
-/** Mean absolute pixel difference between two images inside and outside the ink boxes (in the browser). */
-async function compareRegions(originalUrl, publicUrl, boxes) {
-  const { context, page } = await open(profiles.light390);
-  await page.goto(origin + "/proof.html");
-  const result = await page.evaluate(async ({ originalUrl, publicUrl, boxes }) => {
-    const load = (src) => new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = src; });
-    const [a, b] = await Promise.all([load(originalUrl), load(publicUrl)]);
-    const pixels = (img) => { const c = document.createElement("canvas"); c.width = 960; c.height = 720; const g = c.getContext("2d"); g.drawImage(img, 0, 0, 960, 720); return g.getImageData(0, 0, 960, 720).data; };
-    const pa = pixels(a); const pb = pixels(b);
-    let inside = 0; let ni = 0; let outside = 0; let no = 0;
-    for (let y = 0; y < 720; y += 2) for (let x = 0; x < 960; x += 2) {
-      const i = (y * 960 + x) * 4;
-      const d = (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2])) / 3;
-      if (boxes.some((box) => x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1)) { inside += d; ni++; } else { outside += d; no++; }
-    }
-    return { inside: inside / ni, outside: outside / no };
-  }, { originalUrl, publicUrl, boxes });
-  await context.close();
-  return result;
+const PHOTO_TIP = "Photos are public. Cover any name or phone number on the disc (a thumb or a strip of tape works) or show the other side.";
+const NUDGE = "This photo may show a name or phone number, and anyone can see it.";
+const INK_TEXT = /JORDAN PARKER|252-555-0187|0187/;
+
+/** No payload anyone but the poster gets carries the ink, a nudge, or a storage key. */
+async function assertNoLeak(label, paths, token) {
+  for (const path of paths) {
+    const text = JSON.stringify(await api(path, { token }));
+    assert.doesNotMatch(text, INK_TEXT, label + ": " + path + " carries the ink");
+    assert.doesNotMatch(text, /"nudge"|myPhotos|"nudges":\[\{|lost-found\/post-/, label + ": " + path + " carries a nudge or a storage key");
+  }
 }
 
 const state = {};
@@ -426,6 +414,7 @@ async function runFlows() {
   await lostForm.getByLabel("Hole or area", { exact: true }).fill("Hole 7 by the pond");
   await lostForm.getByLabel("Reward note (optional, shown)").fill("Cold drink on me");
   await lostForm.getByLabel("What's written on it (private)").fill("Jordan Parker 252-555-0187");
+  await lostForm.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
   await shot(owner.page, "flow-lost-form-390-light");
   await assertFits(owner.page, "lost form");
   await lostForm.getByRole("button", { name: "Post lost disc" }).click();
@@ -444,6 +433,9 @@ async function runFlows() {
   await form.locator(".market-photo-thumb").first().waitFor();
   await form.getByLabel("Course", { exact: true }).selectOption({ label: "ECU North Rec Complex" });
   await form.getByLabel("Hole or area", { exact: true }).fill("Hole 7 drop zone");
+  await form.locator("[data-lf-photo-tip]").getByText(PHOTO_TIP).waitFor();
+  await form.getByText("Anyone can see the photos you post.", { exact: false }).waitFor();
+  assert.equal(await form.getByText(/blur/i).count(), 0, "the form promises no blurring");
   await shot(guest.page, "flow-found-form-390-light");
   await assertFits(guest.page, "found form");
   geminiQueue.push(ink.reply);
@@ -461,43 +453,51 @@ async function runFlows() {
   state.foundId = Number(/post\/(\d+)$/.exec(guest.page.url())[1]);
   const detail = guest.page.locator("[data-lf-view=post][data-lf-state=ready]");
   await detail.waitFor();
+  // The photo is up at once.
   await detail.locator("[data-lf-gallery='1'] img.market-gallery-main").waitFor();
-  await guest.page.getByText("Any writing on the disc is blurred in this photo.").waitFor();
   state.guest = await guest.page.evaluate(() => JSON.parse(localStorage.getItem("gvdg_market_guest")));
   assert(state.guest?.token && state.guest.name === "Gail Finder", "the shared guest token is stored");
   assert.equal(JSON.stringify(state.guest).includes("gail@"), false, "the guest's email is not kept client-side");
-  console.log("guest verified by email and posted a found disc with an inked photo");
+  console.log("guest verified by email and posted a found disc; its photo is up straight away");
 
-  // 3. The public photo is the redacted copy; the original is private and never served.
-  const row = db.raw.prepare("SELECT id, original_key, public_key, boxes, redaction FROM lf_photos WHERE post_id = ?").get(state.foundId);
-  assert.equal(row.redaction, "public");
-  assert.equal(row.boxes, 2, "both pieces of ink were blurred");
-  const publicBytes = Buffer.from(photos.objects.get(row.public_key).bytes);
-  const originalBytes = Buffer.from(photos.objects.get(row.original_key).bytes);
-  assert.equal(publicBytes.equals(originalBytes), false);
-  const servedNow = await realFetch(origin + "/api/lost-found/photos/" + row.id);
-  assert.equal(Buffer.from(await servedNow.arrayBuffer()).equals(publicBytes), true, "the photo URL serves the redacted copy");
-  for (const path of ["/api/lost-found/photos/" + row.id + "/original", "/api/lost-found/originals/" + row.id]) {
-    assert.equal((await realFetch(origin + path)).status, 404, path + " is not a way to the original");
-  }
-  const originalUrl = "data:image/jpeg;base64," + originalBytes.toString("base64");
-  const publicUrl = "data:image/jpeg;base64," + publicBytes.toString("base64");
-  const diff = await compareRegions(originalUrl, publicUrl, ink.boxes);
-  assert(diff.inside > 25, "the ink region visibly changed (mean diff " + diff.inside.toFixed(1) + ")");
-  assert(diff.outside < 8, "the rest of the photo is untouched (mean diff " + diff.outside.toFixed(1) + ")");
-  proofHtml = `<!doctype html><meta charset="utf-8"><title>Redaction proof</title><style>
-    body{margin:0;padding:24px;background:#0f0f1e;color:#f4f4f9;font:16px Archivo,system-ui,sans-serif}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:20px}figure{margin:0}img{width:100%;border-radius:10px;display:block}
-    figcaption{margin:10px 0 0;font-weight:700}small{display:block;font-weight:500;opacity:.8;margin-top:4px}
-    h1{font-size:22px;margin:0 0 16px}</style>
-    <h1>Lost &amp; Found photo privacy: what the server stores vs what anyone can see</h1>
-    <div class="row"><figure><img src="${originalUrl}" alt="original"><figcaption>Original (private R2 key, never served)<small>As uploaded by the finder</small></figcaption></figure>
-    <figure><img src="${publicUrl}" alt="public"><figcaption>Public copy (served at /lost-found/photos/${row.id})<small>Ink boxes from the AI, padded and mosaicked by the Worker (photon WASM). Mean pixel change: ink ${diff.inside.toFixed(0)}, rest ${diff.outside.toFixed(1)}</small></figcaption></figure></div>`;
-  const proof = await open(profiles.light1280);
-  await proof.page.goto(origin + "/proof.html");
-  await proof.page.screenshot({ path: join(shotsDir, "proof-original-vs-public.png"), fullPage: true });
-  await proof.context.close();
-  console.log(`public photo is the redacted copy (ink region changed by ${diff.inside.toFixed(0)}, rest by ${diff.outside.toFixed(1)}); originals never served`);
+  // 3. The private read found a name and phone in the photo: the guest (only) gets the nudge, never the text.
+  const nudge = guest.page.locator("[data-lf-nudges] [data-lf-nudge]");
+  await nudge.getByText(NUDGE).waitFor();
+  await nudge.getByRole("button", { name: "Replace photo" }).waitFor();
+  await nudge.getByRole("button", { name: "Keep it" }).waitFor();
+  assert.doesNotMatch(await guest.page.locator("main, body").first().innerText(), INK_TEXT, "the poster's page never shows what was read");
+  await shot(guest.page, "flow-nudge-390-light");
+  await assertFits(guest.page, "post with the nudge");
+  const firstPhoto = db.raw.prepare("SELECT id, photo_key, nudge FROM lf_photos WHERE post_id = ?").get(state.foundId);
+  assert.equal(firstPhoto.nudge, "shown");
+  const viewer = await open(P, { member: tokens.other });
+  await go(viewer.page, "post/" + state.foundId, "[data-lf-view=post][data-lf-state=ready] [data-lf-gallery='1'] img");
+  assert.equal(await viewer.page.locator("[data-lf-nudges], [data-lf-nudge]").count(), 0, "nobody else sees the nudge");
+  assert.equal(await viewer.page.getByText(NUDGE).count(), 0);
+  assert.doesNotMatch(await viewer.page.locator("body").innerText(), INK_TEXT);
+  await shot(viewer.page, "flow-found-post-viewer-390-light");
+  await viewer.context.close();
+  const publicPaths = ["/lost-found/posts?kind=found", "/lost-found/posts?kind=lost", "/lost-found/posts/" + state.foundId, "/lost-found/returned",
+    "/lost-found/returned?view=strip"];
+  await assertNoLeak("signed out", publicPaths);
+  await assertNoLeak("another member", [...publicPaths, "/lost-found/me"], tokens.other);
+  console.log("the nudge shows to the poster only; no payload carries the ink");
+
+  // Replace photo: a new upload (the writing covered) takes its place; the old file 404s and leaves storage.
+  const covered = await makeInkPhoto(join(workDir, "covered.jpg"), []);
+  geminiQueue.push(covered.reply);
+  await nudge.locator("input[type=file]").setInputFiles(covered.file);
+  await guest.page.locator("[data-lf-nudges]").waitFor({ state: "detached" });
+  const replaced = db.raw.prepare("SELECT id, photo_key, nudge, read_state FROM lf_photos WHERE post_id = ? AND status = 'public'").get(state.foundId);
+  assert.notEqual(replaced.id, firstPhoto.id);
+  assert.deepEqual([replaced.nudge, replaced.read_state], ["", "done"]);
+  assert.equal(photos.objects.has(firstPhoto.photo_key), false, "the old file left storage");
+  assert.equal((await realFetch(origin + "/api/lost-found/photos/" + firstPhoto.id)).status, 404);
+  assert.equal((await realFetch(origin + "/api/lost-found/photos/" + replaced.id)).status, 200);
+  await detail.locator(`[data-lf-gallery='1'] img[src$="/lost-found/photos/${replaced.id}"]`).waitFor();
+  // The old read still helps matching; the post is unchanged otherwise.
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM lf_extractions WHERE post_id = ? AND ink_phones <> ''").get(state.foundId).n, 1);
+  console.log("Replace photo swapped the file; the old one is gone");
 
   // 4. The match notice reaches the member (in-app + Lost & Found), and "Is this yours?" -> That's mine.
   const match = db.raw.prepare("SELECT id, status, candidate_id, reasons FROM lf_matches WHERE found_id = ?").get(state.foundId);
@@ -554,7 +554,7 @@ async function runFlows() {
   await shot(owner.page, "flow-confirmed-karma-390-light");
   console.log("finder marked Returned, owner confirmed, +10 karma once");
 
-  // 7. The finder celebrates (the celebration photo is redacted too) -> wall, Top finders.
+  // 7. The finder celebrates -> wall, Top finders. The photo is up at once; its nudge is kept from My posts.
   const celebrationInk = await makeInkPhoto(join(workDir, "celebration.jpg"), [["JORDAN P", 360, 450, 56]]);
   await go(guest.page, "claim/" + state.claimId, "[data-lf-view=claim][data-lf-claim-status=confirmed]");
   await guest.page.getByText("Back home! You earned +10 karma.").waitFor();
@@ -573,8 +573,15 @@ async function runFlows() {
   await card.getByText("Back in Jordan's bag where it belongs!").waitFor();
   await card.locator("img").waitFor();
   await wall.locator("[data-lf-top-finders]").getByText("Karma 10 · 1 disc returned").waitFor();
-  assert.equal(db.raw.prepare("SELECT boxes, redaction FROM lf_photos WHERE celebration_id IS NOT NULL").get().redaction, "public");
-  console.log("celebration on the Returned wall with Top finders");
+  assert.deepEqual({ ...db.raw.prepare("SELECT status, nudge FROM lf_photos WHERE celebration_id IS NOT NULL").get() }, { status: "public", nudge: "shown" });
+  await go(guest.page, "mine", "[data-lf-view=mine][data-lf-state=ready] [data-lf-nudges]");
+  const celebrationNudge = guest.page.locator("[data-lf-nudge]").filter({ hasText: "Your celebration of the" });
+  await celebrationNudge.getByText(NUDGE).waitFor();
+  await shot(guest.page, "flow-mine-nudge-390-light");
+  await celebrationNudge.getByRole("button", { name: "Keep it" }).click();
+  await guest.page.locator("[data-lf-nudges]").waitFor({ state: "detached" });
+  assert.equal(db.raw.prepare("SELECT nudge FROM lf_photos WHERE celebration_id IS NOT NULL").get().nudge, "kept");
+  console.log("celebration on the Returned wall with Top finders; its nudge was kept from My posts");
 
   // 8. Member Home card and the public homepage strip.
   const home = await open(P, { member: tokens.other });
@@ -611,11 +618,13 @@ async function runFlows() {
   const report = admin.page.locator("li[data-admin-lf-report]").first();
   await report.getByText("Celebration · Gail Finder (guest)").waitFor();
   await report.getByText("Shows private information · reported by Riley Chen").waitFor();
-  assert.equal((await api("/admin/lost-found/summary", { token: tokens.admin })).openReports, 1);
-  console.log("report reached the admin Lost & Found queue");
+  await report.locator("img[data-admin-lf-photo]").waitFor();
+  await report.getByRole("button", { name: "Remove photo" }).waitFor();
+  assert.deepEqual(await api("/admin/lost-found/summary", { token: tokens.admin }), { openReports: 1 });
+  console.log("report reached the admin Lost & Found queue with the photo and Remove photo");
 
-  // Seed more data for the screenshots: open found posts (one with the AI down, so its photo waits), more lost
-  // posts, a second confirmed return, and a possible match for the admin review list.
+  // Seed more data for the screenshots: open found posts (one with the AI down: its photo is up anyway), more lost
+  // posts, a nudge on Taylor's post, and a possible match for the admin review list.
   const clean = await makeInkPhoto(join(workDir, "clean-disc.jpg"), []);
   const cleanPhoto = "data:image/jpeg;base64," + (await readFile(clean.file)).toString("base64");
   env.GEMINI_API_KEY = "";
@@ -623,6 +632,11 @@ async function runFlows() {
     kind: "found", color: "Pink", courseId: 2, area: "Basket 12 creek", photos: [cleanPhoto],
   } })).post;
   env.GEMINI_API_KEY = "gk_qa";
+  const taylorInk = await makeInkPhoto(join(workDir, "taylor.jpg"), [["T MORGAN", 330, 450, 54], ["252 555 0123", 330, 515, 46]]);
+  geminiQueue.push(taylorInk.reply);
+  state.nudged = (await api("/lost-found/posts", { method: "POST", token: tokens.finder2, body: {
+    kind: "found", brand: "Discmania", mold: "PD", plastic: "S-Line", color: "Red", courseId: 1, area: "Hole 2",
+    photos: ["data:image/jpeg;base64," + (await readFile(taylorInk.file)).toString("base64")] } })).post;
   for (const [brand, mold, plastic, color, area, courseId] of [["Discraft", "Buzzz", "ESP", "Blue", "Hole 3 left rough", 5], ["MVP", "Volt", "Neutron", "Purple", "Parking lot", 1]]) {
     await api("/lost-found/posts", { method: "POST", token: tokens.finder2, body: {
       kind: "found", brand, mold, plastic, color, courseId, area, holding: brand === "MVP" ? "club_bin" : "finder", binNote: brand === "MVP" ? "ECU North Rec shed" : "",
@@ -632,7 +646,7 @@ async function runFlows() {
   await api("/lost-found/posts", { method: "POST", token: tokens.other, body: { kind: "lost", brand: "Axiom", mold: "Envy", plastic: "Proton", color: "Teal", courseId: 2, area: "Hole 15 ravine",
     rewardNote: "$10", privateInk: "RC 252 555 0144" } });
   await api("/lost-found/posts", { method: "POST", token: tokens.other, body: { kind: "lost", brand: "Discraft", mold: "Buzzz", color: "Blue", courseId: 5, privateInk: "Riley" } });
-  assert.equal((await api("/lost-found/posts/" + state.waiting.id)).post.photoPending, 1, "the AI-down post shows no photo yet");
+  assert.equal((await api("/lost-found/posts/" + state.waiting.id)).post.photos.length, 1, "the AI-down post shows its photo anyway");
   // A possible (undecided) match for the "Is this yours?" screens: Riley's lost Buzzz vs Taylor's found Buzzz.
   const possible = db.raw.prepare("SELECT id, status FROM lf_matches WHERE candidate_id = ? ORDER BY id DESC LIMIT 1").get(people.other.memberId);
   assert(possible, "the lost Buzzz got a possible match");
@@ -659,10 +673,14 @@ async function runBuiltCheck() {
 const lfScreens = [
   ["found-list", () => ({}), "found", "[data-lf-view=found][data-lf-state=ready] article.lf-card"],
   ["lost-list", () => ({}), "lost", "[data-lf-view=lost][data-lf-state=ready] article.lf-card"],
-  ["found-detail-redacted", () => ({}), () => "post/" + state.foundId, "[data-lf-view=post][data-lf-state=ready] [data-lf-gallery='1'] img"],
-  ["post-form", () => ({ member: tokens.other }), "new/found", "form[aria-label='Post a found disc']"],
+  ["found-detail", () => ({}), () => "post/" + state.foundId, "[data-lf-view=post][data-lf-state=ready] [data-lf-gallery='1'] img"],
+  ["post-nudge", () => ({ member: tokens.finder2 }), () => "post/" + state.nudged.id, "[data-lf-view=post][data-lf-state=ready] [data-lf-nudge]"],
+  ["post-form", () => ({ member: tokens.other }), "new/found", "form[aria-label='Post a found disc'] [data-lf-photo-tip]"],
+  ["lost-form", () => ({ member: tokens.other }), "new/lost", "form[aria-label='Post a lost disc'] [data-lf-photo-tip]"],
+  ["celebrate-form", () => ({ member: tokens.owner }), () => "celebrate/" + state.claimId, "form[aria-label='Post a celebration'] [data-lf-photo-tip]"],
   ["is-this-yours", () => ({ member: tokens.other }), () => "match/" + state.possibleMatchId, ".lf-match .lf-decide"],
   ["my-posts", () => ({ guest: state.guest }), "mine", "[data-lf-view=mine][data-lf-state=ready]"],
+  ["my-posts-nudge", () => ({ member: tokens.finder2 }), "mine", "[data-lf-view=mine][data-lf-state=ready] [data-lf-nudge]"],
   ["returned-wall", () => ({}), "returned", "[data-lf-view=returned][data-lf-state=ready] [data-lf-top-finders]"],
   ["claim-confirmed", () => ({ guest: state.guest }), () => "claim/" + state.claimId, "[data-lf-view=claim][data-lf-state=ready]"],
 ];
@@ -745,14 +763,91 @@ async function runGlass() {
   console.log("glass theme: Lost & Found cards turn to glass when on and stay solid when off");
 }
 
+// The public menu: Lost & Found sits next to Pro Shop on every page that renders it (public pages and the
+// homepage share src/shared/site-nav.js). Desktop widths keep one line; at 1024 and below the menu opens as a
+// panel; phones include 320 px with large text. Nothing wraps, overflows or clips.
+async function runMenu() {
+  const menuShots = join(shotsDir, "menu");
+  await mkdir(menuShots, { recursive: true });
+  const widths = [
+    { name: "1280", width: 1280, height: 800, mode: "light" },
+    { name: "1100", width: 1100, height: 800, mode: "light" },
+    { name: "1025", width: 1025, height: 800, mode: "dark" },
+    { name: "1024-menu", width: 1024, height: 800, mode: "light", menu: true },
+    { name: "768-menu", width: 768, height: 1000, mode: "dark", menu: true },
+    { name: "390-menu", width: 390, height: 844, mode: "light", menu: true },
+    { name: "320-large-dark-menu", width: 320, height: 760, mode: "dark", menu: true, large: true },
+  ];
+  for (const page of ["/index.html", "/lost-found.html", "/pro-shop.html"]) {
+    for (const profile of widths) {
+      const view = await open(profile);
+      await view.page.goto(origin + page, { waitUntil: "domcontentloaded" });
+      const nav = view.page.locator("header nav[aria-label='Main navigation']");
+      await nav.waitFor();
+      const link = nav.getByRole("link", { name: "Lost & Found", exact: true });
+      if (profile.menu) {
+        await nav.locator(".menu-toggle").click();
+        await link.waitFor({ state: "visible" });
+      } else {
+        await link.waitFor({ state: "visible" });
+      }
+      await view.page.evaluate(() => document.fonts.ready);
+      const layout = await view.page.evaluate(() => {
+        const items = [...document.querySelectorAll("header .nav-links > li")].filter((li) => li.getBoundingClientRect().width > 0);
+        const order = items.map((li) => (li.querySelector("a, button")?.textContent || "").trim());
+        const wrapped = items.filter((li) => {
+          const target = li.querySelector("a, button");
+          if (!target) return false;
+          // Text only (an icon such as the More caret sits at its own height).
+          const lines = new Set();
+          const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            for (const rect of range.getClientRects()) if (rect.width > 0) lines.add(Math.round(rect.top));
+          }
+          return lines.size > 1;
+        }).map((li) => li.textContent.trim());
+        const tops = new Set(items.map((li) => Math.round(li.getBoundingClientRect().top)));
+        const header = document.querySelector("header").getBoundingClientRect();
+        const rightmost = Math.max(...[...document.querySelectorAll("header nav *")].map((node) => node.getBoundingClientRect().right));
+        return { order, wrapped, rows: tops.size, headerHeight: Math.round(header.height), rightmost, width: innerWidth };
+      });
+      const label = page + " " + profile.name;
+      const shop = layout.order.indexOf("Pro Shop");
+      assert.equal(layout.order[shop + 1], "Lost & Found", label + ": Lost & Found sits right after Pro Shop");
+      assert.deepEqual(layout.wrapped, [], label + ": no menu label wraps");
+      assert(layout.rightmost <= layout.width + 1, label + ": the menu stays inside the viewport");
+      if (!profile.menu) {
+        assert.equal(layout.rows, 1, label + ": the desktop menu is one row");
+        assert(layout.headerHeight <= 100, label + ": the header keeps its height (" + layout.headerHeight + ")");
+      }
+      await assertFits(view.page, label);
+      const file = join(menuShots, page.slice(1).replace(".html", "") + "-" + profile.name + ".png");
+      if (profile.menu) await view.page.screenshot({ path: file, animations: "disabled" });
+      else await view.page.screenshot({ path: file, clip: { x: 0, y: 0, width: profile.width, height: 120 }, animations: "disabled" });
+      await view.context.close();
+    }
+  }
+  console.log("public menu: Lost & Found next to Pro Shop fits at 1280/1100/1025, in the 1024/768 menu and on phones");
+}
+
 try {
+  if (process.env.GVDG_LF_MENU_ONLY) {
+    await runMenu();
+    assert.deepEqual(pageErrors, [], "page errors");
+    console.log("Lost & Found menu QA passed; screenshots in " + join(shotsDir, "menu"));
+    process.exit(0);
+  }
+  await runMenu();
   await runFlows();
   await runBuiltCheck();
   if (!process.env.GVDG_LF_SKIP_SCREENS) await runScreens();
   await runGlass();
-  // The background cron path works too: nothing due right now, and a tick is a no-op.
+  // The background cron path works too: nothing due right now, and a tick reads nothing.
   const tick = await lfProcess.runLostFoundTick(env);
-  assert.equal(tick.published, 0);
+  assert.equal(tick.reads, 0);
   assert.deepEqual(pageErrors, [], "page errors");
   console.log("Lost & Found browser QA passed (" + geminiCalls + " mocked Gemini calls); screenshots in " + shotsDir);
 } finally {
