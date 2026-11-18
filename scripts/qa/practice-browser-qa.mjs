@@ -563,10 +563,12 @@ async function checkBagExtras(page) {
   bag("qa-one").accessories.push({ id: 99, kind: "cart", name: "Zuca all-terrain cart", notes: "Lives in the trunk" });
   const wholePhoto = bag("qa-one").photos.find((photo) => photo.bag).id;
   await page.route(/pro-shop\.html/, (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Pro Shop</title>" }));
-  // The same URL with a hash doesn't reload by itself; reload so My Bag fetches again.
+  // The same URL with a hash doesn't reload by itself; reload (once the first load is done) so My Bag fetches again,
+  // then wait for the bag's server extras (the found-disc switch shows once /me/bag has answered).
   const reopen = async () => {
-    await page.goto(origin + "/practice-qa.html#my-bag", { waitUntil: "commit" });
-    await page.reload({ waitUntil: "commit" });
+    await page.goto(origin + "/practice-qa.html#my-bag", { waitUntil: "load" });
+    await page.reload({ waitUntil: "load" });
+    await page.locator("[data-bag-match]").waitFor();
   };
   const sellFrom = async (button) => {
     await reopen();
