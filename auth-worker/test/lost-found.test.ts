@@ -10,6 +10,11 @@ import { DEFAULT_DAILY_VISION_BUDGET, MAX_ATTEMPTS, dailyVisionBudget, runLostFo
 import { base64Of, extractionStatus, inkKeys, normalizeName, parseCompare, parseDiscExtraction, phoneDigits, showsPersonalInfo } from "../src/lf-vision.js";
 import { dataUrl, testJpeg } from "./lf-harness.js";
 
+/** Public trader keys are random hex, so they can contain "555", "0199" or "ada" by chance. Blank them before
+ * asserting that ink, phone digits or private text never reach a payload. */
+const scrubKeys = (raw: string) => raw.replace(/"key":"[0-9a-f]+"/g, '"key":"-"');
+
+
 const SECRET = "x".repeat(40);
 const ORIGIN = "http://localhost:8080";
 const FIXTURE = testJpeg();
@@ -398,15 +403,15 @@ describe("lost & found photos and privacy", () => {
     expect(mine.data.nudges).toEqual([{ id: photoId, url: "/lost-found/photos/" + photoId, postId: created.id, celebrationId: null, title: "Innova Star Destroyer" }]);
     expect((await call("/me/messages/summary", "GET", finder)).data.lostFound.waiting).toBe(1);
     // ...and never told what was read. Nobody else sees a nudge, a myPhotos list or the ink.
-    for (const res of [own, mine]) expect(res.raw).not.toMatch(/ADA|555|0134|phone|ink/i);
+    for (const res of [own, mine]) expect(scrubKeys(res.raw)).not.toMatch(/ADA|555|0134|phone|ink/i);
     for (const res of [await call("/lost-found/posts/" + created.id), await call("/lost-found/posts/" + created.id, "GET", other),
       await call("/lost-found/posts?kind=found"), await call("/admin/lost-found/overview", "GET", await token("m_admin"))]) {
       expect(res.status).toBe(200);
-      expect(res.raw).not.toMatch(/nudge|myPhotos|ADA|555|0134|lost-found\/post-/i);
+      expect(scrubKeys(res.raw)).not.toMatch(/nudge|myPhotos|ADA|555|0134|lost-found\/post-/i);
     }
     const othersMine = await call("/lost-found/me", "GET", other);
     expect(othersMine.data.nudges).toEqual([]);
-    expect(othersMine.raw).not.toMatch(/ADA|555|0134|lost-found\/post-/i);
+    expect(scrubKeys(othersMine.raw)).not.toMatch(/ADA|555|0134|lost-found\/post-/i);
     expect((await call("/me/messages/summary", "GET", other)).data.lostFound.waiting).toBe(0);
 
     // Keep it: the uploader only; the nudge goes away and stays away.
@@ -424,7 +429,7 @@ describe("lost & found photos and privacy", () => {
     const echoed = await getPost((await createPost(finder, foundBody())).id);
     expect(echoed).toMatchObject({ brand: "Innova", mold: "", plastic: "" });
     const list = await call("/lost-found/posts?kind=found");
-    expect(list.raw).not.toMatch(/555|0134|ADA|wendy/i);
+    expect(scrubKeys(list.raw)).not.toMatch(/555|0134|ADA|wendy/i);
   });
 
   it("Replace photo swaps the file (the old one leaves R2), keeps the old read for matching, and reads the new one", async () => {
@@ -587,10 +592,10 @@ describe("lost & found matching, claims, returns and karma", () => {
     ];
     for (const res of payloads) {
       expect(res.status, res.raw).toBe(200);
-      expect(res.raw).not.toMatch(/smith|0199|555|private_?ink|ink_json|ink_names|photo_key|lost-found\/post-/i);
+      expect(scrubKeys(res.raw)).not.toMatch(/smith|0199|555|private_?ink|ink_json|ink_names|photo_key|lost-found\/post-/i);
     }
     // Only the finder's own views carry their photo nudge; nobody else's ever does.
-    for (const res of payloads.filter((_, i) => i !== 5 && i !== 6)) expect(res.raw).not.toMatch(/nudge|myPhotos|nudges/);
+    for (const res of payloads.filter((_, i) => i !== 5 && i !== 6)) expect(scrubKeys(res.raw)).not.toMatch(/nudge|myPhotos|nudges/);
     // The lost poster sees their own private text on their own post, and only there.
     const own = await call("/lost-found/posts/" + lostPost.id, "GET", wendy.token);
     expect(own.data.post.privateInk).toBe("Wendy Smith 252-555-0199");
@@ -611,7 +616,7 @@ describe("lost & found matching, claims, returns and karma", () => {
     const view = await call("/lost-found/matches/" + match.id, "GET", wendy.token);
     expect(view.data.match).toMatchObject({ strength: "strong", canDecide: true, found: { id: foundPost.id } });
     expect(view.data.match.reasons).toContain("The phone number on the disc matches");
-    expect(view.raw).not.toMatch(/0199|smith/i);
+    expect(scrubKeys(view.raw)).not.toMatch(/0199|smith/i);
 
     const claimed = await call(`/lost-found/matches/${match.id}/mine`, "POST", wendy.token, { message: "It has my name on the rim." });
     expect(claimed.status, claimed.raw).toBe(201);
@@ -701,7 +706,7 @@ describe("lost & found matching, claims, returns and karma", () => {
     const finderMail = mail.find((row) => row.to === "finn@example.test" && row.subject === "Someone may own the disc you found");
     expect(finderMail?.text).not.toMatch(/young|cy\b/i);
     const finderView = await call("/lost-found/posts/" + post.id, "GET", finder.token);
-    expect(finderView.raw).not.toMatch(/young/i);
+    expect(scrubKeys(finderView.raw)).not.toMatch(/young/i);
     const summary = await call("/me/messages/summary", "GET", await token("m_cy"));
     expect(summary.data.lostFound.waiting).toBe(1);
   });
@@ -741,7 +746,7 @@ describe("lost & found celebrations and moderation", () => {
     expect(wall.data.celebrations[1]).toMatchObject({ role: "finder", disc: "Discraft ESP Buzzz", finder: { name: "Bo Burnham", karma: 10, returned: 1 } });
     expect(wall.data.celebrations[1].photos).toHaveLength(1);
     expect(wall.data.topFinders).toEqual([expect.objectContaining({ name: "Bo Burnham", karma: 10, returned: 1 })]);
-    expect(wall.raw).not.toMatch(/555|0134/);
+    expect(scrubKeys(wall.raw)).not.toMatch(/555|0134/);
     const strip = await call("/lost-found/returned?view=strip&limit=4");
     expect(strip.data.recent[0]).toMatchObject({ disc: "Discraft ESP Buzzz", caption: "Back where it belongs!", finder: { name: "Bo Burnham" } });
     expect(strip.data.recent[0].photo.url).toMatch(/^\/lost-found\/photos\/\d+$/);
