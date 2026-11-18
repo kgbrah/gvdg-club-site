@@ -4,14 +4,13 @@
 import React from "react";
 import { Mic, Square } from "lucide-react";
 
-import { resolveApiBase } from "../shared/api-base.js";
+import { clockSeconds, transcribeClip, VOICE_MAX_SECONDS, voiceRecorderMime, voiceRecordingSupported } from "../shared/voice-clip.js";
 import {
   canonicalChoice, choiceKey, colorName, DISC_BRAND_NAMES, DISC_COLOR_NAMES, DISC_WEIGHTS, moldsFor, parseSpokenDisc, plasticsFor,
 } from "../shared/disc-catalog.js";
 
 const h = React.createElement;
 const OTHER = "__other__";
-const MAX_SECONDS = 15;
 
 /**
  * A native select (the phone's wheel / sheet, easy with a thumb). `options`: strings or [value, label]. Unless
@@ -103,29 +102,21 @@ const FIELD_NAMES = [["brand", "brand"], ["mold", "mold"], ["plastic", "plastic"
   ["hole", "hole"], ["area", "where exactly"]];
 export const DISC_VOICE_FIELDS = ["brand", "mold", "plastic", "color", "weightG"];
 
-function recorderMime() {
-  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") return "";
-  for (const type of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"]) {
-    if (MediaRecorder.isTypeSupported(type)) return type;
-  }
-  return "";
-}
-
 export function voiceSupported() {
-  return typeof window !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia) && Boolean(recorderMime());
+  return typeof window !== "undefined" && voiceRecordingSupported();
 }
 
 function voiceError(status, code) {
   if (code === "voice_resting") return "Voice entry is resting for today. Pick from the lists instead.";
   if (status === 429) return "That's a lot of tries. Wait a minute, or pick from the lists.";
   if (status === 422) return "Didn't catch that. Try again, a little closer to the phone.";
-  if (status === 413) return "That was a long one. Keep it under 15 seconds.";
+  if (status === 413) return `That was a long one. Keep it under ${VOICE_MAX_SECONDS} seconds.`;
   if (status === 0) return "Couldn't reach the club. Check your connection, or pick from the lists.";
   return "Voice entry isn't working right now. Pick from the lists instead.";
 }
 
 /**
- * "Say it": tap, describe the disc, tap Stop (or wait 15 s). `onFields(fields)` gets what was heard, already spelled
+ * "Say it": tap, describe the disc, tap Stop (it never stops on a pause; at most VOICE_MAX_SECONDS). `onFields(fields)` gets what was heard, already spelled
  * like the pick-lists, limited to `fields` (the ones this form has). `holes` limits "hole N" to the course;
  * `extraParse(transcript)` adds the form's own matches (Lost & Found: the course). Hidden where audio can't be recorded.
  */
@@ -148,22 +139,14 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
 
   async function send(blob, type) {
     setPhase("sending");
-    let response = null;
-    let data = null;
-    try {
-      response = await fetch(resolveApiBase({ datasetKeys: ["authBase"] }) + "/voice/disc", {
-        body: blob, cache: "no-store", headers: { "Content-Type": type }, method: "POST",
-      });
-      data = await response.json().catch(() => null);
-    } catch {
-      response = null;
-    }
+    const result = await transcribeClip(blob, type);
     if (!job.current?.cancelled) job.current = null;
-    if (!response?.ok || typeof data?.transcript !== "string") {
-      setNote({ tone: "error", text: voiceError(response?.status || 0, data?.error) });
+    if (!result.ok) {
+      setNote({ tone: "error", text: voiceError(result.status === 200 ? 422 : result.status, result.code) });
       setPhase("idle");
       return;
     }
+    const data = { transcript: result.transcript };
     let extra = {};
     try { extra = (extraParse && extraParse(data.transcript)) || {}; } catch { extra = {}; }
     const all = { ...heardFields(parseSpokenDisc(data.transcript, { holes: extra.courseId ? 40 : holes })), ...extra };
@@ -181,7 +164,7 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
   async function start() {
     if (phase !== "idle") return;
     setNote(null);
-    const mime = recorderMime();
+    const mime = voiceRecorderMime();
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -223,7 +206,7 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
     current.tick = setInterval(() => {
       const elapsed = Math.floor((Date.now() - current.started) / 1000);
       setSeconds(elapsed);
-      if (elapsed >= MAX_SECONDS && recorder.state === "recording") recorder.stop();
+      if (elapsed >= VOICE_MAX_SECONDS && recorder.state === "recording") recorder.stop();
     }, 250);
   }
 
@@ -239,9 +222,9 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
       "aria-label": recording ? "Stop recording" : "Say the disc details", className: "shop-btn secondary disc-voice-button", disabled: phase === "sending",
       key: "button", onClick: recording ? stop : () => { void start(); }, type: "button",
     }, recording
-      ? [h(Square, { "aria-hidden": true, key: "icon", size: 16 }), "Stop", h("span", { className: "disc-voice-time", key: "time" }, "0:" + String(seconds).padStart(2, "0"))]
+      ? [h(Square, { "aria-hidden": true, key: "icon", size: 16 }), "Stop", h("span", { "aria-hidden": true, className: "disc-voice-time", key: "time" }, clockSeconds(seconds) + " / " + clockSeconds(VOICE_MAX_SECONDS))]
       : [h(Mic, { "aria-hidden": true, key: "icon", size: 18 }), phase === "sending" ? "Listening back…" : "Say it"]),
-    h("p", { className: "market-hint disc-voice-example", key: "example" }, recording ? "Listening… tap Stop when you're done." : example || "Try: “Orange Star Destroyer, 175 grams.”"),
+    h("p", { className: "market-hint disc-voice-example", key: "example" }, recording ? "Listening… take your time and tap Stop when you're done." : example || "Try: “Orange Star Destroyer, 175 grams.”"),
     h("div", { "aria-live": "polite", className: "disc-voice-result", key: "result", role: "status" }, note ? [
       note.heard ? h("p", { className: "disc-voice-heard", key: "heard" }, "Heard: “" + note.heard + "”") : null,
       h("p", { className: "market-note" + (note.tone === "error" ? " error" : ""), key: "text" }, note.text),

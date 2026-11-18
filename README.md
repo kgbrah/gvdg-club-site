@@ -54,8 +54,8 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 
 *As of November 18, 2026.* `main` is live on `gvdgclub.com`; check the exact commit with `curl -s https://gvdgclub.com/version.json`.
 
-- **Shipped in November 2026:** the used-disc marketplace (0063), Lost & Found (0064), the in-app camera, one-thumb disc pick-lists and "Say it" voice entry, Lost & Found weight and hole (0065), course search with the course and hole filled in from the phone's location, "Return to round", Lost & Found from the scoring app's Tools, and My Bag photos with bag and marketplace cross-checks against Lost & Found (0066).
-- **Cache versions** (bump on any change to a precached file): service worker `gvdg-club-v304`, members bundle `?v=202`, public/events bundle `?v=194`, score bundle `?v=239`, home bundle `?v=189`.
+- **Shipped in November 2026:** the used-disc marketplace (0063), Lost & Found (0064), the in-app camera, one-thumb disc pick-lists and "Say it" voice entry, Lost & Found weight and hole (0065), course search with the course and hole filled in from the phone's location, "Return to round", Lost & Found from the scoring app's Tools, and My Bag photos with bag and marketplace cross-checks against Lost & Found (0066), whole-bag and accessory photos (0067), and voice entry that records until you tap Stop (up to 30 seconds) everywhere.
+- **Cache versions** (bump on any change to a precached file): service worker `gvdg-club-v305`, members bundle `?v=203`, public/events bundle `?v=195`, score bundle `?v=239`, home bundle `?v=189`.
 - **Hosting plan: Cloudflare Workers Free, by the owner's choice.** Every Worker invocation (cron included) gets about 10 ms of CPU, and going over kills the whole invocation. Keep image decoding, re-encoding and heavy loops off the Worker: photos are resized in the browser, and the Worker only copies bytes and calls AI services. AI keys are free tiers too (Gemini for photo reads, Groq for Whisper), with daily budgets in the Worker.
 - **Waiting on the owner:** PayPal live credentials for automatic checkout of dues, event entry and the club shop (until then: store credit, pay at the event, or an admin marks it paid). Marketplace buyers always pay sellers directly (PayPal.me, Cash App or Zelle), so the marketplace doesn't wait on this.
 - **After every deploy** the read-only *Live QA drive* visits every member and admin screen on the live site (see [AGENTS.md](AGENTS.md)); the last runs found nothing.
@@ -75,7 +75,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Watch a round** — a public link follows the card live. No join, no login.
 - **Used-disc marketplace** (Pro Shop → Marketplace) — browse used discs with photos, condition and flight numbers; sell, trade or post a WANTED. Members list discs (after saving a buyer-alert email); members and email-verified guests buy, offer trades, post WANTED, leave feedback and report. Buyers pay sellers directly (PayPal.me, Cash App, Zelle); admins handle reports and seller suspensions. When a listing strongly matches a disc someone reported lost, only its seller is told (privately) and the admins get it to review.
 - **Lost & Found** (`lost-found.html`, top-level menu) — post a found disc (1–3 photos) or a lost one; anyone can post after an email check. A private AI read of the photo (Gemini) fills in brand, mold, plastic and colour and reads any writing **privately** (never shown; used only to find the owner); the poster alone is nudged when a photo may show a name or phone number. Found and lost posts are matched (writing, details, course, hole, weight, dates, photo comparison) and likely owners are told. "Is this yours?" → That's mine → contact through the club → Returned → the owner confirms → the finder earns **+10 karma** and can post a celebration on the **Returned** wall, member Home and the homepage strip.
-- **One-thumb disc entry** (Marketplace and Lost & Found) — **Take photo** opens an in-app camera (several shots in a row; falls back to the phone's camera app); pick-lists for brand, plastic (the brand's own), colour, weight and hole with *Other…* for anything unlisted; **Say it** records a short description and Whisper turns it into the lists, the course and "where exactly".
+- **One-thumb disc entry** (Marketplace and Lost & Found) — **Take photo** opens an in-app camera (several shots in a row; falls back to the phone's camera app); pick-lists for brand, plastic (the brand's own), colour, weight and hole with *Other…* for anything unlisted; **Say it** records until you tap Stop (up to 30 seconds; it never cuts off on a pause) and Whisper turns it into the lists, the course and "where exactly".
 - **Course and hole from location** (Lost & Found) — search courses by name or town, or *Use my location*; when location is already allowed the course you're at and the hole whose tee-to-basket line is closest fill in by themselves. The position never leaves the phone.
 - **Return to round** — a pinned button on every Lost & Found screen while you're on a live card.
 
@@ -87,7 +87,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Member dashboard** (`gvdg-members.html`). The phone bar is **Home, Play, Events, Stats, Club**. Header icons, when signed in: theme, Help, Account, mail, bell. Mail is unread direct messages. The bell is other unseen notices. Both open Messages.
 - **Home** — rating, the last round, what is next, bag tags, and a membership line.
 - **Play** — start or join a card, watch, replay, film a throw, practice, my bag, and course discovery.
-- **My bag** — your discs (brand, mold, plastic, weight, colour), works offline. Each disc can carry up to three **private** photos (the in-app camera or the photo picker) and a private "what's written on it". **I lost this disc** opens a Lost & Found lost post filled in from the bag (each bag photo goes on the post only if ticked). **Check found discs against my bag** (on by default) privately compares new found discs with your bag and tells you only on a strong match: your name, number or initials on the disc, or the AI says your bag photo shows the same disc.
+- **My bag** — your discs (brand, mold, plastic, weight, colour), works offline. **Add by voice** records until you tap Stop (up to 30 seconds) and fills the form after you check it. **Photos of my bag** (the whole bag, up to six) and **Accessories** (cart, towel, minis, rangefinder…, each with up to three photos) are private too. Each disc can carry up to three **private** photos (the in-app camera or the photo picker) and a private "what's written on it". **I lost this disc** opens a Lost & Found lost post filled in from the bag (each bag photo goes on the post only if ticked). **Check found discs against my bag** (on by default) privately compares new found discs with your bag and tells you only on a strong match: your name, number or initials on the disc, or the AI says your bag photo shows the same disc.
 - **Events** — register, withdraw, pick a division, add CTP / ace-pot entries, check in. Club rounds you are already in sit above open club events. Pay entry with PayPal (when enabled) or store credit, or pay at the event.
 - **Stats** — season numbers, and a separate UDisc CSV import that does not mix into club ranks.
 - **Club** — directory, message board, bag tags and challenges, standings, tee-sign photos, meeting minutes, and the **Marketplace** and **Lost & Found** hubs (what's waiting on you, links in).
@@ -180,7 +180,7 @@ One Durable Object class, `LiveEventDO`, serves both event live-scoring and casu
 
 ### Data layer
 
-All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0066`; the `0007` gap is intentional and must not be back-filled; **the next is `0067`**). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, membership dues, the marketplace (`0063`), Lost & Found (`0064`), Lost & Found weight and hole (`0065`), and bag photos, the bag / marketplace cross-checks (`0066`). Do not reuse a number.
+All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0067`; the `0007` gap is intentional and must not be back-filled; **the next is `0068`**). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, membership dues, the marketplace (`0063`), Lost & Found (`0064`), Lost & Found weight and hole (`0065`), bag photos, the bag / marketplace cross-checks (`0066`), and whole-bag / accessory photos (`0067`). Do not reuse a number.
 
 My Bag discs live in `member_practice_records` (JSON payloads synced by the offline-first practice engine); the bag's photos, its found-disc switch and the lost-post links live in their own tables so the sync engine never handles images.
 
@@ -222,7 +222,7 @@ My Bag discs live in `member_practice_records` (JSON payloads synced by the offl
 
 auth-worker/              the Cloudflare Worker (server-side)
   src/                    TypeScript modules (index.ts, authz.ts, live.ts, db*.ts, club-*.ts, …)
-  migrations/             append-only D1 migrations (0001–0066; 0007 gap is intentional; next is 0067)
+  migrations/             append-only D1 migrations (0001–0067; 0007 gap is intentional; next is 0068)
   test/                   vitest suites
   scripts/                provision.mjs, dev-seed.mjs, validate-wrangler-config.mjs
   wrangler.toml           bindings, environments, vars
@@ -373,7 +373,7 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 ### Marketplace, Lost & Found, My Bag and voice (members, and email-verified guests where noted)
 - **Marketplace** `/market/*`: `config`, `guest/{start,verify}` (the shared guest identity), `listings` (browse, create, edit, photos, withdraw / relist, buy), `offers`, `deals`, `wanted` (+ replies), `feedback`, `reports`, `traders/:key`, `settings`, `me`.
 - **Lost & Found** `/lost-found/*`: `config`, `posts` (browse, create, detail, close, turn-in, photo remove), `photos/:id` (public image; `keep` / `replace` / `remove` for its uploader), `matches/:id` (decide: mine / not mine), `claims/:id/...` (messages, returned, confirm, celebrate), `returned` (wall and homepage strip), `people/:key`, `me`, `reports`, `guest/{start,verify}`.
-- **My Bag** (member) `GET /me/bag` · `PUT /me/bag/settings` · `POST /me/bag/photos` · `GET|DELETE /me/bag/photos/:id` (owner only, never cached publicly).
+- **My Bag** (member) `GET /me/bag` · `PUT /me/bag/settings` · `POST /me/bag/photos` (a disc, the whole bag, or an accessory) · `GET|DELETE /me/bag/photos/:id` (owner only, never cached publicly) · `POST|PATCH|DELETE /me/bag/accessories[/:id]`.
 - **Voice** `POST /voice/disc` (an audio clip → `{ transcript }`; open, rate-limited per address and by a daily budget).
 
 ### Admin-gated and admin-only

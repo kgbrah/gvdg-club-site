@@ -742,7 +742,7 @@ describe("lost & found and My Bag", () => {
     const bo = await token("m_bo");
     const disc = bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange" });
     expect((await call("/me/bag")).status).toBe(401);
-    expect((await call("/me/bag", "GET", ada)).data).toEqual({ matchFound: true, photos: [], lost: [] });
+    expect((await call("/me/bag", "GET", ada)).data).toEqual({ matchFound: true, photos: [], bagPhotos: [], accessories: [], lost: [] });
     expect((await call("/me/bag/photos", "POST", ada, { discId: crypto.randomUUID(), image: PHOTO })).status).toBe(404);
     expect((await call("/me/bag/photos", "POST", bo, { discId: disc, image: PHOTO })).status).toBe(404);
     expect((await call("/me/bag/photos", "POST", ada, { discId: disc, image: "data:image/svg+xml;base64,PHN2Zz4=" })).data.error).toBe("invalid_photo");
@@ -771,6 +771,40 @@ describe("lost & found and My Bag", () => {
     await runLostFoundTick(env);
     expect(db.raw.prepare("SELECT COUNT(*) AS n FROM bag_photos").get()).toEqual({ n: 0 });
     expect([...photos.objects.keys()].some((name) => name.startsWith("bag/"))).toBe(false);
+  });
+
+  it("keeps photos of the whole bag and of accessories private too, with their own limits", async () => {
+    const ada = await token("m_ada");
+    const bo = await token("m_bo");
+    // The whole bag: up to six.
+    for (let i = 0; i < 6; i++) expect((await call("/me/bag/photos", "POST", ada, { bag: true, image: PHOTO })).status).toBe(201);
+    expect((await call("/me/bag/photos", "POST", ada, { bag: true, image: PHOTO })).data.error).toBe("too_many_photos");
+    // Accessories: create, edit, photos (three each), private, deleted with their photos.
+    expect((await call("/me/bag/accessories", "POST", ada, { kind: "jetpack", name: "x" })).status).toBe(400);
+    const towel = (await call("/me/bag/accessories", "POST", ada, { kind: "towel", name: "Club towel", notes: "Green, GVDG logo" })).data.accessory;
+    expect(towel).toMatchObject({ kind: "towel", name: "Club towel", notes: "Green, GVDG logo", photos: [] });
+    const cart = (await call("/me/bag/accessories", "POST", ada, { kind: "cart", name: "" })).data.accessory;
+    expect((await call("/me/bag/accessories/" + towel.id, "PATCH", ada, { name: "Big towel" })).data.accessory)
+      .toEqual({ id: towel.id, kind: "towel", name: "Big towel", notes: "Green, GVDG logo" });
+    expect((await call("/me/bag/accessories/" + towel.id, "PATCH", bo, { name: "mine" })).status).toBe(404);
+    const towelPhotos: number[] = [];
+    for (let i = 0; i < 3; i++) towelPhotos.push((await call("/me/bag/photos", "POST", ada, { accessoryId: towel.id, image: PHOTO })).data.photo.id);
+    expect((await call("/me/bag/photos", "POST", ada, { accessoryId: towel.id, image: PHOTO })).data.error).toBe("too_many_photos");
+    expect((await call("/me/bag/photos", "POST", bo, { accessoryId: towel.id, image: PHOTO })).status).toBe(404);
+    await call("/me/bag/photos", "POST", ada, { accessoryId: cart.id, image: PHOTO });
+    expect((await call("/me/bag/photos/" + towelPhotos[0], "GET", bo)).status).toBe(404);
+    const overview = (await call("/me/bag", "GET", ada)).data;
+    expect(overview.bagPhotos).toHaveLength(6);
+    expect(overview.photos).toEqual([]);
+    expect(overview.accessories.map((row: any) => [row.kind, row.name, row.photos.length])).toEqual([["towel", "Big towel", 3], ["cart", "", 1]]);
+    expect((await call("/me/bag", "GET", bo)).data.accessories).toEqual([]);
+    // The cron's orphan sweep is for deleted bag discs only.
+    await runLostFoundTick(env);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM bag_photos WHERE owner = 'm_ada'").get()).toEqual({ n: 10 });
+    const keys = (db.raw.prepare("SELECT photo_key FROM bag_photos WHERE disc_id = ?").all("acc-" + towel.id) as any[]).map((row) => row.photo_key);
+    expect((await call("/me/bag/accessories/" + towel.id, "DELETE", ada)).status).toBe(200);
+    expect(keys.some((key) => photos.objects.has(key))).toBe(false);
+    expect((await call("/me/bag", "GET", ada)).data.accessories.map((row: any) => row.kind)).toEqual(["cart"]);
   });
 
   it("reports a bag disc lost with only the photos its owner picks, and the bag shows the post", async () => {

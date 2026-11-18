@@ -358,7 +358,7 @@ export async function matchBags(env: Env, postId: number, compare = true): Promi
     let checked = 0;
     for (const check of photoChecks.sort((a, b) => b.score - a.score)) {
       if (!foundPhoto || checked >= BAG_COMPARES || strong.some((hit) => hit.owner === check.owner)) continue;
-      const bagPhoto = await env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE owner = ? AND disc_id = ? ORDER BY id LIMIT 1")
+      const bagPhoto = await env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE owner = ? AND subject = 'disc' AND disc_id = ? ORDER BY id LIMIT 1")
         .bind(check.owner, check.discId).first<{ photo_key: string; photo_type: string }>();
       if (!bagPhoto) continue;
       if (await visionSlot(env)) break;

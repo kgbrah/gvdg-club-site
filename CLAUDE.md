@@ -185,9 +185,9 @@ register, live score/card writes. **Admin-gated**: all `/admin/*` + event live-s
 | Pro-shop / wallet | `shop-db.ts`, `club-shop-routes.ts`, `club-admin-shop.ts`, `order-notify.ts`, `wallet-idempotency.ts` | wallet = append-only ledger |
 | Used-disc marketplace | `market-routes.ts` → `market-{listings,deals,wanted,guest,admin,store,input,photos,notify,crypto,sweep,http}.ts` | `/market/*` + `/admin/market/*`; tables from `0063` |
 | Lost & Found | `lf-routes.ts` → `lf-{posts,photos,claims,social,admin,store,input,process,vision,match,notify}.ts` | `/lost-found/*` + `/admin/lost-found/*`; tables from `0064` (+`0065` weight/hole); photos public as uploaded; `lf-process.ts` also runs the bag matcher (`matchBags`) |
-| My Bag extras | `bag-routes.ts` (photos, switch, lost links); bag discs themselves are practice records (`practice-{input,store,routes}.ts`) | `/me/bag/*`, member only; tables from `0066`; photos owner-only |
+| My Bag extras | `bag-routes.ts` (disc / whole-bag / accessory photos, accessories, switch, lost links); bag discs themselves are practice records (`practice-{input,store,routes}.ts`) | `/me/bag/*`, member only; tables from `0066`-`0067` (`bag_photos.subject` = disc / bag / accessory); photos owner-only |
 | Listing ↔ lost check | `market-lost-check.ts` | runs on list / edit / relist and on a new lost post; strong only → seller (`deliverLfNote`) + admins (`notifyAdmins`, review list in `market-admin.ts`) |
-| Voice entry | `voice-disc-route.ts` | `POST /voice/disc`: Whisper on Groq (free) → OpenRouter backup; transcript only, audio never stored |
+| Voice entry | `voice-disc-route.ts` | `POST /voice/disc`: Whisper on Groq (free) → OpenRouter backup; transcript only, audio never stored. Clients (`src/shared/voice-clip.js`: My Bag "Add by voice", "Say it") record until Stop, up to 30 s, never on a pause; admin voice fill (`/admin/voice-fill`, Workers AI Whisper) up to 45 s |
 | Ratings | `ratings.ts` (display), `rating-engine.ts` + `rating-store.ts` + `ratings-recompute*.ts` (PDGA SSA), `pdga.ts` | **two** distinct systems |
 | Integrations | `assistant.ts`+`assistant-route.ts`, `vision.ts`, `photos.ts`, `weather.ts`, `feeds.ts`, `register-notify.ts` | AI, OCR, weather, email, Google-Sheet feeds |
 
@@ -220,8 +220,8 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0066`; next is
-`0067`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0067`; next is
+`0068`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
@@ -234,7 +234,7 @@ requests + league challenges (`0042-0043`, `0059`), admin push (`0044`), live ro
 (`0049`), rating repair (`0050`), member practice + My Bag discs (`0051`), offline rounds (`0053`), spectator
 privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membership dues (`0058`), member push
 (`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
-**Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**.
+**Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`).
 
 `events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
 must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
@@ -348,7 +348,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v304`, members `?v=202`, public/events `?v=194`, score `?v=239`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v305`, members `?v=203`, public/events `?v=195`, score `?v=239`,
 home `?v=189` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to

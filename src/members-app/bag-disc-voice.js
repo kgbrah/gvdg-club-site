@@ -1,29 +1,38 @@
+// My Bag "Add by voice": records until the member taps Stop (never on a pause), up to VOICE_MAX_SECONDS with a running
+// clock, then Whisper (through the Worker's /voice/disc) turns it into a transcript the member checks before anything
+// fills the form. Same rules as before: a change of disc, editor or signed-in member drops the recording and its
+// result, and nothing is saved by voice alone.
 import React from "react";
 
-const MAX_LISTEN_MS = 20_000;
-const MAX_PROCESS_MS = 4_000;
+import { transcribeClip, VOICE_MAX_SECONDS, voiceRecorderMime, voiceRecordingSupported } from "../shared/voice-clip.js";
 
 const ERROR_COPY = {
   "not-allowed": "Microphone permission was denied. Allow it in your browser or type the disc details.",
-  "service-not-allowed": "Your browser blocked its speech service. You can type the disc details.",
   "audio-capture": "The microphone couldn’t start. Check your microphone or type the disc details.",
   "no-speech": "No speech was detected. Try again or type the disc details.",
-  network: "The browser’s speech service couldn’t connect. You can type the disc details.",
-  "language-not-supported": "The browser’s speech service doesn’t support this language. You can type the disc details.",
+  network: "Couldn’t reach the club to read your voice. Check your connection or type the disc details.",
+  "rate-limited": "That’s a lot of tries. Wait a minute or type the disc details.",
+  resting: "Voice entry is resting for today. You can type the disc details.",
+  unavailable: "Voice entry isn’t available right now. You can type the disc details.",
 };
-const IDLE = { phase: "idle", message: "", transcript: "" };
+const IDLE = { phase: "idle", message: "", transcript: "", seconds: 0 };
 
-function recognitionConstructor() {
-  return globalThis.SpeechRecognition || globalThis.webkitSpeechRecognition;
+function failureCopy(result) {
+  if (result.status === 0) return ERROR_COPY.network;
+  if (result.status === 422 || (result.status === 200 && !result.transcript)) return ERROR_COPY["no-speech"];
+  if (result.code === "voice_resting") return ERROR_COPY.resting;
+  if (result.status === 429) return ERROR_COPY["rate-limited"];
+  return ERROR_COPY.unavailable;
 }
 
-function dispose(job, abort) {
-  clearTimeout(job.timer);
-  const recognition = job.recognition;
-  recognition.onstart = recognition.onresult = recognition.onerror = recognition.onnomatch = recognition.onend = null;
-  if (abort) {
-    try { recognition.abort(); } catch { /* The browser may already have ended the session. */ }
-  }
+function dispose(job) {
+  clearInterval(job.tick);
+  job.cancelled = true;
+  job.controller.abort();
+  try {
+    if (job.recorder && job.recorder.state !== "inactive") job.recorder.stop();
+  } catch { /* already stopped */ }
+  job.stream?.getTracks().forEach((track) => track.stop());
 }
 
 export function useBagDiscVoice(isCurrentSession) {
@@ -33,21 +42,27 @@ export function useBagDiscVoice(isCurrentSession) {
   const discard = React.useCallback(() => {
     const job = session.current;
     session.current = null;
-    if (job) dispose(job, true);
+    if (job) dispose(job);
   }, []);
   React.useLayoutEffect(() => discard, [discard]);
 
-  function finish(job, message = "", abort = false) {
+  function fail(job, message) {
     if (session.current !== job) return;
     session.current = null;
-    dispose(job, abort);
+    dispose(job);
+    setState({ ...IDLE, message: isCurrentSession() ? message : "" });
+  }
+
+  async function transcribe(job, blob, type) {
+    if (session.current !== job) return;
+    if (!isCurrentSession()) { discard(); setState(IDLE); return; }
+    setState({ phase: "processing", message: "Turning your words into text…", transcript: "", seconds: 0 });
+    const result = await transcribeClip(blob, type, { signal: job.controller.signal });
+    if (session.current !== job || job.cancelled) return;
+    session.current = null;
     if (!isCurrentSession()) { setState(IDLE); return; }
-    const transcript = message ? "" : job.transcript;
-    setState({
-      phase: transcript ? "review" : "idle",
-      message: message || (transcript ? "Check the voice transcript and disc details." : ERROR_COPY["no-speech"]),
-      transcript,
-    });
+    if (!result.ok) { setState({ ...IDLE, message: failureCopy(result) }); return; }
+    setState({ phase: "review", message: "Check the voice transcript and disc details.", transcript: result.transcript.slice(0, 480), seconds: 0 });
   }
 
   function stop() {
@@ -55,53 +70,60 @@ export function useBagDiscVoice(isCurrentSession) {
     if (!job || job.stopping) return;
     if (!isCurrentSession()) { discard(); setState(IDLE); return; }
     job.stopping = true;
-    clearTimeout(job.timer);
-    setState({ phase: "processing", message: "Finishing voice recognition…", transcript: "" });
-    job.timer = setTimeout(() => finish(job, job.transcript ? "" : "Voice entry timed out. Try again or type the disc details.", true), MAX_PROCESS_MS);
+    clearInterval(job.tick);
     try {
-      job.recognition.stop();
+      job.recorder.stop();
     } catch {
-      finish(job, "The browser couldn’t finish voice entry. You can type the disc details.", true);
+      fail(job, "The browser couldn’t finish recording. You can type the disc details.");
     }
   }
 
-  function start() {
-    const Recognition = recognitionConstructor();
-    if (!Recognition || session.current || !isCurrentSession()) return;
-    let recognition;
+  async function start() {
+    if (!voiceRecordingSupported() || session.current || !isCurrentSession()) return;
+    const job = { controller: new AbortController(), recorder: null, stream: null, tick: 0, cancelled: false, stopping: false, started: 0 };
+    session.current = job;
+    setState({ phase: "starting", message: "Waiting for the microphone…", transcript: "", seconds: 0 });
+    let stream;
     try {
-      recognition = new Recognition();
-    } catch {
-      setState({ ...IDLE, message: "Voice entry is unavailable right now. You can type the disc details." });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (error) {
+      fail(job, error?.name === "NotAllowedError" || error?.name === "SecurityError" ? ERROR_COPY["not-allowed"] : ERROR_COPY["audio-capture"]);
       return;
     }
-    const job = { recognition, transcript: "", timer: null, stopping: false };
-    session.current = job;
-    recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => {
-      if (session.current !== job || job.stopping) return;
-      if (!isCurrentSession()) { discard(); setState(IDLE); return; }
-      setState({ phase: "listening", message: "Listening…", transcript: "" });
-    };
-    recognition.onresult = (event) => {
-      if (session.current !== job) return;
-      if (!isCurrentSession()) { discard(); setState(IDLE); return; }
-      job.transcript = Array.from(event.results).filter((result) => result.isFinal)
-        .map((result) => result[0]?.transcript || "").join(" ").trim().slice(0, 480);
-    };
-    recognition.onerror = (event) => finish(job, ERROR_COPY[event.error] || "Voice entry ended early. Try again or type the disc details.", true);
-    recognition.onnomatch = () => finish(job, ERROR_COPY["no-speech"], true);
-    recognition.onend = () => finish(job);
-    setState({ phase: "starting", message: "Waiting for the microphone…", transcript: "" });
-    job.timer = setTimeout(stop, MAX_LISTEN_MS);
-    try {
-      recognition.start();
-    } catch (error) {
-      finish(job, error?.name === "NotAllowedError" ? ERROR_COPY["not-allowed"] : "Voice entry is unavailable right now. You can type the disc details.", true);
+    job.stream = stream;
+    if (session.current !== job || !isCurrentSession()) {
+      stream.getTracks().forEach((track) => track.stop());
+      if (session.current === job) { discard(); setState(IDLE); }
+      return;
     }
+    const mime = voiceRecorderMime();
+    const chunks = [];
+    try {
+      job.recorder = new MediaRecorder(stream, { mimeType: mime });
+    } catch {
+      fail(job, ERROR_COPY.unavailable);
+      return;
+    }
+    job.recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+    job.recorder.onstop = () => {
+      clearInterval(job.tick);
+      stream.getTracks().forEach((track) => track.stop());
+      if (job.cancelled || session.current !== job) return;
+      const type = mime.split(";")[0];
+      const blob = new Blob(chunks, { type });
+      if (blob.size < 256) { fail(job, ERROR_COPY["no-speech"]); return; }
+      void transcribe(job, blob, type);
+    };
+    job.recorder.start();
+    job.started = Date.now();
+    setState({ phase: "listening", message: "Listening…", transcript: "", seconds: 0 });
+    job.tick = setInterval(() => {
+      if (session.current !== job) return;
+      const seconds = Math.min(VOICE_MAX_SECONDS, Math.floor((Date.now() - job.started) / 1000));
+      if (!isCurrentSession()) { discard(); setState(IDLE); return; }
+      setState((current) => (current.phase === "listening" ? { ...current, seconds } : current));
+      if (seconds >= VOICE_MAX_SECONDS) stop();
+    }, 250);
   }
 
   function cancel(message = "Voice entry cancelled.") {
@@ -110,7 +132,7 @@ export function useBagDiscVoice(isCurrentSession) {
   }
 
   return {
-    supported: Boolean(recognitionConstructor()), ...state, start, stop, cancel,
+    supported: voiceRecordingSupported(), maxSeconds: VOICE_MAX_SECONDS, ...state, start: () => { void start(); }, stop, cancel,
     changeTranscript: (transcript) => setState((current) => ({ ...current, transcript })),
   };
 }
