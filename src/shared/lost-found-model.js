@@ -51,6 +51,7 @@ export function parseLfRoute(hash) {
   if (head === "mine" && parts.length === 1) return route("mine", "mine");
   if (head === "new" && (parts[1] === "found" || parts[1] === "lost") && parts.length === 2) return route(parts[1], "new", { kind: parts[1] });
   if (head === "post" && parts.length === 2 && positiveId(parts[1])) return route("found", "post", { id: positiveId(parts[1]) });
+  if (head === "edit" && parts.length === 2 && positiveId(parts[1])) return route("found", "edit", { id: positiveId(parts[1]) });
   if ((head === "match" || head === "claim" || head === "celebrate") && parts.length === 2 && positiveId(parts[1])) {
     return route("mine", head, { id: positiveId(parts[1]) });
   }
@@ -59,6 +60,7 @@ export function parseLfRoute(hash) {
 }
 
 export function postHref(id) { return "#post/" + id; }
+export function editHref(id) { return "#edit/" + id; }
 export function matchHref(id) { return "#match/" + id; }
 export function claimHref(id) { return "#claim/" + id; }
 export function celebrateHref(id) { return "#celebrate/" + id; }
@@ -140,6 +142,36 @@ export function composeArea(hole, detail) {
   const number = Number(hole);
   if (!Number.isInteger(number) || number < 1 || number > 40) return where;
   return where ? "Hole " + number + " · " + where : "Hole " + number;
+}
+
+/** The "where exactly" part of a stored area: composeArea's "Hole 7 · by the pond" back to "by the pond" (for editing). */
+export function splitArea(area, hole) {
+  const text = String(area ?? "").trim();
+  const number = Number(hole);
+  if (!Number.isInteger(number) || number < 1 || number > 40) return text;
+  const prefix = "Hole " + number;
+  if (text === prefix) return "";
+  return text.startsWith(prefix + " · ") ? text.slice(prefix.length + 3) : text;
+}
+
+/** The edit form's starting draft, from the poster's own post (privateInk is only in their own payload). */
+export function draftFromPost(post) {
+  const hole = Number.isInteger(post?.hole) && post.hole >= 1 && post.hole <= 40 ? String(post.hole) : "";
+  return {
+    brand: post?.brand || "", mold: post?.mold || "", plastic: post?.plastic || "", color: post?.color || "",
+    weightG: post?.weightG ? String(post.weightG) : "", courseId: post?.course?.id ? String(post.course.id) : "", hole,
+    area: splitArea(post?.area, hole), eventDate: post?.date || "", holding: post?.holding === "club_bin" ? "club_bin" : "finder",
+    binNote: post?.binNote || "", rewardNote: post?.rewardNote || "", privateInk: post?.privateInk || "",
+  };
+}
+
+/** PATCH body for an edit: like a new post's, but a cleared course, hole, weight or date is sent as null so it clears. */
+export function postEditPayload(kind, draft) {
+  const body = postPayload(kind, draft, []);
+  delete body.photos;
+  delete body.kind;
+  for (const key of ["courseId", "hole", "weightG", "eventDate"]) if (!(key in body)) body[key] = null;
+  return body;
 }
 
 /** Where "Back to your round" goes: only this site's scoring page. */

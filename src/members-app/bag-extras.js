@@ -1,28 +1,30 @@
-// My Bag meets Lost & Found: private photos of your bag discs (the in-app camera or the photo picker), "I lost this
-// disc" (opens a Lost & Found lost post filled in from the bag), and the switch for checking found discs against your
-// bag. Photos are private: fetched with your sign-in, never a public link. Needs a connection (the bag itself works
+// My Bag meets Lost & Found and the marketplace: private photos of your bag discs (the in-app camera or the photo
+// picker), "I lost this disc" (opens a Lost & Found lost post filled in from the bag, with its photos), "Sell this" on
+// a disc, the bag or an accessory (opens a marketplace listing filled in from the bag, with its photos), and the switch
+// for checking found discs against your bag. Photos are private: fetched with your sign-in, never a public link. Needs a connection (the bag itself works
 // offline); without one, these controls just don't show.
 import React from "react";
-import { Camera, ImagePlus, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Camera, ImagePlus, Plus, Search, ShieldCheck, Tag, Trash2 } from "lucide-react";
 
 import { authBase, request, requestJson } from "./api.js";
 import { resizeImageFile } from "../shared/image-resize.js";
 import { openPhotoInput, useCameraCapture, useCameraMode } from "../public-app/photo-add.js";
 import { LF_BAG_HANDOFF_KEY } from "../public-app/lf-bag.js";
+import { sellFromBag } from "../public-app/market-bag.js";
+import { ACCESSORY_KINDS } from "../shared/market-model.js";
 import { memberConfirm } from "./member-dialogs.js";
 
 const h = React.createElement;
 export const BAG_PHOTOS_PER_DISC = 3;
 export const BAG_PHOTOS_OF_BAG = 6;
 export const PHOTOS_PER_ACCESSORY = 3;
-export const ACCESSORY_KINDS = [
-  ["cart", "Cart"], ["towel", "Towel"], ["mini", "Mini marker"], ["rangefinder", "Rangefinder"], ["retriever", "Disc retriever"],
-  ["umbrella", "Umbrella"], ["shoes", "Shoes"], ["rain_gear", "Rain gear"], ["seat", "Seat"], ["light", "Light / headlamp"], ["other", "Other"],
-];
+export { ACCESSORY_KINDS };
 const KIND_LABEL = Object.fromEntries(ACCESSORY_KINDS);
-const EMPTY = { status: "loading", matchFound: true, photos: [], bagPhotos: [], accessories: [], lost: [] };
+const LISTING_PHOTOS = 4;
+const EMPTY = { status: "loading", matchFound: true, photos: [], bagPhotos: [], accessories: [], lost: [], listings: [] };
 
-/** GET /me/bag, refreshed after a change: { status, matchFound, photos: [{ id, discId }], lost: [{ discId, postId, status }] }. */
+/** GET /me/bag, refreshed after a change: { status, matchFound, photos: [{ id, discId }], lost: [{ discId, postId, status }],
+ *  listings: [{ ref, listingId, status }] (bag items up for sale) }. */
 export function useBagExtras(token) {
   const [state, setState] = React.useState(EMPTY);
   const [version, setVersion] = React.useState(0);
@@ -35,6 +37,7 @@ export function useBagExtras(token) {
         photos: Array.isArray(data?.photos) ? data.photos : [], lost: Array.isArray(data?.lost) ? data.lost : [],
         bagPhotos: Array.isArray(data?.bagPhotos) ? data.bagPhotos.map((photo) => photo.id) : [],
         accessories: Array.isArray(data?.accessories) ? data.accessories : [],
+        listings: Array.isArray(data?.listings) ? data.listings : [],
       });
     }).catch((error) => {
       if (error?.name !== "AbortError") setState((current) => ({ ...current, status: "offline" }));
@@ -161,6 +164,38 @@ export function BagDiscLost({ disc, record, extras }) {
   ]);
 }
 
+/**
+ * "Sell this": a marketplace listing filled in from the bag, its photos already on it. Once it's up, where it stands
+ * instead (with a link). `item()`: what to fill in ({ ref, brand, mold, … , photos }).
+ */
+export function BagSell({ itemRef, item, extras, label = "Sell this" }) {
+  if (extras.status !== "ready") return null;
+  const listing = extras.listings.find((row) => row.ref === itemRef);
+  if (listing) {
+    return h("p", { className: "player-card-meta bag-sale-status", "data-bag-for-sale": itemRef }, [
+      h("strong", { key: "status" }, listing.status === "pending" ? "Sale pending" : "For sale"), " · ",
+      h("a", { href: "pro-shop.html#market/listing/" + listing.listingId, key: "link" }, "View listing"),
+    ]);
+  }
+  return h("button", { className: "dashboard-action bag-sell-button", "data-bag-sell": itemRef, onClick: () => sellFromBag({ ref: itemRef, ...item() }), type: "button" }, [
+    h(Tag, { "aria-hidden": true, key: "icon", size: 16 }), label,
+  ]);
+}
+
+/** "Sell this" on a saved bag disc (not while it's reported lost). */
+export function BagDiscSell({ disc, record, extras }) {
+  const lost = extras.lost.find((row) => row.discId === disc.id);
+  if (lost && lost.status !== "closed" && lost.status !== "expired") return null;
+  return h(BagSell, {
+    extras, itemRef: "disc:" + disc.id,
+    item: () => ({
+      brand: record.brand || "", mold: record.model || "", plastic: record.plastic || "", color: record.color || "",
+      weightG: record.weightGrams == null ? "" : String(Math.round(record.weightGrams)),
+      photos: extras.photos.filter((photo) => photo.discId === disc.id).map((photo) => photo.id).slice(0, LISTING_PHOTOS),
+    }),
+  });
+}
+
 /** "Check found discs against my bag" (on unless turned off). */
 export function BagMatchSwitch({ token, extras }) {
   const [saving, setSaving] = React.useState(false);
@@ -207,6 +242,7 @@ export function BagWholePhotos({ token, extras }) {
       extras, hint: "Your whole bag, open, with the discs showing.", key: "strip", label: "my bag", max: BAG_PHOTOS_OF_BAG,
       photos: extras.bagPhotos, target: { bag: true }, token,
     }),
+    h(BagSell, { extras, item: () => ({ photos: extras.bagPhotos.slice(0, LISTING_PHOTOS) }), itemRef: "bag", key: "sell", label: "Sell my bag" }),
   ]);
 }
 
@@ -299,6 +335,10 @@ export function BagAccessories({ token, extras }) {
           h("button", { className: "dashboard-action", key: "edit", onClick: () => setEditing(item.id), type: "button" }, "Edit"),
           h("button", { className: "dashboard-action member-record-delete", key: "delete", onClick: () => { void remove(item); }, type: "button" }, "Delete"),
         ]),
+        h(BagSell, {
+          extras, itemRef: "accessory:" + item.id, key: "sell",
+          item: () => ({ gearType: item.kind, mold: (item.name || KIND_LABEL[item.kind] || "").slice(0, 40), photos: (item.photos || []).slice(0, LISTING_PHOTOS) }),
+        }),
       ]))) : h("p", { className: "dash-note", key: "empty" }, "No accessories yet."),
     editing === "new"
       ? h(AccessoryForm, { key: "form", onCancel: () => setEditing(null), onDone: done, token })

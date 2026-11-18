@@ -41,8 +41,11 @@ function NumberField({ id, label, value, onChange, min, max, placeholder }) {
   ]);
 }
 
+const KIND_FILTERS = [["disc", "Discs"], ["bag", "Bags"], ["accessory", "Accessories"]];
+
 function BrowseFilters({ filters, facets, onChange, onReset }) {
   const active = activeFilterCount(filters);
+  const gear = filters.kind === "bag" || filters.kind === "accessory";
   const select = (id, label, key, options) => h("div", { className: "market-field", key: id }, [
     h("label", { htmlFor: id, key: "label" }, label),
     h("select", { id, key: "select", onChange: (event) => onChange(key, event.target.value), value: filters[key] }, [
@@ -55,7 +58,7 @@ function BrowseFilters({ filters, facets, onChange, onReset }) {
       h("label", { className: "public-sr-only", htmlFor: "marketSearch", key: "search-label" }, "Search marketplace"),
       h("input", {
         id: "marketSearch", key: "search-input", maxLength: 60, onChange: (event) => onChange("q", event.target.value),
-        placeholder: "Search used discs", type: "search", value: filters.q,
+        placeholder: "Search used discs and gear", type: "search", value: filters.q,
       }),
       h("label", { className: "public-sr-only", htmlFor: "marketSort", key: "sort-label" }, "Sort listings"),
       h("select", { id: "marketSort", key: "sort", onChange: (event) => onChange("sort", event.target.value), value: filters.sort }, [
@@ -68,12 +71,14 @@ function BrowseFilters({ filters, facets, onChange, onReset }) {
     h("details", { className: "shop-filter-details", key: "details" }, [
       h("summary", { key: "summary" }, active ? `Filters (${active} selected)` : "More filters"),
       h("div", { className: "shop-filter-fields market-filter-fields", key: "fields" }, [
-        select("marketType", "Disc type", "type", DISC_TYPES),
+        select("marketKind", "What", "kind", KIND_FILTERS),
+        // Disc type, plastic and weight only mean something for discs.
+        gear ? null : select("marketType", "Disc type", "type", DISC_TYPES),
         select("marketBrand", "Brand", "brand", (facets.brands || []).map((value) => [value, value])),
-        select("marketPlastic", "Plastic", "plastic", (facets.plastics || []).map((value) => [value, value])),
+        gear ? null : select("marketPlastic", "Plastic", "plastic", (facets.plastics || []).map((value) => [value, value])),
         select("marketCondition", "Condition at least", "cond", CONDITION_LEGEND.map(([score, text]) => [String(score), `${score} · ${text}`])),
-        h(NumberField, { id: "marketWmin", key: "wmin", label: "Min weight (g)", max: 200, min: 100, onChange: (value) => onChange("wmin", value), value: filters.wmin }),
-        h(NumberField, { id: "marketWmax", key: "wmax", label: "Max weight (g)", max: 200, min: 100, onChange: (value) => onChange("wmax", value), value: filters.wmax }),
+        gear ? null : h(NumberField, { id: "marketWmin", key: "wmin", label: "Min weight (g)", max: 200, min: 100, onChange: (value) => onChange("wmin", value), value: filters.wmin }),
+        gear ? null : h(NumberField, { id: "marketWmax", key: "wmax", label: "Max weight (g)", max: 200, min: 100, onChange: (value) => onChange("wmax", value), value: filters.wmax }),
         h(NumberField, { id: "marketPmin", key: "pmin", label: "Min price ($)", max: 1000, min: 0, onChange: (value) => onChange("pmin", value), value: filters.pmin }),
         h(NumberField, { id: "marketPmax", key: "pmax", label: "Max price ($)", max: 1000, min: 0, onChange: (value) => onChange("pmax", value), value: filters.pmax }),
         h("label", { className: "market-check", key: "trade" }, [
@@ -130,7 +135,10 @@ export function MarketBrowse({ route }) {
     }
   }
 
-  const change = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  // Bags and accessories: the disc-only filters (hidden for them) are cleared too.
+  const change = (key, value) => setFilters((current) => (key === "kind" && (value === "bag" || value === "accessory")
+    ? { ...current, kind: value, type: "", plastic: "", wmin: "", wmax: "" }
+    : { ...current, [key]: value }));
   const reset = () => setFilters((current) => ({ ...EMPTY_FILTERS, q: current.q, sort: current.sort, seller }));
   const sellerName = seller && state.listings[0]?.seller?.name;
 
@@ -150,6 +158,6 @@ export function MarketBrowse({ route }) {
           ? state.listings.map((listing) => h(ListingCard, { key: listing.id, listing }))
           : h("p", { className: "public-state", role: "status" }, activeFilterCount(filters) || filters.q
             ? "No discs match those filters." : "No used discs are listed right now. Members can list one with Sell a disc.")),
-    state.more ? h("button", { className: "shop-filter-reset market-more", key: "more", onClick: loadMore, type: "button" }, "Show more discs") : null,
+    state.more ? h("button", { className: "shop-filter-reset market-more", key: "more", onClick: loadMore, type: "button" }, "Show more") : null,
   ]);
 }

@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { LF_TAB_COPY, LF_TABS, parseLfRoute } from "../shared/lost-found-model.js";
 import { clearGuest } from "./market-api.js";
 import { ClaimView, CelebrateForm, MatchView } from "./lf-claim.js";
-import { NewPost } from "./lf-form.js";
+import { EditPost, NewPost } from "./lf-form.js";
 import { PostList } from "./lf-list.js";
 import { MyLostFound } from "./lf-mine.js";
 import { PostDetail } from "./lf-post.js";
@@ -64,6 +64,7 @@ export function LostFoundApp() {
   let body;
   if (route.view === "new") body = h(NewPost, { key: "new-" + route.kind, kind: route.kind, route });
   else if (route.view === "post") body = h(PostDetail, { id: route.id, key: "post-" + route.id });
+  else if (route.view === "edit") body = h(EditPost, { id: route.id, key: "edit-" + route.id });
   else if (route.view === "match") body = h(MatchView, { id: route.id, key: "match-" + route.id });
   else if (route.view === "claim") body = h(ClaimView, { id: route.id, key: "claim-" + route.id });
   else if (route.view === "celebrate") body = h(CelebrateForm, { id: route.id, key: "celebrate-" + route.id });

@@ -13,6 +13,7 @@ import {
 import { ownPhotos, photosFrom, removeOwnPhoto, servePhoto, storePhotos } from "./lf-photos.js";
 import { bagDisc } from "./bag-routes.js";
 import { queueLostCheck } from "./market-lost-check.js";
+import { PHOTO_BODY_BYTES } from "./market-photos.js";
 import type { DecodedImage } from "./photos.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
@@ -112,6 +113,7 @@ export async function postDetail(c: MarketCtx, row: Row) {
     // The poster's own photos, with the private nudge where the read found a name or phone number (never the text).
     detail.myPhotos = await ownPhotos(c, { postId: id });
     detail.canClose = live;
+    detail.canEdit = live;
     detail.canTurnIn = isFound && live && card!.holding !== "club_bin";
   } else if (actor) {
     const myClaim = await env.DB.prepare(
@@ -205,6 +207,82 @@ async function ownPost(c: MarketCtx, id: number): Promise<Row | Response> {
   const row = await getPostRow(c.env, id);
   if (!row || str(row, "owner_id") !== c.actor.id) return fail(c, 404, "not_found");
   return row;
+}
+
+function runMatching(c: MarketCtx, id: number, kind: string): void {
+  const job = processPost(c.env, c.ctx, id);
+  try { c.ctx?.waitUntil?.(job); } catch { /* settles on its own */ }
+  if (kind === "lost") queueLostCheck(c.env, c.ctx, id);
+}
+
+/**
+ * The poster edits their own post while it's open (or claimed): the disc, where and when, the reward or where a found
+ * disc is held, and (lost) what's written on it. A lost post stays lost and a found post stays found. Matching runs
+ * again on the new details; suggestions already made stay (they update in place).
+ */
+export async function editPost(c: MarketCtx, id: number): Promise<Response> {
+  const row = await ownPost(c, id);
+  if (row instanceof Response) return row;
+  const status = str(row, "status");
+  if (status !== "open" && status !== "claimed") return fail(c, 409, "not_open");
+  const kind = str(row, "kind");
+  const ink = kind === "lost"
+    ? await c.env.DB.prepare("SELECT private_ink FROM lf_posts WHERE id = ?").bind(id).first<{ private_ink: string }>()
+    : null;
+  const stored: Record<string, unknown> = {
+    brand: str(row, "brand"), mold: str(row, "mold"), plastic: str(row, "plastic"), color: str(row, "color"),
+    courseId: row.course_id ?? null, area: str(row, "area"), weightG: row.weight_g ?? null, hole: row.hole ?? null,
+    eventDate: row.event_date ?? null, holding: row.holding ?? null, binNote: str(row, "bin_note"), rewardNote: str(row, "reward_note"),
+    privateInk: ink?.private_ink ?? "",
+  };
+  const body = (await readJson(c.request)) ?? {};
+  const merged: Record<string, unknown> = { ...stored, kind };
+  for (const key of Object.keys(stored)) if (key in body) merged[key] = body[key];
+  // An unchanged date is kept even if it's now older than a new post may give.
+  const keepDate = merged.eventDate === stored.eventDate;
+  const parsed = parsePost(keepDate ? { ...merged, eventDate: null } : merged);
+  if (!parsed.ok) return fail(c, 400, "invalid_post", parsed.field);
+  const v = { ...parsed.value, eventDate: keepDate ? (stored.eventDate as string | null) : parsed.value.eventDate };
+  let courseName = "";
+  if (v.courseId != null) {
+    const course = await c.env.DB.prepare("SELECT name FROM courses WHERE id = ?").bind(v.courseId).first<{ name: string }>();
+    if (!course) return fail(c, 400, "invalid_post", "courseId");
+    courseName = course.name.slice(0, 120);
+  }
+  const blocked = await limited(c, "lfedit:" + c.actor!.id, 30, 3600);
+  if (blocked) return blocked;
+  const result = await c.env.DB.prepare(
+    `UPDATE lf_posts SET brand = ?, mold = ?, plastic = ?, color = ?, course_id = ?, course_name = ?, area = ?, weight_g = ?, hole = ?,
+       event_date = ?, holding = ?, bin_note = ?, reward_note = ?, private_ink = ?, updated_at = datetime('now')
+     WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed')`,
+  ).bind(v.brand, v.mold, v.plastic, v.color, v.courseId, courseName, v.area, v.weightG, v.hole, v.eventDate, v.holding, v.binNote,
+    v.rewardNote, v.privateInk, id, c.actor!.id).run();
+  if (!changed(result)) return fail(c, 409, "not_open");
+  await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "edit", from: status, to: status });
+  runMatching(c, id, kind);
+  return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
+}
+
+/** The poster adds a photo to their open post (up to the post's limit); it's read and matched like the first ones. */
+export async function addPostPhoto(c: MarketCtx, id: number): Promise<Response> {
+  const row = await ownPost(c, id);
+  if (row instanceof Response) return row;
+  if (!c.env.PHOTOS) return fail(c, 503, "storage_unavailable");
+  const status = str(row, "status");
+  if (status !== "open" && status !== "claimed") return fail(c, 409, "not_open");
+  const body = (await readJson(c.request, PHOTO_BODY_BYTES)) ?? {};
+  const images = photosFrom([body.image], 1, 1);
+  if (!images) return fail(c, 400, "invalid_photo");
+  const kind = str(row, "kind");
+  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(sort_order), -1) AS last FROM lf_photos WHERE post_id = ? AND status <> 'removed'")
+    .bind(id).first<{ n: number; last: number }>();
+  if (Number(count?.n) >= (kind === "found" ? MAX_FOUND_PHOTOS : MAX_LOST_PHOTOS)) return fail(c, 409, "too_many_photos");
+  const blocked = await limited(c, "lfphoto:" + c.actor!.id, 20, 3600);
+  if (blocked) return blocked;
+  await storePhotos(c, { ownerId: c.actor!.id, postId: id }, images, Number(count?.last ?? -1) + 1);
+  await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "photo_add" });
+  runMatching(c, id, kind);
+  return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
 }
 
 export async function closePost(c: MarketCtx, id: number): Promise<Response> {

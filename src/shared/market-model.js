@@ -8,6 +8,24 @@ export const DISC_TYPES = [
   ["putter", "Putter"],
 ];
 
+// What a listing sells. Bags and accessories have no disc type, plastic, weight or flight numbers.
+export const ITEM_KINDS = [
+  ["disc", "Disc"],
+  ["bag", "Bag"],
+  ["accessory", "Accessory"],
+];
+
+// What a My Bag accessory is, and what an accessory listing sells (the Worker keeps the same list).
+export const ACCESSORY_KINDS = [
+  ["cart", "Cart"], ["towel", "Towel"], ["mini", "Mini marker"], ["rangefinder", "Rangefinder"], ["retriever", "Disc retriever"],
+  ["umbrella", "Umbrella"], ["shoes", "Shoes"], ["rain_gear", "Rain gear"], ["seat", "Seat"], ["light", "Light / headlamp"], ["other", "Other"],
+];
+
+/** "Sell a disc" / "Sell a bag" / "Sell an accessory". */
+export function sellHeading(itemKind) {
+  return itemKind === "bag" ? "Sell a bag" : itemKind === "accessory" ? "Sell an accessory" : "Sell a disc";
+}
+
 // PDGA-style 1-10 condition scale, short enough for a select and a legend.
 export const CONDITION_LEGEND = [
   [10, "New, never thrown"],
@@ -77,9 +95,22 @@ export function discTypeLabel(value) {
   return row ? row[1] : "";
 }
 
-export function conditionText(value) {
+/** The same 1-10 scale for a bag or an accessory, worded for gear (it isn't thrown). */
+export function conditionLegend(itemKind) {
+  if (!itemKind || itemKind === "disc") return CONDITION_LEGEND;
+  return CONDITION_LEGEND.map(([score, text]) => [score, score === 10 ? "New, never used" : score === 9 ? "Like new, used a few times" : text.replace("dings", "marks")]);
+}
+
+/** A disc's type ("Midrange"), or what a bag / accessory listing is ("Bag", "Cart"). */
+export function itemKindLabel(listing) {
+  if (listing?.itemKind === "bag") return "Bag";
+  if (listing?.itemKind === "accessory") return ACCESSORY_KINDS.find(([key]) => key === listing.gearType)?.[1] || "Accessory";
+  return discTypeLabel(listing?.discType);
+}
+
+export function conditionText(value, itemKind = "disc") {
   const n = Number(value);
-  const row = CONDITION_LEGEND.find(([score]) => score === n);
+  const row = conditionLegend(itemKind).find(([score]) => score === n);
   return row ? `${n}/10 · ${row[1]}` : "";
 }
 
@@ -144,7 +175,7 @@ export function listingTitle(listing) {
 
 export function listingMeta(listing) {
   return [
-    discTypeLabel(listing?.discType),
+    itemKindLabel(listing),
     listing?.weightG ? listing.weightG + "g" : "",
     listing?.color || "",
     listing?.condition ? listing.condition + "/10" : "",
@@ -263,24 +294,28 @@ function optionalNumber(text, { min, max, step = 1 }) {
 /** Form strings -> the POST /market/listings body (without photos), or the first problem. */
 export function listingPayload(draft) {
   const text = (key) => String(draft?.[key] ?? "").trim();
+  const itemKind = ITEM_KINDS.some(([key]) => key === draft?.itemKind) ? draft.itemKind : "disc";
+  const disc = itemKind === "disc";
+  const gearType = itemKind === "accessory" ? text("gearType") : "";
+  if (itemKind === "accessory" && !ACCESSORY_KINDS.some(([key]) => key === gearType)) return { ok: false, field: "gearType", message: "Choose what it is." };
   const brand = text("brand");
   const mold = text("mold");
-  if (!mold) return { ok: false, field: "mold", message: "Enter the mold (disc name)." };
+  if (!mold) return { ok: false, field: "mold", message: disc ? "Enter the mold (disc name)." : "Enter what it is (the make and model)." };
   for (const key of ["brand", "mold", "plastic", "color", "conditionNotes", "tradeFor", "location"]) {
     if (text(key).length > LIMITS[key]) return { ok: false, field: key, message: "That's too long." };
   }
   const discType = text("discType");
-  if (!DISC_TYPES.some(([key]) => key === discType)) return { ok: false, field: "discType", message: "Choose the disc type." };
+  if (disc && !DISC_TYPES.some(([key]) => key === discType)) return { ok: false, field: "discType", message: "Choose the disc type." };
   const condition = Number(text("condition"));
   if (!Number.isInteger(condition) || condition < 1 || condition > 10) return { ok: false, field: "condition", message: "Choose a condition from 1 to 10." };
-  const flight = {};
-  for (const [key, range] of [["speed", { min: 1, max: 15, step: 0.5 }], ["glide", { min: 0, max: 7, step: 0.5 }],
-    ["turn", { min: -5, max: 2, step: 0.5 }], ["fade", { min: 0, max: 6, step: 0.5 }]]) {
+  const flight = { speed: null, glide: null, turn: null, fade: null };
+  for (const [key, range] of disc ? [["speed", { min: 1, max: 15, step: 0.5 }], ["glide", { min: 0, max: 7, step: 0.5 }],
+    ["turn", { min: -5, max: 2, step: 0.5 }], ["fade", { min: 0, max: 6, step: 0.5 }]] : []) {
     const parsed = optionalNumber(draft?.[key], range);
     if (!parsed.ok) return { ok: false, field: key, message: "Flight numbers: speed 1–15, glide 0–7, turn -5 to 2, fade 0–6." };
     flight[key] = parsed.value;
   }
-  const weight = optionalNumber(draft?.weightG, { min: 100, max: 200 });
+  const weight = disc ? optionalNumber(draft?.weightG, { min: 100, max: 200 }) : { ok: true, value: null };
   if (!weight.ok) return { ok: false, field: "weightG", message: "Weight is in grams, 100–200." };
   const openToTrade = Boolean(draft?.openToTrade);
   const priceText = text("price");
@@ -294,7 +329,7 @@ export function listingPayload(draft) {
   return {
     ok: true,
     value: {
-      brand, mold, plastic: text("plastic"), discType, ...flight, weightG: weight.value, color: text("color"),
+      itemKind, gearType, brand, mold, plastic: disc ? text("plastic") : "", discType: disc ? discType : null, ...flight, weightG: weight.value, color: text("color"),
       condition, conditionNotes: text("conditionNotes"), priceCents, openToTrade,
       tradeFor: openToTrade ? text("tradeFor") : "", quantity, location: text("location"),
     },
@@ -305,6 +340,7 @@ export function listingDraft(listing) {
   const flight = listing?.flight || {};
   const num = (value) => (value == null ? "" : String(value));
   return {
+    itemKind: listing?.itemKind || "disc", gearType: listing?.gearType || "",
     brand: listing?.brand || "", mold: listing?.mold || "", plastic: listing?.plastic || "",
     discType: listing?.discType || "", speed: num(flight.speed), glide: num(flight.glide), turn: num(flight.turn), fade: num(flight.fade),
     weightG: num(listing?.weightG), color: listing?.color || "", condition: listing?.condition ? String(listing.condition) : "",
@@ -388,7 +424,7 @@ export function traderHref(key) { return TRADER_KEY.test(String(key || "")) ? "#
 export function wantedHref(id) { return "#wanted/" + id; }
 
 export const EMPTY_FILTERS = {
-  q: "", type: "", brand: "", plastic: "", wmin: "", wmax: "", cond: "", pmin: "", pmax: "", trade: false, seller: "", sort: "newest",
+  q: "", kind: "", type: "", brand: "", plastic: "", wmin: "", wmax: "", cond: "", pmin: "", pmax: "", trade: false, seller: "", sort: "newest",
 };
 
 /** Browse filters -> the /market/listings query string. Prices are whole dollars, weights grams. */
@@ -400,6 +436,7 @@ export function listingsQuery(filters, offset = 0) {
     return String(value ?? "").trim() !== "" && Number.isInteger(n) && n >= min && n <= max ? String(n) : "";
   };
   if (f.q.trim()) params.set("q", f.q.trim().slice(0, 60));
+  if (ITEM_KINDS.some(([key]) => key === f.kind)) params.set("kind", f.kind);
   if (DISC_TYPES.some(([key]) => key === f.type)) params.set("type", f.type);
   if (f.brand) params.set("brand", f.brand.slice(0, 40));
   if (f.plastic) params.set("plastic", f.plastic.slice(0, 40));
@@ -418,7 +455,7 @@ export function listingsQuery(filters, offset = 0) {
 
 export function activeFilterCount(filters) {
   const f = { ...EMPTY_FILTERS, ...(filters || {}) };
-  return ["type", "brand", "plastic", "wmin", "wmax", "cond", "pmin", "pmax"].filter((key) => String(f[key] || "").trim()).length + (f.trade ? 1 : 0);
+  return ["kind", "type", "brand", "plastic", "wmin", "wmax", "cond", "pmin", "pmax"].filter((key) => String(f[key] || "").trim()).length + (f.trade ? 1 : 0);
 }
 
 /** "2026-11-17 14:03:00" (UTC) -> "Nov 17". */

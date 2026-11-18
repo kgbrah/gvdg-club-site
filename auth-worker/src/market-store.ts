@@ -202,7 +202,7 @@ export async function payInfo(env: Env, sellerId: string, amountCents: number | 
 
 // ---- Listings ----
 
-export const LISTING_COLUMNS = `l.id, l.seller_id, l.brand, l.mold, l.plastic, l.disc_type, l.speed, l.glide, l.turn, l.fade,
+export const LISTING_COLUMNS = `l.id, l.seller_id, l.item_kind, l.gear_type, l.bag_ref, l.brand, l.mold, l.plastic, l.disc_type, l.speed, l.glide, l.turn, l.fade,
   l.weight_g, l.color, l.condition, l.condition_notes, l.price_cents, l.open_to_trade, l.trade_for, l.quantity, l.location,
   l.status, l.hidden, l.created_at, l.updated_at, l.withdrawn_at, l.withdrawal_final,
   (SELECT p.id FROM market_listing_photos p WHERE p.listing_id = l.id ORDER BY p.sort_order, p.id LIMIT 1) AS photo_id`;
@@ -230,6 +230,9 @@ export function listingCard(row: Row, traders: Map<string, TraderLite>, summarie
   return {
     id: num(row, "id"),
     title: listingTitle({ brand: str(row, "brand"), plastic: str(row, "plastic"), mold: str(row, "mold") }),
+    // bag_ref stays private: only the seller's My Bag uses it.
+    itemKind: str(row, "item_kind") || "disc",
+    gearType: str(row, "gear_type"),
     brand: str(row, "brand"),
     mold: str(row, "mold"),
     plastic: str(row, "plastic"),

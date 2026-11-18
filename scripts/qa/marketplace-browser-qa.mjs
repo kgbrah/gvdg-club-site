@@ -10,7 +10,8 @@
 // sees the pending buyer, marks it sold and both sides leave feedback; a trade offer is accepted; a guest's
 // WANTED post gets an "I have one" reply relayed by email; a report appears in the admin Marketplace queue;
 // pay links are exact; a withdrawn listing is relisted within its 24-hour window and a later one is made
-// final by the cron sweep (photos deleted). Then every key screen is checked at 390 light / 390 dark / 320 large-text dark /
+// final by the cron sweep (photos deleted); "Sell this" from My Bag lists a disc, the bag and an accessory with their bag
+// photos, and browse filters by what's for sale. Then every key screen is checked at 390 light / 390 dark / 320 large-text dark /
 // 1280 light for horizontal overflow and clipped action labels, and screenshotted.
 //
 // Usage: CHROMIUM_PATH=/usr/bin/chromium GVDG_QA_NO_SANDBOX=1 node scripts/qa/marketplace-browser-qa.mjs
@@ -182,7 +183,8 @@ const vite = await createServer({
       }
       if (!url.pathname.startsWith("/api/")) return next();
       const path = url.pathname.slice("/api".length);
-      if (path.startsWith("/market/") || path.startsWith("/admin/market/") || path.startsWith("/me/messages") || path.startsWith("/me/notices")) {
+      if (path.startsWith("/market/") || path.startsWith("/admin/market/") || path.startsWith("/me/messages") || path.startsWith("/me/notices")
+        || path === "/me/bag" || path.startsWith("/me/bag/")) {
         const chunks = [];
         for await (const chunk of request) chunks.push(chunk);
         const headers = new Headers();
@@ -670,8 +672,120 @@ async function runScreens() {
   }
 }
 
+/** "Sell this" from My Bag: the sell form fills in from the bag hand-off, the bag photos go on the listing (copied by
+ *  the Worker; the bag keeps its originals), bags and accessories list without disc details, and browse filters by kind. */
+async function runBagSell() {
+  const discId = crypto.randomUUID();
+  db.raw.prepare(`INSERT INTO member_practice_records (owner, id, kind, revision, occurred_on, payload, last_op, updated_at)
+    VALUES (?, ?, 'disc', 1, '2026-11-01', ?, 'op-' || ?, ?)`).run(people.seller.memberId, discId, JSON.stringify({
+    brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange", weightGrams: 175, notes: "", inBag: true, archived: false, ink: "TM 252-555-0134",
+  }), discId, Date.now());
+  const bagPhoto = async (target) => (await api("/me/bag/photos", { method: "POST", token: tokens.seller, body: { ...target, image: photoDataUrl } })).photo.id;
+  const discPhotos = [await bagPhoto({ discId }), await bagPhoto({ discId })];
+  const wholePhoto = await bagPhoto({ bag: true });
+  const cart = (await api("/me/bag/accessories", { method: "POST", token: tokens.seller, body: { kind: "cart", name: "Zuca all-terrain cart" } })).accessory;
+  const cartPhoto = await bagPhoto({ accessoryId: cart.id });
+  const bagKeys = () => db.raw.prepare("SELECT photo_key FROM bag_photos").all().map((row) => row.photo_key);
+  const handoff = async (profile, item) => {
+    const view = await open(profile, { member: tokens.seller });
+    await view.context.addInitScript((value) => {
+      if (!sessionStorage.getItem("gvdg_market_bag_handoff") && !sessionStorage.getItem("qa-posted")) sessionStorage.setItem("gvdg_market_bag_handoff", value);
+    }, JSON.stringify(item));
+    return view;
+  };
+  const post = async (view, form) => {
+    await form.getByRole("button", { name: "Post listing" }).click();
+    await view.page.waitForURL(/#market\/listing\/\d+$/);
+    await view.page.evaluate(() => sessionStorage.setItem("qa-posted", "1"));
+    await view.page.locator("[data-market-view=listing][data-market-state=ready]").waitFor();
+    assert.equal(await view.page.evaluate(() => sessionStorage.getItem("gvdg_market_bag_handoff")), null, "the hand-off is cleared once posted");
+    return Number(/listing\/(\d+)$/.exec(view.page.url())[1]);
+  };
+
+  // 1. A bag disc: filled in, both bag photos on (fetched privately), one taken off, then posted.
+  const disc = await handoff(profiles.light390, { ref: "disc:" + discId, brand: "Innova", mold: "Destroyer", plastic: "Star", color: "Orange", weightG: "175", photos: discPhotos });
+  await go(disc.page, "market/sell?from=bag", "form[aria-label='Sell a disc']");
+  const discForm = disc.page.locator("form[aria-label='Sell a disc']");
+  await discForm.getByText("Filled in from your bag. Check the details, set the condition and a price, and post.").waitFor();
+  assert.equal(await discForm.getByRole("radio", { name: "Disc" }).isChecked(), true);
+  assert.deepEqual(await Promise.all(["Brand", "Mold", "Plastic", "Color", "Weight (g)"].map((label) => discForm.getByLabel(label, { exact: true }).inputValue())),
+    ["Innova", "Destroyer", "Star", "Orange", "175"]);
+  const bagThumbs = discForm.locator("[data-market-bag-photos='2'] img");
+  await bagThumbs.nth(1).waitFor();
+  assert.match(await bagThumbs.first().getAttribute("src"), /^blob:/, "bag photos are fetched with the member's sign-in");
+  await discForm.getByText("Your bag photos are on the listing.", { exact: false }).waitFor();
+  await assertFits(disc.page, "sell a bag disc");
+  await shot(disc.page, "flow-sell-from-bag-390-light");
+  await discForm.getByRole("button", { name: "Remove photo 2" }).click();
+  await discForm.locator("[data-market-bag-photos='1']").waitFor();
+  await discForm.getByLabel("Disc type", { exact: true }).selectOption("driver");
+  await discForm.getByLabel("Condition", { exact: true }).selectOption("8");
+  await discForm.getByLabel("Price (USD)", { exact: true }).fill("20");
+  const discListing = await post(disc, discForm);
+  assert.deepEqual({ ...db.raw.prepare("SELECT item_kind, bag_ref, mold, weight_g FROM market_listings WHERE id = ?").get(discListing) },
+    { item_kind: "disc", bag_ref: "disc:" + discId, mold: "Destroyer", weight_g: 175 });
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM market_listing_photos WHERE listing_id = ?").get(discListing).n, 1);
+  for (const key of bagKeys()) assert(photos.objects.has(key), "the bag keeps its private photos");
+  await disc.context.close();
+
+  // 2. The bag: no disc details, worded for a bag; 320 large text fits.
+  const bag = await handoff(profiles.dark320, { ref: "bag", photos: [wholePhoto] });
+  await go(bag.page, "market/sell?from=bag", "form[aria-label='Sell a bag']");
+  const bagForm = bag.page.locator("form[aria-label='Sell a bag']");
+  assert.equal(await bagForm.getByRole("radio", { name: "Bag" }).isChecked(), true);
+  for (const label of ["Disc type", "Plastic", "Weight (g)", "Speed"]) assert.equal(await bagForm.getByLabel(label, { exact: true }).count(), 0, label + " is for discs");
+  await bagForm.locator("[data-market-bag-photos='1'] img").first().waitFor();
+  await bagForm.getByLabel("Brand (optional)").fill("Grip");
+  await bagForm.getByLabel("Model", { exact: true }).fill("AX5");
+  assert.match(await bagForm.getByLabel("Condition", { exact: true }).innerText(), /10 · New, never used/);
+  await bagForm.getByLabel("Condition", { exact: true }).selectOption("9");
+  await bagForm.getByLabel("Price (USD)", { exact: true }).fill("90");
+  await assertFits(bag.page, "sell the bag, 320 large text");
+  await shot(bag.page, "flow-sell-bag-320-large-dark");
+  const bagListing = await post(bag, bagForm);
+  await bag.page.locator("[data-market-view=listing]").getByText("New, never used", { exact: false }).count();
+  assert.deepEqual({ ...db.raw.prepare("SELECT item_kind, disc_type, brand, mold, bag_ref FROM market_listings WHERE id = ?").get(bagListing) },
+    { item_kind: "bag", disc_type: null, brand: "Grip", mold: "AX5", bag_ref: "bag" });
+  await bag.context.close();
+
+  // 3. An accessory: what it is comes from the bag.
+  const acc = await handoff(profiles.light390, { ref: "accessory:" + cart.id, gearType: "cart", mold: cart.name, photos: [cartPhoto] });
+  await go(acc.page, "market/sell?from=bag", "form[aria-label='Sell an accessory']");
+  const accForm = acc.page.locator("form[aria-label='Sell an accessory']");
+  assert.equal(await accForm.getByLabel("What is it?").inputValue(), "cart");
+  assert.equal(await accForm.getByLabel("Name or model").inputValue(), "Zuca all-terrain cart");
+  await accForm.getByLabel("Condition", { exact: true }).selectOption("7");
+  await accForm.getByLabel("Price (USD)", { exact: true }).fill("45");
+  const accListing = await post(acc, accForm);
+  await acc.page.locator("[data-market-view=listing]").getByText("Cart", { exact: true }).first().waitFor();
+  assert.deepEqual({ ...db.raw.prepare("SELECT item_kind, gear_type, bag_ref FROM market_listings WHERE id = ?").get(accListing) },
+    { item_kind: "accessory", gear_type: "cart", bag_ref: "accessory:" + cart.id });
+  await acc.context.close();
+  assert.deepEqual((await api("/me/bag", { token: tokens.seller })).listings.map((row) => row.ref).sort(),
+    ["accessory:" + cart.id, "bag", "disc:" + discId].sort(), "My Bag shows each item for sale");
+
+  // 4. Choosing what to sell on a fresh form, and browsing by kind.
+  const fresh = await open(profiles.light390, { member: tokens.seller });
+  await go(fresh.page, "market/sell", "form[aria-label='Sell a disc']");
+  await fresh.page.getByRole("radio", { name: "Accessory" }).check();
+  const gearForm = fresh.page.locator("form[aria-label='Sell an accessory']");
+  await gearForm.getByLabel("What is it?").waitFor();
+  assert.equal(await gearForm.getByLabel("Disc type", { exact: true }).count(), 0);
+  await fresh.page.getByRole("radio", { name: "Disc" }).check();
+  await fresh.page.locator("form[aria-label='Sell a disc']").getByLabel("Disc type", { exact: true }).waitFor();
+  await go(fresh.page, "market", "[data-market-view=browse][data-market-state=ready]");
+  await fresh.page.locator("summary", { hasText: "More filters" }).click();
+  await fresh.page.getByLabel("What", { exact: true }).selectOption("bag");
+  await fresh.page.locator(`article.market-card[data-market-listing="${bagListing}"]`).waitFor();
+  await fresh.page.waitForFunction((id) => [...document.querySelectorAll("article.market-card")].every((card) => card.getAttribute("data-market-listing") === String(id)), bagListing);
+  assert.equal(await fresh.page.getByLabel("Disc type", { exact: true }).count(), 0, "disc-only filters hide for bags");
+  await fresh.context.close();
+  console.log("Sell this from My Bag: a disc, the bag and an accessory were listed with their bag photos (copied, the bag kept its own); browse filters by kind");
+}
+
 try {
   await runFlows();
+  await runBagSell();
   if (!process.env.GVDG_MARKET_SKIP_SCREENS) await runScreens();
   await runGlass();
   assert.deepEqual(pageErrors, [], "page errors");

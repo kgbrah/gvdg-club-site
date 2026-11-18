@@ -106,10 +106,14 @@ gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="a
 
 ## Conventions that bite if missed
 
-- **Next migration number is `0068`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
-  and hole, `0066` My Bag photos and the bag / marketplace cross-checks, `0067` whole-bag and accessory photos).
-- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v307`), plus the
-  `?v=` on the bundle you changed (members `203`, public/events `195`, score `239`, home `189`) and the
+- **Next migration number is `0069`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
+  and hole, `0066` My Bag photos and the bag / marketplace cross-checks, `0067` whole-bag and accessory photos,
+  `0068` bags and accessories in the marketplace + "Sell this" links).
+- **Changing a CHECK constraint means rebuilding the table.** Do it the way `0068` does: `PRAGMA defer_foreign_keys = on`,
+  create the new table, copy every row with its id, drop the old, rename, recreate the indexes, `PRAGMA defer_foreign_keys = off`,
+  and replay it on a seeded database inside a transaction with foreign keys on (`auth-worker/test/market-gear-migration.test.ts`).
+- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v308`), plus the
+  `?v=` on the bundle you changed (members `204`, public/events `196`, score `239`, home `189`) and the
   tests that pin them.
 - **Generated bundles conflict on merge.** Delete the generated outputs, `npm run build`, then `git add -A`.
 - **Private stays private.** Lost & Found writing ("what's written on it"), AI reads, My Bag photos and

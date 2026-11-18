@@ -3,7 +3,8 @@
 // off), and which bag discs you reported lost (with their posts' status).
 //
 //   GET    /me/bag                  -> { matchFound, photos: [{ id, discId }], bagPhotos: [{ id }],
-//                                       accessories: [{ id, kind, name, notes, photos: [id] }], lost: [{ discId, postId, status, title }] }
+//                                       accessories: [{ id, kind, name, notes, photos: [id] }], lost: [{ discId, postId, status, title }],
+//                                       listings: [{ ref, listingId, status }] }  (bag items up for sale: "Sell this")
 //   PUT    /me/bag/settings         { matchFound: boolean }
 //   POST   /me/bag/photos           { discId | bag: true | accessoryId, image (data URL) } -> { photo }
 //                                   (3 a disc, 6 of the whole bag, 3 an accessory)
@@ -27,7 +28,8 @@ export const BAG_PHOTOS_PER_DISC = 3;
 export const BAG_PHOTOS_OF_BAG = 6;
 export const PHOTOS_PER_ACCESSORY = 3;
 export const MAX_ACCESSORIES = 40;
-export const ACCESSORY_KINDS = ["cart", "towel", "mini", "rangefinder", "retriever", "umbrella", "shoes", "rain_gear", "seat", "light", "other"] as const;
+export { ACCESSORY_KINDS } from "./market-input.js";
+import { ACCESSORY_KINDS } from "./market-input.js";
 const SERVED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 
@@ -87,7 +89,7 @@ async function ownAccessory(env: Env, owner: string, id: number) {
 }
 
 async function overview(env: Env, owner: string, origin: string | null): Promise<Response> {
-  const [photos, lost, matchFound, accessories] = await Promise.all([
+  const [photos, lost, matchFound, accessories, listings] = await Promise.all([
     env.DB.prepare("SELECT id, disc_id, subject FROM bag_photos WHERE owner = ? ORDER BY id").bind(owner).all<{ id: number; disc_id: string; subject: string }>(),
     env.DB.prepare(
       `SELECT id, bag_disc_id, status, expires_at, brand, plastic, mold, color FROM lf_posts
@@ -96,6 +98,11 @@ async function overview(env: Env, owner: string, origin: string | null): Promise
     bagMatchingOn(env, owner),
     env.DB.prepare("SELECT id, kind, name, notes FROM bag_accessories WHERE owner = ? ORDER BY id").bind(owner)
       .all<{ id: number; kind: string; name: string; notes: string }>(),
+    // Listings made with "Sell this" that are still up (newest first, one per bag item).
+    env.DB.prepare(
+      `SELECT id, bag_ref, status FROM market_listings WHERE seller_id = ? AND bag_ref IS NOT NULL AND status IN ('active', 'pending')
+       ORDER BY id DESC LIMIT 200`,
+    ).bind(owner).all<{ id: number; bag_ref: string; status: string }>(),
   ]);
   const photoRows = photos.results ?? [];
   const latest = new Map<string, Row>();
@@ -109,6 +116,8 @@ async function overview(env: Env, owner: string, origin: string | null): Promise
       photos: photoRows.filter((photo) => photo.subject === "accessory" && photo.disc_id === "acc-" + row.id).map((photo) => photo.id),
     })),
     lost: [...latest.values()].map((row) => ({ discId: String(row.bag_disc_id), postId: Number(row.id), status: postStatus(row), title: postTitle(row) })),
+    listings: (listings.results ?? []).filter((row, index, rows) => rows.findIndex((other) => other.bag_ref === row.bag_ref) === index)
+      .map((row) => ({ ref: row.bag_ref, listingId: row.id, status: row.status })),
   }, 200, origin);
 }
 

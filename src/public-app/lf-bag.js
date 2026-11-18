@@ -32,7 +32,8 @@ export function clearBagHandoff() {
   try { sessionStorage.removeItem(LF_BAG_HANDOFF_KEY); } catch { /* nothing kept */ }
 }
 
-function BagPhoto({ id, alt }) {
+/** One of the signed-in member's private bag photos, fetched with their sign-in (never a public link). */
+export function BagPhoto({ id, alt }) {
   const [src, setSrc] = React.useState("");
   React.useEffect(() => {
     let live = true;
@@ -50,12 +51,12 @@ function BagPhoto({ id, alt }) {
   return src ? h("img", { alt, className: "market-photo-thumb", src }) : h("span", { "aria-label": alt, className: "market-photo-thumb lf-bag-photo-loading", role: "img" });
 }
 
-/** The bag's photos, each with "Show on the post" (off until ticked). `room`: how many more the post can take. */
+/** The bag's photos, each with "Show on the post" (on until unticked). `room`: how many more the post can take. */
 export function BagPhotoChooser({ photos, chosen, setChosen, room }) {
   if (!photos.length) return null;
   return h("fieldset", { className: "market-fieldset lf-bag-photos", "data-lf-bag-photos": photos.length }, [
     h("legend", { key: "legend" }, "Photos from your bag"),
-    h("p", { className: "market-hint", key: "why" }, "These are private. Tick one to show it on the post, where anyone can see it."),
+    h("p", { className: "market-hint", key: "why" }, "Ticked photos go on the post, where anyone can see them. Untick any you'd rather keep private."),
     h("ul", { className: "market-photo-list", key: "list" }, photos.map((id, index) => {
       const on = chosen.includes(id);
       return h("li", { className: "market-photo-item", key: id }, [

@@ -106,3 +106,28 @@ test("photo copy: photos are public, the tip says how to cover writing, and noth
     assert.doesNotMatch(text, /blur|redact/i);
   }
 });
+
+test("editing a post: its route, the form filled back in, and cleared fields sent as null", async () => {
+  const model = await import("../src/shared/lost-found-model.js");
+  assert.deepEqual((({ view, id }) => ({ view, id }))(model.parseLfRoute("#edit/12")), { view: "edit", id: 12 });
+  assert.equal(model.parseLfRoute("#edit/x").view, "list");
+  assert.equal(model.editHref(12), "#edit/12");
+  assert.equal(model.splitArea("Hole 7 · by the pond", 7), "by the pond");
+  assert.equal(model.splitArea("Hole 7", 7), "");
+  assert.equal(model.splitArea("Hole 7 · by the pond", 8), "Hole 7 · by the pond");
+  assert.equal(model.splitArea("Parking lot", null), "Parking lot");
+  const draft = model.draftFromPost({
+    kind: "lost", brand: "Innova", mold: "Destroyer", plastic: "Star", color: "Orange", weightG: 175, course: { id: 9, name: "Elm" }, hole: 7,
+    area: "Hole 7 · by the pond", date: "2026-11-10", rewardNote: "Pizza", privateInk: "Ada 252", holding: null, binNote: "",
+  });
+  assert.deepEqual(draft, {
+    brand: "Innova", mold: "Destroyer", plastic: "Star", color: "Orange", weightG: "175", courseId: "9", hole: "7", area: "by the pond",
+    eventDate: "2026-11-10", holding: "finder", binNote: "", rewardNote: "Pizza", privateInk: "Ada 252",
+  });
+  // Saved back unchanged, it composes the same area again.
+  assert.equal(model.postEditPayload("lost", draft).area, "Hole 7 · by the pond");
+  const cleared = model.postEditPayload("lost", { ...draft, courseId: "", hole: "", weightG: "", eventDate: "" });
+  assert.deepEqual([cleared.courseId, cleared.hole, cleared.weightG, cleared.eventDate], [null, null, null, null]);
+  assert.equal("photos" in cleared, false);
+  assert.equal("kind" in cleared, false);
+});

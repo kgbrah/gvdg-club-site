@@ -3,6 +3,11 @@
 
 export const DISC_TYPES = ["driver", "fairway", "midrange", "putter"] as const;
 export type DiscType = (typeof DISC_TYPES)[number];
+/** What a listing sells. Bags and accessories have no disc type, plastic, weight or flight numbers. */
+export const ITEM_KINDS = ["disc", "bag", "accessory"] as const;
+export type ItemKind = (typeof ITEM_KINDS)[number];
+/** What a My Bag accessory is, and what an accessory listing sells (the same list). */
+export const ACCESSORY_KINDS = ["cart", "towel", "mini", "rangefinder", "retriever", "umbrella", "shoes", "rain_gear", "seat", "light", "other"] as const;
 export const REPORT_REASONS = ["scam", "prohibited", "wrong_info", "abusive", "spam", "other"] as const;
 export const RATINGS = ["positive", "neutral", "negative"] as const;
 export type Rating = (typeof RATINGS)[number];
@@ -48,10 +53,14 @@ function bool(value: unknown): boolean {
 }
 
 export interface ListingInput {
+  itemKind: ItemKind;
+  /** What an accessory is (as in My Bag: cart, towel…); "" for discs and bags. */
+  gearType: string;
   brand: string;
+  /** The disc's mold, or a bag's / accessory's name or model. */
   mold: string;
   plastic: string;
-  discType: DiscType;
+  discType: DiscType | null;
   speed: number | null;
   glide: number | null;
   turn: number | null;
@@ -68,23 +77,31 @@ export interface ListingInput {
 }
 
 export function parseListing(body: Record<string, unknown>): Ok<ListingInput> | Fail {
+  const itemKind = body.itemKind == null || body.itemKind === "" ? "disc" : body.itemKind;
+  if (typeof itemKind !== "string" || !(ITEM_KINDS as readonly string[]).includes(itemKind)) return { ok: false, field: "itemKind" };
+  const disc = itemKind === "disc";
+  const gearType = itemKind === "accessory" ? body.gearType : "";
+  if (itemKind === "accessory" && (typeof gearType !== "string" || !(ACCESSORY_KINDS as readonly string[]).includes(gearType))) {
+    return { ok: false, field: "gearType" };
+  }
   const brand = cleanLine(body.brand, 40);
   if (brand == null) return { ok: false, field: "brand" };
   const mold = cleanLine(body.mold, 40);
   if (!mold) return { ok: false, field: "mold" };
-  const plastic = cleanLine(body.plastic, 40);
+  // Disc-only details: a bag or an accessory never carries them (whatever the body says).
+  const plastic = disc ? cleanLine(body.plastic, 40) : "";
   if (plastic == null) return { ok: false, field: "plastic" };
   const discType = typeof body.discType === "string" && (DISC_TYPES as readonly string[]).includes(body.discType) ? body.discType as DiscType : null;
-  if (!discType) return { ok: false, field: "discType" };
-  const speed = optionalNumber(body.speed, 1, 15, 0.5);
+  if (disc && !discType) return { ok: false, field: "discType" };
+  const speed = disc ? optionalNumber(body.speed, 1, 15, 0.5) : null;
   if (speed === undefined) return { ok: false, field: "speed" };
-  const glide = optionalNumber(body.glide, 0, 7, 0.5);
+  const glide = disc ? optionalNumber(body.glide, 0, 7, 0.5) : null;
   if (glide === undefined) return { ok: false, field: "glide" };
-  const turn = optionalNumber(body.turn, -5, 2, 0.5);
+  const turn = disc ? optionalNumber(body.turn, -5, 2, 0.5) : null;
   if (turn === undefined) return { ok: false, field: "turn" };
-  const fade = optionalNumber(body.fade, 0, 6, 0.5);
+  const fade = disc ? optionalNumber(body.fade, 0, 6, 0.5) : null;
   if (fade === undefined) return { ok: false, field: "fade" };
-  const weightG = optionalInt(body.weightG, 100, 200);
+  const weightG = disc ? optionalInt(body.weightG, 100, 200) : null;
   if (weightG === undefined) return { ok: false, field: "weightG" };
   const color = cleanLine(body.color, 30);
   if (color == null) return { ok: false, field: "color" };
@@ -105,7 +122,8 @@ export function parseListing(body: Record<string, unknown>): Ok<ListingInput> | 
   return {
     ok: true,
     value: {
-      brand, mold, plastic, discType, speed, glide, turn, fade, weightG, color, condition, conditionNotes,
+      itemKind: itemKind as ItemKind, gearType: String(gearType), brand, mold, plastic, discType: disc ? discType : null,
+      speed, glide, turn, fade, weightG, color, condition, conditionNotes,
       priceCents, openToTrade, tradeFor: openToTrade ? tradeFor : "", quantity, location,
     },
   };

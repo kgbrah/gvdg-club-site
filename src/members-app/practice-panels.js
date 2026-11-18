@@ -3,7 +3,7 @@ import React from "react";
 import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { discCatalog, discChoices, unfilledDiscDetails } from "./bag-disc-catalog.js";
 import { BagDiscChoice, BagDiscVoice, BagDiscWeight } from "./bag-disc-inputs.js";
-import { BagAccessories, BagDiscLost, BagDiscPhotos, BagMatchSwitch, BagWholePhotos, useBagExtras } from "./bag-extras.js";
+import { BagAccessories, BagDiscLost, BagDiscPhotos, BagDiscSell, BagMatchSwitch, BagWholePhotos, useBagExtras } from "./bag-extras.js";
 import { DISC_COLOR_NAMES } from "../shared/disc-catalog.js";
 
 import { MoreLink } from "./more-link.js";
@@ -285,7 +285,10 @@ export function MemberBagPage({ workspace }) {
     // Server extras need the disc saved (synced) first: not for a draft that only lives on this phone.
     !row.draftState ? h(BagDiscPhotos, { disc: row, extras, key: "photos", label: DiscLabel(row.record), token }) : null,
     discActions(row, workspace, openEditor, setError),
-    !row.draftState ? h(BagDiscLost, { disc: row, extras, key: "lost", record: row.record }) : null,
+    !row.draftState ? h("div", { className: "bag-item-actions", key: "bag-actions" }, [
+      h(BagDiscLost, { disc: row, extras, key: "lost", record: row.record }),
+      h(BagDiscSell, { disc: row, extras, key: "sell", record: row.record }),
+    ]) : null,
   ])));
   return h("div", { className: "react-play-page player-play member-practice", "data-member-bag": "ready" }, [
     h("div", { className: "member-practice-toolbar", key: "toolbar" }, [

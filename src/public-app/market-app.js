@@ -74,7 +74,7 @@ export function MarketplaceView({ hash }) {
   } else if (view === "listing") {
     body = h(MarketListing, { id, key: "listing-" + id });
   } else if (view === "sell") {
-    body = h(MarketSell, { key: "sell" });
+    body = h(MarketSell, { fromBag: route.query.get("from") === "bag", key: "sell" });
   } else if (view === "edit") {
     body = h(MarketSell, { editId: id, key: "edit-" + id });
   } else if (view === "trader") {
