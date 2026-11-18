@@ -348,7 +348,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v305`, members `?v=203`, public/events `?v=195`, score `?v=239`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v306`, members `?v=203`, public/events `?v=195`, score `?v=239`,
 home `?v=189` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to

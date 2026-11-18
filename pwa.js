@@ -21,6 +21,8 @@
   var SNOOZE_MS = 12 * 60 * 60 * 1000;
   var CHECK_MS = 5 * 60 * 1000;
   var REFRESH_TIMEOUT_MS = 15000;
+  // How long Refresh gives a new service worker to take over before reloading anyway (see refreshNow).
+  var ACTIVATION_GRACE_MS = 8000;
   var buildTag = document.querySelector('meta[name="gvdg-build"]');
   var stampedBuild = buildTag ? (buildTag.content || '').trim() : '';
   var documentBuild = stampedBuild || readStorage('localStorage', BUILD_KEY);
@@ -204,10 +206,10 @@
     checkWorker().catch(function () {});
   }
 
-  function waitForControl(worker, sendSkipWaiting) {
+  function waitForControl(worker, sendSkipWaiting, limitMs) {
     return new Promise(function (resolve, reject) {
       var sent = false;
-      var timeout = window.setTimeout(function () { finish(new Error('Update did not activate')); }, REFRESH_TIMEOUT_MS);
+      var timeout = window.setTimeout(function () { finish(new Error('Update did not activate')); }, limitMs || REFRESH_TIMEOUT_MS);
       function finish(error) {
         window.clearTimeout(timeout);
         navigator.serviceWorker.removeEventListener('controllerchange', inspect);
@@ -230,13 +232,13 @@
     });
   }
 
-  async function activateIncomingWorker() {
+  async function activateIncomingWorker(limitMs) {
     if (!registration) return;
     var incoming = registration.waiting || registration.installing;
     var active = registration.active;
     var controller = navigator.serviceWorker.controller;
-    if (incoming) await waitForControl(incoming, true);
-    else if (active && controller && active !== controller) await waitForControl(active, false);
+    if (incoming) await waitForControl(incoming, true, limitMs);
+    else if (active && controller && active !== controller) await waitForControl(active, false, limitMs);
   }
 
   async function checkPageAvailable() {
@@ -257,11 +259,20 @@
     refreshError = '';
     showBanner();
     try {
-      await activateIncomingWorker();
+      // Only the network decides whether a refresh can happen: the published release and the page itself.
       var commit = await checkPublishedBuild();
       if ((offer.commit && !commit) || navigator.onLine === false) throw new Error('Could not verify the update');
       await checkPageAvailable();
-      await activateIncomingWorker();
+      // Then give the new service worker a moment to take over, but never fail on it. Chromium can leave a new
+      // worker "installed" and waiting for a long time while a page is open, and an install can fail (a full
+      // storage quota, say); either used to end in "Couldn't refresh" on every tap, even on good signal. The
+      // reload gets the new release anyway (pages, bundles and chunks load network-first or by versioned / hashed
+      // URL), and the worker takes over on a later launch.
+      try {
+        await activateIncomingWorker(ACTIVATION_GRACE_MS);
+      } catch (err) {
+        if (window.console && console.warn) console.warn('[pwa] reloading without the new service worker:', err && err.message);
+      }
       if (refreshCancelled || scoringOpen() || navigator.onLine === false) return;
       if (commit) {
         writeStorage('sessionStorage', REFRESH_KEY, JSON.stringify({ commit: commit, requestedAt: Date.now() }));
