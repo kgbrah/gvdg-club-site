@@ -15,7 +15,8 @@ const STORE_KEY = "gvdg_karma_directory";
 const FRESH_MS = 5 * 60 * 1000;
 export const EMPTY_KARMA = Object.freeze({ players: Object.freeze({}), traders: Object.freeze({}) });
 
-/** Only well-formed keys and positive whole numbers survive (the directory is public data, but still checked). */
+/** Only well-formed keys and non-zero whole numbers survive (the directory is public data, but still checked). A total
+ *  can be below zero after an admin penalty for gaming round karma. */
 export function cleanKarmaDirectory(data) {
   const out = { players: {}, traders: {} };
   for (const kind of ["players", "traders"]) {
@@ -23,7 +24,7 @@ export function cleanKarmaDirectory(data) {
     if (!source || typeof source !== "object") continue;
     for (const [key, value] of Object.entries(source)) {
       const karma = Number(value);
-      if (/^[0-9a-f]{16,32}$/i.test(key) && Number.isInteger(karma) && karma > 0) out[kind][key] = karma;
+      if (/^[0-9a-f]{16,32}$/i.test(key) && Number.isInteger(karma) && karma !== 0) out[kind][key] = karma;
     }
   }
   return out;
@@ -85,23 +86,28 @@ export function karmaOf(directory, who) {
   return who.traderKey && directory.traders ? directory.traders[who.traderKey] || 0 : 0;
 }
 
+/** "40", or "−8" with a true minus sign. */
+export function karmaText(karma) {
+  return karma < 0 ? "\u2212" + Math.abs(karma) : String(karma);
+}
+
 /** " ✦ 40" for text that can't hold a chip (a select option, a canvas); "" when none. */
 export function karmaSuffix(directory, who) {
   const karma = karmaOf(directory, who);
-  return karma > 0 ? ` ✦ ${karma}` : "";
+  return karma ? ` ✦ ${karmaText(karma)}` : "";
 }
 
 /**
  * The chip itself. Pass `karma` when the payload already has it, or any of karmaKey / memberId / pdga / traderKey.
- * Renders nothing for 0. The visible text is "✦ 40"; screen readers and hover read "40 karma".
+ * Renders nothing for 0. The visible text is "✦ 40" ("✦ −8" below zero); screen readers and hover read "40 karma".
  */
 export function KarmaChip({ karma = null, karmaKey = "", memberId = "", pdga = "", traderKey = "" }) {
   const directory = useKarmaDirectory();
   const value = karma != null ? Number(karma) : karmaOf(directory, { karmaKey, memberId, pdga, traderKey });
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return h("span", { className: "karma-chip", "data-karma": value, title: `${value} karma` }, [
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value === 0) return null;
+  return h("span", { className: value < 0 ? "karma-chip is-negative" : "karma-chip", "data-karma": value, title: `${karmaText(value)} karma` }, [
     h("span", { "aria-hidden": "true", key: "mark" }, "✦"),
-    h("span", { key: "n" }, String(value)),
+    h("span", { key: "n" }, karmaText(value)),
     h("span", { className: "karma-chip-label", key: "label" }, " karma"),
   ]);
 }

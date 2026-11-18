@@ -224,8 +224,8 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0070`; next is
-`0071`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0071`; next is
+`0072`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
@@ -240,7 +240,7 @@ privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membe
 (`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
 **Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`), bags + accessories in the
 marketplace and "Sell this" links (`0068`: `market_listings` rebuilt with the same ids under `PRAGMA defer_foreign_keys`; see
-`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data), members' PDGA registrations (`0069`), club donations from marketplace sales (`0070`).
+`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data), members' PDGA registrations (`0069`), club donations from marketplace sales (`0070`), the round karma watch (`0071`).
 
 `events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
 must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
@@ -366,15 +366,22 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v312`, members `?v=206`, public/events `?v=199`, score `?v=240`,
-home `?v=191` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v313`, members `?v=207`, public/events `?v=200`, score `?v=241`,
+home `?v=192` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
 `.karma-chip` in `tokens.css`): every rendered player name gets `KarmaChip` (by `memberId` / `pdga` / payload `karmaKey` /
 `traderKey`), fed by one public `GET /karma` (`auth-worker/src/karma-directory.ts`: Lost & Found ledger + confirmed donations,
 keyed by `handicapKey(memberId)` like live scoring's `handicapKeys`, or the opaque trader key; cached 5 min per tab).
 Name-only payloads (live snapshot players / cardmates, event field, public bag tags, event chat, course conditions, PDGA
-going, community) carry `karmaKey`; community adds it only where the name itself is visible. The **member app is code-split**: Home, the shell and the nav are the entry
+going, community) carry `karmaKey`; community adds it only where the name itself is visible. **Round karma**: +1 per round a
+member finished in the app, counted live from stored rounds (`roundKarmaSql`: finalized casual results with a place, finished
+results of final events not imported (`source` not `udisc` / `ryder-import`), member-owned offline rounds; never imports, guests or DNFs; nothing to backfill).
+**Karma watch** (`karma-watch.ts`, `0071`, 15-minute cron): more than 3 finished rounds in one club day (America/New_York)
+opens one `karma_flags` row and pushes the admins; Admin › Lost & Found › Unusual karma either clears it or takes that day's
+round karma back plus 3x as a penalty (append-only `karma_adjustments`), and tells the member. A penalty stays listed
+for 60 days with **Undo penalty** (one `penalty_undone` entry gives it all back; the flag closes as `undone`). Totals can go below zero
+(chip "✦ −15", outlined). The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to
 precache every chunk (kept in `gvdg-member-chunks` for the current and previous release). Chunks import the entry

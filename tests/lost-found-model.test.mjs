@@ -32,6 +32,8 @@ test("karma badge and disc labels", () => {
   assert.equal(karmaLabel({ karma: 30, returned: 3 }), "Karma 30 · 3 discs returned");
   assert.equal(karmaLabel({ karma: 10, returned: 1 }), "Karma 10 · 1 disc returned");
   assert.equal(karmaLabel({ karma: 0, returned: 0 }), "");
+  assert.equal(karmaLabel({ karma: 4, returned: 0 }), "Karma 4");
+  assert.equal(karmaLabel({ karma: -12, returned: 0 }), "Karma \u221212");
   assert.equal(karmaLabel(null), "");
   assert.equal(discTitle({ brand: "Innova", plastic: "Star", mold: "Destroyer" }), "Innova Star Destroyer");
   assert.equal(discTitle({ color: "Orange" }), "Orange disc");

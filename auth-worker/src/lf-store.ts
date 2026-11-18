@@ -4,6 +4,7 @@
 // PRIVACY FILTER: every public shape below is built from an explicit allow-list of fields. Rows are never
 // spread into a response, so private_ink, ink text, R2 keys, nudges and owner ids cannot leak by accident.
 
+import { adjustmentKarmaSql, roundKarmaSql } from "./karma-directory.js";
 import type { Env } from "./env.js";
 import { discTitle } from "./lf-input.js";
 import { reasonLabels } from "./lf-match.js";
@@ -57,8 +58,8 @@ export function celebrationPhotos(env: Env, celebrationIds: readonly number[]): 
 
 export interface Karma { karma: number; returned: number }
 
-/** Karma = SUM of the append-only ledger, plus the whole dollars of confirmed club donations from marketplace sales;
- *  discs returned = confirmed returns that were not reversed. */
+/** Karma = SUM of the append-only ledger, plus the whole dollars of confirmed club donations from marketplace sales, plus
+ *  +1 for every round finished in the app (roundKarmaSql), less admin penalties for gaming it; discs returned = confirmed returns that were not reversed. */
 export async function karmaOf(env: Env, personIds: readonly string[]): Promise<Map<string, Karma>> {
   const out = new Map<string, Karma>();
   const ids = [...new Set(personIds.filter(Boolean))];
@@ -74,7 +75,11 @@ export async function karmaOf(env: Env, personIds: readonly string[]): Promise<M
       `SELECT seller_id AS person_id, SUM(karma) AS karma FROM market_donations
        WHERE status = 'confirmed' AND seller_id IN (${placeholders(chunk)}) GROUP BY seller_id`,
     ).bind(...chunk).all<{ person_id: string; karma: number }>()).results ?? [];
-    for (const row of given) {
+    const played = (await env.DB.prepare(roundKarmaSql(chunk.length)).bind(...chunk, ...chunk, ...chunk)
+      .all<{ person_id: string; karma: number }>()).results ?? [];
+    const adjusted = (await env.DB.prepare(adjustmentKarmaSql(chunk.length)).bind(...chunk)
+      .all<{ person_id: string; karma: number }>()).results ?? [];
+    for (const row of [...given, ...played, ...adjusted]) {
       const base = out.get(row.person_id) ?? { karma: 0, returned: 0 };
       out.set(row.person_id, { ...base, karma: base.karma + (Number(row.karma) || 0) });
     }

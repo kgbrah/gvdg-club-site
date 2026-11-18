@@ -70,10 +70,11 @@ export function personHref(key) { return PERSON_KEY.test(String(key || "")) ? "#
 export function karmaLabel(person) {
   const karma = Number(person?.karma) || 0;
   const returned = Number(person?.returned) || 0;
-  if (karma <= 0 && returned <= 0) return "";
-  // Karma from club donations alone has no returns to count.
-  if (returned <= 0) return `Karma ${karma}`;
-  return `Karma ${karma} · ${returned} ${returned === 1 ? "disc" : "discs"} returned`;
+  if (karma === 0 && returned <= 0) return "";
+  const shown = karma < 0 ? "\u2212" + Math.abs(karma) : String(karma);
+  // Karma from rounds or club donations alone has no returns to count.
+  if (returned <= 0) return `Karma ${shown}`;
+  return `Karma ${shown} · ${returned} ${returned === 1 ? "disc" : "discs"} returned`;
 }
 
 export function discTitle(post) {

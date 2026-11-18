@@ -10,6 +10,14 @@ import { nameMatch, privateKeys, rosterNameMatch, scoreMatch, type FoundSide, ty
 import { DEFAULT_DAILY_VISION_BUDGET, MAX_ATTEMPTS, dailyVisionBudget, runLostFoundTick, visionPerMinute } from "../src/lf-process.js";
 import { base64Of, extractionStatus, inkKeys, normalizeName, parseCompare, parseDiscExtraction, phoneDigits, showsPersonalInfo } from "../src/lf-vision.js";
 import { dataUrl, testJpeg } from "./lf-harness.js";
+import { clubDayOf, runKarmaWatch } from "../src/karma-watch.js";
+
+/** Admin alerts sent (the real sender needs push subscriptions; these tests only need to see the note). */
+const adminPushes = vi.hoisted(() => [] as Array<{ title: string; body: string; url: string; tag: string }>);
+vi.mock("../src/admin-push.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/admin-push.js")>();
+  return { ...actual, notifyAdmins: (_ctx: unknown, _env: unknown, note: (typeof adminPushes)[number]) => { adminPushes.push(note); } };
+});
 
 /** Public trader keys are random hex, so they can contain "555", "0199" or "ada" by chance. Blank them before
  * asserting that ink, phone digits or private text never reach a payload. */
@@ -531,7 +539,7 @@ describe("lost & found photos and privacy", () => {
     expect(db.raw.prepare("SELECT read_state, attempts FROM lf_photos WHERE post_id = ?").get(unread.id)).toEqual({ read_state: "failed", attempts: MAX_ATTEMPTS });
     expect((await getPost(unread.id)).photos).toHaveLength(1);
     const summary = await call("/admin/lost-found/summary", "GET", await token("m_admin"));
-    expect(summary.data).toEqual({ openReports: 0 });
+    expect(summary.data).toEqual({ openReports: 0, karmaFlags: 0 });
   });
 
   it("a free-tier quota answer is 'try later': it never uses up an attempt", async () => {
@@ -1264,5 +1272,154 @@ describe("lost & found celebrations and moderation", () => {
     expect(tick.expired).toBe(1);
     expect(db.raw.prepare("SELECT status FROM lf_posts WHERE id = ?").get(post.id)).toEqual({ status: "expired" });
     expect(db.raw.prepare("SELECT photo_key, status FROM lf_photos WHERE post_id = ?").get(post.id)).toEqual({ photo_key: null, status: "removed" });
+  });
+});
+
+describe("round karma: +1 for every round finished in the app, and the gaming watch", () => {
+  let roundId = 0;
+  /** A finalized casual round; each player is [memberId or guest id, place (null = didn't finish)]. */
+  function casualRound(finalizedAt: string, players: Array<[string, number | null]>) {
+    roundId += 1;
+    db.raw.prepare("INSERT INTO casual_rounds (id, round_code, course_name, layout_name, created_by, finalized_at) VALUES (?, ?, 'Pinebrook', 'Main', ?, ?)")
+      .run(9000 + roundId, "KR" + roundId, players[0]?.[0] ?? null, finalizedAt);
+    for (const [id, place] of players) {
+      db.raw.prepare("INSERT INTO casual_results (casual_round_id, member_id, name, place, total) VALUES (?, ?, ?, ?, 54)").run(9000 + roundId, id, id, place);
+    }
+  }
+  const karmaFor = async (memberId: string) => (await call("/karma")).data.players[handicapKey(memberId)] ?? 0;
+  const NOW = Date.parse("2026-11-15T16:00:00Z");
+
+  beforeEach(() => { adminPushes.length = 0; roundId = 0; });
+
+  it("counts casual, live-scored event and offline rounds a member finished, never imported results, guests or unfinished cards", async () => {
+    casualRound("2026-11-10 14:00:00", [["m_bo", 1], ["m_ada", 2], ["g_walkon", 3], ["m_cy", null]]);
+    db.raw.exec(`INSERT INTO events (id, type, name, status, source) VALUES
+      (50, 'league_round', 'Tuesday league', 'final', 'manual'),
+      (51, 'tournament', 'UDisc import', 'final', 'udisc'),
+      (52, 'league_round', 'Still going', 'live', 'manual'),
+      (53, 'tournament', 'From the DGS import, scored live', 'final', 'dgs'),
+      (54, 'league_round', 'Ryder Cup sheet backfill', 'final', 'ryder-import')`);
+    db.raw.exec(`INSERT INTO results (event_id, member_id, name, place, total) VALUES
+      (50, 'm_bo', 'Bo', 1, 50), (50, 'm_cy', 'Cy', NULL, NULL), (51, 'm_bo', 'Bo', 1, 50), (52, 'm_ada', 'Ada', 1, 50),
+      (53, 'm_bo', 'Bo', 2, 52), (54, 'm_ada', 'Ada', 1, 50)`);
+    db.raw.exec(`INSERT INTO offline_rounds (local_id, owner_id, owner_kind, payload_hash, course_name, layout_name, finished_at, snapshot) VALUES
+      ('off-1', 'm_ada', 'member', 'h1', 'Pinebrook', 'Main', '2026-11-11T15:00:00Z', '{}'),
+      ('off-2', 'open-guest', 'open', 'h2', 'Pinebrook', 'Main', '2026-11-11T15:00:00Z', '{}')`);
+    const res = await call("/karma");
+    expect(res.data.players).toEqual({ [handicapKey("m_bo")]: 3, [handicapKey("m_ada")]: 2 });
+    expect(res.raw).not.toMatch(/m_bo|m_ada|g_walkon/);
+    // The same total everywhere a member's karma shows (Lost & Found, the marketplace).
+    expect((await call("/lost-found/me", "GET", await token("m_bo"))).data.karma).toMatchObject({ karma: 3 });
+  });
+
+  it("reads the day in club time", () => {
+    expect(clubDayOf("2026-11-15 03:30:00")).toBe("2026-11-14");
+    expect(clubDayOf("2026-11-15T16:00:00Z")).toBe("2026-11-15");
+    expect(clubDayOf("")).toBe("");
+  });
+
+  it("alerts the admins once when a member finishes more than 3 rounds in a day; an admin removes it and gives 3x as a penalty", async () => {
+    for (const at of ["2026-11-14 13:00:00", "2026-11-14 15:00:00", "2026-11-14 18:00:00"]) casualRound(at, [["m_bo", 1], ["m_ada", 2]]);
+    // 10:30 pm in Greenville is the next day in UTC: still Bo's 14th.
+    casualRound("2026-11-15 03:30:00", [["m_bo", 1]]);
+    expect(await karmaFor("m_bo")).toBe(4);
+
+    expect(await runKarmaWatch(env, NOW)).toMatchObject({ flagged: 1 });
+    expect(adminPushes).toEqual([expect.objectContaining({
+      title: "Unusual karma", url: "/admin.html#lost-found",
+      body: "Bo Burnham finished 4 rounds on Sat, Nov 14 (more than 3 a day). Please review it.",
+    })]);
+    // Ada (3 rounds) isn't flagged, and the next sweep doesn't alert again.
+    expect(await runKarmaWatch(env, NOW)).toMatchObject({ flagged: 0 });
+    expect(adminPushes).toHaveLength(1);
+    // A late-synced 5th round keeps the flag's count current, still without a second alert.
+    casualRound("2026-11-14 20:00:00", [["m_bo", 1]]);
+    await runKarmaWatch(env, NOW);
+    expect(adminPushes).toHaveLength(1);
+
+    const admin = await token("m_admin");
+    expect((await call("/admin/lost-found/summary", "GET", admin)).data).toEqual({ openReports: 0, karmaFlags: 1 });
+    const overview = await call("/admin/lost-found/overview", "GET", admin);
+    expect(overview.data.karmaFlags).toEqual([expect.objectContaining({ name: "Bo Burnham", day: "2026-11-14", dayLabel: "Sat, Nov 14", rounds: 5, removes: 5, penalty: 15 })]);
+    expect(overview.raw).not.toMatch(/m_bo/);
+    const flagId = overview.data.karmaFlags[0].id;
+
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/penalize`, "POST", await token("m_ada"), { reason: "x" })).status).toBe(403);
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/penalize`, "POST", admin, {})).status).toBe(400);
+    const done = await call(`/admin/lost-found/karma-flags/${flagId}/penalize`, "POST", admin, { reason: "Five 1-minute rounds in one evening" });
+    expect(done.status, done.raw).toBe(200);
+    expect(done.data).toEqual({ ok: true, removed: 5, penalty: 15 });
+    // 5 rounds earned, 5 taken back, 15 penalty: below zero, and it shows that way.
+    expect(await karmaFor("m_bo")).toBe(-15);
+    expect(await karmaFor("m_ada")).toBe(3);
+    expect(db.raw.prepare("SELECT title, body FROM member_notices WHERE member_id = 'm_bo'").get()).toEqual({
+      title: "Karma adjusted",
+      body: "A club admin reviewed your 5 rounds on Sat, Nov 14 and took back their 5 karma, plus a 15 karma penalty for gaming the system. Contact a club admin if this is a mistake.",
+    });
+    // Decided once; the ledger can't be edited or deleted.
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/penalize`, "POST", admin, { reason: "again" })).status).toBe(409);
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/clear`, "POST", admin, { reason: "undo" })).status).toBe(409);
+    expect(() => db.raw.exec("UPDATE karma_adjustments SET delta = 0")).toThrow(/append-only/);
+    expect(() => db.raw.exec("DELETE FROM karma_adjustments")).toThrow(/append-only/);
+    expect((await call("/admin/lost-found/summary", "GET", admin)).data.karmaFlags).toBe(0);
+    // Future rounds still earn karma back.
+    casualRound("2026-11-16 15:00:00", [["m_bo", 1]]);
+    expect(await karmaFor("m_bo")).toBe(-14);
+
+    // Undo: the penalty is listed for 60 days; one entry gives back everything it took, and Bo is told.
+    const penalties = (await call("/admin/lost-found/overview", "GET", admin)).data.karmaPenalties;
+    expect(penalties).toEqual([expect.objectContaining({ id: flagId, name: "Bo Burnham", dayLabel: "Sat, Nov 14", rounds: 5, taken: 20, admin: "Ann Admin", note: "Five 1-minute rounds in one evening" })]);
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", await token("m_ada"), { reason: "x" })).status).toBe(403);
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, {})).status).toBe(400);
+    const undone = await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "It was a putting league" });
+    expect(undone.status, undone.raw).toBe(200);
+    expect(undone.data).toEqual({ ok: true, restored: 20 });
+    expect(await karmaFor("m_bo")).toBe(6);
+    expect(db.raw.prepare("SELECT title, body FROM member_notices WHERE member_id = 'm_bo' AND title = 'Karma restored'").get()).toEqual({
+      title: "Karma restored",
+      body: "A club admin took another look at your rounds on Sat, Nov 14 and gave back the 20 karma that was removed. Sorry about that!",
+    });
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "again" })).status).toBe(409);
+    expect((await call("/admin/lost-found/overview", "GET", admin)).data.karmaPenalties).toEqual([]);
+    // The day stays decided: the next sweep doesn't flag it again.
+    await runKarmaWatch(env, NOW);
+    expect(adminPushes).toHaveLength(1);
+  });
+
+  it("can't undo a flag that was never penalized", async () => {
+    for (let i = 0; i < 4; i++) casualRound(`2026-11-15 1${i}:00:00`, [["m_ada", 1]]);
+    await runKarmaWatch(env, NOW);
+    const admin = await token("m_admin");
+    const flagId = (await call("/admin/lost-found/overview", "GET", admin)).data.karmaFlags[0].id;
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "still open" })).status).toBe(409);
+    await call(`/admin/lost-found/karma-flags/${flagId}/clear`, "POST", admin, { reason: "fine" });
+    expect((await call(`/admin/lost-found/karma-flags/${flagId}/undo`, "POST", admin, { reason: "was cleared" })).status).toBe(409);
+    expect(await karmaFor("m_ada")).toBe(4);
+  });
+
+  it("counts offline rounds on the day they reached the server, so back-dated uploads still trip the watch", async () => {
+    for (let i = 1; i <= 4; i++) {
+      db.raw.prepare(`INSERT INTO offline_rounds (local_id, owner_id, owner_kind, payload_hash, course_name, layout_name, finished_at, snapshot, created_at)
+        VALUES (?, 'm_cy', 'member', ?, 'Pinebrook', 'Main', ?, '{}', ?)`).run("bulk-" + i, "h" + i, `2026-10-0${i}T15:00:00Z`, `2026-11-15T15:0${i}:00.000Z`);
+    }
+    expect(await karmaFor("m_cy")).toBe(4);
+    expect(await runKarmaWatch(env, NOW)).toMatchObject({ flagged: 1 });
+    expect(adminPushes[0]?.body).toBe("Cy Young finished 4 rounds on Sun, Nov 15 (more than 3 a day). Please review it.");
+  });
+
+  it("lets an admin clear a flag that looks fine, leaving the karma alone", async () => {
+    for (let i = 0; i < 4; i++) casualRound(`2026-11-15 1${i}:00:00`, [["m_ada", 1]]);
+    await runKarmaWatch(env, NOW);
+    const admin = await token("m_admin");
+    const flagId = (await call("/admin/lost-found/overview", "GET", admin)).data.karmaFlags[0].id;
+    const cleared = await call(`/admin/lost-found/karma-flags/${flagId}/clear`, "POST", admin, { reason: "Ran a 4-round tournament day" });
+    expect(cleared.data).toEqual({ ok: true, removed: 0, penalty: 0 });
+    expect(await karmaFor("m_ada")).toBe(4);
+    expect(db.raw.prepare("SELECT status, review_note, reviewed_by FROM karma_flags WHERE id = ?").get(flagId))
+      .toEqual({ status: "cleared", review_note: "Ran a 4-round tournament day", reviewed_by: "m_admin" });
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM karma_adjustments").get()).toEqual({ n: 0 });
+    // Cleared stays cleared: the next sweep doesn't flag that day again.
+    await runKarmaWatch(env, NOW);
+    expect(adminPushes).toHaveLength(1);
   });
 });
