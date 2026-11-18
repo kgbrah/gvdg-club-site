@@ -12,6 +12,7 @@ const EMPTY_NEEDS = {
   teeSigns: 0,
   marketReports: 0,
   lostFoundReports: 0,
+  karmaFlags: 0,
 };
 
 const MORE_TABS = new Set(["bag-tags", "members", "tee-signs", "lost-found"]);
@@ -42,6 +43,7 @@ export function publishAdminNeeds(partial) {
     teeSigns: countOf(source.teeSigns),
     marketReports: countOf(source.marketReports),
     lostFoundReports: countOf(source.lostFoundReports),
+    karmaFlags: countOf(source.karmaFlags),
   };
   window.dispatchEvent(new CustomEvent("gvdg:admin-needs", { detail: adminNeedsState }));
   return adminNeedsState;
@@ -55,6 +57,7 @@ export function adminNeedsItems(source) {
   const teeSigns = countOf(input.teeSigns);
   const marketReports = countOf(input.marketReports);
   const lostFoundReports = countOf(input.lostFoundReports);
+  const karmaFlags = countOf(input.karmaFlags);
   const orders = countOf(input.orders);
   const shelf = countOf(input.shelf);
   const shelfName = text(input.shelfName);
@@ -111,6 +114,15 @@ export function adminNeedsItems(source) {
       count: lostFoundReports,
       label: lostFoundReports === 1 ? "Lost & Found report" : "Lost & Found reports",
       detail: "Review and act",
+    });
+  }
+  if (karmaFlags) {
+    items.push({
+      id: "karma-flags",
+      tab: "lost-found",
+      count: karmaFlags,
+      label: karmaFlags === 1 ? "Unusual karma" : "Unusual karma flags",
+      detail: "More than 3 rounds in a day",
     });
   }
   if (orders) {

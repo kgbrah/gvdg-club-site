@@ -33,6 +33,7 @@ import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
 import { handlePdgaRegistrationStatus, handlePdgaRegistrations, runPdgaRegistrationTick } from "./pdga-registrations.js";
 import { handleKarma } from "./karma-directory.js";
+import { runKarmaWatch } from "./karma-watch.js";
 import { handlePdgaBaselines, isPdgaBaselineRoute } from "./pdga-baseline-routes.js";
 import { runPdgaBaselineTick } from "./pdga-baseline-ingest.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
@@ -139,7 +140,7 @@ export default {
       if (pathname === "/tee-signs" && method === "POST") return await handleTeeSignUpload(request, env, origin, ctx);
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
-      if (pathname === "/karma" && method === "GET") return await handleKarma(env, origin);
+      if (pathname === "/karma" && method === "GET") return await handleKarma(env, origin, request);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);
       if (pathname === "/membership/apply" && method === "POST") return await handleMembershipApply(request, env, origin, ctx);
       if (pathname.startsWith("/membership/")) {
@@ -188,6 +189,13 @@ export default {
               console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
             } catch (error) {
               importError = error;
+            }
+            // Round karma watch: flag anyone past 3 finished rounds in a day for an admin (a few small reads).
+            try {
+              const watch = await runKarmaWatch(env, Date.now(), ctx);
+              if (watch.flagged) console.log(JSON.stringify({ message: "karma_watch", ...watch }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "karma_watch_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
             // Lost & Found runs LAST in this branch, so however long its Gemini waits take it can never starve the
             // market sweep or the UDisc import above. It does I/O only (no image work); expiry and purges first.

@@ -3,6 +3,7 @@
 // action needs a reason and is logged. Admins never see ink text either: match review shows scores and reason
 // codes only.
 
+import { openKarmaFlagCount, openKarmaFlags, reviewKarmaFlag } from "./karma-watch.js";
 import { adminGate } from "./authz.js";
 import { readJson } from "./http.js";
 import { purgePostPhotos } from "./lf-process.js";
@@ -22,7 +23,7 @@ function reasonOf(body: Record<string, unknown>): string | null {
 
 async function counts(c: MarketCtx) {
   const row = await c.env.DB.prepare("SELECT COUNT(*) AS reports FROM lf_reports WHERE status = 'open'").first<{ reports: number }>();
-  return { openReports: Number(row?.reports) || 0 };
+  return { openReports: Number(row?.reports) || 0, karmaFlags: await openKarmaFlagCount(c.env) };
 }
 
 async function reportViews(c: MarketCtx, rows: Row[]) {
@@ -102,6 +103,7 @@ async function overview(c: MarketCtx): Promise<Response> {
   const title = (row: Row) => postTitle(row);
   return ok(c, {
     counts: await counts(c),
+    karmaFlags: await openKarmaFlags(env),
     reports: await reportViews(c, reports),
     matches: matchRows.map((row) => {
       const found = posts.get(num(row, "found_id"));
@@ -215,6 +217,10 @@ export async function handleLostFoundAdmin(c: MarketCtx, method: string, seg: st
     return ok(c, { ok: true });
   }
 
+  // Unusual karma (karma-watch.ts): "Looks fine", or take that day's round karma back plus a 3x penalty.
+  if (seg[2] === "karma-flags" && seg.length === 5 && (action === "clear" || action === "penalize")) {
+    return reviewKarmaFlag(c, adminId, id, action, reason);
+  }
   if (seg[2] === "karma" && seg.length === 5 && action === "reverse") {
     const award = await c.env.DB.prepare("SELECT person_id FROM lf_karma WHERE claim_id = ? AND reason = 'return_confirmed'").bind(id)
       .first<{ person_id: string }>();

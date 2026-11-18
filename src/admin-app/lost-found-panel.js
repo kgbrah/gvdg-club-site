@@ -146,14 +146,28 @@ export function AdminLostFoundPanel() {
   const reports = Array.isArray(data.reports) ? data.reports : [];
   const matches = Array.isArray(data.matches) ? data.matches : [];
   const karma = Array.isArray(data.karma) ? data.karma : [];
+  const flags = Array.isArray(data.karmaFlags) ? data.karmaFlags : [];
   const hiddenPosts = Array.isArray(data.hidden?.posts) ? data.hidden.posts : [];
   const hiddenCelebrations = Array.isArray(data.hidden?.celebrations) ? data.hidden.celebrations : [];
   const log = Array.isArray(data.log) ? data.log : [];
   return h("div", { "data-admin-lost-found": state.status === "loading" ? "loading" : "ready" }, [
-    h("p", { className: "al-note", key: "intro" }, "Reports, AI match suggestions and karma. Photos are public as posted; take one down from a report if it shows private information. Every action needs a reason and is logged. Private ink text is never shown here."),
+    h("p", { className: "al-note", key: "intro" }, "Unusual karma, reports, AI match suggestions and karma. Photos are public as posted; take one down from a report if it shows private information. Every action needs a reason and is logged. Private ink text is never shown here."),
     h("button", { className: "admin-btn secondary", key: "refresh", onClick: () => { void load(); }, type: "button" }, "Refresh"),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading", role: "status" }, "Loading Lost & Found…") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error", role: "alert" }, "Lost & Found couldn't load.") : null,
+
+    h("h2", { className: "admin-pane-kicker", key: "flags-title" }, `Unusual karma (${flags.length})`),
+    list(flags, "Nobody has finished more than 3 rounds in a day.", (flag) => h(Card, {
+      actions: [
+        ["Looks fine", `/admin/lost-found/karma-flags/${flag.id}/clear`, {}, "Cleared. Their karma stays."],
+        [`Remove ${flag.removes} karma + ${flag.penalty} penalty`, `/admin/lost-found/karma-flags/${flag.id}/penalize`, {},
+          "Karma removed and the penalty given. They've been told."],
+      ],
+      data: { "data-admin-karma-flag": flag.id }, key: flag.id, reasonId: "karma-flag-" + flag.id, reload: load,
+      meta: [`${flag.rounds} rounds on ${flag.dayLabel || flag.day}`, flag.createdAt ? "flagged " + when(flag.createdAt) : ""].filter(Boolean).join(" · "),
+      text: `Every round finished in the app earns +1 karma. If they're gaming it, take back that day's ${flag.removes} karma and give 3x that (${flag.penalty}) as a penalty.`,
+      title: flag.name,
+    }), "karma-flags"),
 
     h("h2", { className: "admin-pane-kicker", key: "reports-title" }, `Open reports (${reports.length})`),
     list(reports, "No open reports.", (report) => {

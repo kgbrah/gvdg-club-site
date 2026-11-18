@@ -149,7 +149,7 @@ let env = null;
 let origin = "";
 let glassTheme = null;
 const tokenOwners = new Map();
-const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|me\/bag|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
+const WORKER_PATHS = /^\/(karma|lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|me\/bag|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
 
 function fixture(path, authorization) {
   if (path === "/me") {
@@ -259,6 +259,7 @@ origin = vite.resolvedUrls.local[0].replace(/\/$/, "");
 worker = (await vite.ssrLoadModule("/auth-worker/src/index.ts")).default;
 jwt = await vite.ssrLoadModule("/auth-worker/src/jwt.ts");
 const lfProcess = await vite.ssrLoadModule("/auth-worker/src/lf-process.ts");
+const karmaWatch = await vite.ssrLoadModule("/auth-worker/src/karma-watch.ts");
 env = {
   ROSTER: memoryKv(roster), RATELIMIT: memoryKv(), DB: db, PHOTOS: photos, JWT_SECRET: secret, SESSION_TTL_SEC: "43200",
   ALLOWED_ORIGINS: origin, RESEND_API_KEY: "re_qa", GEMINI_API_KEY: "gk_qa", EXPECTED_ORIGIN: "https://gvdgclub.com",
@@ -645,8 +646,35 @@ async function runFlows() {
   await report.getByText("Shows private information · reported by Riley Chen").waitFor();
   await report.locator("img[data-admin-lf-photo]").waitFor();
   await report.getByRole("button", { name: "Remove photo" }).waitFor();
-  assert.deepEqual(await api("/admin/lost-found/summary", { token: tokens.admin }), { openReports: 1 });
+  assert.deepEqual(await api("/admin/lost-found/summary", { token: tokens.admin }), { openReports: 1, karmaFlags: 0 });
   console.log("report reached the admin Lost & Found queue with the photo and Remove photo");
+
+  // Round karma watch: Riley finishes 4 rounds in one club day (+1 karma each). The sweep alerts the admins; the admin
+  // takes the 4 back and gives 3x (12) as a penalty from Unusual karma.
+  const myKarma = async () => (await api("/lost-found/me", { token: tokens.other })).karma?.karma ?? 0;
+  const before = await myKarma();
+  const day = karmaWatch.clubDayOf(new Date().toISOString());
+  for (let i = 0; i < 4; i++) {
+    db.raw.prepare("INSERT INTO casual_rounds (round_code, course_name, layout_name, created_by, finalized_at) VALUES (?, 'Pinebrook', 'Main', ?, ?)")
+      .run("QAK" + i, people.other.memberId, `${day} 17:0${i}:00`);
+    const roundRow = db.raw.prepare("SELECT id FROM casual_rounds WHERE round_code = ?").get("QAK" + i);
+    db.raw.prepare("INSERT INTO casual_results (casual_round_id, member_id, name, place, total) VALUES (?, ?, ?, 1, 54)")
+      .run(roundRow.id, people.other.memberId, people.other.name);
+  }
+  assert.equal(await myKarma(), before + 4, "+1 karma for every finished round");
+  assert.equal((await karmaWatch.runKarmaWatch(env)).flagged, 1);
+  assert.deepEqual(await api("/admin/lost-found/summary", { token: tokens.admin }), { openReports: 1, karmaFlags: 1 });
+  await admin.page.reload({ waitUntil: "domcontentloaded" });
+  const flag = admin.page.locator("li[data-admin-karma-flag]");
+  await flag.getByText("Riley Chen", { exact: true }).waitFor();
+  await flag.getByText(`4 rounds on ${karmaWatch.dayLabel(day)}`, { exact: false }).waitFor();
+  await flag.getByLabel("Reason (logged)").fill("Four 2-minute rounds");
+  if (process.env.GVDG_KARMA_SHOTS) await flag.screenshot({ path: join(process.env.GVDG_KARMA_SHOTS, "admin-karma-flag.png") });
+  await flag.getByRole("button", { name: "Remove 4 karma + 12 penalty" }).click();
+  // The decided card leaves the list (like every other admin card here).
+  await admin.page.getByText("Nobody has finished more than 3 rounds in a day.").waitFor();
+  assert.equal(await myKarma(), before + 4 - 4 - 12, "4 taken back, 12 penalty");
+  console.log("unusual karma: flagged, alerted, removed + 3x penalty from the admin list");
 
   // Seed more data for the screenshots: open found posts (one with the AI down: its photo is up anyway), more lost
   // posts, a nudge on Taylor's post, and a possible match for the admin review list.

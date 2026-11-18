@@ -49,7 +49,7 @@ export function MyLostFound() {
   return h("section", { "data-lf-state": "ready", "data-lf-view": "mine" }, [
     h("p", { className: "market-identity", "data-lf-my-karma": data.karma?.karma || 0, key: "karma" }, karma
       ? ["Your karma: ", h("strong", { key: "k" }, karma)]
-      : "Return a disc to its owner to earn karma: +10 for every confirmed return."),
+      : "Earn karma: +1 for every round you finish in the scoring app, +10 for every disc you return to its owner."),
     h(PhotoNudges, { heading: nudges.length > 1 ? "Check your photos" : "Check your photo", key: "nudges", onChanged: state.retry, photos: nudges }),
     matches.length ? h(Section, { data: { "data-lf-section": "matches" }, key: "matches", title: "Is this yours?" },
       h("ul", { className: "market-my-listings", key: "list" }, matches.map((match) => h(Row, {

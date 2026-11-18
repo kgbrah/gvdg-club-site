@@ -936,7 +936,7 @@ export function startAdminController() {
         let adminNeedsRequest = 0;
         async function refreshAdminNeeds() {
             const request = ++adminNeedsRequest;
-            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0, marketReports: 0, lostFoundReports: 0 };
+            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0, marketReports: 0, lostFoundReports: 0, karmaFlags: 0 };
             const [tags, applications, signs, market, lostFound] = await Promise.all([
                 adminApi('/admin/bag-tags').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/members/applications').then(async (r) => r.ok ? r.json() : null).catch(() => null),
@@ -954,6 +954,7 @@ export function startAdminController() {
             if (market) next.marketReports = Number(market.openReports) || 0;
             if (lostFound) {
                 next.lostFoundReports = Number(lostFound.openReports) || 0;
+                next.karmaFlags = Number(lostFound.karmaFlags) || 0;
             }
             publishAdminNeeds(next);
         }

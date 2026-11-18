@@ -36,6 +36,16 @@ test("admin needs lists every waiting queue and lights the matching button", () 
   assert.deepEqual(adminNeedsItems({ bagRequests: 0, orders: "nope", shelf: -1 }), []);
 });
 
+test("unusual round karma (more than 3 rounds in a day) waits in Lost & Found with its own count", () => {
+  const items = adminNeedsItems({ lostFoundReports: 1, karmaFlags: 2 });
+  assert.deepEqual(items.map((item) => [item.id, item.tab, item.count, item.label, item.detail]), [
+    ["lost-found-reports", "lost-found", 1, "Lost & Found report", "Review and act"],
+    ["karma-flags", "lost-found", 2, "Unusual karma flags", "More than 3 rounds in a day"],
+  ]);
+  assert.equal(adminNeedsBadgeCount(items, "lost-found"), 3);
+  assert.equal(adminNeedsItems({ karmaFlags: 1 })[0].label, "Unusual karma");
+});
+
 test("today command center links each queue and keeps the scoring card", () => {
   const today = readFileSync("src/admin-app/today-dashboard.js", "utf8");
   const nav = readFileSync("src/admin-app/navigation.js", "utf8");
