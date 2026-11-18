@@ -55,3 +55,24 @@ test("next week is offered only when that Saturday is not already on the calenda
   events.push({ date: "2026-11-07", name: "Saturday league", status: "scheduled", type: "league_round" });
   assert.equal(nextWeekOffer(events, "2026-11-02"), null);
 });
+
+test("the next-week offer: not for a league already scheduled ahead, and it says what it adds", () => {
+  // Sunday Baggers played Nov 15 and Nov 29 is already on the calendar (Nov 22 skipped on purpose): no offer.
+  const events = [
+    { date: "2026-11-15", name: "Sunday Baggers - Sunday Baggers Nov 15th", status: "final", type: "league_round", league_id: 4 },
+    { date: "2026-11-29", name: "Sunday Baggers - Sunday Baggers Nov 29th", status: "scheduled", type: "league_round", league_id: 4 },
+  ];
+  assert.equal(nextWeekOffer(events, "2026-11-18"), null);
+  // Nothing ahead: the offer names next week's date, not last week's.
+  const offer = nextWeekOffer(events.slice(0, 1), "2026-11-18");
+  assert.equal(offer.label, "Schedule Sunday Baggers for Sun, Nov 22");
+  assert.equal(offer.nextDate, "2026-11-22");
+  // No league id: the same name once the dates are taken out is the same league.
+  const named = [
+    { date: "2026-11-15", name: "Sunday Baggers Nov 15th", status: "final", type: "league_round" },
+    { date: "2026-11-22", name: "Sunday Baggers Nov 22nd", status: "scheduled", type: "league_round" },
+  ];
+  assert.equal(nextWeekOffer(named, "2026-11-18"), null);
+  assert.equal(nextWeekOffer([...named.slice(0, 1), { date: "2026-11-22", name: "Fall Open", status: "scheduled", type: "tournament" }], "2026-11-18").label,
+    "Schedule Sunday Baggers for Sun, Nov 22");
+});

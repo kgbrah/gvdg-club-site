@@ -8,6 +8,7 @@ import {
   minusWallMinutes,
   nextWeeklyDate,
   pickRepeatEvent,
+  renameForDate,
   repeatLabel,
   shiftWallByDays,
 } from "./repeat-draft.js";
@@ -230,6 +231,8 @@ export function repeatSavePayload(source, today = clubToday(new Date())) {
   const days = calendarDaysBetween(anchor, nextDate);
   return eventPayload({
     ...base,
+    // "Sunday Baggers Nov 15th" becomes "Sunday Baggers Nov 22nd".
+    name: renameForDate(base.name, anchor, nextDate),
     checkinDeadline: shiftWallByDays(base.checkinDeadline, days),
     date: nextDate,
     registrationDeadline: shiftWallByDays(base.registrationDeadline, days),
@@ -418,6 +421,7 @@ export function AdminEventForm() {
     setEditingEvent(null);
     setForm({
       ...base,
+      name: renameForDate(base.name, anchor, nextDate),
       checkinDeadline: shiftWallByDays(base.checkinDeadline, days),
       date: nextDate,
       registrationDeadline: shiftWallByDays(base.registrationDeadline, days),
