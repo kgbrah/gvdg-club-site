@@ -174,6 +174,16 @@ The Pro Shop has a **Marketplace** where members sell and trade their used discs
 - **Feedback:** after a deal is done, both sides can leave **positive / neutral / negative** feedback within 60 days, like eBay. Each seller shows a score such as "98% positive (51)".
 - **Safety:** payments go straight to the seller. Meet at club events when you can, and use PayPal Goods & Services for shipped discs. Something wrong? Tap **Report**.
 
+### 🧭 Lost & Found (find a disc's owner, get yours back)
+**Lost & Found** (`lost-found.html`, or **Club → On the course → Lost & Found** in the member app) helps discs get home. Anyone can post: members right away, everyone else after the same **6-digit email code** the Marketplace uses (one check works for both, and your email is never shown).
+- **Found a disc?** Tap **Post a found disc** and add 1–3 photos (show any writing). Everything else is optional: the club reads the brand, mold, plastic and colour from the photo. Say whether **you have it** or **turned it in to a club bin**.
+- **Your privacy (and the owner's):** writing on discs is often a name or phone number. The AI reads it **privately** to find the owner, and the photo everyone sees has that writing **blurred out by the club's server**. If the AI can't check a photo yet, the photo stays hidden until it can. The original photo is never shown to anyone and is deleted with the post. Writing still showing? Take that photo down from your post, or tap **Report**.
+- **Lost a disc?** Tap **Post a lost disc**, describe it and add **what's written on it**. That text is **private**: it's only used for matching and nobody else ever sees it. You can add a reward note.
+- **"Is this yours?"** When a found disc looks like yours (same phone number or name on it, same mold and colour, same course…) you get an alert. If your full name is written on a disc someone finds, the club tells you directly. Tap **That's mine** or **Not mine**. A person always decides; the AI only suggests.
+- **Getting it back:** after **That's mine**, members talk in **Messages**; when a guest is involved, messages are passed on by email (no addresses shared). The finder taps **Returned**, you tap **I got it back**, and the finder earns **+10 karma**.
+- **Karma and celebrations:** finders show a badge like "Karma 30 · 3 discs returned", and the **Returned** tab lists the **Top finders**. After a return, the finder (and the owner) can post a **celebration** photo. Recent returns also appear on member Home and on the club homepage.
+- Posts close after **90 days**, or whenever you close them.
+
 ### 🎟️ Your wallet (store credit)
 - Your **wallet** is like a piggy bank of club credit. Helpers can add credit to it (for example, if you win a prize).
 - When you buy something, you can spend your credit instead of real money.
@@ -261,6 +271,7 @@ Admins are club helpers with extra powers. The **Admin** page (`admin.html`) is 
 - **Pro Shop** — add and edit the **items** for sale (name, price, picture).
 - **Orders** — see everything people **bought** in the pro shop, so you can hand out the items.
 - **Marketplace** — reports about used-disc listings, WANTED posts or feedback land here (and in **Needs you**). You can **hide** a listing or post, **remove** rude feedback, or **suspend** someone from the marketplace. Every action needs a short reason and is written in the log. You can also see listings their sellers withdrew in the last 24 hours (they can still relist them).
+- **Lost & Found** (Tools) — reports on posts and celebrations, photos the AI couldn't check yet (**Retry now** or **Remove photo**; they stay hidden until then), the AI's match suggestions (dismiss one that's wrong), recent karma (**Reverse karma** if a return wasn't real), hidden items, and **Close or merge a post** for duplicates. Every action needs a short reason and is logged. You never see the private ink text or the original photos either.
 - **Wallets** — give a member **store credit** (for example, a prize). Type who and how much.
 - **Members** — the people list. Here you can:
    - **Make a new member** — type their name and PDGA/UDisc; the site gives you a **one-time temporary PIN** to hand to them.

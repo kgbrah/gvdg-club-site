@@ -5,7 +5,7 @@ import { Disc3, ShieldCheck } from "lucide-react";
 
 import { karmaLabel, LF_REPORT_REASONS, lfErrorMessage, personHref } from "../shared/lost-found-model.js";
 import { IDENTITY_EVENT, marketBase, marketRequest } from "./market-api.js";
-import { GuestBadge, Note, StatusLine, useAction, useIdentityGate } from "./market-ui.js";
+import { Note, StatusLine, useAction, useIdentityGate } from "./market-ui.js";
 
 const h = React.createElement;
 const EMPTY_VIEWER = { kind: "public", key: null, name: null, isAdmin: false };
@@ -105,6 +105,10 @@ export function LfPhoto({ photo, alt, className = "product-img", pending = false
     h(Disc3, { key: "icon", size: 44, strokeWidth: 1.45 }),
     pending ? h("span", { className: "lf-photo-pending", key: "text" }, "Photo being checked") : null,
   ]);
+}
+
+export function GuestBadge() {
+  return h("span", { className: "market-badge market-guest-badge" }, "Guest");
 }
 
 export function KarmaBadge({ person }) {

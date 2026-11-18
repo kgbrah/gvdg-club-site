@@ -405,6 +405,12 @@ describe("lost & found photos and privacy", () => {
     for (const path of [post.photos[0].url + "/original", "/lost-found/photos/" + row.original_key, "/lost-found/originals/1"]) {
       expect((await call(path)).status).toBe(404);
     }
+    // The poster can take a photo down (writing the AI missed); nobody else can.
+    expect((await call(`/lost-found/posts/${created.id}/photos/${post.photos[0].id}/remove`, "POST", await token("m_cy"))).status).toBe(404);
+    const removed = await call(`/lost-found/posts/${created.id}/photos/${post.photos[0].id}/remove`, "POST", finder);
+    expect(removed.data.post.photos).toEqual([]);
+    expect((await call(post.photos[0].url)).status).toBe(404);
+    expect(photos.objects.size).toBe(0);
     // Ink text never reaches a public payload.
     const list = await call("/lost-found/posts?kind=found");
     expect(list.raw).not.toMatch(/555|0134|ADA/);

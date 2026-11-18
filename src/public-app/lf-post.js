@@ -33,7 +33,8 @@ export function Facts({ post }) {
   const rows = [
     ["Brand", post.brand], ["Mold", post.mold], ["Plastic", post.plastic], ["Colour", post.color],
     ["Course", post.course?.name], ["Hole or area", post.area], [found ? "Found" : "Lost", shortDay(post.date)],
-    ["Where it is now", found ? holdingText(post) : ""], ["Reward", post.rewardNote],
+    ["Where it is now", found && (post.status === "open" || post.status === "claimed") ? holdingText(post) : ""],
+    ["Reward", post.status === "open" || post.status === "claimed" ? post.rewardNote : ""],
   ].filter(([, value]) => value);
   return h("dl", { className: "market-facts" }, rows.map(([label, value]) => h("div", { className: "market-fact", key: label }, [
     h("dt", { key: "dt" }, label), h("dd", { key: "dd" }, value),
@@ -109,6 +110,13 @@ function PosterTools({ post, reload }) {
       h("p", { className: "market-deal-who", key: "who" }, match.strength === "strong" ? "Strong match: a found disc looks like yours" : "Possible match: a found disc may be yours"),
       h("a", { className: "shop-btn", href: matchHref(match.id), key: "open" }, "Is this yours?"),
     ]))) : null,
+    post.photos?.length ? h("div", { className: "lf-photo-tools", key: "photo-tools" }, [
+      h(Note, { key: "n" }, "We blur writing automatically. If a name or number still shows in a photo, take that photo down."),
+      h("div", { className: "market-actions", key: "a" }, post.photos.map((photo, index) => h("button", {
+        className: "shop-filter-reset", disabled: action.busy, key: photo.id,
+        onClick: () => act("photos/" + photo.id + "/remove", {}, "Photo removed."), type: "button",
+      }, post.photos.length > 1 ? `Remove photo ${index + 1}` : "Remove photo"))),
+    ]) : null,
     post.canTurnIn ? (binOpen
       ? h("form", { className: "market-form", key: "bin", noValidate: true, onSubmit: (event) => { event.preventDefault(); void act("turn-in", { binNote: bin.trim() }, "Marked as turned in."); } }, [
         h("label", { key: "label" }, ["Which club bin?", h("input", { key: "input", maxLength: 80, onChange: (event) => setBin(event.target.value), placeholder: "Elm Street Park shed", type: "text", value: bin })]),

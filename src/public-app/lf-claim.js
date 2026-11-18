@@ -4,7 +4,7 @@ import React from "react";
 import { PartyPopper } from "lucide-react";
 
 import {
-  CLAIM_STATUS_LABELS, celebrateHref, discTitle, LF_LIMITS, LF_MAX_PHOTOS, lfErrorMessage, postHref,
+  CLAIM_STATUS_LABELS, celebrateHref, discTitle, LF_LIMITS, LF_MAX_PHOTOS, lfErrorMessage, postHref, withArticle,
 } from "../shared/lost-found-model.js";
 import { Note, StatusLine, useAction } from "./market-ui.js";
 import { Facts, Gallery } from "./lf-post.js";
@@ -47,8 +47,8 @@ export function MatchView({ id }) {
       h("span", { className: "market-kicker", key: "kicker" }, match.strength === "strong" ? "STRONG MATCH" : "POSSIBLE MATCH"),
       h("h2", { className: "market-title", key: "title" }, "Is this yours?"),
       h("p", { className: "market-note", key: "lead" }, match.lost
-        ? `Someone found a ${title} that looks like your lost ${match.lost.title}.`
-        : `Someone found a ${title}, and it may be yours.`),
+        ? `Someone found ${withArticle(title)} that looks like your lost ${match.lost.title}.`
+        : `Someone found ${withArticle(title)}, and it may be yours.`),
       h("div", { className: "market-detail", key: "detail" }, [
         h(Gallery, { key: "gallery", pending: post.photoPending, photos: post.photos, title }),
         h("div", { className: "lf-match-copy", key: "copy" }, [
@@ -140,7 +140,7 @@ export function ClaimView({ id }) {
       h("span", { className: "market-kicker", key: "kicker" }, finder ? "YOU FOUND IT" : "YOUR DISC"),
       h("h2", { className: "market-title", key: "title" }, "Returning the " + title),
       h(Steps, { key: "steps", status: claim.status }),
-      h("p", { className: "market-pending lf-claim-status", key: "status" }, CLAIM_STATUS_LABELS[claim.status] || claim.status),
+      h("p", { className: "market-pending lf-claim-status", key: "claim-status" }, CLAIM_STATUS_LABELS[claim.status] || claim.status),
       h("p", { className: "market-deal-who", key: "other" }, h(PersonLine, { person: other, prefix: finder ? "Owner:" : "Finder:" })),
       claim.message ? h("blockquote", { className: "market-quote", key: "msg" }, claim.message) : null,
       post.id ? h("a", { className: "market-link", href: postHref(post.id), key: "post" }, "See the post") : null,

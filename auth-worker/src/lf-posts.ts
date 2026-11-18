@@ -247,6 +247,20 @@ export async function turnInPost(c: MarketCtx, id: number): Promise<Response> {
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
 }
 
+/** The poster takes a photo down (e.g. writing the AI missed). Both copies leave R2 at once. */
+export async function removePostPhoto(c: MarketCtx, id: number, photoId: number): Promise<Response> {
+  const row = await ownPost(c, id);
+  if (row instanceof Response) return row;
+  const photo = await c.env.DB.prepare("SELECT original_key, public_key, redaction FROM lf_photos WHERE id = ? AND post_id = ?")
+    .bind(photoId, id).first<{ original_key: string | null; public_key: string | null; redaction: string }>();
+  if (!photo || photo.redaction === "removed") return fail(c, 404, "not_found");
+  await c.env.DB.prepare("UPDATE lf_photos SET redaction = 'removed', original_key = NULL, public_key = NULL WHERE id = ? AND post_id = ?").bind(photoId, id).run();
+  if (photo.original_key) await c.env.PHOTOS?.delete(photo.original_key);
+  if (photo.public_key) await c.env.PHOTOS?.delete(photo.public_key);
+  await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "photo_remove", note: "photo " + photoId });
+  return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
+}
+
 /** Only the redacted public copy is ever served, and only while its post or celebration is publicly visible. */
 export async function servePublicPhoto(c: MarketCtx, photoId: number): Promise<Response> {
   const row = await c.env.DB.prepare(

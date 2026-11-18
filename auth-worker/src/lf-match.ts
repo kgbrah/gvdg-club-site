@@ -211,5 +211,7 @@ export const REASON_LABELS: Record<string, string> = {
 
 /** Public-safe reason words (negative signals are left out). */
 export function reasonLabels(codes: readonly string[]): string[] {
-  return codes.map((code) => REASON_LABELS[code]).filter((label): label is string => Boolean(label));
+  // One line for the name: "matches" already covers "matches a club member".
+  const shown = codes.includes("ink_name") ? codes.filter((code) => code !== "member_name") : codes;
+  return shown.map((code) => REASON_LABELS[code]).filter((label): label is string => Boolean(label));
 }

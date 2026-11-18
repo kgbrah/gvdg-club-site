@@ -10,7 +10,7 @@ import { KarmaBadge, LfLoad, LfPhoto, LfReportControl, PersonLine, useLfConfig, 
 const h = React.createElement;
 
 export function CelebrationCard({ celebration, viewer }) {
-  const who = celebration.role === "owner" ? "got their disc back" : "returned a disc";
+  const who = celebration.role === "owner" ? "Got their disc back" : "Returned a disc";
   return h("article", { className: "product-card market-card lf-celebration", "data-lf-celebration": celebration.id }, [
     h("div", { className: "market-card-photo", key: "photo" }, h(LfPhoto, { alt: celebration.caption || "Celebration photo",
       pending: !celebration.photos?.length && celebration.photoPending > 0, photo: celebration.photos?.[0] })),

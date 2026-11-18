@@ -148,7 +148,10 @@ export async function applyExtraction(env: Env, postId: number): Promise<void> {
       try { colors = JSON.parse(str(read, "colors")) as string[]; } catch { colors = []; }
       if (colors.length) break;
     }
-    if (colors.length) { next.color = colors.slice(0, 2).join(" / "); fields.add("color"); }
+    if (colors.length) {
+      next.color = colors.slice(0, 2).map((color) => color.charAt(0).toUpperCase() + color.slice(1)).join(" / ");
+      fields.add("color");
+    }
   }
   if (!Object.keys(next).length) return;
   await env.DB.prepare(

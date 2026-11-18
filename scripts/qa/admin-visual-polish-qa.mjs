@@ -107,6 +107,7 @@ const probes = {
   "data-archive": "[data-react-admin-data-archive-export-controls]",
   "review-queue": ".admin-community-review",
   marketplace: "[data-admin-marketplace='ready'] .admin-market-report",
+  "lost-found": "[data-admin-lost-found='ready'] [data-admin-lf-report]",
 };
 assert.deepEqual(Object.keys(probes).sort(), ADMIN_DESTINATIONS.map((item) => item.key).sort());
 
@@ -126,6 +127,25 @@ const marketOverview = {
   hidden: { listings: [], wanted: [{ id: 3, title: "Discraft Z Zone", poster: { key: "t_g", name: "Pat Guest", kind: "guest" } }] },
   suspensions: [{ id: 1, trader: { key: "t_x", name: "Sam Spammer", kind: "guest" }, reason: "Repeated spam WANTED posts", createdAt: date, by: "Taylor Morgan" }],
   log: [{ id: 9, action: "hide", targetKind: "wanted", targetId: 3, reason: "Duplicate post", by: "Taylor Morgan", createdAt: date }],
+};
+// Lost & Found moderation: a report on a celebration, a photo the AI couldn't check, an AI suggestion and a
+// return with karma, with long names to stress 320 px.
+const lostFoundOverview = {
+  counts: { openReports: 1, failedPhotos: 1, waitingPhotos: 0 },
+  reports: [{ id: 6, kind: "celebration", targetId: 2, reason: "privacy", details: "The photo might show a phone number.", createdAt: date,
+    reporter: { key: "t_r", name: "Avery Brooks", kind: "member", karma: 0, returned: 0 },
+    target: { title: "Celebration", status: "shown", hidden: false, text: "Back in the bag where it belongs!", postId: 9,
+      owner: { key: "t_f", name: "Casey Guest-Longname", kind: "guest", karma: 30, returned: 3 } } }],
+  photos: [{ id: 14, postId: 9, celebrationId: null, title: "Found: Innova Champion Firebird (Bottom Stamp)", status: "failed", attempts: 6,
+    lastError: "ai_unsure", nextAttemptAt: date, createdAt: date }],
+  matches: [{ id: 3, score: 88, status: "notified", aiVerdict: "same", codes: ["ink_phone", "mold"], reasons: ["The phone number on the disc matches", "Same mold"],
+    createdAt: date, found: { id: 9, title: "Innova Champion Firebird", course: course.name }, lost: { id: 4, title: "Innova Champion Firebird", course: course.name },
+    finder: { key: "t_f", name: "Casey Guest-Longname", kind: "guest", karma: 30, returned: 3 }, candidate: { key: "t_o", name: "Jordan Reyes", kind: "member", karma: 0, returned: 0 },
+    via: "lost_post" }],
+  hidden: { posts: [], celebrations: [] },
+  karma: [{ claimId: 5, finder: { key: "t_f", name: "Casey Guest-Longname", kind: "guest", karma: 30, returned: 3 }, owner: { key: "t_o", name: "Jordan Reyes", kind: "member" },
+    createdAt: date, disc: "Innova Champion Firebird", reversed: false, points: 10 }],
+  log: [{ id: 2, action: "karma_reverse", targetKind: "claim", targetId: "4", reason: "Same household", by: "Taylor Morgan", createdAt: date }],
 };
 const errors = [];
 const warnings = [];
@@ -168,6 +188,8 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/course-health/7/tasks") return { tasks: [task] };
   if (path === "/admin/market/summary") return { openReports: 1 };
   if (path === "/admin/market/overview") return marketOverview;
+  if (path === "/admin/lost-found/summary") return { openReports: 1, failedPhotos: 1, waitingPhotos: 0 };
+  if (path === "/admin/lost-found/overview") return lostFoundOverview;
   if (path === "/admin/community/reviews") return { queue: reviewPending ? [review] : [], more: false };
   if (path === "/admin/community/reviews/3" && method === "PUT") { reviewPending = false; return { ok: true }; }
   if (path === "/community/courses") return { courses: [{ ...course, difficulty: "beginner", amenities: {}, notes: "", revision: 1 }] };

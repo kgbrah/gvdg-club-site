@@ -52,6 +52,10 @@ jobs:
           node scripts/qa/pwa-update-browser-qa.mjs
           node scripts/qa/pwa-waiting-worker-browser-qa.mjs
           node scripts/qa/field-test-browser-qa.mjs
+      - name: Install Worker dependencies (Lost & Found QA runs the real Worker in-process)
+        run: npm ci --prefix auth-worker
+      - name: Verify Lost & Found (redaction, matching, returns, karma) against the real Worker
+        run: node scripts/qa/lost-found-browser-qa.mjs
 
   worker:
     runs-on: ubuntu-24.04

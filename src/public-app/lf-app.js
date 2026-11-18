@@ -4,13 +4,12 @@ import React from "react";
 
 import { LF_TAB_COPY, LF_TABS, parseLfRoute } from "../shared/lost-found-model.js";
 import { clearGuest } from "./market-api.js";
-import { GuestBadge } from "./market-ui.js";
 import { ClaimView, CelebrateForm, MatchView } from "./lf-claim.js";
 import { NewPost } from "./lf-form.js";
 import { PostList } from "./lf-list.js";
 import { MyLostFound } from "./lf-mine.js";
 import { PostDetail } from "./lf-post.js";
-import { useLfConfig } from "./lf-ui.js";
+import { GuestBadge, useLfConfig } from "./lf-ui.js";
 import { PersonProfile, ReturnedWall } from "./lf-wall.js";
 
 const h = React.createElement;

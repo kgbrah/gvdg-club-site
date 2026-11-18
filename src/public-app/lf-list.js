@@ -19,7 +19,7 @@ export function PostCard({ post, showPoster = true }) {
       h("span", { className: "market-kicker", key: "kind" }, post.kind === "lost" ? "LOST" : "FOUND"),
       h("a", { className: "product-name market-card-title", href, key: "name" }, title),
       h("div", { className: "product-meta", key: "meta" }, postMeta(post)),
-      post.kind === "found" ? h("div", { className: "product-meta", key: "where" }, holdingText(post)) : null,
+      post.kind === "found" && post.status !== "returned" ? h("div", { className: "product-meta", key: "where" }, holdingText(post)) : null,
       post.kind === "lost" && post.rewardNote ? h("div", { className: "product-meta lf-reward", key: "reward" }, "Reward: " + post.rewardNote) : null,
       showPoster && post.poster ? h("div", { className: "product-meta market-card-seller", key: "poster" }, h(PersonLine, { link: false, person: post.poster })) : null,
     ]),
@@ -88,7 +88,7 @@ export function PostList({ kind, route }) {
     h("div", { "aria-label": found ? "Found disc filters" : "Lost disc filters", className: "filters shop-filters market-filters lf-filters", key: "filters" }, [
       h("div", { className: "shop-search-row", key: "row" }, [
         h("label", { className: "public-sr-only", htmlFor: "lfSearch", key: "search-label" }, found ? "Search found discs" : "Search lost discs"),
-        h("input", { id: "lfSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value), placeholder: "Brand, mold, colour or course", type: "search", value: q }),
+        h("input", { id: "lfSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value), placeholder: "Search discs", type: "search", value: q }),
         h("label", { className: "public-sr-only", htmlFor: "lfCourse", key: "course-label" }, "Course"),
         h("select", { id: "lfCourse", key: "course", onChange: (event) => setCourse(event.target.value), value: course }, [
           h("option", { key: "any", value: "" }, "Any course"),

@@ -24,7 +24,7 @@ self.GVDG_MEMBER_CHUNKS = [
   "members-app/chunks/player-identity-CBvQ4o3L.js",
   "members-app/chunks/practice-panels-B1Uejbof.js",
   "members-app/chunks/registration-panel-C_N-OlFR.js",
-  "members-app/chunks/returned-home-card-DxlBYp82.js",
+  "members-app/chunks/returned-home-card-K2R7PRF8.js",
   "members-app/chunks/search-BNbxuwAe.js",
   "members-app/chunks/season-page-DksUGA3S.js",
   "members-app/chunks/tee-signs-panel-Dono6U-n.js",

@@ -11,7 +11,7 @@
 import type { Env } from "./env.js";
 import { handleLostFoundAdmin } from "./lf-admin.js";
 import { acceptMatch, claimAction, claimPost, declineMatch, getClaim, getMatch, postClaimMessage } from "./lf-claims.js";
-import { browsePosts, closePost, createPost, getPost, servePublicPhoto, turnInPost } from "./lf-posts.js";
+import { browsePosts, closePost, createPost, getPost, removePostPhoto, servePublicPhoto, turnInPost } from "./lf-posts.js";
 import { createCelebration, fileReport, finderProfile, myLostFound, returnedWall } from "./lf-social.js";
 import { startGuest, verifyGuest } from "./market-guest.js";
 import { fail, idOf, ok, type MarketCtx, type WaitCtx } from "./market-http.js";
@@ -67,6 +67,10 @@ export async function handleLostFound(
       if (b === "close") return closePost(c, id);
       if (b === "turn-in") return turnInPost(c, id);
       if (b === "claim") return claimPost(c, id);
+    }
+    if (seg.length === 6 && b === "photos" && seg[5] === "remove" && method === "POST") {
+      const photoId = idOf(seg[4]);
+      return photoId ? removePostPhoto(c, id, photoId) : fail(c, 404, "not_found");
     }
     return fail(c, 404, "not_found");
   }

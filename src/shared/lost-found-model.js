@@ -84,6 +84,12 @@ export function aiFieldsNote(fields) {
   return list.charAt(0).toUpperCase() + list.slice(1) + " read from the photo";
 }
 
+/** "a Destroyer" / "an Innova Star Destroyer". */
+export function withArticle(text) {
+  const value = String(text || "").trim();
+  return (/^[aeiou]/i.test(value) ? "an " : "a ") + value;
+}
+
 export function shortDay(value) {
   const text = String(value || "");
   const iso = /^\d{4}-\d{2}-\d{2}$/.test(text) ? text + "T12:00:00Z" : /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(text) ? text.replace(" ", "T") + "Z" : text;
