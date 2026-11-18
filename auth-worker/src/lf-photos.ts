@@ -102,12 +102,18 @@ export async function replacePhoto(c: MarketCtx, photoId: number): Promise<Respo
   if (!image) return fail(c, 400, "invalid_photo");
   const blocked = await limited(c, "lfreplace:" + c.actor!.id, 12, 3600);
   if (blocked) return blocked;
-  const taken = await c.env.DB.prepare("UPDATE lf_photos SET status = 'removed', photo_key = NULL WHERE id = ? AND status = 'public'").bind(photoId).run();
-  if (!changed(taken)) return fail(c, 404, "not_found");
-  if (photo.photo_key) await c.env.PHOTOS.delete(photo.photo_key);
+  // The new photo is stored first, so a failure part-way never leaves the post without its photo.
   const owner = photo.post_id != null ? { ownerId: c.actor!.id, postId: photo.post_id } : { ownerId: c.actor!.id, celebrationId: photo.celebration_id! };
-  const { ids } = await storePhotos(c, owner, [image], photo.sort_order);
+  const { keys, ids } = await storePhotos(c, owner, [image], photo.sort_order);
   const newId = ids[0]!;
+  const taken = await c.env.DB.prepare("UPDATE lf_photos SET status = 'removed', photo_key = NULL WHERE id = ? AND status = 'public'").bind(photoId).run();
+  if (!changed(taken)) {
+    // Someone (or another tab) took the old photo down meanwhile: undo the new one.
+    await c.env.DB.prepare("UPDATE lf_photos SET status = 'removed', photo_key = NULL WHERE id = ?").bind(newId).run();
+    await Promise.all(keys.map((key) => c.env.PHOTOS.delete(key).catch(() => {})));
+    return fail(c, 404, "not_found");
+  }
+  if (photo.photo_key) await c.env.PHOTOS.delete(photo.photo_key);
   await logClaim(c.env, { postId: photo.post_id, actorId: c.actor!.id, action: "photo_replace", note: `photo ${photoId} -> ${newId}` });
   const job = photo.post_id != null ? processPost(c.env, c.ctx, photo.post_id) : processCelebration(c.env, photo.celebration_id!);
   try { c.ctx?.waitUntil?.(job); } catch { /* settles on its own */ }
