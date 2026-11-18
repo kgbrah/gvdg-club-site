@@ -19,6 +19,7 @@
     "audit": "npm audit --audit-level=moderate"
   },
   "dependencies": {
+    "@cf-wasm/photon": "0.3.7",
     "@simplewebauthn/server": "^13.3.3",
     "jose": "^5.9.6"
   },

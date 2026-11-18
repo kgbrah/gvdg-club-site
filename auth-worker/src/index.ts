@@ -49,6 +49,8 @@ import { handlePhoneActivityRoute } from "./phone-activity-routes.js";
 import { handleMemberArchiveRoute } from "./member-archive-routes.js";
 import { handleMarket } from "./market-routes.js";
 import { finalizeWithdrawals } from "./market-sweep.js";
+import { handleLostFound } from "./lf-routes.js";
+import { runLostFoundTick } from "./lf-process.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
 /**
@@ -140,6 +142,8 @@ export default {
 
       const market = await handleMarket(request, env, origin, pathname, method, ctx);
       if (market) return market;
+      const lostFound = await handleLostFound(request, env, origin, pathname, method, ctx);
+      if (lostFound) return lostFound;
 
       const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;
@@ -167,6 +171,14 @@ export default {
               if (sweep.finalized || sweep.photosDeleted) console.log(JSON.stringify({ message: "market_withdrawals_finalized", ...sweep }));
             } catch (error) {
               console.error(JSON.stringify({ message: "market_sweep_failed", error: error instanceof Error ? error.stack : String(error) }));
+            }
+            // Lost & Found: retry photos still waiting for a trusted AI read (with backoff), expire 90-day posts,
+            // purge photos of finished posts. Isolated from the import.
+            try {
+              const lf = await runLostFoundTick(env);
+              if (lf.photos || lf.expired || lf.purged) console.log(JSON.stringify({ message: "lost_found_tick", ...lf }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "lost_found_tick_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
             const result = await runUdiscLayoutImportTick(env);
             console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));

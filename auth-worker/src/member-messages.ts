@@ -7,6 +7,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyMembers } from "./member-push.js";
 import { getMember, listMembers } from "./roster.js";
 import { waitingCount } from "./market-store.js";
+import { lostFoundSummary } from "./lf-social.js";
 
 const MAX_BODY = 500;
 
@@ -198,7 +199,9 @@ export async function handleMemberMessages(
   if (pathname === "/me/messages/summary" && method === "GET") {
     // Marketplace "deals waiting on you" rides along so Home needs no extra request.
     const market = await waitingCount(env, self).catch(() => 0);
-    return json({ ...(await counts(env, self)), market }, 200, origin);
+    // Lost & Found rides along too: what waits on this member and the latest returns for the Home card.
+    const lostFound = await lostFoundSummary(env, self).catch(() => ({ waiting: 0, recent: [] }));
+    return json({ ...(await counts(env, self)), market, lostFound }, 200, origin);
   }
 
   if (pathname === "/me/notices" && method === "GET") {

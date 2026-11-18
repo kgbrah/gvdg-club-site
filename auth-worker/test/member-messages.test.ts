@@ -98,7 +98,7 @@ describe("member messages and notices", () => {
     expect(JSON.stringify(adaInbox.data)).not.toContain("secret-pin");
 
     const boSummary = await call(env, "/me/messages/summary", "GET", bo);
-    expect(boSummary.data).toEqual({ unread: 1, unseen: 0, market: 0 });
+    expect(boSummary.data).toEqual({ unread: 1, unseen: 0, market: 0, lostFound: { waiting: 0, recent: [] } });
     const notice = db.raw.prepare("SELECT member_id, kind, title FROM member_notices").all();
     expect(notice).toEqual([{ member_id: "m_bo", kind: "message", title: "Ada Lovelace" }]);
 
@@ -150,7 +150,7 @@ describe("member messages and notices", () => {
     });
     const bo = await token("m_bo");
     const summary = await call(env, "/me/messages/summary", "GET", bo);
-    expect(summary.data).toEqual({ unread: 0, unseen: 1, market: 0 });
+    expect(summary.data).toEqual({ unread: 0, unseen: 1, market: 0, lostFound: { waiting: 0, recent: [] } });
     const listed = await call(env, "/me/notices", "GET", bo);
     expect(listed.data.notices).toHaveLength(1);
     expect(listed.data.notices[0].kind).toBe("bag-tag");
