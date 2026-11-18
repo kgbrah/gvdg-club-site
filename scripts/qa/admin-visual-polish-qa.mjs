@@ -106,6 +106,7 @@ const probes = {
   meetings: "[data-react-admin-meeting-form]",
   "data-archive": "[data-react-admin-data-archive-export-controls]",
   "review-queue": ".admin-community-review",
+  marketplace: "[data-admin-marketplace='ready'] .admin-market-report",
 };
 assert.deepEqual(Object.keys(probes).sort(), ADMIN_DESTINATIONS.map((item) => item.key).sort());
 
@@ -115,6 +116,17 @@ let orderStatus = "submitted";
 let checkedIn = false;
 let leagueChallengeOpen = true;
 let reviewPending = true;
+// Marketplace moderation: one open report against a listing whose long title and seller name stress 320 px.
+const marketOverview = {
+  counts: { openReports: 1 },
+  reports: [{ id: 4, kind: "listing", targetId: 12, reason: "scam", details: "Asked me to pay with a gift card before meeting.", status: "open", createdAt: date,
+    reporter: { key: "t_r", name: "Avery Brooks", kind: "member" },
+    target: { title: "Innova Star Destroyer (Bottom Stamp)", status: "active", hidden: false, text: "Small ink on the back, no rim dents",
+      owner: { key: "t_s", name: "Casey Guest-Longname", kind: "member", suspended: false } } }],
+  hidden: { listings: [], wanted: [{ id: 3, title: "Discraft Z Zone", poster: { key: "t_g", name: "Pat Guest", kind: "guest" } }] },
+  suspensions: [{ id: 1, trader: { key: "t_x", name: "Sam Spammer", kind: "guest" }, reason: "Repeated spam WANTED posts", createdAt: date, by: "Taylor Morgan" }],
+  log: [{ id: 9, action: "hide", targetKind: "wanted", targetId: 3, reason: "Duplicate post", by: "Taylor Morgan", createdAt: date }],
+};
 const errors = [];
 const warnings = [];
 function fixture(path, method, query, authorization, body) {
@@ -154,6 +166,8 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/course-health") return { courses: [course] };
   if (path === "/admin/course-health/7") return courseHealth;
   if (path === "/admin/course-health/7/tasks") return { tasks: [task] };
+  if (path === "/admin/market/summary") return { openReports: 1 };
+  if (path === "/admin/market/overview") return marketOverview;
   if (path === "/admin/community/reviews") return { queue: reviewPending ? [review] : [], more: false };
   if (path === "/admin/community/reviews/3" && method === "PUT") { reviewPending = false; return { ok: true }; }
   if (path === "/community/courses") return { courses: [{ ...course, difficulty: "beginner", amenities: {}, notes: "", revision: 1 }] };

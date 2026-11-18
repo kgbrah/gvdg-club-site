@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, ChevronRight, CircleHelp, ClipboardList, ExternalLink, FlaskConical, Globe, KeyRound, Mail, MessageSquare, Palette,
+import { Camera, ChevronRight, CircleHelp, ClipboardList, Disc3, ExternalLink, FlaskConical, Globe, KeyRound, Mail, MessageSquare, Palette,
   ShieldCheck, Smartphone, Tag, Trophy, UserRound, Users, Wallet } from "lucide-react";
 
 import { ToolFinder } from "../shared/tool-finder.js";
@@ -100,6 +100,7 @@ export function MemberMorePage() {
       ]),
       h(MemberLinkSection, { title: "Club sites", key: "sites" }, [
         h(MemberLinkRow, { title: "Pro shop", icon: Tag, href: "pro-shop.html", key: "shop" }),
+        h(MemberLinkRow, { tab: "marketplace", title: "Marketplace", detail: "Buy, sell and trade used discs", icon: Disc3, key: "marketplace" }),
         h(MemberLinkRow, { title: "Club website", icon: Globe, href: "index.html", key: "home" }),
       ]),
     ]),

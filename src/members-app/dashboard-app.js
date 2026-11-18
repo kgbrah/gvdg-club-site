@@ -34,6 +34,7 @@ const MemberBoardPanel = lazyPanel(() => import("./board-panel.js"), "MemberBoar
 const MemberTeeSignsPanel = lazyPanel(() => import("./tee-signs-panel.js"), "MemberTeeSignsPanel");
 const MemberClubPanel = lazyPanel(() => import("./club-panel.js"), "MemberClubPanel");
 const MemberMessagesPanel = lazyPanel(() => import("./messages-panel.js"), "MemberMessagesPanel");
+const MemberMarketplacePage = lazyPanel(() => import("./marketplace-panel.js"), "MemberMarketplacePage");
 const ActiveStandingsPanel = lazyPanel(() => import("./active-standings-panel.js"), "ActiveStandingsPanel");
 const DoublesLeaguePanel = lazyPanel(() => import("./doubles-league-panel.js"), "DoublesLeaguePanel");
 const MemberCommunityPage = lazyPanel(() => import("./community-panel.js"), "MemberCommunityPage");
@@ -103,6 +104,7 @@ export function MemberDashboardApp() {
     tab === "field-test" ? h(MemberFieldTestPage, { key: "field-test" }) : null,
     tab === "tags" && token ? h(BagTagPanel, { key: "tags", token }) : null,
     tab === "messages" && token ? h(MemberMessagesPanel, { key: "messages", token }) : null,
+    tab === "marketplace" && token ? h(MemberMarketplacePage, { key: "marketplace", token }) : null,
     tab === "standings" ? h(ActiveStandingsPanel, { key: "standings", standalone: true }) : null,
     tab === "leagues" ? h(React.Fragment, { key: "leagues" }, [
       h(LeagueSchedule, { key: "current" }),

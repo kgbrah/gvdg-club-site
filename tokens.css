@@ -677,7 +677,8 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
     body.player-theme-glass[data-public-polish] :is(
       .events-intro, .ryder-intro, .shop-head > :first-child, .construction-card, .page-hero,
       .event-card, .detail-card, .status-box, .register-card, .league-card, .fundraiser-card, .live-chat,
-      .wallet-panel, .cart, .product-card, .my-orders-panel, .shop-filters
+      .wallet-panel, .cart, .product-card, .my-orders-panel, .shop-filters, .market-panel,
+      .market-root > section > :is(.market-note, .market-identity)
     ) {
       background: var(--glass-fill);
       border-color: var(--glass-line);

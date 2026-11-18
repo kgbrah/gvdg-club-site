@@ -158,6 +158,7 @@ register, live score/card writes. **Admin-gated**: all `/admin/*` + event live-s
 | Live scoring | `live.ts` (the DO) + `live-{state,scoring,snapshot,finalize,format,pairs,consensus,target-consensus,types}.ts`, `scoring.ts`, `matchplay-scoring.ts`, `score-breakdown.ts` | consensus model — see below |
 | Courses / imports | `layouts.ts`, `distance.ts`, `assign.ts`, `imports.ts` + `imports/{fetch,csv,events,udisc}.ts`, `tee-sign-routes.ts` | SSRF-guarded imports; tee-signs → R2 |
 | Pro-shop / wallet | `shop-db.ts`, `club-shop-routes.ts`, `club-admin-shop.ts`, `order-notify.ts`, `wallet-idempotency.ts` | wallet = append-only ledger |
+| Used-disc marketplace | `market-routes.ts` → `market-{listings,deals,wanted,guest,admin,store,input,photos,notify,crypto,sweep,http}.ts` | `/market/*` + `/admin/market/*`; tables from `0063` |
 | Ratings | `ratings.ts` (display), `rating-engine.ts` + `rating-store.ts` + `ratings-recompute*.ts` (PDGA SSA), `pdga.ts` | **two** distinct systems |
 | Integrations | `assistant.ts`+`assistant-route.ts`, `vision.ts`, `photos.ts`, `weather.ts`, `feeds.ts`, `register-notify.ts` | AI, OCR, weather, email, Google-Sheet feeds |
 
@@ -211,6 +212,19 @@ freeform notes.
   `INSERT…SELECT…WHERE SUM+amount>=0` (`wallet-idempotency.ts`) so concurrent debits can't overdraw.
   Three checkout paths: `paypal.me` redirect (manual reconcile, no stock decrement), PayPal Orders v2
   auto-capture, and store-credit debit; only the latter two decrement stock and email.
+- **Used-disc marketplace** (Pro Shop → Marketplace / WANTED / My marketplace; lazy chunk
+  `public-app/chunks/market-app-*.js`). Anyone browses; members **and email-verified guests** buy, propose
+  trades, post WANTED, leave feedback and report; **only members list** (and must first save a buyer-alert
+  email, `seller_email_required`). Guest identity = 6-digit emailed code (hashed, 10 min, single use, rate-
+  limited) → an `mkt` JWT that `verifySession` **rejects** everywhere else; guest emails are stored only as an
+  HMAC + AES-GCM copy (keys derived from `JWT_SECRET`). Public payloads use opaque `market_traders.trader_key`,
+  never member ids or emails. Listing state is compare-and-set: `active → pending` (one buyer; unique partial
+  index) `→ sold|traded`, or released/cancelled back to active; `withdrawn` can be **relisted for 24 h**, then
+  the */15 cron (`finalizeWithdrawals`) makes it final and deletes the R2 photos. Pay links (paypal.me / cash.app)
+  are built server-side from validated handles and shown only to members and verified guests; there is no
+  in-app payment. Feedback: once per party per completed deal, 60-day window, one edit in 7 days, one reply.
+  Admin moderation actions all require a logged reason. Root QA: `scripts/qa/marketplace-browser-qa.mjs` runs
+  the real Worker in-process.
 - **PayPal** (`payments.ts`) — server-trust: amount always priced server-side, capture trusted only when
   `order.status==COMPLETED && capture.status==COMPLETED && USD && amount>=owed`; registration reserves the
   slot *before* charging and releases on failure.

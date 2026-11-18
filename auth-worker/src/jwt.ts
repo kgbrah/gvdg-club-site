@@ -49,11 +49,36 @@ export async function signOpenPlaySession(
     .sign(keyOf(secret));
 }
 
-/** Verify a session token. Returns the claims, or null on any failure (bad sig, expired, malformed). */
+/** Sign a guest marketplace token (a verified email, no club account). `mkt: true` makes verifySession
+ *  reject it, so it can never act as a member session on any other route. */
+export async function signMarketGuestSession(sub: string, secret: string, ttlSeconds: number): Promise<string> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  return new SignJWT({ mkt: true })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(sub)
+    .setIssuedAt(nowSec)
+    .setExpirationTime(nowSec + ttlSeconds)
+    .sign(keyOf(secret));
+}
+
+/** Verify a guest marketplace token. Returns the guest owner id ("mg_<n>") or null. */
+export async function verifyMarketGuestSession(token: string, secret: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, keyOf(secret), { algorithms: ["HS256"] });
+    if (payload.mkt !== true || typeof payload.sub !== "string" || !/^mg_\d{1,12}$/.test(payload.sub)) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
+/** Verify a session token. Returns the claims, or null on any failure (bad sig, expired, malformed).
+ *  Guest marketplace tokens (`mkt`) are never sessions. */
 export async function verifySession(token: string, secret: string): Promise<SessionClaims | null> {
   try {
     const { payload } = await jwtVerify(token, keyOf(secret), { algorithms: ["HS256"] });
     if (typeof payload.sub !== "string") return null;
+    if (payload.mkt === true) return null;
     const name = typeof payload.name === "string" ? payload.name.trim() : "";
     return {
       sub: payload.sub,

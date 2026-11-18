@@ -47,6 +47,8 @@ import { handleCommunityRoute } from "./community-routes.js";
 import { handleOfflineRoundRoute } from "./offline-round-routes.js";
 import { handlePhoneActivityRoute } from "./phone-activity-routes.js";
 import { handleMemberArchiveRoute } from "./member-archive-routes.js";
+import { handleMarket } from "./market-routes.js";
+import { finalizeWithdrawals } from "./market-sweep.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
 /**
@@ -136,6 +138,9 @@ export default {
         if (membership) return membership;
       }
 
+      const market = await handleMarket(request, env, origin, pathname, method, ctx);
+      if (market) return market;
+
       const club = await clubApi(request, env, origin, pathname, method, ctx);
       if (club) return club;
 
@@ -156,6 +161,13 @@ export default {
       (async () => {
         try {
           if (isUdiscLayoutCron(controller.cron)) {
+            // Marketplace: make 24-hour-old withdrawals final and delete their photos. Isolated from the import.
+            try {
+              const sweep = await finalizeWithdrawals(env);
+              if (sweep.finalized || sweep.photosDeleted) console.log(JSON.stringify({ message: "market_withdrawals_finalized", ...sweep }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "market_sweep_failed", error: error instanceof Error ? error.stack : String(error) }));
+            }
             const result = await runUdiscLayoutImportTick(env);
             console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
             return;

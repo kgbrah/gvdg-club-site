@@ -7,6 +7,72 @@ import { SITE_DONATE_URL } from "../shared/site-nav.js";
 
 const h = React.createElement;
 
+// The marketplace (listings, WANTED, My marketplace) is its own chunk, fetched the first time one of those
+// sections opens. The club shop never loads it.
+const loadMarket = () => import("./market-app.js");
+const MarketplaceView = React.lazy(() => loadMarket().then((module) => ({ default: module.MarketplaceView })));
+const MarketIdentityPanel = React.lazy(() => loadMarket().then((module) => ({ default: module.MarketIdentityPanel })));
+
+const SHOP_SECTIONS = [
+  ["shop", "#shop", "Club shop"],
+  ["market", "#market", "Marketplace"],
+  ["wanted", "#wanted", "WANTED"],
+  ["mine", "#my-market", "My marketplace"],
+];
+
+const SECTION_COPY = {
+  shop: "Browse club discs and gear, then spend store credit earned from events or check out with PayPal.",
+  market: "Buy, sell and trade used discs with club members. Pay sellers directly with PayPal, Cash App or Zelle.",
+  wanted: "Looking for a certain disc? Post a WANTED and let sellers come to you.",
+  mine: "Your listings, deals, feedback and payment settings.",
+};
+
+export function shopSection(hash) {
+  const head = String(hash || "").replace(/^#/, "").split(/[/?]/, 1)[0];
+  if (head === "market") return "market";
+  if (head === "wanted") return "wanted";
+  if (head === "my-market") return "mine";
+  return "shop";
+}
+
+function useLocationHash() {
+  const [hash, setHash] = React.useState(() => window.location.hash);
+  React.useEffect(() => {
+    const update = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
+  return hash;
+}
+
+function ShopSections({ section }) {
+  return h("nav", { "aria-label": "Pro shop sections", className: "shop-sections" }, SHOP_SECTIONS.map(([key, href, label]) => h("a", {
+    "aria-current": key === section ? "page" : undefined,
+    className: "shop-section-link" + (key === section ? " on" : ""),
+    href,
+    key,
+  }, label)));
+}
+
+class MarketBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return h("div", { className: "public-state", role: "alert" }, [
+      h("p", { key: "message" }, "The marketplace didn't load. Check your connection and try again."),
+      h("button", { className: "shop-filter-reset", key: "retry", onClick: () => window.location.reload(), type: "button" }, "Try again"),
+    ]);
+  }
+}
+
 const ORDER_LABELS = {
   submitted: "Order received",
   processing: "Being prepared",
@@ -335,6 +401,9 @@ function PayPalButtons({ config, createOrder, onApprove, onLoadError, onCancel, 
 }
 
 export function ProShopApp() {
+  const hash = useLocationHash();
+  const section = shopSection(hash);
+  const marketSection = section !== "shop";
   const [apiBase] = React.useState(authBase);
   const [token] = React.useState(currentToken);
   const [products, setProducts] = React.useState([]);
@@ -691,15 +760,36 @@ export function ProShopApp() {
     notify("PayPal payment could not be confirmed. Please contact the club if you were charged.", "error");
   }, [api, loadProducts, loadWallet, notify, token]);
 
-  return h("main", { "data-react-pro-shop": productsStatus }, [
-    h("div", { className: "shop-head", key: "head" }, [
-      h("div", { key: "copy" }, [
-        h("h1", { className: "page-title", key: "title" }, "Pro Shop"),
-        h("p", { className: "page-subtitle", key: "subtitle" },
-          "Browse club discs and gear, then spend store credit earned from events or check out with PayPal."),
-      ]),
-      h(WalletPanel, { key: "wallet", wallet }),
+  React.useEffect(() => {
+    if (!marketSection) return;
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [hash, marketSection]);
+
+  const head = h("div", { className: "shop-head", key: "head" }, [
+    h("div", { key: "copy" }, [
+      h("h1", { className: "page-title", key: "title" }, "Pro Shop"),
+      h("p", { className: "page-subtitle", key: "subtitle" }, SECTION_COPY[section]),
     ]),
+    marketSection
+      ? h(MarketBoundary, { key: "identity" }, h(React.Suspense, {
+        fallback: h("aside", { className: "wallet-panel", "aria-busy": "true" }, h("div", { className: "wallet-label" }, "Marketplace")),
+      }, h(MarketIdentityPanel)))
+      : h(WalletPanel, { key: "wallet", wallet }),
+  ]);
+
+  if (marketSection) {
+    return h("main", { "data-react-pro-shop": productsStatus, "data-shop-section": section }, [
+      head,
+      h(ShopSections, { key: "sections", section }),
+      h(MarketBoundary, { key: "market" }, h(React.Suspense, {
+        fallback: h("p", { className: "public-state", role: "status" }, "Loading the marketplace…"),
+      }, h(MarketplaceView, { hash }))),
+    ]);
+  }
+
+  return h("main", { "data-react-pro-shop": productsStatus, "data-shop-section": section }, [
+    head,
+    h(ShopSections, { key: "sections", section }),
     h(MyOrders, { key: "orders", orders: wallet.orders }),
     h("div", { className: "shop-shell", key: "shell" }, [
       h("section", { key: "products" }, [

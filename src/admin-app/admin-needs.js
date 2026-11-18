@@ -10,6 +10,7 @@ const EMPTY_NEEDS = {
   bagChallenges: 0,
   applications: 0,
   teeSigns: 0,
+  marketReports: 0,
 };
 
 const MORE_TABS = new Set(["bag-tags", "members", "tee-signs"]);
@@ -38,6 +39,7 @@ export function publishAdminNeeds(partial) {
     bagChallenges: countOf(source.bagChallenges),
     applications: countOf(source.applications),
     teeSigns: countOf(source.teeSigns),
+    marketReports: countOf(source.marketReports),
   };
   window.dispatchEvent(new CustomEvent("gvdg:admin-needs", { detail: adminNeedsState }));
   return adminNeedsState;
@@ -49,6 +51,7 @@ export function adminNeedsItems(source) {
   const bagChallenges = countOf(input.bagChallenges);
   const applications = countOf(input.applications);
   const teeSigns = countOf(input.teeSigns);
+  const marketReports = countOf(input.marketReports);
   const orders = countOf(input.orders);
   const shelf = countOf(input.shelf);
   const shelfName = text(input.shelfName);
@@ -87,6 +90,15 @@ export function adminNeedsItems(source) {
       count: teeSigns,
       label: teeSigns === 1 ? "Tee sign to review" : "Tee signs to review",
       detail: "Awaiting review",
+    });
+  }
+  if (marketReports) {
+    items.push({
+      id: "market-reports",
+      tab: "marketplace",
+      count: marketReports,
+      label: marketReports === 1 ? "Marketplace report" : "Marketplace reports",
+      detail: "Review and act",
     });
   }
   if (orders) {

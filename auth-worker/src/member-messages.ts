@@ -6,6 +6,7 @@ import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyMembers } from "./member-push.js";
 import { getMember, listMembers } from "./roster.js";
+import { waitingCount } from "./market-store.js";
 
 const MAX_BODY = 500;
 
@@ -150,6 +151,23 @@ async function appendMessage(env: Env, ctx: { waitUntil?: (promise: Promise<unkn
   return { id: messageId, at: saved?.created_at || "" };
 }
 
+/** Send a direct message from one member to another on the server's behalf (e.g. a marketplace
+ *  "I have one" reply). The recipient gets the usual message notice and push. */
+export async function sendMemberDirectMessage(
+  env: Env,
+  ctx: { waitUntil?: (promise: Promise<unknown>) => void } | undefined,
+  from: string,
+  to: string,
+  text: string,
+): Promise<number | null> {
+  const body = cleanBody(text.slice(0, MAX_BODY));
+  if (!body || !from || !to || from === to) return null;
+  const threadId = await ensureThread(env, from, to);
+  if (!threadId) return null;
+  await appendMessage(env, ctx, from, threadId, body);
+  return threadId;
+}
+
 async function markThreadRead(env: Env, memberId: string, threadId: number) {
   const latest = await env.DB.prepare(
     "SELECT COALESCE(MAX(id), 0) AS id FROM member_messages WHERE thread_id = ?",
@@ -178,7 +196,9 @@ export async function handleMemberMessages(
   const self = session.sub;
 
   if (pathname === "/me/messages/summary" && method === "GET") {
-    return json(await counts(env, self), 200, origin);
+    // Marketplace "deals waiting on you" rides along so Home needs no extra request.
+    const market = await waitingCount(env, self).catch(() => 0);
+    return json({ ...(await counts(env, self)), market }, 200, origin);
   }
 
   if (pathname === "/me/notices" && method === "GET") {
