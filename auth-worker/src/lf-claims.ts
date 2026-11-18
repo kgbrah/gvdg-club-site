@@ -25,6 +25,7 @@ import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
 import { sendMemberDirectMessage } from "./member-messages.js";
 import { bagDisc, bagDiscLabel } from "./bag-routes.js";
+import { guestLinkUrl } from "./guest-link.js";
 
 async function getMatchRow(c: MarketCtx, id: number): Promise<Row | null> {
   return c.env.DB.prepare(`SELECT ${MATCH_COLUMNS} FROM lf_matches m WHERE m.id = ?`).bind(id).first<Row>();
@@ -224,7 +225,8 @@ export async function postClaimMessage(c: MarketCtx, id: number): Promise<Respon
       if (!to) return;
       await sendMarketEmail(c.env, to, `Lost & Found: a message about the ${title}`, [
         `${me.name} wrote about the ${title}:`, "", text, "",
-        "Reply on the claim page: " + lfUrl(c.env, "claim/" + id), "",
+        // The link signs the guest in wherever they open it (no second code).
+        "Reply on the claim page: " + await guestLinkUrl(c.env, other, lfUrl(c.env, "claim/" + id)), "",
         "Your email address was not shared. - Greenville Disc Golf Club",
       ].join("\n"));
     })().catch(() => {});

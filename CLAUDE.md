@@ -226,6 +226,12 @@ standings are written to D1 (`results` for events, `casual_rounds`/`casual_resul
   member; `POST /admin/members/set-tier` (last-admin guarded), `POST /admin/members/lapsed-to-guest`. Guests: membership
   view `guest: true` (never lapsed), registration not blocked, and `requireListingSeller` refuses new listings, relists and
   Wanted offers (`guests_cannot_list`; the market viewer carries `canList`).
+- **Guests verify once** (`guest-link.ts`): every email to a marketplace / Lost & Found guest carries a sign-in link
+  (`?gl=` a 14-day `glink` JWT, marked `mkt` + `glink` so it is never a member or guest session). The page exchanges it
+  once (`POST /market/guest/link` → a guest session, `consumeGuestLink` in `market-api.js`) and drops it from the address,
+  so a link opened in the mail app or on another device doesn't ask for a second code. **Lost a disc from your bag**:
+  `lf-form.js` shows a signed-in member "Which disc did you lose?" from `GET /me/practice` + `/me/bag` (bag discs first;
+  archived and already-reported discs left out); a pick fills the post like My Bag's "I lost this disc" (`bagDiscId`).
 - **Guest accounts** (`guest-accounts.ts`): `POST /membership/apply` with `kind: "guest"` needs a valid email and phone
   (`parsePhone` → `+1…`), PDGA/UDisc optional; approval creates `guest: true` with `email`/`phone` on the record and an
   `idx:email:` login index (`resolveMember` checks `@` first, so an email is never read as a PDGA #; member id
@@ -391,7 +397,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v318`, members `?v=210`, public/events `?v=201`, score `?v=241`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v319`, members `?v=211`, public/events `?v=202`, score `?v=241`,
 home `?v=192` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,

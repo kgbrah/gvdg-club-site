@@ -1333,6 +1333,19 @@
 
 /* ==== Lost & Found (lost-found.html): the Pro Shop marketplace's cards, panels and chips, plus a few pieces of its own ==== */
 [data-page="lost-found"] .lf-photo-fallback { position: relative; flex-direction: column; gap: 6px; }
+/* "Which disc did you lose?": the member's bag discs, one tap each (photo + name), then "Enter it myself". */
+[data-page="lost-found"] .lf-bag-picker { display: grid; gap: 10px; min-width: 0; }
+[data-page="lost-found"] .lf-bag-pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+[data-page="lost-found"] .lf-bag-pick {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-height: 64px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--site-line); border-radius: 10px; background: var(--bg-secondary); color: var(--text-primary); text-align: start; cursor: pointer;
+  font: 650 .92rem/1.3 Archivo, system-ui, sans-serif;
+}
+[data-page="lost-found"] .lf-bag-pick:hover { background: var(--site-quiet); }
+[data-page="lost-found"] .lf-bag-pick:focus-visible { outline: 3px solid var(--site-focus); outline-offset: 2px; }
+[data-page="lost-found"] .lf-bag-pick .market-photo-thumb { width: 52px; height: 52px; }
+[data-page="lost-found"] .lf-bag-pick-label { min-width: 0; overflow-wrap: anywhere; }
+[data-page="lost-found"] .lf-bag-picker > .shop-btn { justify-self: start; }
 [data-page="lost-found"] .lf-photo-tip { margin: 0 0 4px; color: var(--text-primary); font: 650 .9rem/1.45 Archivo, system-ui, sans-serif; }
 [data-page="lost-found"] .lf-nudge-title { display: flex; align-items: center; gap: 6px; }
 [data-page="lost-found"] .lf-nudge-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }

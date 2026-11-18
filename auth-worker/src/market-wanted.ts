@@ -10,6 +10,7 @@ import {
   WANTED_COLUMNS, ensureTrader, isSuspended, num, str, viewerOf, wantedReplies, wantedStatus, wantedViews, type Row,
 } from "./market-store.js";
 import { changed, fail, limited, ok, requireListingSeller, requireSeller, requireTrader, type MarketCtx } from "./market-http.js";
+import { guestLinkUrl } from "./guest-link.js";
 
 const PAGE = 30;
 export const WANTED_DAYS = 60;
@@ -131,7 +132,7 @@ export async function replyWanted(c: MarketCtx, id: number): Promise<Response> {
       if (!to) return;
       await sendMarketEmail(c.env, to, `I have one: ${title}`, [
         `${seller.name} (GVDG member) replied to your WANTED post "${title}":`, "", text, listingLine.trim(), "",
-        "See replies on your WANTED post: " + marketUrl(c.env, "wanted/" + id), "",
+        "See replies on your WANTED post: " + await guestLinkUrl(c.env, posterId, marketUrl(c.env, "wanted/" + id)), "",
         "Your email address was not shared. - Greenville Disc Golf Club Pro Shop",
       ].filter((line, index, all) => line || all[index - 1] !== "").join("\n"));
     })().catch(() => {});

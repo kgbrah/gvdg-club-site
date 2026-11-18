@@ -16,7 +16,7 @@ import { useCourses } from "./lf-list.js";
 import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PickList, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
 import { CoursePicker, useHere } from "./course-picker.js";
-import { BagPhotoChooser, clearBagHandoff, readBagHandoff } from "./lf-bag.js";
+import { BagPhotoChooser, BagPicker, clearBagHandoff, readBagHandoff, useBagChoices } from "./lf-bag.js";
 
 const LF_VOICE_FIELDS = ["brand", "mold", "plastic", "color", "weightG", "courseId", "hole", "area"];
 
@@ -167,8 +167,27 @@ export function NewPost({ kind, route, edit = null }) {
   const courses = useCourses();
   const editing = Boolean(edit);
   // "I lost this disc" from My Bag fills the lost post in (a signed-in member's own bag disc only).
-  const [bag] = React.useState(() => (!editing && kind === "lost" && route?.query?.get("from") === "bag" ? readBagHandoff() : null));
+  const [bag, setBag] = React.useState(() => (!editing && kind === "lost" && route?.query?.get("from") === "bag" ? readBagHandoff() : null));
   const fromBag = bag && config.viewer?.kind === "member" ? bag : null;
+  // "Lost a disc" without one picked: a signed-in member with discs saved picks one from the bag, or enters it.
+  const [skipPicker, setSkipPicker] = React.useState(false);
+  const member = config.viewer?.kind === "member";
+  // Loaded once for the form (not dropped after a pick, so "Pick a different disc" can bring it back); not needed when
+  // My Bag already handed a disc over.
+  const [cameFromBag] = React.useState(() => route?.query?.get("from") === "bag");
+  const picker = useBagChoices(member && !editing && kind === "lost" && !cameFromBag);
+  const showPicker = member && !editing && kind === "lost" && !bag && !skipPicker && picker.status === "ready";
+  function pickFromBag(handoff) {
+    setBag(handoff);
+    setBagChosen(handoff.photos.slice(0, LF_MAX_PHOTOS.lost));
+    setDraft((current) => ({ ...current, brand: handoff.brand, mold: handoff.mold, plastic: handoff.plastic, color: handoff.color, weightG: handoff.weightG, privateInk: handoff.ink }));
+  }
+  function unpickBag() {
+    setBag(null);
+    setBagChosen([]);
+    setSkipPicker(false);
+    setDraft((current) => ({ ...current, brand: "", mold: "", plastic: "", color: "", weightG: "", privateInk: "" }));
+  }
   // The bag's photos go on the post unless the owner unticks them (a lost post takes two).
   const [bagChosen, setBagChosen] = React.useState(() => (bag ? bag.photos.slice(0, LF_MAX_PHOTOS.lost) : []));
   const [remotePhotos, setRemotePhotos] = React.useState(() => edit?.myPhotos || []);
@@ -280,7 +299,11 @@ export function NewPost({ kind, route, edit = null }) {
       found
         ? h(PrivacyNote, { key: "privacy" }, "Anyone can see the photos you post. We also read any writing on the disc privately, only to find its owner.")
         : h(PrivacyNote, { key: "privacy" }, "What you type about the writing on your disc stays private: it's only used to match your disc with found ones and is never shown to anyone. Any photo you add is public."),
-      fromBag ? h(Note, { key: "from-bag", tone: "success" }, "Filled in from your bag. Add where you lost it, check the rest, and post.") : null,
+      showPicker ? h(BagPicker, { choices: picker.discs, key: "bag-picker", onPick: pickFromBag, onSkip: () => setSkipPicker(true) }) : null,
+      fromBag ? h(Note, { key: "from-bag", tone: "success" }, [
+        "Filled in from your bag. Add where you lost it, check the rest, and post. ",
+        picker.status === "ready" ? h("button", { className: "market-text-btn", "data-lf-bag-change": "true", key: "change", onClick: unpickBag, type: "button" }, "Pick a different disc") : null,
+      ]) : null,
       fromBag ? h(BagPhotoChooser, {
         chosen: bagChosen, key: "bag-photos", photos: fromBag.photos, room: LF_MAX_PHOTOS[kind] - photos.length - bagChosen.length, setChosen: setBagChosen,
       }) : null,

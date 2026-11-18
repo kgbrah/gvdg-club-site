@@ -149,7 +149,7 @@ let env = null;
 let origin = "";
 let glassTheme = null;
 const tokenOwners = new Map();
-const WORKER_PATHS = /^\/(karma|lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|me\/bag|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
+const WORKER_PATHS = /^\/(karma|lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|me\/bag|me\/practice|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
 
 function fixture(path, authorization) {
   if (path === "/me") {
@@ -485,6 +485,19 @@ async function runFlows() {
   assert(state.guest?.token && state.guest.name === "Gail Finder", "the shared guest token is stored");
   assert.equal(JSON.stringify(state.guest).includes("gail@"), false, "the guest's email is not kept client-side");
   console.log("guest verified by email and posted a found disc; its photo is up straight away");
+
+  // 2b. Gail verified once. The link in an email we send her (?gl=) signs her in wherever she opens it (the mail app,
+  // a laptop): no second code, and the link leaves the address once used.
+  const gailId = db.raw.prepare("SELECT id FROM market_guests WHERE display_name = 'Gail Finder'").get().id;
+  const emailLink = await jwt.signGuestLink("mg_" + gailId, secret, 3600);
+  const elsewhere = await open(P, {});
+  await elsewhere.page.goto(origin + "/lost-found.html?gl=" + encodeURIComponent(emailLink) + "#mine", { waitUntil: "domcontentloaded" });
+  await elsewhere.page.waitForFunction(() => JSON.parse(localStorage.getItem("gvdg_market_guest") || "null")?.name === "Gail Finder");
+  assert.equal(new URL(elsewhere.page.url()).searchParams.has("gl"), false, "the sign-in link is dropped from the address");
+  await elsewhere.page.locator(`[data-lf-my-post='${state.foundId}']`).waitFor();
+  assert.equal(await elsewhere.page.getByLabel("Verification code").count(), 0, "no second code");
+  await elsewhere.context.close();
+  console.log("guest email link: signed in on another browser without a second code; the link left the address");
 
   // 3. The private read found a name and phone in the photo: the guest (only) gets the nudge, never the text.
   const nudge = guest.page.locator("[data-lf-nudges] [data-lf-nudge]");
@@ -1469,6 +1482,49 @@ async function runBag() {
   await go(stranger.page, "edit/" + postId, "[data-lf-view=edit][data-lf-state=locked]");
   await stranger.context.close();
   console.log("My Bag: I lost this disc filled the lost post with its bag photo already ticked; the bag shows the post; the poster edited it (details and photos) and nobody else could");
+
+  // 1c. "Lost a disc" straight from Lost & Found: pick the disc from your bag (bag discs first, then others saved; the
+  // Wave already reported lost isn't offered), or enter it yourself.
+  const destroyer = seedBagDisc(people.owner.memberId, { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange", weightGrams: 175, ink: "JP 4" });
+  seedBagDisc(people.owner.memberId, { brand: "Axiom", model: "Envy", plastic: "Proton", color: "Teal", inBag: false });
+  seedBagDisc(people.owner.memberId, { brand: "Old", model: "Archived", archived: true, inBag: false });
+  const pickView = await cameraView(P, { member: tokens.owner });
+  await go(pickView.page, "new/lost", "form[aria-label='Post a lost disc']");
+  const pickForm = pickView.page.locator("form[aria-label='Post a lost disc']");
+  const picker = pickForm.locator("[data-lf-bag-picker]");
+  await picker.getByRole("heading", { name: "Which disc did you lose?" }).waitFor();
+  assert.deepEqual(await picker.locator("[data-lf-bag-pick]").allInnerTexts(), ["Innova Destroyer · Star · Orange · 175 g", "Axiom Envy · Proton · Teal"],
+    "bag discs first, then other saved discs; not the Wave (already reported lost) or archived discs");
+  await assertFits(pickView.page, "lost form bag picker");
+  await shot(pickView.page, "lost-bag-picker-390-light");
+  await picker.locator(`[data-lf-bag-pick='${destroyer}']`).click();
+  await pickForm.getByText("Filled in from your bag.", { exact: false }).waitFor();
+  assert.deepEqual(await Promise.all(["Brand", "Mold", "Plastic", "Colour", "Weight (if you know it)"].map((label) => pickForm.getByLabel(label, { exact: true }).inputValue())),
+    ["Innova", "Destroyer", "Star", "Orange", "175"]);
+  assert.equal(await pickForm.getByLabel("What's written on it (private)").inputValue(), "JP 4");
+  assert.equal(await pickForm.locator("[data-lf-bag-picker]").count(), 0, "the picker steps aside once a disc is picked");
+  // Changed your mind: pick again, or enter it yourself.
+  await pickForm.locator("[data-lf-bag-change]").click();
+  await picker.waitFor();
+  assert.equal(await pickForm.getByLabel("Brand", { exact: true }).inputValue(), "");
+  await picker.getByRole("button", { name: "Enter it myself" }).click();
+  await picker.waitFor({ state: "detached" });
+  await pickForm.getByLabel("Brand", { exact: true }).waitFor();
+  // Posting a picked disc ties the post to that bag disc.
+  await go(pickView.page, "new/lost", "form[aria-label='Post a lost disc']");
+  await pickView.page.locator(`[data-lf-bag-pick='${destroyer}']`).click();
+  await pickCourse(pickForm, "ecu", "ECU North Rec Complex");
+  await pickForm.getByRole("button", { name: "Post lost disc" }).click();
+  await pickView.page.waitForURL(/#post\/\d+$/);
+  const pickedPost = Number(/post\/(\d+)$/.exec(pickView.page.url())[1]);
+  assert.equal(db.raw.prepare("SELECT bag_disc_id FROM lf_posts WHERE id = ?").get(pickedPost).bag_disc_id, destroyer);
+  // A guest (not signed in) sees the normal form, no picker.
+  const guestView = await cameraView(P, {});
+  await go(guestView.page, "new/lost", "form[aria-label='Post a lost disc']");
+  await guestView.page.locator("form[aria-label='Post a lost disc']").getByLabel("Brand", { exact: true }).waitFor();
+  assert.equal(await guestView.page.locator("[data-lf-bag-picker]").count(), 0);
+  for (const each of [pickView, guestView]) await each.context.close();
+  console.log("Lost a disc: picked from the bag (bag first, reported/archived left out), changed, entered by hand, and posted tied to the bag disc; guests see the plain form");
 
   // 2. A found disc with a member's bag-disc writing on it: only that member hears, and the match names their bag disc.
   const riley = seedBagDisc(people.other.memberId, { brand: "Innova", model: "Firebird", plastic: "Champion", color: "Red", ink: "RC 252-555-0177" });
