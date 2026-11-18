@@ -18,6 +18,7 @@ import { EventsRegistrationApp } from "./events-registration-app.js";
 import { EventsStatusApp } from "./events-status-app.js";
 import { EventsViewController, installEventsRouteController } from "./events-view-controller.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
+import { consumeGuestLink } from "./market-api.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   import("react-scan").then(({ scan }) => scan({ enabled: true })).catch(() => {});
@@ -119,6 +120,9 @@ if (eventsMeetingsMount) {
 if (eventsLastUpdatedMount) {
   createRoot(eventsLastUpdatedMount).render(h(EventsLastUpdatedApp));
 }
+
+// A guest's sign-in link from one of our emails: signs them in here, no second code (the pages refresh on sign-in).
+if (proShopMount || lostFoundMount) void consumeGuestLink();
 
 if (proShopMount) {
   createRoot(proShopMount).render(h(ProShopApp));

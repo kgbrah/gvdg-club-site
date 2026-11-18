@@ -9,6 +9,7 @@ import { emailConfigured, isGuestId, sendMarketEmail, traderEmail } from "./mark
 import { recordMemberNotices } from "./member-messages.js";
 import { notifyMembers } from "./member-push.js";
 import { siteBase } from "./membership-notify.js";
+import { guestLinkUrl } from "./guest-link.js";
 
 type WaitCtx = { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 
@@ -36,8 +37,10 @@ export async function deliverLfNote(env: Env, ctx: WaitCtx, personId: string, no
     if (!emailConfigured(env)) return;
     const to = await traderEmail(env, personId);
     if (!to) return;
+    // A guest's link signs them in wherever they open it (no second code).
+    const link = isGuestId(personId) ? await guestLinkUrl(env, personId, lfUrl(env, note.hash)) : lfUrl(env, note.hash);
     await sendMarketEmail(env, to, note.title, [
-      note.body, "", "Open Lost & Found: " + lfUrl(env, note.hash), "",
+      note.body, "", "Open Lost & Found: " + link, "",
       "Your email address is never shown to anyone. - Greenville Disc Golf Club",
     ].join("\n"));
   } catch {

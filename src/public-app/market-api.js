@@ -37,6 +37,31 @@ export function writeGuest(guest) {
   announce();
 }
 
+/**
+ * A sign-in link from one of our emails to a guest (?gl=…): exchanged once for a guest session in this browser, then
+ * dropped from the address. Getting the email proved the inbox, so no second code. Resolves true when signed in.
+ */
+export async function consumeGuestLink(location = window.location, history = window.history) {
+  let url;
+  try { url = new URL(location.href); } catch { return false; }
+  const link = url.searchParams.get("gl");
+  if (!link) return false;
+  url.searchParams.delete("gl");
+  try { history.replaceState(history.state, "", url.pathname + url.search + url.hash); } catch { /* address stays */ }
+  if (readMemberToken() || link.length > 2000) return false;
+  try {
+    const response = await fetch(marketBase() + "/market/guest/link", {
+      method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ token: link }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || typeof data?.token !== "string") return false;
+    writeGuest({ token: data.token, key: data.guest?.key || "", name: data.guest?.name || "Guest" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function clearGuest() {
   try {
     localStorage.removeItem(GUEST_KEY);

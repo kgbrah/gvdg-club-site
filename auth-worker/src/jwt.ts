@@ -65,7 +65,8 @@ export async function signMarketGuestSession(sub: string, secret: string, ttlSec
 export async function verifyMarketGuestSession(token: string, secret: string): Promise<string | null> {
   try {
     const { payload } = await jwtVerify(token, keyOf(secret), { algorithms: ["HS256"] });
-    if (payload.mkt !== true || typeof payload.sub !== "string" || !/^mg_\d{1,12}$/.test(payload.sub)) return null;
+    // A sign-in link (glink) is never a session: it can only be exchanged at POST /market/guest/link.
+    if (payload.mkt !== true || payload.glink === true || typeof payload.sub !== "string" || !/^mg_\d{1,12}$/.test(payload.sub)) return null;
     return payload.sub;
   } catch {
     return null;
@@ -74,6 +75,31 @@ export async function verifyMarketGuestSession(token: string, secret: string): P
 
 /** Verify a session token. Returns the claims, or null on any failure (bad sig, expired, malformed).
  *  Guest marketplace tokens (`mkt`) are never sessions. */
+/**
+ * A guest's sign-in link, put in the emails we send them (they proved the inbox is theirs by getting it): exchanged once
+ * per browser for a guest session, so a link opened on another device or in the mail app doesn't ask for a code again.
+ * Marked mkt (so it is never a member session) and glink (so it is never a guest session either).
+ */
+export async function signGuestLink(sub: string, secret: string, ttlSeconds: number): Promise<string> {
+  const nowSec = Math.floor(Date.now() / 1000);
+  return new SignJWT({ mkt: true, glink: true })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(sub)
+    .setIssuedAt(nowSec)
+    .setExpirationTime(nowSec + ttlSeconds)
+    .sign(keyOf(secret));
+}
+
+export async function verifyGuestLink(token: string, secret: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, keyOf(secret), { algorithms: ["HS256"] });
+    if (payload.mkt !== true || payload.glink !== true || typeof payload.sub !== "string" || !/^mg_\d{1,12}$/.test(payload.sub)) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifySession(token: string, secret: string): Promise<SessionClaims | null> {
   try {
     const { payload } = await jwtVerify(token, keyOf(secret), { algorithms: ["HS256"] });

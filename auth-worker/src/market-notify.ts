@@ -8,6 +8,7 @@ import { decryptEmail } from "./market-crypto.js";
 import { recordMemberNotices } from "./member-messages.js";
 import { notifyMembers } from "./member-push.js";
 import { siteBase } from "./membership-notify.js";
+import { guestLinkUrl } from "./guest-link.js";
 
 type WaitCtx = { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 
@@ -87,7 +88,10 @@ export async function deliverMarketNote(env: Env, ctx: WaitCtx, ownerId: string,
     if (!emailConfigured(env)) return;
     const to = await traderEmail(env, ownerId);
     if (!to) return;
-    const text = [note.body, "", "Open the marketplace: " + marketUrl(env, note.hash || "my-market"), "", "- Greenville Disc Golf Club Pro Shop"].join("\n");
+    // A guest's link signs them in wherever they open it (no second code).
+    const page = marketUrl(env, note.hash || "my-market");
+    const link = isGuestId(ownerId) ? await guestLinkUrl(env, ownerId, page) : page;
+    const text = [note.body, "", "Open the marketplace: " + link, "", "- Greenville Disc Golf Club Pro Shop"].join("\n");
     await sendMarketEmail(env, to, note.title, text);
   } catch {
     /* notices are optional */

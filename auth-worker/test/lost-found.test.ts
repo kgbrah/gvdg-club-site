@@ -594,7 +594,8 @@ describe("lost & found matching, claims, returns and karma", () => {
     expect(match).toMatchObject({ found_id: foundPost.id, lost_id: lostPost.id, candidate_id: expect.stringMatching(/^mg_/), status: "notified" });
     expect(JSON.parse(match.reasons)).toEqual(expect.arrayContaining(["ink_phone", "ink_name", "mold", "course"]));
     const toWendy = mail.find((row) => row.to === "wendy@example.test" && row.subject === "Is this your disc?");
-    expect(toWendy?.text).toContain("lost-found.html#match/" + match.id);
+    // Wendy is a guest: the link signs her in wherever she opens it.
+    expect(toWendy?.text).toMatch(new RegExp("lost-found\\.html\\?gl=[^#\\s]+#match/" + match.id));
     const notice = db.raw.prepare("SELECT title, body, href FROM member_notices WHERE member_id = 'm_bo'").all() as any[];
     expect(notice.map((row) => row.title)).toContain("Someone may own the disc you found");
     expect(JSON.stringify(notice)).not.toMatch(/wendy|smith|0199/i);
@@ -658,6 +659,20 @@ describe("lost & found matching, claims, returns and karma", () => {
     const relay = mail.find((row) => row.to === "wendy@example.test" && row.subject.startsWith("Lost & Found: a message"));
     expect(relay?.text).toContain("club bin Saturday");
     expect(relay?.text).not.toMatch(/bo@|m_bo/);
+
+    // Wendy verified once. The link in the email signs her in wherever she opens it (mail app, laptop): no second code.
+    const linkUrl = /Reply on the claim page: (\S+)/.exec(relay!.text)![1]!;
+    expect(linkUrl).toMatch(/\/lost-found\.html\?gl=[^#]+#claim\/\d+$/);
+    const link = decodeURIComponent(/gl=([^#&]+)/.exec(linkUrl)![1]!);
+    // The link is never a session by itself, as a guest or as a member.
+    expect((await call(`/lost-found/claims/${claim.id}`, "GET", link)).status).toBe(401);
+    expect((await call("/me", "GET", link)).status).toBe(401);
+    const exchanged = await call("/market/guest/link", "POST", undefined, { token: link });
+    expect(exchanged.status, exchanged.raw).toBe(200);
+    expect(exchanged.data.guest).toEqual({ key: wendy.guest.key, name: "Wendy Guest" });
+    expect((await call(`/lost-found/claims/${claim.id}`, "GET", exchanged.data.token)).status).toBe(200);
+    expect((await call("/market/guest/link", "POST", undefined, { token: "nope" })).data.error).toBe("link_expired");
+    expect((await call("/market/guest/link", "POST", undefined, { token: wendy.token })).data.error).toBe("link_expired");
 
     // Only the finder marks it returned; only the owner confirms.
     expect((await call(`/lost-found/claims/${claim.id}/returned`, "POST", wendy.token)).status).toBe(404);

@@ -12,7 +12,7 @@ import type { Env } from "./env.js";
 import { handleMarketAdmin } from "./market-admin.js";
 import { sendDonation } from "./market-donations.js";
 import { buyListing, dealAction, editFeedback, fileReport, leaveFeedback, myMarket, mySummary, offerAction, proposeTrade, replyFeedback } from "./market-deals.js";
-import { startGuest, verifyGuest } from "./market-guest.js";
+import { exchangeGuestLink, startGuest, verifyGuest } from "./market-guest.js";
 import { idOf, fail, ok, type MarketCtx, type WaitCtx } from "./market-http.js";
 import {
   addListingPhoto, browseListings, createListing, deleteListingPhoto, editListing, getListing, relistListing, servePhoto, settingsRoute, withdrawListing,
@@ -78,6 +78,7 @@ export async function handleMarket(
   if (area === "guest" && seg.length === 3 && method === "POST") {
     if (a === "start") return startGuest(c);
     if (a === "verify") return verifyGuest(c);
+    if (a === "link") return exchangeGuestLink(c);
   }
   if (area === "me" && method === "GET") {
     if (seg.length === 2) return myMarket(c);

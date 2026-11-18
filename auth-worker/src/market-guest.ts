@@ -6,7 +6,7 @@
 // Without a Resend key the flow is unavailable (fail soft: members can still sign in).
 
 import { clientIp, readJson } from "./http.js";
-import { signMarketGuestSession } from "./jwt.js";
+import { signMarketGuestSession, verifyGuestLink } from "./jwt.js";
 import { codeHash, constantTimeEqualText, emailHash, encryptEmail, sixDigitCode } from "./market-crypto.js";
 import { parseDisplayName, parseEmail } from "./market-input.js";
 import { emailConfigured, sendMarketEmail } from "./market-notify.js";
@@ -68,6 +68,22 @@ export async function startGuest(c: MarketCtx, surface: GuestSurface = "market")
   const sent = await sendMarketEmail(c.env, email, message.subject, message.text);
   if (!sent) return fail(c, 502, "email_failed");
   return ok(c, { ok: true, expiresInSec: GUEST_CODE_TTL_MIN * 60 });
+}
+
+/** POST /market/guest/link { token }: a sign-in link from one of our emails becomes a guest session in this browser. */
+export async function exchangeGuestLink(c: MarketCtx): Promise<Response> {
+  const blocked = await limited(c, "mktlink:ip:" + clientIp(c.request), 30, 600);
+  if (blocked) return blocked;
+  const body = (await readJson(c.request)) ?? {};
+  const link = typeof body.token === "string" && body.token.length < 2000 ? body.token : "";
+  const sub = link ? await verifyGuestLink(link, c.env.JWT_SECRET) : null;
+  if (!sub) return fail(c, 400, "link_expired");
+  const guest = await c.env.DB.prepare("SELECT id, display_name FROM market_guests WHERE id = ?").bind(Number(sub.slice(3)))
+    .first<{ id: number; display_name: string }>();
+  if (!guest) return fail(c, 400, "link_expired");
+  const key = await ensureTrader(c.env, { id: sub, kind: "guest", name: guest.display_name });
+  const token = await signMarketGuestSession(sub, c.env.JWT_SECRET, GUEST_TOKEN_TTL_SEC);
+  return ok(c, { token, guest: { key, name: guest.display_name } });
 }
 
 export async function verifyGuest(c: MarketCtx): Promise<Response> {
