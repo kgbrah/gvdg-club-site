@@ -5,10 +5,12 @@
 // captured Resend (the guest's 6-digit code is read from the captured email). Everything else the pages
 // call (/shop/products, /events, admin lists) is a small fixture.
 //
-// Flows (390 light): a guest browses, verifies by email code and buys; a member lists a disc with a photo,
+// Flows (390 light): a guest browses, verifies by email code and buys; a member adds the required buyer-alert
+// email inline and lists a disc with a photo,
 // sees the pending buyer, marks it sold and both sides leave feedback; a trade offer is accepted; a guest's
 // WANTED post gets an "I have one" reply relayed by email; a report appears in the admin Marketplace queue;
-// pay links are exact. Then every key screen is checked at 390 light / 390 dark / 320 large-text dark /
+// pay links are exact; a withdrawn listing is relisted within its 24-hour window and a later one is made
+// final by the cron sweep (photos deleted). Then every key screen is checked at 390 light / 390 dark / 320 large-text dark /
 // 1280 light for horizontal overflow and clipped action labels, and screenshotted.
 //
 // Usage: CHROMIUM_PATH=/usr/bin/chromium GVDG_QA_NO_SANDBOX=1 node scripts/qa/marketplace-browser-qa.mjs
@@ -78,6 +80,7 @@ const people = {
   seller: { memberId: "m_qa_seller", name: "Taylor Morgan" },
   buyer: { memberId: "m_qa_buyer", name: "Jordan Parker" },
   admin: { memberId: "m_qa_admin", name: "Avery Brooks", isAdmin: true },
+  fresh: { memberId: "m_qa_fresh", name: "Riley Chen" },
 };
 const roster = Object.fromEntries(Object.values(people).map((person) => ["member:" + person.memberId,
   JSON.stringify({ ...person, isAdmin: person.isAdmin === true, pinHash: "qa", mustChangePin: false })]));
@@ -212,7 +215,9 @@ env = {
   ROSTER: memoryKv(roster), RATELIMIT: memoryKv(), DB: db, PHOTOS: photos, JWT_SECRET: secret, SESSION_TTL_SEC: "43200",
   ALLOWED_ORIGINS: origin, RESEND_API_KEY: "re_qa", EXPECTED_ORIGIN: "https://gvdgclub.com",
 };
-const tokens = { seller: await memberToken(people.seller), buyer: await memberToken(people.buyer), admin: await memberToken(people.admin) };
+const tokens = { seller: await memberToken(people.seller), buyer: await memberToken(people.buyer), admin: await memberToken(people.admin),
+  fresh: await memberToken(people.fresh) };
+const sweep = await vite.ssrLoadModule("/auth-worker/src/market-sweep.ts");
 
 /** Call the in-process Worker directly (seeding / assertions), as the browser would. */
 async function api(path, { method = "GET", token, body } = {}) {
@@ -346,6 +351,10 @@ async function runFlows() {
 
   await go(seller.page, "market/sell", "form[aria-label='Sell a disc']");
   const form = seller.page.locator("form[aria-label='Sell a disc']");
+  // No buyer-alert email yet: the form asks for it right here (required to sell).
+  const emailBox = form.locator("[data-market-seller-email=required]");
+  await emailBox.waitFor();
+  await emailBox.getByLabel("Email for buyer alerts (required to sell)").fill("taylor@example.test");
   await form.getByLabel("Brand", { exact: true }).fill("Innova");
   await form.getByLabel("Mold", { exact: true }).fill("Destroyer");
   await form.getByLabel("Plastic", { exact: true }).fill("Star");
@@ -372,7 +381,10 @@ async function runFlows() {
   assert.equal(photos.objects.size, 1, "the photo reached R2 through the Worker");
   const [stored] = [...photos.objects.values()];
   assert.equal(Buffer.from(stored.bytes).includes(Buffer.from("Exif")), false, "stored photo has no EXIF");
-  console.log("member listed a disc with a photo");
+  const confirm = mail.find((row) => row.to === "taylor@example.test");
+  assert(confirm && confirm.text.includes("You're set up to sell on the GVDG marketplace — buyer alerts will come here."), "seller email confirmed");
+  assert.equal((await api("/market/settings", { token: tokens.seller })).settings.paypalMe, "TaylorDiscs", "saving the email kept the handles");
+  console.log("member added a buyer-alert email inline and listed a disc with a photo");
 
   // 2. A guest browses, verifies by email code and buys.
   const guest = await open(P);
@@ -451,6 +463,7 @@ async function runFlows() {
   // 5. A trade offer is accepted.
   const tradeListing = (await api("/market/listings", { method: "POST", token: tokens.seller,
     body: listingBody({ brand: "Discraft", mold: "Buzzz", plastic: "ESP", discType: "midrange", weightG: 177, condition: 9, priceCents: 1500, openToTrade: true, tradeFor: "A stable putter" }) })).listing;
+  await api("/market/settings", { method: "PUT", token: tokens.buyer, body: { notifyEmail: "jordan@example.test" } });
   const ownDisc = (await api("/market/listings", { method: "POST", token: tokens.buyer,
     body: listingBody({ brand: "Axiom", mold: "Envy", plastic: "Neutron", discType: "putter", weightG: 174, condition: 7, priceCents: 1400 }) })).listing;
   await go(other.page, "market/listing/" + tradeListing.id, "[data-market-view=listing][data-market-state=ready]");
@@ -518,7 +531,49 @@ async function runFlows() {
     body: listingBody({ brand: "MVP", mold: "Volt", plastic: "Neutron", discType: "fairway", weightG: 170, condition: 10, priceCents: 1850, location: "Will ship +$5" }) })).listing;
   await api(`/market/listings/${state.pending.id}/buy`, { method: "POST", token: state.guest.token });
   await api("/market/wanted", { method: "POST", token: tokens.buyer, body: { brand: "Discraft", mold: "Zone", plastic: "ESP", discType: "putter", conditionMin: 6, maxPriceCents: 1200, notes: "Any color" } });
-  // 8. The built bundle (as deployed) lazy-loads the marketplace chunk; the club shop alone does not.
+  // 8. Withdraw is not final: the seller can relist for 24 hours; then the cron sweep makes it final.
+  const wizard = (await api("/market/listings", { method: "POST", token: tokens.seller,
+    body: listingBody({ brand: "Gateway", mold: "Wizard", plastic: "Super Stupid Soft", discType: "putter", weightG: 174, condition: 7, priceCents: 1200 }) })).listing;
+  const photosBefore = photos.objects.size;
+  await go(seller.page, "market/listing/" + wizard.id, "[data-market-seller-tools]");
+  await seller.page.getByRole("button", { name: "Withdraw listing" }).click();
+  await seller.page.getByRole("button", { name: "Yes, withdraw" }).click();
+  await seller.page.locator("[data-market-relist]").getByText(/^Withdrawn — relist within 2[34] h$/).waitFor();
+  assert.equal(photos.objects.size, photosBefore, "photos are kept during the relist window");
+  assert.equal((await api("/market/listings")).listings.some((row) => row.id === wizard.id), false, "withdrawn listings stay out of browse");
+  await go(seller.page, "my-market", "[data-market-view=mine][data-market-state=ready]");
+  const row = seller.page.locator(`[data-market-my-listing="${wizard.id}"]`);
+  await row.getByText(/^Withdrawn — relist within 2[34] h$/).waitFor();
+  await shot(seller.page, "flow-my-marketplace-withdrawn-390-light");
+  await assertFits(seller.page, "my marketplace withdrawn");
+  await row.getByRole("button", { name: "Relist" }).click();
+  await seller.page.waitForFunction(async (id) => (await (await fetch("/api/market/listings/" + id)).json()).listing?.status === "active", wizard.id);
+  const relisted = (await api("/market/listings/" + wizard.id)).listing;
+  assert.deepEqual(relisted.photos, wizard.photos, "relist keeps the same photos");
+  assert.equal(relisted.priceCents, 1200);
+  // After 24 hours the sweep makes it final and deletes the photos; relist is no longer offered.
+  await api(`/market/listings/${wizard.id}/withdraw`, { method: "POST", token: tokens.seller });
+  db.raw.prepare("UPDATE market_listings SET withdrawn_at = datetime('now', '-25 hours') WHERE id = ?").run(wizard.id);
+  const swept = await sweep.finalizeWithdrawals(env);
+  assert.equal(swept.finalized, 1);
+  assert.equal(photos.objects.size, photosBefore - 1, "the final withdrawal deleted the photo from R2");
+  await go(seller.page, "my-market", "[data-market-view=mine][data-market-state=ready]");
+  await row.getByText("Withdrawn", { exact: true }).waitFor();
+  assert.equal(await row.getByRole("button", { name: "Relist" }).count(), 0);
+  // Leave one listing inside its relist window for the screenshots and the admin view.
+  state.withdrawn = (await api("/market/listings", { method: "POST", token: tokens.seller,
+    body: listingBody({ brand: "Prodigy", mold: "PA-3", plastic: "300", discType: "putter", weightG: 173, condition: 8, priceCents: 1300 }) })).listing;
+  await api(`/market/listings/${state.withdrawn.id}/withdraw`, { method: "POST", token: tokens.seller });
+  db.raw.prepare("UPDATE market_listings SET withdrawn_at = datetime('now', '-1 hour') WHERE id = ?").run(state.withdrawn.id);
+  console.log("withdraw kept the listing 24 h; relist restored it; the sweep made a later withdrawal final");
+
+  // 9. A member without a buyer-alert email can't list until they add one (the API says so too).
+  const refused = await worker.fetch(new Request("https://worker.qa/market/listings", { method: "POST",
+    headers: { Origin: origin, Authorization: "Bearer " + tokens.fresh, "Content-Type": "application/json" }, body: JSON.stringify(listingBody()) }), env);
+  assert.equal(refused.status, 400);
+  assert.equal((await refused.json()).error, "seller_email_required");
+
+  // 10. The built bundle (as deployed) lazy-loads the marketplace chunk; the club shop alone does not.
   const built = await open(P);
   const scripts = [];
   built.page.on("request", (request) => { if (request.resourceType() === "script") scripts.push(new URL(request.url()).pathname); });
@@ -583,15 +638,17 @@ const screens = [
   ["market-grid", () => ({}), "market", "[data-market-view=browse][data-market-state=ready]"],
   ["listing-pay-options", () => ({ guest: state.guest }), () => "market/listing/" + state.pending.id, "[data-deal-role=buyer] [data-market-pay]"],
   ["sell-form", () => ({ member: tokens.seller }), "market/sell", "form[aria-label='Sell a disc']"],
+  ["sell-form-email-prompt", () => ({ member: tokens.fresh }), "market/sell", "[data-market-seller-email=required]"],
   ["wanted", () => ({}), "wanted", "[data-market-view=wanted][data-market-state=ready]"],
   ["my-marketplace-pending", () => ({ member: tokens.seller }), "my-market", "[data-market-section=selling] [data-market-deal]"],
+  ["my-marketplace-withdrawn", () => ({ member: tokens.seller }), "my-market", "[data-market-relist] button", "[data-market-section=listings]"],
   ["feedback-profile", () => ({}), () => "market/trader/" + state.sellerKey, "[data-market-view=trader][data-market-state=ready]"],
   ["admin-reports", () => ({ member: tokens.admin }), null, "li[data-admin-market-report]"],
 ];
 
 async function runScreens() {
   for (const profile of [profiles.light390, profiles.dark390, profiles.dark320, profiles.light1280]) {
-    for (const [name, who, hash, ready] of screens) {
+    for (const [name, who, hash, ready, clip] of screens) {
       const view = await open(profile, who());
       if (name === "admin-reports") {
         await view.page.goto(origin + "/admin.html#marketplace", { waitUntil: "domcontentloaded" });
@@ -601,7 +658,12 @@ async function runScreens() {
       }
       await view.page.waitForLoadState("networkidle").catch(() => {});
       await assertFits(view.page, profile.name + " " + name);
-      await shot(view.page, name + "-" + profile.name);
+      if (clip) {
+        await view.page.locator(clip).scrollIntoViewIfNeeded();
+        await view.page.locator(clip).screenshot({ path: join(shotsDir, name + "-" + profile.name + ".png"), animations: "disabled" });
+      } else {
+        await shot(view.page, name + "-" + profile.name);
+      }
       await view.context.close();
     }
     console.log(profile.name + ": " + screens.length + " marketplace screens fit");
