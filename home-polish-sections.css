@@ -363,3 +363,63 @@ header .logo:hover .logo-image { transform: none; }
   #homeReactFooterApp footer { padding: 24px 64px calc(88px + env(safe-area-inset-bottom)); }
   #homeReactFooterApp .footer-links { gap: 8px 20px; }
 }
+
+/* Recently returned (Lost & Found): the same calm section box as Area Tournaments, a row of small cards. */
+#returned-discs {
+  width: calc(100% - 48px);
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+}
+#returned-discs .section-title {
+  margin-bottom: 8px;
+  text-align: left;
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 400;
+  letter-spacing: 0.035em;
+  color: var(--text-primary);
+}
+#returned-discs .section-subtitle { margin: 0 0 24px; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5; }
+#returned-discs .returned-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+#returned-discs .returned-item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+}
+#returned-discs .returned-photo {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--bg-tertiary);
+}
+#returned-discs .returned-photo-fallback { display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+#returned-discs .returned-copy { display: grid; gap: 3px; min-width: 0; }
+#returned-discs .returned-copy p { margin: 0; overflow-wrap: anywhere; }
+#returned-discs .returned-disc { color: var(--text-primary); font: 700 0.95rem/1.3 'Archivo', system-ui, sans-serif; }
+#returned-discs .returned-caption { color: var(--text-primary); font-size: 0.85rem; line-height: 1.4; }
+#returned-discs .returned-meta { color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4; }
+#returned-discs .returned-karma { color: var(--secondary-text); font-size: 0.78rem; font-weight: 700; }
+#returned-discs .returned-footer { margin: 20px 0 0; text-align: left; }
+#returned-discs .view-all-link { display: inline-flex; align-items: center; gap: 2px; color: var(--secondary-text); font-weight: 700; text-underline-offset: 4px; }
+.returned-sentinel { height: 1px; }
+@media (max-width: 768px) {
+  #returned-discs { width: calc(100% - 24px); margin: 16px auto; padding: 16px; }
+  #returned-discs .section-title { font-size: 2rem; }
+}

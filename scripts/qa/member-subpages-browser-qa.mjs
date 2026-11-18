@@ -202,6 +202,13 @@ async function serveFixture(path, query, request, ref, reply) {
       buyer: { key: "t_x", name: "Jordan Parker", kind: "member" }, createdAt: now }],
     buying: [], feedbackToLeave: [],
   });
+  else if (path === "/lost-found/me") reply(empty ? { karma: { karma: 0, returned: 0 }, posts: [], matches: [], claims: [] } : {
+    karma: { karma: 30, returned: 3 }, posts: [],
+    matches: [{ id: 3, status: "notified", strength: "strong", reasons: ["The phone number on the disc matches"],
+      found: { id: 9, kind: "found", brand: "Innova", plastic: "Champion", mold: "Firebird (Bottom Stamp)", photos: [], photoPending: 0 } }],
+    claims: [{ id: 5, status: "returned", role: "owner", found: { id: 8, brand: "Discraft", plastic: "ESP", mold: "Buzzz" },
+      finder: { key: "t_f", name: "Casey Guest-Longname", kind: "guest" }, owner: { key: "t_me", name: member.name, kind: "member" } }],
+  });
   else if (path === "/assistant") { fixture.asks += 1; reply({ reply: "Check the club schedule for the next round." }); }
   else reply({});
 }
@@ -297,6 +304,7 @@ const readiness = {
   tags: "[data-react-bag-tags]", account: "[data-member-account-devices]", appearance: ".member-appearance", wallet: "[data-react-wallet='ready']",
   imports: "[data-react-udisc-history='ready']", practice: "[data-member-practice]", "my-bag": "[data-member-bag]",
   marketplace: "[data-member-marketplace='ready']",
+  "lost-found": "[data-member-lost-found='ready']",
 };
 
 async function verifyDestinations(width, mode) {

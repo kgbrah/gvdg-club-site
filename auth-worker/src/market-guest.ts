@@ -1,7 +1,8 @@
-// Guest marketplace identity: a display name + email, proven with a 6-digit code sent by email.
-// Codes are stored hashed, expire after 10 minutes, are single use and allow 5 guesses. Requests are
-// rate-limited per email and per IP. Verifying returns a guest token (mkt JWT, never a member session)
-// for a stable identity keyed by the verified email, so feedback accrues to the same guest.
+// The club's guest identity, shared by the marketplace and Lost & Found: a display name + email, proven with
+// a 6-digit code sent by email. Codes are stored hashed, expire after 10 minutes, are single use and allow 5
+// guesses. Requests are rate-limited per email and per IP (one budget across both surfaces). Verifying returns
+// a guest token (mkt JWT, never a member session) for a stable identity keyed by the verified email, so a
+// guest who verified for one surface is the same person on the other (feedback and karma accrue to them).
 // Without a Resend key the flow is unavailable (fail soft: members can still sign in).
 
 import { clientIp, readJson } from "./http.js";
@@ -16,7 +17,35 @@ export const GUEST_CODE_TTL_MIN = 10;
 export const GUEST_CODE_ATTEMPTS = 5;
 export const GUEST_TOKEN_TTL_SEC = 30 * 24 * 60 * 60;
 
-export async function startGuest(c: MarketCtx): Promise<Response> {
+/** Where the code was asked for; only the email wording differs, the identity is the same. */
+export type GuestSurface = "market" | "lostfound";
+
+function codeEmail(surface: GuestSurface, name: string, code: string): { subject: string; text: string } {
+  if (surface === "lostfound") {
+    return {
+      subject: `Your GVDG verification code: ${code}`,
+      text: [
+        `Hi ${name},`, "",
+        `Your Greenville Disc Golf Club verification code is ${code}.`,
+        `It expires in ${GUEST_CODE_TTL_MIN} minutes and works once. It signs you in to Lost & Found and the marketplace.`, "",
+        "If you didn't ask for this, you can ignore this email.", "",
+        "- Greenville Disc Golf Club",
+      ].join("\n"),
+    };
+  }
+  return {
+    subject: `Your GVDG marketplace code: ${code}`,
+    text: [
+      `Hi ${name},`, "",
+      `Your Greenville Disc Golf Club marketplace code is ${code}.`,
+      `It expires in ${GUEST_CODE_TTL_MIN} minutes and works once.`, "",
+      "If you didn't ask for this, you can ignore this email.", "",
+      "- Greenville Disc Golf Club Pro Shop",
+    ].join("\n"),
+  };
+}
+
+export async function startGuest(c: MarketCtx, surface: GuestSurface = "market"): Promise<Response> {
   if (!emailConfigured(c.env)) return fail(c, 503, "guest_unavailable");
   const body = (await readJson(c.request)) ?? {};
   const name = parseDisplayName(body.name);
@@ -35,13 +64,8 @@ export async function startGuest(c: MarketCtx): Promise<Response> {
     `INSERT INTO market_guest_codes (email_hash, code_hash, display_name, email_enc, expires_at)
      VALUES (?, ?, ?, ?, datetime('now', '+${GUEST_CODE_TTL_MIN} minutes'))`,
   ).bind(hash, await codeHash(c.env.JWT_SECRET, hash, code), name, await encryptEmail(c.env.JWT_SECRET, email)).run();
-  const sent = await sendMarketEmail(c.env, email, `Your GVDG marketplace code: ${code}`, [
-    `Hi ${name},`, "",
-    `Your Greenville Disc Golf Club marketplace code is ${code}.`,
-    `It expires in ${GUEST_CODE_TTL_MIN} minutes and works once.`, "",
-    "If you didn't ask for this, you can ignore this email.", "",
-    "- Greenville Disc Golf Club Pro Shop",
-  ].join("\n"));
+  const message = codeEmail(surface, name, code);
+  const sent = await sendMarketEmail(c.env, email, message.subject, message.text);
   if (!sent) return fail(c, 502, "email_failed");
   return ok(c, { ok: true, expiresInSec: GUEST_CODE_TTL_MIN * 60 });
 }

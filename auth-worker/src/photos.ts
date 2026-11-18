@@ -28,6 +28,19 @@ const EXT: Record<DecodedImage["contentType"], DecodedImage["ext"]> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
 };
 
+type FromBase64 = (text: string) => Uint8Array;
+
+/** Native base64 decode where the runtime has it (about 10x cheaper in CPU than a char-by-char loop over atob,
+ *  which matters on the Workers Free plan's 10 ms budget); the loop otherwise. */
+export function base64Bytes(text: string): Uint8Array {
+  const native = (Uint8Array as unknown as { fromBase64?: FromBase64 }).fromBase64;
+  if (typeof native === "function") return native(text);
+  const bin = atob(text);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
 /** Decode a `data:image/...;base64,...` URL to validated bytes, or null if invalid/oversize/wrong-type.
  *  Content type is determined by MAGIC BYTES and must match the declared type. */
 export function decodeDataUrl(dataUrl: unknown): DecodedImage | null {
@@ -37,9 +50,7 @@ export function decodeDataUrl(dataUrl: unknown): DecodedImage | null {
   const declared = m[1] === "image/jpg" ? "image/jpeg" : m[1]; // accept the common jpg alias
   let bytes: Uint8Array;
   try {
-    const bin = atob(m[2]!);
-    bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    bytes = base64Bytes(m[2]!);
   } catch {
     return null;
   }

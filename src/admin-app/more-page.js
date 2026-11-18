@@ -1,5 +1,5 @@
 import React from "react";
-import { Archive, ChevronRight, ClipboardCheck, FileText, Flag, Map, Tag, Wrench } from "lucide-react";
+import { Archive, ChevronRight, ClipboardCheck, FileText, Flag, HandHeart, Map, Tag, Wrench } from "lucide-react";
 
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
@@ -10,11 +10,11 @@ import { AdminNeedsBadge } from "./admin-needs.js";
 
 const h = React.createElement;
 
-const NEEDS_TABS = new Set(["bag-tags", "members", "tee-signs"]);
+const NEEDS_TABS = new Set(["bag-tags", "members", "tee-signs", "lost-found"]);
 
 const MORE_LINKS = ADMIN_DESTINATIONS.filter((item) => item.group === "more" && item.key !== "more");
 const ICONS = { courses: Map, "course-health": Wrench, layouts: Map, "tee-signs": Flag, "bag-tags": Tag,
-  meetings: FileText, "data-archive": Archive, "review-queue": ClipboardCheck };
+  meetings: FileText, "data-archive": Archive, "review-queue": ClipboardCheck, "lost-found": HandHeart };
 const TOOL_SECTIONS = [
   ["Courses and reviews", ["courses", "course-health", "layouts", "tee-signs", "review-queue"]],
   ["Club records", MORE_LINKS.map((item) => item.key).filter((key) => !["courses", "course-health", "layouts", "tee-signs", "review-queue"].includes(key))],

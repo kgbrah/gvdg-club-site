@@ -188,8 +188,18 @@ export function PayOptions({ pay, primary = true }) {
 
 // ---- Guest identity ----
 
-export function GuestGate({ onVerified, onCancel, title = "Verify your email to continue" }) {
+const MARKET_GUEST_INTRO = "Not a club member? Buy or post WANTED as a guest. Your email stays private; sellers see only your display name.";
+
+/** The club's guest check (the same identity on the marketplace and Lost & Found). */
+export function GuestGate(props) {
   const config = useMarketConfig();
+  return h(GuestGateView, { ...props, available: config.status === "ready" ? config.guestCheckout : null });
+}
+
+export function GuestGateView({
+  onVerified, onCancel, title = "Verify your email to continue", available = null, intro = MARKET_GUEST_INTRO,
+  startPath = "/market/guest/start", verifyPath = "/market/guest/verify", unavailableTitle = "Guest checkout", unavailableText = GUEST_UNAVAILABLE,
+}) {
   const [step, setStep] = React.useState("start");
   const [name, setName] = React.useState(() => readGuest()?.name || "");
   const [email, setEmail] = React.useState("");
@@ -198,10 +208,10 @@ export function GuestGate({ onVerified, onCancel, title = "Verify your email to 
   const action = useAction();
   const headingId = React.useId();
 
-  if (config.status === "ready" && !config.guestCheckout) {
+  if (available === false) {
     return h("section", { "aria-labelledby": headingId, className: "market-guest-gate", "data-market-guest-gate": "unavailable" }, [
-      h("h3", { className: "market-subhead", id: headingId, key: "title" }, "Guest checkout"),
-      h(Note, { key: "note", tone: "error" }, GUEST_UNAVAILABLE),
+      h("h3", { className: "market-subhead", id: headingId, key: "title" }, unavailableTitle),
+      h(Note, { key: "note", tone: "error" }, unavailableText),
       h("div", { className: "market-actions", key: "actions" }, [
         h("a", { className: "shop-btn", href: "gvdg-members.html", key: "sign-in" }, "Members sign in"),
         onCancel ? h("button", { className: "shop-filter-reset", key: "cancel", onClick: onCancel, type: "button" }, "Not now") : null,
@@ -221,13 +231,13 @@ export function GuestGate({ onVerified, onCancel, title = "Verify your email to 
       return;
     }
     await action.run(async () => {
-      const { ok, status, data } = await marketRequest("/market/guest/start", { body: { email: email.trim(), name: trimmed }, method: "POST" });
+      const { ok, status, data } = await marketRequest(startPath, { body: { email: email.trim(), name: trimmed }, method: "POST" });
       if (ok) {
         setStep("code");
         action.setMessage({ text: "We emailed you a 6-digit code. It expires in 10 minutes.", tone: "success" });
       } else if (status === 503 || data.error === "guest_unavailable") {
         setUnavailable(true);
-        action.setMessage({ text: GUEST_UNAVAILABLE, tone: "error" });
+        action.setMessage({ text: unavailableText, tone: "error" });
       } else {
         action.setMessage({ text: data.error === "invalid_name" ? "Choose a different display name." : data.error === "invalid_email"
           ? "Enter a valid email address." : errorMessage(data), tone: "error" });
@@ -242,7 +252,7 @@ export function GuestGate({ onVerified, onCancel, title = "Verify your email to 
       return;
     }
     await action.run(async () => {
-      const { ok, data } = await marketRequest("/market/guest/verify", { body: { code: code.trim(), email: email.trim() }, method: "POST" });
+      const { ok, data } = await marketRequest(verifyPath, { body: { code: code.trim(), email: email.trim() }, method: "POST" });
       if (ok && typeof data.token === "string") {
         writeGuest({ token: data.token, key: data.guest?.key || "", name: data.guest?.name || name.trim() });
         action.setMessage({ text: "You're verified.", tone: "success" });
@@ -255,7 +265,7 @@ export function GuestGate({ onVerified, onCancel, title = "Verify your email to 
 
   return h("section", { "aria-labelledby": headingId, className: "market-guest-gate", "data-market-guest-gate": step }, [
     h("h3", { className: "market-subhead", id: headingId, key: "title" }, title),
-    h(Note, { key: "why" }, "Not a club member? Buy or post WANTED as a guest. Your email stays private; sellers see only your display name."),
+    h(Note, { key: "why" }, intro),
     step === "start"
       ? h("form", { className: "market-form", key: "start", noValidate: true, onSubmit: start }, [
         h("label", { key: "name" }, ["Display name", h("input", {
@@ -282,8 +292,9 @@ export function GuestGate({ onVerified, onCancel, title = "Verify your email to 
   ]);
 }
 
-/** Wrap an action that needs a member or a verified guest: public viewers get the guest gate first. */
-export function useIdentityGate(viewer) {
+/** Wrap an action that needs a member or a verified guest: public viewers get the guest gate first.
+ *  `gateOptions` (Lost & Found) swaps in that surface's endpoints and wording. */
+export function useIdentityGate(viewer, gateOptions = null) {
   const [pending, setPending] = React.useState(null);
   const pendingRef = React.useRef(null);
   const require = React.useCallback((label, job) => {
@@ -292,7 +303,8 @@ export function useIdentityGate(viewer) {
     setPending(label || "Verify your email to continue");
     return null;
   }, [viewer?.kind]);
-  const gate = pending ? h(GuestGate, {
+  const gate = pending ? h(gateOptions ? GuestGateView : GuestGate, {
+    ...(gateOptions || {}),
     key: "gate",
     onCancel: () => { pendingRef.current = null; setPending(null); },
     onVerified: () => {

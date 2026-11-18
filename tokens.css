@@ -506,8 +506,13 @@ body.score-glove.player-theme-active.player-theme-glass {
 }
 
 /* Text that sits on the bare wallpaper (page titles, headings outside cards) gets a soft halo. */
-body.player-theme-glass[data-member-shell="members"] #members :is(.member-page-heading, .member-page-heading *, .member-section-title, #members > h2, .member-home-section > h2, .member-home-section > h3) {
+body.player-theme-glass[data-member-shell="members"] #members :is(.member-page-heading, .member-page-heading *, .member-section-title, #members > h2, .member-home-section > h2, .member-home-section > h3, .member-link-section > h2) {
   text-shadow: var(--glass-halo);
+}
+/* Grouped-list titles (Club hub, Account) sit straight on the lighter glass wallpaper: in dark glass their ink
+   leans a little toward white so they keep AA contrast wherever the wallpaper falls behind them. */
+:root[data-theme="dark"] body.player-theme-glass[data-member-shell="members"] #members .member-link-section > h2 {
+  color: color-mix(in srgb, var(--text-primary) 70%, white);
 }
 
 /* Member app: containers (cards, grouped lists, panels) */
@@ -695,7 +700,7 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
     body.player-theme-glass[data-public-polish] :is(.events-intro, .ryder-intro, .shop-head > :first-child, .page-hero) :is(p, .page-subtitle) { color: var(--text-secondary); }
     body.player-theme-glass[data-public-polish] header .menu-toggle { color: var(--text-primary) !important; }
     /* Home: each section box is one glass container; the cards inside only tint. */
-    body.player-theme-glass[data-public-polish] :is(#scoring-app-teaser, #membership, #courses, #events, #area-tournaments, #about, #contact) {
+    body.player-theme-glass[data-public-polish] :is(#scoring-app-teaser, #membership, #courses, #events, #area-tournaments, #returned-discs, #about, #contact) {
       background: var(--glass-fill);
       border-color: var(--glass-line);
       box-shadow: var(--glass-edge), var(--glass-drop);
@@ -703,7 +708,7 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
       -webkit-backdrop-filter: var(--glass-filter);
       backdrop-filter: var(--glass-filter);
     }
-    body.player-theme-glass[data-public-polish] :is(.course-card, .event-item, .tournament-item, .stat-card, .board-member-card, .contact-box, .membership-step, .no-events, .scoring-teaser-score) {
+    body.player-theme-glass[data-public-polish] :is(.course-card, .event-item, .tournament-item, .returned-item, .stat-card, .board-member-card, .contact-box, .membership-step, .no-events, .scoring-teaser-score) {
       background: var(--glass-chip);
       border-color: var(--glass-line);
       text-shadow: none;

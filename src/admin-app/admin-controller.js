@@ -936,12 +936,13 @@ export function startAdminController() {
         let adminNeedsRequest = 0;
         async function refreshAdminNeeds() {
             const request = ++adminNeedsRequest;
-            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0, marketReports: 0 };
-            const [tags, applications, signs, market] = await Promise.all([
+            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0, marketReports: 0, lostFoundReports: 0 };
+            const [tags, applications, signs, market, lostFound] = await Promise.all([
                 adminApi('/admin/bag-tags').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/members/applications').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/tee-signs?status=candidate').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/market/summary').then(async (r) => r.ok ? r.json() : null).catch(() => null),
+                adminApi('/admin/lost-found/summary').then(async (r) => r.ok ? r.json() : null).catch(() => null),
             ]);
             if (request !== adminNeedsRequest) return;
             if (tags) {
@@ -951,6 +952,9 @@ export function startAdminController() {
             if (applications) next.applications = Array.isArray(applications.applications) ? applications.applications.length : 0;
             if (signs) next.teeSigns = Array.isArray(signs.teeSigns) ? signs.teeSigns.length : 0;
             if (market) next.marketReports = Number(market.openReports) || 0;
+            if (lostFound) {
+                next.lostFoundReports = Number(lostFound.openReports) || 0;
+            }
             publishAdminNeeds(next);
         }
 

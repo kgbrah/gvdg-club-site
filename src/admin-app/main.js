@@ -10,6 +10,7 @@ import { AdminFundraisersList, AdminLeaguesList, AdminMeetingsList } from "./clu
 import { AdminBagTagsPanel } from "./bag-tags-panel.js";
 import { AdminCommunityPanel } from "./community-panel.js";
 import { AdminMarketplacePanel } from "./marketplace-panel.js";
+import { AdminLostFoundPanel } from "./lost-found-panel.js";
 import { AdminCourseForm } from "./course-form.js";
 import { AdminCourseHealth } from "./course-health.js";
 import { AdminCoursesList } from "./courses-list.js";
@@ -246,6 +247,11 @@ if (communityMount) {
 const marketplaceMount = document.getElementById("adminMarketplaceReactApp");
 if (marketplaceMount) {
   flushSync(() => createRoot(marketplaceMount).render(h(AdminMarketplacePanel)));
+}
+
+const lostFoundMount = document.getElementById("adminLostFoundReactApp");
+if (lostFoundMount) {
+  flushSync(() => createRoot(lostFoundMount).render(h(AdminLostFoundPanel)));
 }
 
 const dataArchiveDestinationFormMount = document.getElementById("adminDataArchiveDestinationFormReactApp");

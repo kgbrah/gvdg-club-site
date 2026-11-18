@@ -20,9 +20,19 @@ import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
 import { InboxHomeAlert } from "./inbox-home-alert.js";
+import { useInboxSummary } from "./inbox-summary.js";
 import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
 
 const h = React.createElement;
+
+// "Recently returned" (Lost & Found): data from the inbox summary Home already loads; code only when needed.
+const ReturnedHomeCard = React.lazy(() => import("./returned-home-card.js").then((module) => ({ default: module.ReturnedHomeCard })));
+
+function HomeReturned({ token }) {
+  const recent = useInboxSummary(token).lostFound?.recent || [];
+  if (!recent.length) return null;
+  return h(React.Suspense, { fallback: null }, h(ReturnedHomeCard, { recent }));
+}
 
 function initials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
@@ -310,5 +320,6 @@ export function MemberOverviewDashboard() {
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
+    h(HomeReturned, { key: "returned", token }),
   ]);
 }
