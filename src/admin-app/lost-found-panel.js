@@ -1,9 +1,9 @@
-// Admin moderation for Lost & Found: reports, photos still waiting for a redacted copy, AI match review,
+// Admin moderation for Lost & Found: reports (with the reported item's photos, each removable), AI match review,
 // recent karma (with reversal), hidden items and the log. Every action needs a short reason; the Worker logs
-// it. Admins see scores and reason codes, never the private ink text or the original photos.
+// it. Admins see scores and reason codes, never the private ink text.
 import React from "react";
 
-import { adminJson, adminToken } from "./admin-api.js";
+import { adminAuthBase, adminJson, adminToken } from "./admin-api.js";
 import { currentAdminActiveTab, currentAdminAuthGateState } from "./admin-shell-state.js";
 
 const h = React.createElement;
@@ -12,10 +12,11 @@ const REASONS = {
   not_mine: "Claiming someone else's disc", wrong_info: "Wrong or misleading details", privacy: "Shows private information",
   inappropriate: "Inappropriate", spam: "Spam", other: "Something else",
 };
-const PHOTO_ERRORS = {
-  ai_unavailable: "AI unavailable", ai_unsure: "AI unsure about the writing", ai_budget: "Daily AI budget used", redact_failed: "Couldn't process the image",
-  original_missing: "Original missing",
-};
+
+/** Only "/lost-found/photos/<id>" becomes an image URL. */
+function photoSrc(photo) {
+  return typeof photo?.url === "string" && /^\/lost-found\/photos\/\d{1,12}$/.test(photo.url) ? adminAuthBase() + photo.url : "";
+}
 
 function access() {
   return currentAdminActiveTab() === "lost-found" && currentAdminAuthGateState().status === "panel";
@@ -143,14 +144,13 @@ export function AdminLostFoundPanel() {
 
   const data = state.data || {};
   const reports = Array.isArray(data.reports) ? data.reports : [];
-  const photos = Array.isArray(data.photos) ? data.photos : [];
   const matches = Array.isArray(data.matches) ? data.matches : [];
   const karma = Array.isArray(data.karma) ? data.karma : [];
   const hiddenPosts = Array.isArray(data.hidden?.posts) ? data.hidden.posts : [];
   const hiddenCelebrations = Array.isArray(data.hidden?.celebrations) ? data.hidden.celebrations : [];
   const log = Array.isArray(data.log) ? data.log : [];
   return h("div", { "data-admin-lost-found": state.status === "loading" ? "loading" : "ready" }, [
-    h("p", { className: "al-note", key: "intro" }, "Reports, photos waiting for a blurred copy, AI match suggestions and karma. Every action needs a reason and is logged. Private ink text and original photos are never shown here."),
+    h("p", { className: "al-note", key: "intro" }, "Reports, AI match suggestions and karma. Photos are public as posted; take one down from a report if it shows private information. Every action needs a reason and is logged. Private ink text is never shown here."),
     h("button", { className: "admin-btn secondary", key: "refresh", onClick: () => { void load(); }, type: "button" }, "Refresh"),
     state.status === "loading" ? h("p", { className: "dash-note", key: "loading", role: "status" }, "Loading Lost & Found…") : null,
     state.status === "error" ? h("p", { className: "dash-note", key: "error", role: "alert" }, "Lost & Found couldn't load.") : null,
@@ -159,10 +159,12 @@ export function AdminLostFoundPanel() {
     list(reports, "No open reports.", (report) => {
       const target = report.target;
       const base = report.kind === "post" ? "posts" : "celebrations";
+      const pics = (Array.isArray(target?.photos) ? target.photos : []).filter((photo) => photoSrc(photo));
       return h(Card, {
         actions: [
           target && !target.hidden ? [report.kind === "post" ? "Hide post" : "Hide celebration", `/admin/lost-found/${base}/${report.targetId}/hide`, {}, "Hidden.", true] : null,
           target?.hidden ? [report.kind === "post" ? "Unhide post" : "Unhide celebration", `/admin/lost-found/${base}/${report.targetId}/unhide`, {}, "Visible again."] : null,
+          ...pics.map((photo, index) => [pics.length > 1 ? `Remove photo ${index + 1}` : "Remove photo", `/admin/lost-found/photos/${photo.id}/remove`, {}, "Photo removed."]),
           ["Resolve report", `/admin/lost-found/reports/${report.id}`, { action: "resolve" }, "Report resolved."],
           ["Dismiss report", `/admin/lost-found/reports/${report.id}`, { action: "dismiss" }, "Report dismissed."],
         ],
@@ -170,21 +172,11 @@ export function AdminLostFoundPanel() {
         meta: [REASONS[report.reason] || report.reason, " · reported by ", who(report.reporter), report.createdAt ? " · " + when(report.createdAt) : ""].join(""),
         text: [report.details, target?.text].filter(Boolean).join(" — "),
         title: (target?.title || "Removed item") + (target?.owner ? " · " + who(target.owner) : ""),
-      });
+      }, pics.length ? h("div", { className: "admin-lf-photos", key: "photos" }, pics.map((photo, index) => h("img", {
+        alt: pics.length > 1 ? `Reported photo ${index + 1}` : "Reported photo", className: "admin-lf-photo", "data-admin-lf-photo": photo.id, key: photo.id,
+        loading: "lazy", src: photoSrc(photo),
+      }))) : null);
     }, "reports"),
-
-    h("h2", { className: "admin-pane-kicker", key: "photos-title" }, `Photos awaiting a blurred copy (${photos.length})`),
-    h("p", { className: "al-note", key: "photos-note" }, "A photo goes public only after the AI read it and the server blurred any writing. These stay private until then; the cron retries with backoff."),
-    list(photos, "No photos are waiting.", (photo) => h(Card, {
-      actions: [
-        ["Retry now", `/admin/lost-found/photos/${photo.id}/retry`, {}, "Retried.", true],
-        ["Remove photo", `/admin/lost-found/photos/${photo.id}/remove`, {}, "Photo removed."],
-      ],
-      data: { "data-admin-lf-photo": photo.id, "data-admin-lf-photo-status": photo.status }, key: photo.id, reasonId: "lf-photo-" + photo.id, reload: load,
-      meta: [photo.status === "failed" ? "Gave up after " + photo.attempts + " tries" : "Try " + photo.attempts, PHOTO_ERRORS[photo.lastError] || photo.lastError,
-        photo.createdAt ? "posted " + when(photo.createdAt) : ""].filter(Boolean).join(" · "),
-      title: photo.title,
-    }), "photos"),
 
     h("h2", { className: "admin-pane-kicker", key: "matches-title" }, `AI match suggestions (${matches.length})`),
     list(matches, "No open suggestions.", (match) => h(Card, {

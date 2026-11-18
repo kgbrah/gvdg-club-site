@@ -83,3 +83,14 @@ test("Lost & Found is reachable from the member and admin apps and stays lazy", 
   assert.match(page, /<body data-public-polish="shop" data-auth-base="" data-page="lost-found">/);
   assert.match(page, /<div id="lostFoundReactApp"><\/div>/);
 });
+
+test("photo copy: photos are public, the tip says how to cover writing, and nothing promises blurring", async () => {
+  const model = await import("../src/shared/lost-found-model.js");
+  assert.match(model.LF_PHOTO_TIP, /^Photos are public\./);
+  assert.match(model.LF_PHOTO_TIP, /thumb or a strip of tape/);
+  assert.equal(model.LF_NUDGE_TEXT, "This photo may show a name or phone number, and anyone can see it.");
+  for (const value of Object.values(model)) {
+    const text = typeof value === "string" ? value : value && typeof value === "object" ? JSON.stringify(value) : "";
+    assert.doesNotMatch(text, /blur|redact/i);
+  }
+});

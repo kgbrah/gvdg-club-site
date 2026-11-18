@@ -1230,7 +1230,28 @@
 
 /* ==== Lost & Found (lost-found.html): the Pro Shop marketplace's cards, panels and chips, plus a few pieces of its own ==== */
 [data-page="lost-found"] .lf-photo-fallback { position: relative; flex-direction: column; gap: 6px; }
-[data-page="lost-found"] .lf-photo-pending { font: 700 .82rem/1.2 Archivo, system-ui, sans-serif; letter-spacing: .02em; text-transform: none; }
+[data-page="lost-found"] .lf-photo-tip { margin: 0 0 4px; color: var(--text-primary); font: 650 .9rem/1.45 Archivo, system-ui, sans-serif; }
+[data-page="lost-found"] .lf-nudge-title { display: flex; align-items: center; gap: 6px; }
+[data-page="lost-found"] .lf-nudge-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+[data-page="lost-found"] .lf-nudge {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--site-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--site-paper));
+}
+[data-page="lost-found"] .lf-nudge-thumb { width: 88px; height: 88px; border-radius: 8px; object-fit: cover; }
+[data-page="lost-found"] .lf-nudge-body { display: grid; gap: 6px; min-width: 0; }
+[data-page="lost-found"] .lf-nudge-label { color: var(--text-primary); font: 700 .92rem/1.3 Archivo, system-ui, sans-serif; overflow-wrap: anywhere; }
+[data-page="lost-found"] .lf-nudge-text { margin: 0; color: var(--text-primary); font: 650 .93rem/1.4 Archivo, system-ui, sans-serif; }
+[data-page="lost-found"] .lf-nudge-actions { margin: 0; }
+@media (max-width: 360px) {
+  [data-page="lost-found"] .lf-nudge { grid-template-columns: minmax(0, 1fr); }
+  [data-page="lost-found"] .lf-nudge-thumb { width: 100%; height: auto; aspect-ratio: 4 / 3; }
+}
 [data-page="lost-found"] .lf-karma {
   background: color-mix(in srgb, var(--accent) 26%, var(--site-paper));
   border-color: color-mix(in srgb, var(--accent) 55%, var(--site-line));

@@ -13,7 +13,7 @@ export function CelebrationCard({ celebration, viewer }) {
   const who = celebration.role === "owner" ? "Got their disc back" : "Returned a disc";
   return h("article", { className: "product-card market-card lf-celebration", "data-lf-celebration": celebration.id }, [
     h("div", { className: "market-card-photo", key: "photo" }, h(LfPhoto, { alt: celebration.caption || "Celebration photo",
-      pending: !celebration.photos?.length && celebration.photoPending > 0, photo: celebration.photos?.[0] })),
+      photo: celebration.photos?.[0] })),
     h("div", { className: "product-body", key: "body" }, [
       celebration.caption ? h("p", { className: "product-name lf-caption", key: "caption" }, celebration.caption) : null,
       h("div", { className: "product-meta", key: "who" }, h(PersonLine, { person: celebration.author })),

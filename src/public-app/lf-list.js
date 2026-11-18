@@ -12,7 +12,7 @@ export function PostCard({ post, showPoster = true }) {
   const status = post.status === "open" ? null : POST_STATUS_LABELS[post.status] || post.status;
   return h("article", { className: "product-card market-card lf-card", "data-lf-post": post.id, "data-lf-kind": post.kind, "data-status": post.status }, [
     h("a", { "aria-hidden": "true", className: "market-card-photo", href, key: "photo", tabIndex: -1 }, [
-      h(LfPhoto, { alt: "", key: "img", pending: !post.photos?.length && post.photoPending > 0, photo: post.photos?.[0] }),
+      h(LfPhoto, { alt: "", key: "img", photo: post.photos?.[0] }),
       status ? h("span", { className: "market-chip market-chip-pending market-card-flag", key: "flag" }, status) : null,
     ]),
     h("div", { className: "product-body", key: "body" }, [

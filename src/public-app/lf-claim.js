@@ -50,7 +50,7 @@ export function MatchView({ id }) {
         ? `Someone found ${withArticle(title)} that looks like your lost ${match.lost.title}.`
         : `Someone found ${withArticle(title)}, and it may be yours.`),
       h("div", { className: "market-detail", key: "detail" }, [
-        h(Gallery, { key: "gallery", pending: post.photoPending, photos: post.photos, title }),
+        h(Gallery, { key: "gallery", photos: post.photos, title }),
         h("div", { className: "lf-match-copy", key: "copy" }, [
           h(Facts, { key: "facts", post }),
           match.reasons?.length ? h("div", { className: "lf-reasons", key: "reasons" }, [
@@ -204,7 +204,7 @@ export function CelebrateForm({ id }) {
     h("a", { className: "market-back", href: "#claim/" + claim.id, key: "back" }, "Back to the return"),
     h("form", { "aria-label": "Post a celebration", className: "market-form market-panel", key: "form", noValidate: true, onSubmit: submit }, [
       h("h2", { className: "my-orders-title", key: "t" }, "Celebrate the return"),
-      h(PrivacyNote, { key: "privacy" }, "Celebration photos get the same check as found-disc photos: any writing on the disc is blurred before it's shown."),
+      h(PrivacyNote, { key: "privacy" }, "Celebration photos are public on the Returned wall."),
       h(PhotoPicker, { key: "photos", legend: "Photos (1 or 2)", max: LF_MAX_PHOTOS.celebration, min: 1, onError: (text) => action.setMessage({ text, tone: "error" }), photos, setPhotos }),
       h(Field, { id: "lfCaption", key: "caption", label: "Caption" },
         h("textarea", { id: "lfCaption", key: "input", maxLength: LF_LIMITS.caption, onChange: (event) => setCaption(event.target.value), placeholder: "Back in the bag where it belongs!", rows: 2, value: caption })),

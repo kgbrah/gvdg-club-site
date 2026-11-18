@@ -33,7 +33,7 @@ export function ReturnedHomeCard({ recent }) {
           ? h("img", { alt: "", className: "member-returned-thumb", key: "img", loading: "lazy", src })
           : h("span", { "aria-hidden": "true", className: "member-returned-thumb member-returned-fallback", key: "img" }, h(Disc3, { size: 20 })),
         h("span", { className: "member-returned-copy", key: "copy" }, [
-          h("strong", { key: "what" }, `${row.finder?.name || "A member"} returned ${/^[aeiou]/i.test(String(row.disc || "")) ? "an" : "a"} ${row.disc}`),
+          h("strong", { key: "what" }, `${row.finder?.name || "A finder"} returned ${/^[aeiou]/i.test(String(row.disc || "")) ? "an" : "a"} ${row.disc}`),
           h("small", { key: "meta" }, [karma, row.course].filter(Boolean).join(" · ")),
         ]),
       ]);

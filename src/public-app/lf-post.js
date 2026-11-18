@@ -1,5 +1,6 @@
-// One Lost & Found post: the redacted photos and details, the poster's karma, and what this viewer can do
-// (claim it, follow a match, or - for the poster - see claims, turn it in to a club bin, or close it).
+// One Lost & Found post: its photos and details, the poster's karma, and what this viewer can do (claim it,
+// follow a match, or - for the poster - check a photo the club's private read flagged, see claims, turn it in to a
+// club bin, or close it).
 import React from "react";
 
 import {
@@ -9,22 +10,21 @@ import { Note, StatusLine, useAction } from "./market-ui.js";
 import {
   announceLfChange, LfLoad, LfPhoto, lfRequest, LfReportControl, PersonLine, PrivacyNote, useLfConfig, useLfIdentityGate, useLfResource,
 } from "./lf-ui.js";
+import { PhotoNudges } from "./lf-nudge.js";
 
 const h = React.createElement;
 
-export function Gallery({ photos, pending, title }) {
+export function Gallery({ photos, title }) {
   const list = Array.isArray(photos) && photos.length ? photos : [null];
   const [index, setIndex] = React.useState(0);
   const current = list[Math.min(index, list.length - 1)];
   return h("div", { className: "market-gallery", "data-lf-gallery": photos?.length || 0 }, [
     h(LfPhoto, { alt: title + (list.length > 1 ? `, photo ${index + 1} of ${list.length}` : ""), className: "product-img market-gallery-main", key: "main",
-      pending: !photos?.length && pending > 0, photo: current }),
+      photo: current }),
     list.length > 1 ? h("div", { className: "market-thumbs", key: "thumbs" }, list.map((photo, position) => h("button", {
       "aria-label": `Show photo ${position + 1}`, "aria-pressed": position === index ? "true" : "false", className: "market-thumb", key: photo?.id || position,
       onClick: () => setIndex(position), type: "button",
     }, h(LfPhoto, { alt: "", className: "market-thumb-img", photo })))) : null,
-    photos?.length ? h("p", { className: "market-hint", key: "redacted" }, "Any writing on the disc is blurred in this photo.")
-      : pending ? h("p", { className: "market-hint", key: "pending" }, "We're still checking the photo. It appears once any writing on the disc is blurred out.") : null,
   ]);
 }
 
@@ -111,7 +111,7 @@ function PosterTools({ post, reload }) {
       h("a", { className: "shop-btn", href: matchHref(match.id), key: "open" }, "Is this yours?"),
     ]))) : null,
     post.photos?.length ? h("div", { className: "lf-photo-tools", key: "photo-tools" }, [
-      h(Note, { key: "n" }, "We blur writing automatically. If a name or number still shows in a photo, take that photo down."),
+      h(Note, { key: "n" }, "Anyone can see these photos. Take one down if it shows a name or phone number."),
       h("div", { className: "market-actions", key: "a" }, post.photos.map((photo, index) => h("button", {
         className: "shop-filter-reset", disabled: action.busy, key: photo.id,
         onClick: () => act("photos/" + photo.id + "/remove", {}, "Photo removed."), type: "button",
@@ -154,7 +154,7 @@ export function PostDetail({ id }) {
   return h("section", { "data-lf-kind": post.kind, "data-lf-state": "ready", "data-lf-view": "post" }, [
     h("a", { className: "market-back", href: found ? "#found" : "#lost", key: "back" }, found ? "Back to found discs" : "Back to lost discs"),
     h("div", { className: "market-detail", key: "detail" }, [
-      h(Gallery, { key: "gallery", pending: post.photoPending, photos: post.photos, title }),
+      h(Gallery, { key: "gallery", photos: post.photos, title }),
       h("div", { className: "market-panel lf-detail-panel", key: "panel" }, [
         h("span", { className: "market-kicker", key: "kind" }, found ? "FOUND DISC" : "LOST DISC"),
         h("h2", { className: "market-title", key: "title" }, title),
@@ -166,10 +166,14 @@ export function PostDetail({ id }) {
           : post.myMatch ? h("a", { className: "shop-btn market-buy", href: matchHref(post.myMatch.id), key: "my-match" }, "We think this may be yours")
             : found && post.canClaim ? h(ClaimForm, { key: "claim", post, viewer })
               : !found ? h("a", { className: "shop-btn secondary", href: "#new/found", key: "found-it" }, "Found it? Post a found disc") : null,
-        found && !post.mine ? h(PrivacyNote, { key: "privacy" }, "Writing on found discs is read privately to find the owner and is never shown here.") : null,
+        found && !post.mine ? h(PrivacyNote, { key: "privacy" }, "The club reads writing on found discs privately to find the owner. It's never shown here as text.") : null,
         post.canReport ? h(LfReportControl, { id: post.id, key: "report", kind: "post", label: "Report this post", viewer }) : null,
       ]),
     ]),
+    post.mine ? h(PhotoNudges, {
+      key: "nudges", onChanged: reload,
+      photos: (post.myPhotos || []).map((photo, index, all) => ({ ...photo, label: all.length > 1 ? `Photo ${index + 1}` : "" })).filter((photo) => photo.nudge),
+    }) : null,
     post.mine ? h(PosterTools, { key: "tools", post, reload }) : null,
   ]);
 }

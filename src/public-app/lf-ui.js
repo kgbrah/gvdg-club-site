@@ -16,7 +16,7 @@ export function announceLfChange() {
   window.dispatchEvent(new CustomEvent("gvdg:lf-changed"));
 }
 
-/** Only "/lost-found/photos/<id>" (always a redacted copy) becomes an image URL. */
+/** Only "/lost-found/photos/<id>" (a post's or celebration's public photo) becomes an image URL. */
 export function lfPhotoSrc(photo) {
   const path = typeof photo === "string" ? photo : photo?.url;
   return typeof path === "string" && /^\/lost-found\/photos\/\d{1,12}$/.test(path) ? marketBase() + path : "";
@@ -96,15 +96,11 @@ export function useLfResource(path) {
   return { ...state, retry: () => setAttempt((value) => value + 1) };
 }
 
-export function LfPhoto({ photo, alt, className = "product-img", pending = false }) {
+export function LfPhoto({ photo, alt, className = "product-img" }) {
   const src = lfPhotoSrc(photo);
   const [failed, setFailed] = React.useState("");
   if (src && failed !== src) return h("img", { alt: alt || "", className, loading: "lazy", onError: () => setFailed(src), src });
-  return h("div", { "aria-hidden": pending ? undefined : "true", className: "product-fallback lf-photo-fallback" + (pending ? " is-pending" : ""), role: pending ? "img" : undefined,
-    "aria-label": pending ? "Photo being checked" : undefined }, [
-    h(Disc3, { key: "icon", size: 44, strokeWidth: 1.45 }),
-    pending ? h("span", { className: "lf-photo-pending", key: "text" }, "Photo being checked") : null,
-  ]);
+  return h("div", { "aria-hidden": "true", className: "product-fallback lf-photo-fallback" }, h(Disc3, { size: 44, strokeWidth: 1.45 }));
 }
 
 export function GuestBadge() {

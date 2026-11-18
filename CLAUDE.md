@@ -159,7 +159,7 @@ register, live score/card writes. **Admin-gated**: all `/admin/*` + event live-s
 | Courses / imports | `layouts.ts`, `distance.ts`, `assign.ts`, `imports.ts` + `imports/{fetch,csv,events,udisc}.ts`, `tee-sign-routes.ts` | SSRF-guarded imports; tee-signs → R2 |
 | Pro-shop / wallet | `shop-db.ts`, `club-shop-routes.ts`, `club-admin-shop.ts`, `order-notify.ts`, `wallet-idempotency.ts` | wallet = append-only ledger |
 | Used-disc marketplace | `market-routes.ts` → `market-{listings,deals,wanted,guest,admin,store,input,photos,notify,crypto,sweep,http}.ts` | `/market/*` + `/admin/market/*`; tables from `0063` |
-| Lost & Found | `lf-routes.ts` → `lf-{posts,claims,social,admin,store,input,process,vision,match,redact,notify}.ts` | `/lost-found/*` + `/admin/lost-found/*`; tables from `0064`; photon WASM redaction |
+| Lost & Found | `lf-routes.ts` → `lf-{posts,photos,claims,social,admin,store,input,process,vision,match,notify}.ts` | `/lost-found/*` + `/admin/lost-found/*`; tables from `0064`; photos public as uploaded |
 | Ratings | `ratings.ts` (display), `rating-engine.ts` + `rating-store.ts` + `ratings-recompute*.ts` (PDGA SSA), `pdga.ts` | **two** distinct systems |
 | Integrations | `assistant.ts`+`assistant-route.ts`, `vision.ts`, `photos.ts`, `weather.ts`, `feeds.ts`, `register-notify.ts` | AI, OCR, weather, email, Google-Sheet feeds |
 
@@ -228,12 +228,13 @@ freeform notes.
   the real Worker in-process.
 - **Lost & Found** (`lost-found.html`, lazy chunk `public-app/chunks/lf-app-*.js`; member tab `lost-found`, admin tab
   `lost-found`). Anyone posts found/lost discs; non-members use the **marketplace's guest identity** (`market_guests`, `mkt`
-  token; `/lost-found/guest/*` and `/market/guest/*` are the same identity). **Privacy invariants:** a found photo's original is
-  stored under `lost-found/private/…` and is **never served by any route**; `/lost-found/photos/:id` serves only the redacted copy.
-  `lf-process.ts` (waitUntil after a post, then the */15 cron with backoff) asks Gemini for disc details + ink with boxes
-  (`lf-vision.ts`); only a **trusted (`gemini:`), fully boxed, confident** read publishes a photo, which `lf-redact.ts` re-encodes
-  with the padded boxes mosaicked (photon, imported lazily). No AI / unsure / untrusted fallback → no public photo (fail-closed).
-  Ink text, `lf_posts.private_ink` and original keys never appear in a payload (`lf-store.ts` builds every shape from an
+  token; `/lost-found/guest/*` and `/market/guest/*` are the same identity). **Photos are public as uploaded** (magic bytes, size
+  cap, EXIF/XMP stripped at the byte level; the Worker never decodes an image) and the forms ask posters to cover names and phone
+  numbers. `lf-process.ts` (waitUntil after a post, then the */15 cron with backoff; 429 = try later; daily budget
+  `LF_DAILY_VISION_BUDGET`, per-minute `LF_VISION_PER_MINUTE`) asks Gemini once per photo for disc details + ink (`lf-vision.ts`);
+  the read feeds details, matching and an **uploader-only nudge** (`lf_photos.nudge`: "may show a name or phone number" with
+  Replace photo / Keep it, `lf-photos.ts`; never the text, never anyone else). Privacy invariants: ink text, `lf_posts.private_ink`,
+  R2 keys and nudges never appear in another party's payload (`lf-store.ts` builds every shape from an
   allow-list; `test/lost-found.test.ts` greps every public payload). Matching (`lf-match.ts`, pure) scores ink phone/name vs the
   lost post's private text or the member's roster name first, then details, course/nearby, date; a roster member whose full name
   is on a disc is told directly. Claims: `open → returned → confirmed`; karma is an **append-only ledger** (`lf_karma`, triggers

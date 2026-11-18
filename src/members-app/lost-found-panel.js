@@ -1,7 +1,7 @@
 // Member app entry to Lost & Found: what's waiting on you (possible matches, returns in progress), your karma,
 // and links into lost-found.html. Lazy chunk; Lost & Found itself lives on its own page.
 import React from "react";
-import { ChevronRight, Handshake, HandHeart, PackageSearch, Search, Trophy } from "lucide-react";
+import { ChevronRight, EyeOff, Handshake, HandHeart, PackageSearch, Search, Trophy } from "lucide-react";
 
 import { requestJson } from "./api.js";
 
@@ -45,6 +45,14 @@ export function waitingRows(data) {
       : (claim.status === "returned" ? "The finder marked it returned. Confirm you got it back" : `${claim.finder?.name || "The finder"} has it. Arrange the return`);
     rows.push({ key: "c" + id, href: `${PAGE}#claim/${id}`, icon: Handshake, title: (finder ? "Return " : "Get back ") + title(claim.found), detail });
   }
+  // Your own photos the club's private read flagged (only you ever see this; never what was read).
+  for (const photo of Array.isArray(data?.nudges) ? data.nudges : []) {
+    const id = positive(photo.id);
+    if (!id) continue;
+    const postId = positive(photo.postId);
+    rows.push({ key: "n" + id, href: postId ? `${PAGE}#post/${postId}` : `${PAGE}#mine`, icon: EyeOff, title: "Check your photo of the " + title(photo),
+      detail: "It may show a name or phone number. Replace it or keep it" });
+  }
   return rows;
 }
 
@@ -80,7 +88,7 @@ export function MemberLostFoundPage({ token }) {
         h(LinkRow, { detail: "Discs people found on our courses", href: `${PAGE}#found`, icon: Search, key: "found", title: "Found discs" }),
         h(LinkRow, { detail: "Discs people are looking for", href: `${PAGE}#lost`, icon: PackageSearch, key: "lost", title: "Lost discs" }),
         h(LinkRow, { detail: "Returned discs and Top finders", href: `${PAGE}#returned`, icon: Trophy, key: "returned", title: "Returned" }),
-        h(LinkRow, { detail: "Writing on the disc is kept private and blurred in photos", href: `${PAGE}#new/found`, icon: HandHeart, key: "post-found", title: "Post a found disc" }),
+        h(LinkRow, { detail: "Photos are public, so cover any name or phone number", href: `${PAGE}#new/found`, icon: HandHeart, key: "post-found", title: "Post a found disc" }),
         h(LinkRow, { detail: "What's written on it stays private", href: `${PAGE}#new/lost`, icon: PackageSearch, key: "post-lost", title: "Post a lost disc" }),
         h(LinkRow, { detail: "Posts, matches and returns", href: `${PAGE}#mine`, icon: Handshake, key: "mine", title: "My posts" }),
       ]),

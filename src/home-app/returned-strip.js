@@ -64,7 +64,7 @@ export function HomeReturnedStrip() {
   if (!items.length) return null;
   return h("section", { "aria-labelledby": "returnedDiscsTitle", className: "section", "data-home-returned-strip": items.length, id: "returned-discs" }, [
     h("h2", { className: "section-title visible", id: "returnedDiscsTitle", key: "title" }, "Recently Returned"),
-    h("p", { className: "section-subtitle", key: "subtitle" }, "Lost discs that found their way home, thanks to the members who returned them."),
+    h("p", { className: "section-subtitle", key: "subtitle" }, "Lost discs that found their way home, thanks to the finders who returned them."),
     h("ul", { className: "returned-list", key: "list" }, items.map((item) => h(ReturnedItem, { item, key: item.claimId }))),
     h("p", { className: "returned-footer", key: "footer" }, h("a", { className: "view-all-link", href: "lost-found.html#returned" }, [
       "Lost a disc, or found one? Lost & Found",

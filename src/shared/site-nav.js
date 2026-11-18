@@ -11,6 +11,7 @@ export const SITE_NAV_PRIMARY = [
   { label: "Keep score", href: "score.html", page: "score" },
   { label: "Events", href: "events.html", page: "events" },
   { label: "Pro Shop", href: "pro-shop.html", page: "pro-shop" },
+  { label: "Lost & Found", href: "lost-found.html", page: "lost-found" },
   { label: "Members", href: "gvdg-members.html", page: "gvdg-members" },
 ];
 export const SITE_NAV_MORE = [

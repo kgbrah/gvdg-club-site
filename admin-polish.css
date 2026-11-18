@@ -945,3 +945,5 @@ body.admin-page.player-theme-active {
 
 /* Lost & Found moderation: the close / merge tool's two id fields sit side by side when there is room. */
 .admin-lf-post-fields { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.admin-lf-photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.admin-lf-photo { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--admin-hairline); }

@@ -8,7 +8,7 @@ export const LF_TABS = [
 ];
 
 export const LF_TAB_COPY = {
-  found: "Found a disc on the course? Post it. We read the disc and any writing on it privately, blur the writing out of the photo, and let a likely owner know.",
+  found: "Found a disc on the course? Post it. We read the disc and any writing on it privately and let a likely owner know.",
   lost: "Lost a disc? Describe it. What's written on it stays private and is only used to match it with found discs.",
   returned: "Discs that made it home, and the finders who brought them back.",
   mine: "Your posts, possible matches and returns in progress.",
@@ -25,6 +25,11 @@ export const LF_REPORT_REASONS = [
 
 export const LF_LIMITS = { brand: 40, mold: 40, plastic: 40, color: 40, area: 60, binNote: 80, rewardNote: 80, privateInk: 120, message: 500, caption: 200 };
 export const LF_MAX_PHOTOS = { found: 3, lost: 2, celebration: 2 };
+
+/** Shown wherever photos are added: photos are public as uploaded. */
+export const LF_PHOTO_TIP = "Photos are public. Cover any name or phone number on the disc (a thumb or a strip of tape works) or show the other side.";
+/** The uploader-only nudge when the private read found a name or phone number in one of their photos. */
+export const LF_NUDGE_TEXT = "This photo may show a name or phone number, and anyone can see it.";
 
 const PERSON_KEY = /^[0-9a-f]{18}$/;
 

@@ -1,10 +1,11 @@
 // Post a found or a lost disc. Members post directly; anyone else verifies their email first (the club's guest
 // identity, shared with the marketplace). Photos are resized on the phone (which drops location data) and the
-// server strips metadata again, reads the writing privately and blurs it out before a photo is shown.
+// server strips metadata again. Photos are public as posted, so the form asks posters to cover names and
+// phone numbers; the club reads the writing privately to find the owner.
 import React from "react";
 
 import { resizeImageFile } from "../shared/image-resize.js";
-import { LF_LIMITS, LF_MAX_PHOTOS, lfErrorMessage, postHref, postPayload, validatePost } from "../shared/lost-found-model.js";
+import { LF_LIMITS, LF_MAX_PHOTOS, LF_PHOTO_TIP, lfErrorMessage, postHref, postPayload, validatePost } from "../shared/lost-found-model.js";
 import { Note, StatusLine, useAction } from "./market-ui.js";
 import { announceLfChange, lfRequest, PrivacyNote, useLfConfig, useLfIdentityGate } from "./lf-ui.js";
 import { useCourses } from "./lf-list.js";
@@ -49,6 +50,7 @@ export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, onError
   }
   return h("fieldset", { className: "market-fieldset market-photos", "data-lf-field": "photos" }, [
     h("legend", { key: "legend" }, legend || `Photos (${min ? min + " to " : "up to "}${max})`),
+    h("p", { className: "lf-photo-tip", "data-lf-photo-tip": "true", key: "tip" }, LF_PHOTO_TIP),
     photos.length ? h("ul", { className: "market-photo-list", key: "list" }, photos.map((photo, index) => h("li", { className: "market-photo-item", key: photo.key }, [
       h("img", { alt: `Photo ${index + 1}`, className: "market-photo-thumb", key: "img", src: photo.dataUrl }),
       h("button", { "aria-label": `Remove photo ${index + 1}`, className: "shop-filter-reset", disabled: busy, key: "remove",
@@ -112,11 +114,11 @@ export function NewPost({ kind }) {
     h("form", { "aria-label": found ? "Post a found disc" : "Post a lost disc", className: "market-form market-panel lf-form", key: "form", noValidate: true, onSubmit: submit }, [
       h("h2", { className: "my-orders-title", key: "title" }, found ? "Post a found disc" : "Post a lost disc"),
       found
-        ? h(PrivacyNote, { key: "privacy" }, "Writing on a disc often includes a name or phone number. We read it privately to find the owner, and the public photo has it blurred out. A photo we can't check yet stays hidden.")
-        : h(PrivacyNote, { key: "privacy" }, "What's written on your disc stays private: it's only used to match your disc with found ones and is never shown to anyone."),
+        ? h(PrivacyNote, { key: "privacy" }, "Anyone can see the photos you post. We also read any writing on the disc privately, only to find its owner.")
+        : h(PrivacyNote, { key: "privacy" }, "What you type about the writing on your disc stays private: it's only used to match your disc with found ones and is never shown to anyone. Any photo you add is public."),
       h(PhotoPicker, {
         key: "photos", max: LF_MAX_PHOTOS[kind], min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
-        hint: found ? "Show the top, the bottom and any writing. Photos are resized on your phone and location data is removed." : "Optional: a photo of the same disc or one like it.",
+        hint: found ? "Show the top and the bottom. Photos are resized on your phone and location data is removed." : "Optional: a photo of the same disc or one like it.",
         legend: found ? "Photos (1 to 3)" : "Photos (optional, up to 2)",
       }),
       problem?.field === "photos" ? h(Note, { key: "photo-error", tone: "error" }, problem.text) : null,
