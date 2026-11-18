@@ -1,7 +1,8 @@
 import React from "react";
 import { CalendarPlus, Check, Share2 } from "lucide-react";
 
-import { downloadCalendarFile, calendarEventFromClub } from "../shared/event-calendar.js";
+import { calendarEventFromClub } from "../shared/event-calendar.js";
+import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { eventShareUrl } from "../shared/events-display.js";
 
 const h = React.createElement;
@@ -10,15 +11,11 @@ function icon(Icon) {
   return h(Icon, { key: "i", "aria-hidden": "true", focusable: "false", size: 16, strokeWidth: 2 });
 }
 
-/** Client-generated .ics download. `event` needs name + date/starts_at (+ course_name/layout_name). */
+/** Add to calendar (Google / Outlook / the .ics file). `event` needs name + date/starts_at (+ course_name/layout_name). */
 export function EventCalendarButton({ event }) {
   const item = React.useMemo(() => calendarEventFromClub(event), [event]);
   if (!item) return null;
-  return h("button", {
-    className: "event-action-btn",
-    onClick: () => downloadCalendarFile(item),
-    type: "button",
-  }, [icon(CalendarPlus), h("span", { key: "t" }, "Add to calendar")]);
+  return h(AddToCalendarButton, { className: "event-action-btn", item }, [icon(CalendarPlus), h("span", { key: "t" }, "Add to calendar")]);
 }
 
 /** Web Share API with a copy-link fallback. */

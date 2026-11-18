@@ -2,6 +2,7 @@ import React from "react";
 
 import { requestJson } from "./api.js";
 import { useSessionToken } from "./session-token.js";
+import { EMPTY_PDGA_REGISTRATIONS, readPdgaRegistrations } from "./pdga-registrations.js";
 
 const h = React.createElement;
 const RegistrationContext = React.createContext(null);
@@ -12,6 +13,7 @@ const idleState = {
   registrations: [],
   casualRequests: [],
   paymentsConfig: { enabled: false },
+  pdga: EMPTY_PDGA_REGISTRATIONS,
 };
 
 export function RegistrationProvider({ children }) {
@@ -34,13 +36,16 @@ export function RegistrationProvider({ children }) {
       requestJson("/registration/open", { signal: controller.signal }).catch(() => ({ events: [] })),
       requestJson("/my-registrations", { signal: controller.signal, token }).catch(() => ({ registrations: [] })),
       requestJson("/casual-rounds", { signal: controller.signal, token }).catch(() => ({ requests: [] })),
-    ]).then(([paymentsConfig, eventData, registrationData, casualData]) => {
+      // PDGA events members are registered for (checked hourly); optional, so a failure just leaves it empty.
+      requestJson("/pdga-registrations", { signal: controller.signal, token }).catch(() => EMPTY_PDGA_REGISTRATIONS),
+    ]).then(([paymentsConfig, eventData, registrationData, casualData, pdgaData]) => {
       setState({
         status: "ready",
         paymentsConfig: paymentsConfig || { enabled: false },
         events: Array.isArray(eventData.events) ? eventData.events : [],
         registrations: Array.isArray(registrationData.registrations) ? registrationData.registrations : [],
         casualRequests: Array.isArray(casualData.requests) ? casualData.requests : [],
+        pdga: readPdgaRegistrations(pdgaData),
       });
     }).catch((error) => {
       if (error.name !== "AbortError") setState((current) => ({ ...current, status: "error" }));

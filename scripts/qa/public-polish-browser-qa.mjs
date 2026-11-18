@@ -285,6 +285,21 @@ async function checkEvents(page, profile) {
   await page.locator(".ts-hole-num").getByText("Hole 18", { exact: true }).waitFor();
   assert.equal(await page.locator(".ts-hole-card").count(), 12);
   await screenshot(page, "interaction-event-tee-signs");
+  // Add to calendar opens a menu (Google / Outlook pages filled in, or the .ics file), not a bare download.
+  const calendar = page.getByRole("button", { name: "Add to calendar" });
+  if (await calendar.count()) {
+    await calendar.click();
+    const menu = page.getByRole("menu", { name: "Add to calendar" });
+    await menu.waitFor();
+    assert.equal(await menu.getByRole("menuitem").count(), 3);
+    assert.match(await menu.getByRole("menuitem", { name: "Google Calendar" }).getAttribute("href"), /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE&/);
+    const box = await menu.boundingBox();
+    assert(box && box.x >= 0 && box.x + box.width <= page.viewportSize().width + 1, "the calendar menu fits the screen");
+    await page.keyboard.press("Escape");
+    await menu.waitFor({ state: "detached" });
+  } else {
+    throw new Error("the event page has no Add to calendar button");
+  }
   await page.getByRole("button", { name: /all events/i }).click();
   await page.locator("[data-events-view=hub]").waitFor();
 }

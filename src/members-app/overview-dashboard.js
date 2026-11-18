@@ -21,7 +21,8 @@ import { WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
 import { InboxHomeAlert } from "./inbox-home-alert.js";
 import { useInboxSummary } from "./inbox-summary.js";
-import { calendarEventFromClub, calendarEventFromPdga } from "../shared/event-calendar.js";
+import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration } from "../shared/event-calendar.js";
+import { goingText, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
 
 const h = React.createElement;
 
@@ -130,8 +131,10 @@ function UpNextCard({ events, registrations }) {
 
 const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
 
-function NextPdgaCard() {
+/** Next PDGA: the member's own next registered PDGA event (found on PDGA every hour), else the nearest upcoming one. */
+function NextPdgaCard({ token }) {
   const [event, setEvent] = React.useState(null);
+  const [mine, setMine] = React.useState(null);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -144,9 +147,28 @@ function NextPdgaCard() {
       .catch((error) => {
         if (error?.name !== "AbortError") setEvent(null);
       });
+    if (token) {
+      requestJson("/pdga-registrations", { signal: controller.signal, token })
+        .then((data) => setMine(readPdgaRegistrations(data).mine[0] || null))
+        .catch(() => {});
+    }
     return () => controller.abort();
-  }, []);
+  }, [token]);
 
+  if (mine) {
+    return h("div", { className: "player-story-block", "data-react-home-pdga": "registered", key: "pdga" }, [
+      h("h3", { key: "title" }, "Next PDGA"),
+      h("div", { className: "player-event-name", key: "name" }, mine.name),
+      h("div", { className: "player-card-meta", key: "meta" }, pdgaEventMeta(mine)),
+      h("div", { className: "player-chip-row", key: "chips" }, h("span", { className: "player-chip" }, "You're registered" + (mine.division ? " · " + mine.division : ""))),
+      mine.going?.length ? h("div", { className: "player-card-meta", key: "going" }, "Also going: " + goingText(mine.going)) : null,
+      h("div", { className: "member-action-grid", key: "actions" }, [
+        h("a", { className: "player-btn primary", href: mine.url, key: "pdga", rel: "noopener noreferrer", target: "_blank" }, "PDGA page"),
+        h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdgaRegistration(mine), key: "cal", label: "Calendar" }),
+        h("button", { className: "player-btn", key: "all", type: "button", onClick: () => selectDashboardTab("events") }, "All events"),
+      ]),
+    ]);
+  }
   if (!event) return null;
   const miles = typeof event.miles === "number" ? `${event.miles.toFixed(1)} mi` : "";
   const meta = [event.date, event.course, miles].filter(Boolean).join(" · ");
@@ -316,7 +338,7 @@ export function MemberOverviewDashboard() {
       h(RatingMove, { stats: pdgaState.stats, status: pdgaState.status, key: "rating" }),
       h(LastRoundCard, { token, onCasualHistory: setPlayedCasual, key: "recent" }),
       h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
-      h(NextPdgaCard, { key: "next-pdga" }),
+      h(NextPdgaCard, { key: "next-pdga", token }),
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),

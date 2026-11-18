@@ -151,3 +151,70 @@ export function downloadCalendarFile(item) {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** A PDGA event a club member is registered for (from /pdga-registrations: ISO start / end dates). */
+export function calendarEventFromPdgaRegistration(event) {
+  const start = String(event?.start || "");
+  const end = String(event?.end || start);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || !event?.name) return null;
+  const url = String(event.url || "");
+  return allDayItem({
+    uid: `gvdg-pdga-${slug(String(event.eventId || event.name))}@gvdgclub.com`,
+    summary: event.name,
+    location: event.location || "",
+    description: [event.division ? "Division: " + event.division : "", url ? "PDGA: " + url : ""].filter(Boolean).join("\n"),
+    url,
+    start: start.replace(/-/g, ""),
+    end: addDays(end.replace(/-/g, ""), 1),
+  });
+}
+
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Nov 21, 2026", "Nov 21–22, 2026", "Sep 13 – Nov 29, 2026", "Dec 30, 2026 – Jan 2, 2027" from ISO dates. */
+export function dateRangeText(start, end = start) {
+  const read = (value) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+    return match ? { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) } : null;
+  };
+  const a = read(start);
+  const b = read(end) || a;
+  if (!a) return "";
+  const month = (date) => SHORT_MONTHS[date.month - 1] || "";
+  if (a.year !== b.year) return `${month(a)} ${a.day}, ${a.year} – ${month(b)} ${b.day}, ${b.year}`;
+  if (a.month !== b.month) return `${month(a)} ${a.day} – ${month(b)} ${b.day}, ${b.year}`;
+  if (a.day !== b.day) return `${month(a)} ${a.day}–${b.day}, ${a.year}`;
+  return `${month(a)} ${a.day}, ${a.year}`;
+}
+
+/** Google Calendar's "add event" page, filled in (opens the Calendar app on Android phones that have it). */
+export function googleCalendarUrl(item) {
+  if (!item) return "";
+  const params = new URLSearchParams({ action: "TEMPLATE", text: item.summary, dates: `${item.start}/${item.end}` });
+  if (item.description) params.set("details", item.description);
+  if (item.location) params.set("location", item.location);
+  return "https://calendar.google.com/calendar/render?" + params.toString();
+}
+
+function outlookTime(stamp, allDay) {
+  if (allDay) return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}`;
+  return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}T${stamp.slice(9, 11)}:${stamp.slice(11, 13)}:${stamp.slice(13, 15)}Z`;
+}
+
+/** Outlook.com's "new event" page, filled in. */
+export function outlookCalendarUrl(item) {
+  if (!item) return "";
+  const params = new URLSearchParams({
+    path: "/calendar/action/compose", rru: "addevent", subject: item.summary,
+    startdt: outlookTime(item.start, item.allDay), enddt: outlookTime(item.end, item.allDay),
+  });
+  if (item.allDay) params.set("allday", "true");
+  if (item.location) params.set("location", item.location);
+  if (item.description) params.set("body", item.description);
+  return "https://outlook.live.com/calendar/0/deeplink/compose?" + params.toString();
+}
+
+/** Which calendar to offer first: Apple's on iPhone / iPad / Mac, Google's everywhere else. */
+export function preferredCalendar(userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent) {
+  return /iPhone|iPad|iPod|Macintosh/.test(String(userAgent)) ? "apple" : "google";
+}

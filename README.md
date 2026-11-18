@@ -54,8 +54,8 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 
 *As of November 18, 2026.* `main` is live on `gvdgclub.com`; check the exact commit with `curl -s https://gvdgclub.com/version.json`.
 
-- **Shipped in November 2026:** the used-disc marketplace (0063), Lost & Found (0064), the in-app camera, one-thumb disc pick-lists and "Say it" voice entry, Lost & Found weight and hole (0065), course search with the course and hole filled in from the phone's location, "Return to round", Lost & Found from the scoring app's Tools, and My Bag photos with bag and marketplace cross-checks against Lost & Found (0066), whole-bag and accessory photos (0067), voice entry that records until you tap Stop (up to 30 seconds) everywhere, **Sell this** from My Bag with bags and accessories in the marketplace (0068), and editing your own Lost & Found posts.
-- **Cache versions** (bump on any change to a precached file): service worker `gvdg-club-v308`, members bundle `?v=204`, public/events bundle `?v=196`, score bundle `?v=239`, home bundle `?v=189`.
+- **Shipped in November 2026:** the used-disc marketplace (0063), Lost & Found (0064), the in-app camera, one-thumb disc pick-lists and "Say it" voice entry, Lost & Found weight and hole (0065), course search with the course and hole filled in from the phone's location, "Return to round", Lost & Found from the scoring app's Tools, and My Bag photos with bag and marketplace cross-checks against Lost & Found (0066), whole-bag and accessory photos (0067), voice entry that records until you tap Stop (up to 30 seconds) everywhere, **Sell this** from My Bag with bags and accessories in the marketplace (0068), editing your own Lost & Found posts, members' PDGA registrations in NC / VA / SC found every hour (0069), and an "Add to calendar" menu (Google, Outlook or the .ics file).
+- **Cache versions** (bump on any change to a precached file): service worker `gvdg-club-v309`, members bundle `?v=205`, public/events bundle `?v=197`, score bundle `?v=239`, home bundle `?v=189`.
 - **Hosting plan: Cloudflare Workers Free, by the owner's choice.** Every Worker invocation (cron included) gets about 10 ms of CPU, and going over kills the whole invocation. Keep image decoding, re-encoding and heavy loops off the Worker: photos are resized in the browser, and the Worker only copies bytes and calls AI services. AI keys are free tiers too (Gemini for photo reads, Groq for Whisper), with daily budgets in the Worker.
 - **Waiting on the owner:** PayPal live credentials for automatic checkout of dues, event entry and the club shop (until then: store credit, pay at the event, or an admin marks it paid). Marketplace buyers always pay sellers directly (PayPal.me, Cash App or Zelle), so the marketplace doesn't wait on this.
 - **After every deploy** the read-only *Live QA drive* visits every member and admin screen on the live site (see [AGENTS.md](AGENTS.md)); the last runs found nothing.
@@ -68,7 +68,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Home page** (`index.html`) — club identity, upcoming tournaments (auto-loaded from a published Google Sheet CSV and Disc Golf Scene), a course browser with a details modal (UDisc, directions, course-preview video), membership call-to-action, and contact info.
 - **Keep score** from the home page and nav. Park players start or join a casual card with a name. No club login.
 - **Scoring app** (`scoring-app.html`) — what the phone app actually does: wallpaper, color, and glass themes (shots of the real member Home), saved throw clips, live watch links, and the shot stats behind a score.
-- **Events hub** (`events.html`) — live / upcoming / past events, event detail pages (roster, multi-course / multi-layout venue summaries, live-scoring banner, results, CTPs, ace pots), leagues & standings. The member Events tab also lists PDGA events within 100 miles, closest first, with Disc Golf Scene registration links.
+- **Events hub** (`events.html`) — live / upcoming / past events, event detail pages (roster, multi-course / multi-layout venue summaries, live-scoring banner, results, CTPs, ace pots), leagues & standings. The member Events tab also lists PDGA events within 100 miles, closest first, with Disc Golf Scene registration links. **PDGA registrations:** every hour the Worker reads PDGA's registration lists for upcoming events in North Carolina, Virginia and South Carolina; a member's own events join *My events* (with their division, who else from the club is going, and a PDGA link) and Home's *Next PDGA*, and *Clubmates at PDGA events* shows signed-in members which events other members are registered for. **Add to calendar** opens a menu everywhere: Google Calendar or Outlook (their own "new event" page, filled in) or the .ics file for Apple Calendar and other apps (Apple's first on iPhone / Mac, Google's first elsewhere).
 - **Ryder Cup** (`ryder-cup.html`) — Red vs. Blue team match-play standings and weekly results.
 - **Blog** (`gvdg-blog.html`) and **Results archive** (`archive.html`).
 - **Crotts** — a floating AI assistant (named after club officer Max Crotts) available on public pages, grounded in the club's live calendar and courses.
@@ -159,7 +159,7 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
                cron "*/15 * * * *" → marketplace withdrawal sweep, UDisc layout import (similar names + city,
                                      unmapped only), then the Lost & Found tick last (expiry, photo purge,
                                      due AI reads, matching, bag-photo cleanup)
-               cron "7 * * * *"    → hourly PDGA events within 100 miles; Sunday 3pm Eastern
+               cron "7 * * * *"    → hourly PDGA events within 100 miles, members' PDGA registrations (NC / VA / SC); Sunday 3pm Eastern
                                      UDisc league standings ride this tick
 ```
 
@@ -180,7 +180,7 @@ One Durable Object class, `LiveEventDO`, serves both event live-scoring and casu
 
 ### Data layer
 
-All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0068`; the `0007` gap is intentional and must not be back-filled; **the next is `0069`**). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, membership dues, the marketplace (`0063`), Lost & Found (`0064`), Lost & Found weight and hole (`0065`), bag photos, the bag / marketplace cross-checks (`0066`), whole-bag / accessory photos (`0067`), and bags and accessories in the marketplace plus "Sell this" links (`0068`, a rebuild of `market_listings` that keeps every id). Do not reuse a number.
+All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0069`; the `0007` gap is intentional and must not be back-filled; **the next is `0070`**). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, membership dues, the marketplace (`0063`), Lost & Found (`0064`), Lost & Found weight and hole (`0065`), bag photos, the bag / marketplace cross-checks (`0066`), whole-bag / accessory photos (`0067`), bags and accessories in the marketplace plus "Sell this" links (`0068`, a rebuild of `market_listings` that keeps every id), and members' PDGA registrations (`0069`). Do not reuse a number.
 
 My Bag discs live in `member_practice_records` (JSON payloads synced by the offline-first practice engine); the bag's photos, its found-disc switch and the lost-post links live in their own tables so the sync engine never handles images.
 
@@ -222,7 +222,7 @@ My Bag discs live in `member_practice_records` (JSON payloads synced by the offl
 
 auth-worker/              the Cloudflare Worker (server-side)
   src/                    TypeScript modules (index.ts, authz.ts, live.ts, db*.ts, club-*.ts, …)
-  migrations/             append-only D1 migrations (0001–0068; 0007 gap is intentional; next is 0069)
+  migrations/             append-only D1 migrations (0001–0069; 0007 gap is intentional; next is 0070)
   test/                   vitest suites
   scripts/                provision.mjs, dev-seed.mjs, validate-wrangler-config.mjs
   wrangler.toml           bindings, environments, vars
@@ -362,7 +362,7 @@ Optional vars: `MEMBERSHIP_DUES_CENTS` (default 1500) and `MEMBERSHIP_DUES_ONLIN
 All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgclub.com` / `auth.greenvillediscgolf.com` / `http://127.0.0.1:8788`).
 
 ### Public (no auth)
-`POST /login` · `POST /membership/apply` · `GET /membership/config` · `POST /assistant` · `POST /webauthn/auth/{options,verify}` · `GET /pdga-stats` · `GET /courses` · `GET /leagues[/:id]` · `GET /events[/:id]` · `GET /events/:id/{results,ctps,ace-pot}` · `GET /fundraisers[/:id]` · `GET /meetings[/:id]` · `GET /registration/open` · `GET /payments/config` · live snapshots + `/ws`.
+`POST /login` · `POST /membership/apply` · `GET /membership/config` · `POST /assistant` · `POST /webauthn/auth/{options,verify}` · `GET /pdga-stats` · `GET /courses` · `GET /leagues[/:id]` · `GET /events[/:id]` · `GET /events/:id/{results,ctps,ace-pot}` · `GET /fundraisers[/:id]` · `GET /meetings[/:id]` · `GET /registration/open` · `GET /payments/config` · live snapshots + `/ws`. Member: `GET /pdga-registrations` → `{ mine, club }` (the member's PDGA events with their division and clubmates going; events clubmates are registered for).
 
 ### Member-authenticated (Bearer JWT)
 `GET /me` · `POST /set-pin` · `POST /profile` · `GET /my-results` (club events + `casual` history) · `GET /my-ratings` · `GET /my-live-rounds` · `GET /my-registrations` · `GET|POST /board[/…]` · `GET|POST /me/messages` · `GET|PUT|DELETE /me/push-subscription` · `GET /me/notices` · `POST /webauthn/register/{options,verify}` · `POST /tee-signs` · `GET /my-tee-signs` · live score/card writes (own card only).

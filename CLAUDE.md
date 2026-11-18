@@ -142,7 +142,11 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
     "17 8 * * *"    → daily ratings recompute + the Dec 1 membership reminder
     "*/15 * * * *"  → marketplace withdrawal sweep, UDisc layout import, then the Lost & Found tick LAST
                       (expiry, photo purge, due AI reads, matching incl. bags, bag-photo cleanup)
-    "7 * * * *"     → hourly PDGA events (+ layout baselines); the Sunday UDisc league refresh rides it
+    "7 * * * *"     → hourly PDGA events (+ layout baselines, + members' PDGA registrations in NC / VA / SC:
+                      pdga-registrations.ts reads one state's event search and up to 16 event pages a run, events
+                      within two weeks every hour, and matches registered PDGA numbers against the roster's
+                      idx:pdga:<n> keys -> pdga_watch_events / pdga_registrations, 0069; GET /pdga-registrations);
+                      the Sunday UDisc league refresh rides it
 ```
 
 ### The split router (`src/index.ts` + `club-api.ts`)
@@ -220,8 +224,8 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0068`; next is
-`0069`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0069`; next is
+`0070`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
@@ -236,7 +240,7 @@ privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membe
 (`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
 **Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`), bags + accessories in the
 marketplace and "Sell this" links (`0068`: `market_listings` rebuilt with the same ids under `PRAGMA defer_foreign_keys`; see
-`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data).
+`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data), members' PDGA registrations (`0069`).
 
 `events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
 must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
@@ -358,8 +362,10 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v308`, members `?v=204`, public/events `?v=196`, score `?v=239`,
-home `?v=189` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v309`, members `?v=205`, public/events `?v=197`, score `?v=239`,
+home `?v=189` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
+`src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
+Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to
 precache every chunk (kept in `gvdg-member-chunks` for the current and previous release). Chunks import the entry

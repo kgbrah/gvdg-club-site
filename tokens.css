@@ -810,3 +810,30 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
   body.player-theme-active.player-theme-glass,
   body.score-glove.player-theme-active.player-theme-glass { background-image: var(--player-theme-image); }
 }
+
+/* "Add to calendar" menu (src/shared/add-to-calendar.js): placed on the page, below (or above) its button. */
+.cal-menu {
+  position: fixed;
+  z-index: 2147483000;
+  display: grid;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  box-shadow: 0 14px 32px var(--shadow);
+}
+.cal-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: 650 .95rem/1.25 Archivo, system-ui, sans-serif;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.cal-menu-item:hover, .cal-menu-item:focus-visible { background: var(--bg-primary); outline: 2px solid var(--secondary, currentColor); outline-offset: -2px; }
