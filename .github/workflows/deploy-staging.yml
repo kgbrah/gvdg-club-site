@@ -96,6 +96,15 @@ jobs:
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       # Voice disc entry ("Say it") uses Groq's free Whisper first; without this key it falls back to OpenRouter.
+      # The check prints only Groq's HTTP status (never the key) and never blocks the deploy.
+      - name: Check the Groq key
+        if: ${{ env.HAS_GROQ == 'true' }}
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "Authorization: Bearer $GROQ_API_KEY" https://api.groq.com/openai/v1/models || true)
+          echo "Groq key check: HTTP $code"
+          if [ "$code" != "200" ]; then echo "::warning::GROQ_API_KEY was refused (HTTP $code); voice entry uses OpenRouter until it is fixed."; fi
       - name: Upload voice entry key
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && env.HAS_GROQ == 'true' }}
         uses: cloudflare/wrangler-action@v3
