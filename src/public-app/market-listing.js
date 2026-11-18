@@ -1,7 +1,7 @@
 import React from "react";
 
 import {
-  conditionText, discTypeLabel, flightText, listingTitle, money, PENDING_NOTE, priceLine, withdrawnLabel,
+  conditionText, flightText, itemKindLabel, listingTitle, money, PENDING_NOTE, priceLine, withdrawnLabel,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import {
@@ -36,13 +36,13 @@ function Gallery({ listing }) {
 
 function Facts({ listing }) {
   const rows = [
-    ["Type", discTypeLabel(listing.discType)],
+    ["Type", itemKindLabel(listing)],
     ["Brand", listing.brand],
     ["Plastic", listing.plastic],
     ["Weight", listing.weightG ? listing.weightG + "g" : ""],
     ["Color", listing.color],
     ["Flight", flightText(listing.flight)],
-    ["Condition", conditionText(listing.condition)],
+    ["Condition", conditionText(listing.condition, listing.itemKind)],
     ["Condition notes", listing.conditionNotes],
     ["Quantity", listing.quantity > 1 ? String(listing.quantity) : ""],
     ["Pickup", listing.location],

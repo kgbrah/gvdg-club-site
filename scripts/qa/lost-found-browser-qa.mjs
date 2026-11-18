@@ -1371,7 +1371,7 @@ async function runBag() {
   const discId = seedBagDisc(people.owner.memberId, { brand: "MVP", model: "Wave", plastic: "Neutron", color: "Blue", weightGrams: 171, ink: "JP 252-555-0166" });
   const photoId = (await api("/me/bag/photos", { method: "POST", token: tokens.owner, body: { discId, image: photoUrl } })).photo.id;
 
-  // 1. I lost this disc: the form fills in from the bag; the bag photo goes on the post only once ticked.
+  // 1. I lost this disc: the form fills in from the bag, and the bag photo goes on the post (ticked from the start).
   const view = await cameraView(P, { member: tokens.owner });
   await view.context.addInitScript(({ discId, photoId }) => {
     if (!sessionStorage.getItem("gvdg_lf_bag_handoff")) sessionStorage.setItem("gvdg_lf_bag_handoff", JSON.stringify({
@@ -1390,7 +1390,7 @@ async function runBag() {
   await form.getByLabel("Hole lost on", { exact: true }).selectOption("4");
   await assertFits(view.page, "lost form from the bag");
   await shot(view.page, "bag-lost-form-390-light");
-  await chooser.getByLabel("Show on the post").check();
+  assert.equal(await chooser.getByLabel("Show on the post").isChecked(), true, "the bag photo goes on the post unless it's unticked");
   await form.getByRole("button", { name: "Post lost disc" }).click();
   await view.page.waitForURL(/#post\/\d+$/);
   const postId = Number(/post\/(\d+)$/.exec(view.page.url())[1]);
@@ -1398,8 +1398,40 @@ async function runBag() {
   assert.deepEqual({ ...db.raw.prepare("SELECT bag_disc_id, private_ink FROM lf_posts WHERE id = ?").get(postId) }, { bag_disc_id: discId, private_ink: "JP 252-555-0166" });
   assert.equal(await view.page.evaluate(() => sessionStorage.getItem("gvdg_lf_bag_handoff")), null, "the handoff is cleared once posted");
   assert.deepEqual((await api("/me/bag", { token: tokens.owner })).lost.map((row) => [row.discId, row.postId, row.status]), [[discId, postId, "open"]]);
+
+  // 1b. The poster edits the post: the form fills back in, changes save, and photos come off / go on straight away.
+  await view.page.locator("[data-lf-poster-tools] [data-lf-edit]").click();
+  await view.page.waitForURL(/#edit\/\d+$/);
+  const editForm = view.page.locator("form[aria-label='Edit your post']");
+  await editForm.waitFor();
+  assert.deepEqual(await Promise.all(["Brand", "Mold", "Colour", "Weight (if you know it)", "Hole lost on"].map((label) => editForm.getByLabel(label, { exact: true }).inputValue())),
+    ["MVP", "Wave", "Blue", "171", "4"]);
+  assert.equal(await editForm.getByLabel("What's written on it (private)").inputValue(), "JP 252-555-0166");
+  const editPhotos = editForm.locator("[data-lf-edit-photos]");
+  assert.equal(await editPhotos.getAttribute("data-lf-edit-photos"), "1");
+  await editPhotos.getByLabel("Choose disc photos").setInputFiles((await makeInkPhoto(join(workDir, "edit-added.jpg"), [])).file);
+  await view.page.locator("[data-lf-edit-photos='2']").waitFor();
+  await assertFits(view.page, "edit post form");
+  await shot(view.page, "lost-edit-form-390-light");
+  await editPhotos.getByRole("button", { name: "Remove photo 1" }).click();
+  await view.page.locator("[data-lf-edit-photos='1']").waitFor();
+  await editForm.getByLabel("Hole lost on", { exact: true }).selectOption("5");
+  await editForm.getByLabel("Where exactly (optional)").fill("in the creek");
+  await editForm.getByLabel("Reward note (optional, shown)").fill("Pizza on me");
+  await editForm.getByRole("button", { name: "Save changes" }).click();
+  await view.page.waitForURL(new RegExp("#post/" + postId + "$"));
+  await view.page.locator("[data-lf-view=post][data-lf-state=ready]").getByText("Pizza on me", { exact: false }).first().waitFor();
+  assert.deepEqual({ ...db.raw.prepare("SELECT area, hole, reward_note, private_ink, bag_disc_id FROM lf_posts WHERE id = ?").get(postId) },
+    { area: "Hole 5 · in the creek", hole: 5, reward_note: "Pizza on me", private_ink: "JP 252-555-0166", bag_disc_id: discId });
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM lf_photos WHERE post_id = ? AND status = 'public'").get(postId).n, 1);
   await view.context.close();
-  console.log("My Bag: I lost this disc filled the lost post; the ticked bag photo went on it; the bag shows the post");
+  // Nobody else gets the Edit link, or the form.
+  const stranger = await cameraView(P, { member: tokens.other });
+  await go(stranger.page, "post/" + postId, "[data-lf-view=post][data-lf-state=ready]");
+  assert.equal(await stranger.page.locator("[data-lf-edit]").count(), 0);
+  await go(stranger.page, "edit/" + postId, "[data-lf-view=edit][data-lf-state=locked]");
+  await stranger.context.close();
+  console.log("My Bag: I lost this disc filled the lost post with its bag photo already ticked; the bag shows the post; the poster edited it (details and photos) and nobody else could");
 
   // 2. A found disc with a member's bag-disc writing on it: only that member hears, and the match names their bag disc.
   const riley = seedBagDisc(people.other.memberId, { brand: "Innova", model: "Firebird", plastic: "Champion", color: "Red", ink: "RC 252-555-0177" });

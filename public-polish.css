@@ -1092,6 +1092,8 @@
 }
 [data-public-polish="shop"] .market-check input { width: 20px; height: 20px; flex: none; accent-color: var(--site-link); }
 [data-public-polish="shop"] .market-check-block { align-self: end; }
+/* Sell form: "What are you selling?" Disc / Bag / Accessory, one tap each. */
+[data-public-polish="shop"] .market-kind-options { display: flex; flex-wrap: wrap; gap: 6px 18px; }
 [data-public-polish="shop"] .market-fieldset { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 10px 12px 12px; border: 1px solid var(--site-line); border-radius: 10px; }
 [data-public-polish="shop"] .market-fieldset legend { padding: 0 4px; color: var(--text-primary); font: 700 .9rem/1.3 Archivo, system-ui, sans-serif; }
 [data-public-polish="shop"] .market-rating { grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr)); }

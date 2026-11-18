@@ -1,2 +1,0 @@
-import{Gt as e,Hn as t,Vn as n,Zt as r}from"../members-app.js?v=203";var i=t(n(),1).createElement;function a({tab:t,label:n,className:a=`player-more-item`}){return i(`button`,{type:`button`,className:a,onClick:()=>e(t)},n||r(`member`,t).label)}export{a as t};
-//# sourceMappingURL=more-link-CcX8SY2D.js.map

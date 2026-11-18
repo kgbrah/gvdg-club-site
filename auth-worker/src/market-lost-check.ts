@@ -24,7 +24,8 @@ const MAX_LOST = 20;
 const MAX_LISTINGS = 20;
 const NO_INK: InkKeys = { names: [], phones: [], initials: [] };
 const OPEN_LOST = "p.kind = 'lost' AND p.status = 'open' AND p.hidden = 0 AND p.expires_at > datetime('now')";
-const ACTIVE_LISTING = "l.status = 'active' AND l.hidden = 0";
+// Only disc listings: a bag or an accessory for sale is never checked against lost discs.
+const ACTIVE_LISTING = "l.status = 'active' AND l.hidden = 0 AND l.item_kind = 'disc'";
 
 const norm = (value: unknown) => String(value ?? "").trim().toLowerCase();
 

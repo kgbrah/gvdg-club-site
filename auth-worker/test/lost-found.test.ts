@@ -742,7 +742,7 @@ describe("lost & found and My Bag", () => {
     const bo = await token("m_bo");
     const disc = bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange" });
     expect((await call("/me/bag")).status).toBe(401);
-    expect((await call("/me/bag", "GET", ada)).data).toEqual({ matchFound: true, photos: [], bagPhotos: [], accessories: [], lost: [] });
+    expect((await call("/me/bag", "GET", ada)).data).toEqual({ matchFound: true, photos: [], bagPhotos: [], accessories: [], lost: [], listings: [] });
     expect((await call("/me/bag/photos", "POST", ada, { discId: crypto.randomUUID(), image: PHOTO })).status).toBe(404);
     expect((await call("/me/bag/photos", "POST", bo, { discId: disc, image: PHOTO })).status).toBe(404);
     expect((await call("/me/bag/photos", "POST", ada, { discId: disc, image: "data:image/svg+xml;base64,PHN2Zz4=" })).data.error).toBe("invalid_photo");
@@ -953,6 +953,176 @@ describe("marketplace listings checked against lost posts", () => {
     expect(db.raw.prepare("SELECT verdict FROM market_lost_checks WHERE listing_id = ? AND lost_id = ?").get(listing.id, lost.id)).toEqual({ verdict: "strong" });
     expect(notices("m_bo").some((row) => row.title === "A disc you listed may be someone's lost disc")).toBe(true);
     expect(db.raw.prepare("SELECT COUNT(*) AS n FROM market_listing_reads").get()).toEqual({ n: 1 });
+  });
+});
+
+describe("Sell this: marketplace listings from My Bag (discs, the bag, accessories)", () => {
+  function bagDiscRow(owner: string, record: Record<string, unknown>) {
+    const id = crypto.randomUUID();
+    db.raw.prepare(`INSERT INTO member_practice_records (owner, id, kind, revision, occurred_on, payload, last_op, updated_at)
+      VALUES (?, ?, 'disc', 1, '2026-11-01', ?, 'op-' || ?, ?)`)
+      .run(owner, id, JSON.stringify({ brand: "", model: "", plastic: "", weightGrams: null, notes: "", inBag: true, archived: false, ...record }), id, Date.now());
+    return id;
+  }
+  async function sellerToken(id: string) {
+    db.raw.prepare("INSERT OR REPLACE INTO market_seller_settings (member_id, notify_email) VALUES (?, ?)").run(id, id + "@example.test");
+    return token(id);
+  }
+  const sell = (bearer: string, body: Record<string, unknown>) => call("/market/listings", "POST", bearer, {
+    condition: 8, priceCents: 2500, quantity: 1, ...body,
+  });
+  async function bagPhoto(bearer: string, target: Record<string, unknown>) {
+    const res = await call("/me/bag/photos", "POST", bearer, { ...target, image: PHOTO });
+    expect(res.status, res.raw).toBe(201);
+    return res.data.photo.id as number;
+  }
+  const listingKeys = (id: number) => (db.raw.prepare("SELECT r2_key FROM market_listing_photos WHERE listing_id = ? ORDER BY sort_order").all(id) as any[]).map((row) => row.r2_key);
+
+  it("lists a bag disc with its bag photos (copied; the bag keeps its private originals) and shows it for sale in My Bag", async () => {
+    const ada = await sellerToken("m_ada");
+    const disc = bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange", weightGrams: 175 });
+    const other = bagDiscRow("m_ada", { model: "Buzzz" });
+    const ids = [await bagPhoto(ada, { discId: disc }), await bagPhoto(ada, { discId: disc })];
+    const otherPhoto = await bagPhoto(ada, { discId: other });
+    const body = { itemKind: "disc", brand: "Innova", mold: "Destroyer", plastic: "Star", discType: "driver", weightG: 175, color: "Orange", bagRef: "disc:" + disc };
+    // Photos must be the seller's own photos of this disc, one to four in all.
+    expect((await sell(ada, { ...body, bagPhotoIds: [] })).data.error).toBe("invalid_photo");
+    expect((await sell(ada, { ...body, bagPhotoIds: [otherPhoto] })).data.error).toBe("invalid_photo");
+    expect((await sell(ada, { ...body, bagPhotoIds: [ids[0], ids[0]] })).data.error).toBe("invalid_photo");
+    expect((await sell(ada, { ...body, bagPhotoIds: ids, photos: [PHOTO, PHOTO, PHOTO] })).data.error).toBe("invalid_photo");
+    const bo = await sellerToken("m_bo");
+    expect((await sell(bo, { ...body, bagPhotoIds: ids })).data).toMatchObject({ error: "invalid_listing", field: "bagRef" });
+    expect((await sell(bo, { ...body, bagRef: "disc:" + bagDiscRow("m_bo", { model: "Wraith" }), bagPhotoIds: ids })).data.error).toBe("invalid_photo");
+    expect((await sell(ada, { ...body, itemKind: "bag", bagPhotoIds: ids })).data).toMatchObject({ error: "invalid_listing" });
+    expect((await sell(ada, { ...body, bagRef: "disc:not-a-uuid", bagPhotoIds: ids })).data).toMatchObject({ field: "bagRef" });
+
+    const created = await sell(ada, { ...body, bagPhotoIds: ids, photos: [PHOTO] });
+    expect(created.status, created.raw).toBe(201);
+    const listing = created.data.listing;
+    expect(listing).toMatchObject({ itemKind: "disc", gearType: "", title: "Innova Star Destroyer", discType: "driver", weightG: 175 });
+    expect(listing.photos).toHaveLength(3);
+    expect(JSON.stringify(listing)).not.toContain(disc);
+    const keys = listingKeys(listing.id);
+    expect(keys.every((key) => key.startsWith("market/"))).toBe(true);
+    for (const id of ids) {
+      const original = (db.raw.prepare("SELECT photo_key FROM bag_photos WHERE id = ?").get(id) as any).photo_key;
+      expect(photos.objects.has(original)).toBe(true);
+      expect(keys).not.toContain(original);
+    }
+    expect((await call("/market/photos/" + listing.photos[0].id)).status).toBe(200);
+    expect((await call("/me/bag", "GET", ada)).data.listings).toEqual([{ ref: "disc:" + disc, listingId: listing.id, status: "active" }]);
+    expect((await call("/me/bag", "GET", bo)).data.listings).toEqual([]);
+    // Taken down: no longer "for sale" in My Bag.
+    expect((await call("/market/listings/" + listing.id + "/withdraw", "POST", ada)).status).toBe(200);
+    expect((await call("/me/bag", "GET", ada)).data.listings).toEqual([]);
+  });
+
+  it("sells the bag and accessories without disc details, never checks them against lost discs, and filters by kind", async () => {
+    const ada = await sellerToken("m_ada");
+    await createPost(await token("m_cy"), lostBody({ mold: "AX5" }));
+    const aiBefore = geminiCalls;
+    const whole = await bagPhoto(ada, { bag: true });
+    const bag = await sell(ada, {
+      itemKind: "bag", brand: "Grip", mold: "AX5", color: "Black", bagRef: "bag", bagPhotoIds: [whole],
+      // Disc-only details are dropped for a bag, whatever the form sent.
+      plastic: "Star", discType: "driver", weightG: 175, speed: 12,
+    });
+    expect(bag.status, bag.raw).toBe(201);
+    expect(bag.data.listing).toMatchObject({ itemKind: "bag", title: "Grip AX5", discType: "", plastic: "", weightG: null, flight: null });
+
+    const cart = (await call("/me/bag/accessories", "POST", ada, { kind: "cart", name: "Zuca cart" })).data.accessory;
+    const cartPhoto = await bagPhoto(ada, { accessoryId: cart.id });
+    const accessoryBody = { itemKind: "accessory", mold: "Zuca cart", bagRef: "accessory:" + cart.id, bagPhotoIds: [cartPhoto] };
+    expect((await sell(ada, accessoryBody)).data).toMatchObject({ error: "invalid_listing", field: "gearType" });
+    expect((await sell(ada, { ...accessoryBody, gearType: "jetpack" })).data).toMatchObject({ field: "gearType" });
+    expect((await sell(ada, { ...accessoryBody, gearType: "cart", mold: "" })).data).toMatchObject({ field: "mold" });
+    const bo = await sellerToken("m_bo");
+    expect((await sell(bo, { ...accessoryBody, gearType: "cart" })).data).toMatchObject({ field: "bagRef" });
+    expect((await sell(ada, { ...accessoryBody, gearType: "cart", bagPhotoIds: [whole] })).data.error).toBe("invalid_photo");
+    const accessory = await sell(ada, { ...accessoryBody, gearType: "cart" });
+    expect(accessory.status, accessory.raw).toBe(201);
+    expect(accessory.data.listing).toMatchObject({ itemKind: "accessory", gearType: "cart", title: "Zuca cart" });
+    // A disc listing still needs its disc type.
+    expect((await sell(bo, { mold: "Destroyer", photos: [PHOTO] })).data).toMatchObject({ field: "discType" });
+    const disc = await sell(bo, { mold: "AX5", discType: "putter", photos: [PHOTO] });
+    expect(disc.status).toBe(201);
+
+    // Neither the bag nor the cart was read by the AI or checked against the lost AX5 (a disc listing of that name was).
+    expect(db.raw.prepare("SELECT listing_id FROM market_lost_checks ORDER BY listing_id").all().map((row: any) => row.listing_id)).toEqual([disc.data.listing.id]);
+    expect(geminiCalls - aiBefore).toBeGreaterThan(0);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM market_listing_reads WHERE listing_id IN (?, ?)").get(bag.data.listing.id, accessory.data.listing.id)).toEqual({ n: 0 });
+
+    const titles = async (query: string) => (await call("/market/listings" + query)).data.listings.map((row: any) => row.title);
+    expect(await titles("?kind=bag")).toEqual(["Grip AX5"]);
+    expect(await titles("?kind=accessory")).toEqual(["Zuca cart"]);
+    expect(await titles("?kind=disc")).toEqual(["AX5"]);
+    expect((await titles("?kind=hat")).length).toBe(3);
+
+    // Editing keeps what it sells; an accessory can change what kind of accessory it is.
+    const edited = await call("/market/listings/" + accessory.data.listing.id, "PATCH", ada, { itemKind: "disc", discType: "driver", gearType: "seat", mold: "Cart seat" });
+    expect(edited.status, edited.raw).toBe(200);
+    expect(edited.data.listing).toMatchObject({ itemKind: "accessory", gearType: "seat", title: "Cart seat", discType: "" });
+    expect((await call("/me/bag", "GET", ada)).data.listings.map((row: any) => row.ref).sort()).toEqual(["accessory:" + cart.id, "bag"]);
+  });
+});
+
+describe("editing your own lost & found post", () => {
+  it("lets the poster edit an open post (never its kind), keeps an old date, and matches again on the new details", async () => {
+    const finder = await token("m_bo");
+    // The found disc has a guest's name and number on it; nobody on the roster has that name, so only her lost post can match.
+    geminiReplies = [inkReply([{ text: "WENDY SMITH", type: "name" }, { text: "252 555 0199", type: "phone" }])];
+    const found = await createPost(finder, foundBody({ brand: "Discraft", mold: "Buzzz", color: "Blue" }));
+    const ada = (await guestToken()).token;
+    const lost = await createPost(ada, lostBody({ brand: "Innova", mold: "Wraith", color: "Red", privateInk: "", rewardNote: "" }));
+    const matchFor = () => db.raw.prepare("SELECT status FROM lf_matches WHERE found_id = ? AND lost_id = ?").get(found.id, lost.id) as any;
+    const before = matchFor();
+
+    const edit = (bearer: string, id: number, body: Record<string, unknown>) => call("/lost-found/posts/" + id, "PATCH", bearer, body);
+    expect((await edit(finder, lost.id, { area: "mine now" })).status).toBe(404);
+    expect((await edit(ada, lost.id, { courseId: 424242 })).data).toMatchObject({ error: "invalid_post", field: "courseId" });
+    expect((await edit(ada, lost.id, { eventDate: "2001-01-01" })).data).toMatchObject({ field: "eventDate" });
+    expect((await edit(ada, lost.id, { brand: "", mold: "", color: "" })).data).toMatchObject({ field: "mold" });
+    const saved = await edit(ada, lost.id, {
+      kind: "found", brand: "Discraft", mold: "Buzzz", color: "Blue", courseId: 9002, area: "Hole 3 creek", hole: 3, weightG: 177,
+      rewardNote: "Pizza", privateInk: "Wendy Smith 252-555-0199",
+    });
+    expect(saved.status, saved.raw).toBe(200);
+    expect(saved.data.post).toMatchObject({ kind: "lost", title: "Discraft Star Buzzz", course: { id: 9002, name: "Green Mill Run" }, area: "Hole 3 creek", hole: 3, weightG: 177,
+      rewardNote: "Pizza", privateInk: "Wendy Smith 252-555-0199" });
+    expect((await getPost(lost.id)).privateInk).toBeUndefined();
+    expect(db.raw.prepare("SELECT action FROM lf_claim_log WHERE post_id = ? ORDER BY id DESC LIMIT 1").get(lost.id)).toEqual({ action: "edit" });
+    // The new details match the found Buzzz with her name and number on it.
+    expect(before?.status ?? "none").not.toBe("notified");
+    expect(matchFor()?.status).toBe("notified");
+
+    // A date older than a new post may give is kept when it isn't changed.
+    db.raw.prepare("UPDATE lf_posts SET event_date = '2025-01-02' WHERE id = ?").run(lost.id);
+    const kept = await edit(ada, lost.id, { area: "Hole 4", eventDate: "2025-01-02" });
+    expect(kept.status, kept.raw).toBe(200);
+    expect(kept.data.post).toMatchObject({ area: "Hole 4", date: "2025-01-02" });
+
+    // Found posts: where it's held can change; a closed post can't be edited.
+    expect((await edit(finder, found.id, { holding: "club_bin", binNote: "" })).data).toMatchObject({ field: "binNote" });
+    expect((await edit(finder, found.id, { holding: "club_bin", binNote: "Club bin at the shelter" })).data.post).toMatchObject({ holding: "club_bin", kind: "found" });
+    expect((await call(`/lost-found/posts/${lost.id}/close`, "POST", ada)).status).toBe(200);
+    expect((await edit(ada, lost.id, { area: "Hole 5" })).status).toBe(409);
+  });
+
+  it("lets the poster add photos to an open post, up to its limit", async () => {
+    const ada = await token("m_ada");
+    const lost = await createPost(ada, lostBody());
+    const add = (bearer: string) => call(`/lost-found/posts/${lost.id}/photos`, "POST", bearer, { image: PHOTO });
+    expect((await add(await token("m_bo"))).status).toBe(404);
+    expect((await call(`/lost-found/posts/${lost.id}/photos`, "POST", ada, { image: "data:image/png;base64,AAAA" })).data.error).toBe("invalid_photo");
+    const first = await add(ada);
+    expect(first.status, first.raw).toBe(200);
+    expect(first.data.post.myPhotos).toHaveLength(1);
+    expect((await add(ada)).data.post.myPhotos).toHaveLength(2);
+    expect((await add(ada)).data.error).toBe("too_many_photos");
+    // Taking one down makes room again.
+    const [photoId] = photoIdsOf(lost.id);
+    expect((await call(`/lost-found/posts/${lost.id}/photos/${photoId}/remove`, "POST", ada)).status).toBe(200);
+    expect((await add(ada)).status).toBe(200);
   });
 });
 

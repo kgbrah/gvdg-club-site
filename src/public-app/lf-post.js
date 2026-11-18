@@ -1,10 +1,10 @@
 // One Lost & Found post: its photos and details, the poster's karma, and what this viewer can do (claim it,
 // follow a match, or - for the poster - check a photo the club's private read flagged, see claims, turn it in to a
-// club bin, or close it).
+// club bin, edit it, or close it).
 import React from "react";
 
 import {
-  aiFieldsNote, CLAIM_STATUS_LABELS, claimHref, discTitle, holdingText, lfErrorMessage, matchHref, POST_STATUS_LABELS, shortDay,
+  aiFieldsNote, CLAIM_STATUS_LABELS, claimHref, discTitle, editHref, holdingText, lfErrorMessage, matchHref, POST_STATUS_LABELS, shortDay,
 } from "../shared/lost-found-model.js";
 import { Note, StatusLine, useAction } from "./market-ui.js";
 import {
@@ -93,6 +93,7 @@ function PosterTools({ post, reload }) {
   const matches = Array.isArray(post.matches) ? post.matches : [];
   return h("section", { className: "market-panel market-seller-tools", "data-lf-poster-tools": "true" }, [
     h("h3", { className: "market-subhead", key: "title" }, "Your post"),
+    post.canEdit ? h("a", { className: "shop-btn secondary", "data-lf-edit": post.id, href: editHref(post.id), key: "edit" }, "Edit post") : null,
     post.kind === "found" ? h(Note, { key: "notified" }, post.ownersNotified
       ? `We let ${post.ownersNotified === 1 ? "a possible owner" : post.ownersNotified + " possible owners"} know.`
       : "We'll let you know if someone may own it.") : null,

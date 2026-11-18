@@ -220,8 +220,8 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0067`; next is
-`0068`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0068`; next is
+`0069`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
@@ -234,7 +234,9 @@ requests + league challenges (`0042-0043`, `0059`), admin push (`0044`), live ro
 (`0049`), rating repair (`0050`), member practice + My Bag discs (`0051`), offline rounds (`0053`), spectator
 privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membership dues (`0058`), member push
 (`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
-**Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`).
+**Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`), bags + accessories in the
+marketplace and "Sell this" links (`0068`: `market_listings` rebuilt with the same ids under `PRAGMA defer_foreign_keys`; see
+`test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data).
 
 `events.course_id` / `events.layout_id` remain the primary legacy/scoring fields, but multi-course events
 must also be represented in `event_courses` (migration `0025`). Admin create/edit payloads may include
@@ -260,8 +262,10 @@ freeform notes.
   the */15 cron (`finalizeWithdrawals`) makes it final and deletes the R2 photos. Pay links (paypal.me / cash.app)
   are built server-side from validated handles and shown only to members and verified guests; there is no
   in-app payment. Feedback: once per party per completed deal, 60-day window, one edit in 7 days, one reply.
-  Admin moderation actions all require a logged reason. Root QA: `scripts/qa/marketplace-browser-qa.mjs` runs
-  the real Worker in-process.
+  Admin moderation actions all require a logged reason. Listings sell a **disc, a bag or an accessory**
+  (`item_kind`; `gear_type` = the My Bag accessory kinds; disc type, plastic, weight and flight are disc-only, enforced by
+  CHECKs and `parseListing`; browse `?kind=`); the kind is fixed once listed. Bags and accessories are never checked against
+  lost discs. Root QA: `scripts/qa/marketplace-browser-qa.mjs` runs the real Worker in-process.
 - **Lost & Found** (`lost-found.html`, lazy chunk `public-app/chunks/lf-app-*.js`; member tab `lost-found`, admin tab
   `lost-found`). Anyone posts found/lost discs; non-members use the **marketplace's guest identity** (`market_guests`, `mkt`
   token; `/lost-found/guest/*` and `/market/guest/*` are the same identity). **Photos are public as uploaded** (magic bytes, size
@@ -283,12 +287,18 @@ freeform notes.
   location** (`course-picker.js`, `src/shared/course-geo.js`: nearest course within 2 km, the hole whose tee-to-basket line is
   within 150 m; position never leaves the phone). The scoring app's round Tools link to `#new/found|lost?course=&hole=&from=score
   &return=`; `live-round.js` pins **Return to round** while the viewer is on a live card. QA: `scripts/qa/lost-found-browser-qa.mjs`
-  (real Worker in-process; mocked Gemini / Groq / OpenRouter; Chromium fake camera, mic and geolocation).
+  (real Worker in-process; mocked Gemini / Groq / OpenRouter; Chromium fake camera, mic and geolocation). Posters edit their own
+  open/claimed post (`PATCH /lost-found/posts/:id`, kind fixed, an unchanged old date kept; `POST …/photos` adds one) from
+  `#edit/<id>` (the same form, `EditPost` in `lf-form.js`); every edit re-runs matching (and the lost-disc listing check).
 - **My Bag ↔ Lost & Found.** Bag discs are practice records (`member_practice_records`, kind `disc`; optional `color` and
   private `ink` fields, omitted when blank so old payloads are unchanged). Up to 3 **owner-only** photos per disc
   (`bag_photos`, R2 `bag/<owner>/…`, `Cache-Control: private, no-store`; orphans swept by the cron). "I lost this disc" hands the
-  disc to the lost-post form via `sessionStorage` (`gvdg_lf_bag_handoff`, never the URL); ticked bag photos are copied
-  server-side onto the post and `lf_posts.bag_disc_id` links them. `matchBags` compares a found disc with same-mold bag discs of
+  disc to the lost-post form via `sessionStorage` (`gvdg_lf_bag_handoff`, never the URL); the bag photos start ticked (up to the
+  post's two), are copied server-side onto the post, and `lf_posts.bag_disc_id` links them. **Sell this** (a disc, *Sell my bag*,
+  an accessory) does the same for the marketplace (`gvdg_market_bag_handoff`, `src/public-app/market-bag.js` →
+  `pro-shop.html#market/sell?from=bag`): the listing POST carries `bagRef` (`disc:<id>` | `bag` | `accessory:<id>`, checked to be
+  the seller's and to match the listing's kind) and `bagPhotoIds` (that item's own bag photos, copied from R2; never the private
+  writing); `market_listings.bag_ref` stays private and `GET /me/bag` lists active/pending ones so the item shows *For sale*. `matchBags` compares a found disc with same-mold bag discs of
   members whose `bag_settings.match_found` is on (default) and stores **only strong** matches (ink identity / initials with
   agreeing details, or a Gemini "same disc" on a bag photo) as `lf_matches` rows with `bag_disc_id` → the usual strong-match
   notices ("… in your bag"). The finder never learns whose bag.
@@ -348,7 +358,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v307`, members `?v=203`, public/events `?v=195`, score `?v=239`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v308`, members `?v=204`, public/events `?v=196`, score `?v=239`,
 home `?v=189` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. The **member app is code-split**: Home, the shell and the nav are the entry
 (`members-app/members-app.js`); every other screen is a content-hashed `members-app/chunks/*.js` loaded on first
 open (`src/members-app/lazy-panel.js`). The members build writes `members-app/sw-chunks.js`, which `sw.js` imports to

@@ -2,7 +2,9 @@
 // payment settings.
 
 import { corsHeaders, readJson } from "./http.js";
-import { DISC_TYPES, MAX_PHOTOS, listingTitle, parseEmail, parseListing, parseSettings } from "./market-input.js";
+import { DISC_TYPES, ITEM_KINDS, MAX_PHOTOS, listingTitle, parseEmail, parseListing, parseSettings, type ItemKind } from "./market-input.js";
+import { bagDisc } from "./bag-routes.js";
+import type { DecodedImage } from "./photos.js";
 import { marketUrl, notifyTrader, sendMarketEmail } from "./market-notify.js";
 import { decodeListingPhoto, listingPhotoKey, LISTING_BODY_BYTES, PHOTO_BODY_BYTES } from "./market-photos.js";
 import { queueListingCheck } from "./market-lost-check.js";
@@ -47,6 +49,8 @@ export async function browseListings(c: MarketCtx): Promise<Response> {
   const p = new URL(c.request.url).searchParams;
   const where = ["l.status IN ('active', 'pending')", "l.hidden = 0", NOT_SUSPENDED("l.seller_id")];
   const binds: unknown[] = [];
+  const kind = p.get("kind");
+  if (kind && (ITEM_KINDS as readonly string[]).includes(kind)) { where.push("l.item_kind = ?"); binds.push(kind); }
   const type = p.get("type");
   if (type && (DISC_TYPES as readonly string[]).includes(type)) { where.push("l.disc_type = ?"); binds.push(type); }
   const brand = (p.get("brand") || "").trim();
@@ -154,10 +158,48 @@ export async function getListing(c: MarketCtx, id: number): Promise<Response> {
   return ok(c, { listing: await listingDetail(c, row), viewer: await viewerOf(c.env, c.actor) });
 }
 
-function photosFrom(body: Record<string, unknown>) {
-  if (!Array.isArray(body.photos) || body.photos.length < 1 || body.photos.length > MAX_PHOTOS) return null;
+/** Photos uploaded with the listing (may be none when photos come from My Bag). */
+function photosFrom(body: Record<string, unknown>): DecodedImage[] | null {
+  if (body.photos == null) return [];
+  if (!Array.isArray(body.photos) || body.photos.length > MAX_PHOTOS) return null;
   const images = body.photos.map((item) => decodeListingPhoto(item));
   return images.every(Boolean) ? images.map((image) => image!) : null;
+}
+
+const BAG_REF = /^(?:disc:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bag|accessory:[1-9]\d{0,9})$/;
+
+/**
+ * "Sell this" from My Bag: the seller's own bag item (a disc, the bag, or an accessory, matching what the listing
+ * sells) and the bag photos they kept on the form. The photos are copied, so the bag keeps its private originals;
+ * bag photos were already checked and stripped of metadata when they were added to the bag.
+ */
+async function bagSource(c: MarketCtx, sellerId: string, body: Record<string, unknown>, itemKind: ItemKind)
+  : Promise<{ ref: string | null; images: DecodedImage[] } | Response> {
+  if (body.bagRef == null || body.bagRef === "") return { ref: null, images: [] };
+  const ref = typeof body.bagRef === "string" && BAG_REF.test(body.bagRef) ? body.bagRef : "";
+  const [subject, id = ""] = ref.split(":");
+  let item = "";
+  if (subject === "disc" && itemKind === "disc" && (await bagDisc(c.env, sellerId, id))) item = id;
+  else if (subject === "bag" && itemKind === "bag") item = "bag";
+  else if (subject === "accessory" && itemKind === "accessory"
+    && (await c.env.DB.prepare("SELECT 1 AS hit FROM bag_accessories WHERE id = ? AND owner = ?").bind(Number(id), sellerId).first())) {
+    item = "acc-" + id;
+  }
+  if (!item) return fail(c, 400, "invalid_listing", "bagRef");
+  const wanted: unknown[] = Array.isArray(body.bagPhotoIds) ? body.bagPhotoIds : [];
+  if (wanted.length > MAX_PHOTOS || new Set(wanted).size !== wanted.length || !wanted.every((value) => Number.isInteger(value) && Number(value) > 0)) {
+    return fail(c, 400, "invalid_photo");
+  }
+  const images: DecodedImage[] = [];
+  for (const photoId of wanted) {
+    const row = await c.env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE id = ? AND owner = ? AND subject = ? AND disc_id = ?")
+      .bind(photoId, sellerId, subject, item).first<{ photo_key: string; photo_type: string }>();
+    const obj = row ? await c.env.PHOTOS.get(row.photo_key) : null;
+    if (!row || !obj) return fail(c, 400, "invalid_photo");
+    const type = row.photo_type as DecodedImage["contentType"];
+    images.push({ bytes: new Uint8Array(await obj.arrayBuffer()), contentType: type, ext: type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg" });
+  }
+  return { ref, images };
 }
 
 export async function createListing(c: MarketCtx): Promise<Response> {
@@ -169,18 +211,23 @@ export async function createListing(c: MarketCtx): Promise<Response> {
   const body = (await readJson(c.request, LISTING_BODY_BYTES)) ?? {};
   const parsed = parseListing(body);
   if (!parsed.ok) return fail(c, 400, "invalid_listing", parsed.field);
-  const images = photosFrom(body);
-  if (!images) return fail(c, 400, "invalid_photo");
+  const uploaded = photosFrom(body);
+  if (!uploaded) return fail(c, 400, "invalid_photo");
   const blocked = await limited(c, "mktlist:" + seller.id, 10, 3600);
   if (blocked) return blocked;
-  await ensureTrader(c.env, seller);
   const v = parsed.value;
+  const source = await bagSource(c, seller.id, body, v.itemKind);
+  if (source instanceof Response) return source;
+  // Bag photos first (as the form shows them), then any taken for the listing: one to four in all.
+  const images = [...source.images, ...uploaded];
+  if (images.length < 1 || images.length > MAX_PHOTOS) return fail(c, 400, "invalid_photo");
+  await ensureTrader(c.env, seller);
   const created = await c.env.DB.prepare(
-    `INSERT INTO market_listings (seller_id, brand, mold, plastic, disc_type, speed, glide, turn, fade, weight_g, color, condition,
-       condition_notes, price_cents, open_to_trade, trade_for, quantity, location)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-  ).bind(seller.id, v.brand, v.mold, v.plastic, v.discType, v.speed, v.glide, v.turn, v.fade, v.weightG, v.color, v.condition,
-    v.conditionNotes, v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location).first<{ id: number }>();
+    `INSERT INTO market_listings (seller_id, item_kind, gear_type, bag_ref, brand, mold, plastic, disc_type, speed, glide, turn, fade, weight_g,
+       color, condition, condition_notes, price_cents, open_to_trade, trade_for, quantity, location)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+  ).bind(seller.id, v.itemKind, v.gearType, source.ref, v.brand, v.mold, v.plastic, v.discType, v.speed, v.glide, v.turn, v.fade, v.weightG,
+    v.color, v.condition, v.conditionNotes, v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location).first<{ id: number }>();
   const id = Number(created?.id);
   if (!id) return fail(c, 500, "server_error");
   const stored: string[] = [];
@@ -208,7 +255,7 @@ export async function createListing(c: MarketCtx): Promise<Response> {
 
 function inputOf(row: Row): Record<string, unknown> {
   return {
-    brand: str(row, "brand"), mold: str(row, "mold"), plastic: str(row, "plastic"), discType: str(row, "disc_type"),
+    itemKind: str(row, "item_kind") || "disc", gearType: str(row, "gear_type"), brand: str(row, "brand"), mold: str(row, "mold"), plastic: str(row, "plastic"), discType: str(row, "disc_type"),
     speed: row.speed, glide: row.glide, turn: row.turn, fade: row.fade, weightG: row.weight_g, color: str(row, "color"),
     condition: row.condition, conditionNotes: str(row, "condition_notes"), priceCents: row.price_cents,
     openToTrade: num(row, "open_to_trade") === 1, tradeFor: str(row, "trade_for"), quantity: row.quantity, location: str(row, "location"),
@@ -231,15 +278,17 @@ export async function editListing(c: MarketCtx, id: number): Promise<Response> {
   const body = (await readJson(c.request)) ?? {};
   const merged: Record<string, unknown> = inputOf(row);
   for (const key of Object.keys(merged)) if (key in body) merged[key] = body[key];
+  // What a listing sells is fixed once it's listed (a disc stays a disc).
+  merged.itemKind = str(row, "item_kind") || "disc";
   const parsed = parseListing(merged);
   if (!parsed.ok) return fail(c, 400, "invalid_listing", parsed.field);
   const v = parsed.value;
   const result = await c.env.DB.prepare(
-    `UPDATE market_listings SET brand = ?, mold = ?, plastic = ?, disc_type = ?, speed = ?, glide = ?, turn = ?, fade = ?, weight_g = ?,
-       color = ?, condition = ?, condition_notes = ?, price_cents = ?, open_to_trade = ?, trade_for = ?, quantity = ?, location = ?,
-       updated_at = datetime('now')
+    `UPDATE market_listings SET gear_type = ?, brand = ?, mold = ?, plastic = ?, disc_type = ?, speed = ?, glide = ?, turn = ?, fade = ?,
+       weight_g = ?, color = ?, condition = ?, condition_notes = ?, price_cents = ?, open_to_trade = ?, trade_for = ?, quantity = ?,
+       location = ?, updated_at = datetime('now')
      WHERE id = ? AND seller_id = ? AND status = 'active'`,
-  ).bind(v.brand, v.mold, v.plastic, v.discType, v.speed, v.glide, v.turn, v.fade, v.weightG, v.color, v.condition, v.conditionNotes,
+  ).bind(v.gearType, v.brand, v.mold, v.plastic, v.discType, v.speed, v.glide, v.turn, v.fade, v.weightG, v.color, v.condition, v.conditionNotes,
     v.priceCents, v.openToTrade ? 1 : 0, v.tradeFor, v.quantity, v.location, id, seller.id).run();
   if (!changed(result)) return fail(c, 409, "not_active");
   await logDeal(c.env, { listingId: id, actorId: seller.id, action: "edit", from: "active", to: "active" });

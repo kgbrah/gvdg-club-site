@@ -79,7 +79,7 @@ const vite = await createServer({
           const photoId = Number(/\/photos\/(\d+)$/.exec(path)?.[1]);
           if (path === "/fixture/me/bag" && req.method === "GET") {
             reply({
-              matchFound: mine.matchFound, lost: mine.lost,
+              matchFound: mine.matchFound, lost: mine.lost, listings: mine.listings || [],
               photos: mine.photos.filter((photo) => photo.discId).map(({ id, discId }) => ({ id, discId })),
               bagPhotos: mine.photos.filter((photo) => photo.bag).map(({ id }) => ({ id })),
               accessories: mine.accessories.map((item) => ({ ...item, photos: mine.photos.filter((photo) => photo.accessoryId === item.id).map((photo) => photo.id) })),
@@ -556,8 +556,47 @@ async function checkBagExtras(page) {
   await reported.getByText("Reported lost").waitFor();
   assert.equal(await reported.getByRole("link", { name: "View post" }).getAttribute("href"), "lost-found.html#post/41");
   assert.equal(await page.getByRole("button", { name: "I lost this disc" }).count(), 0);
+  assert.equal(await card.getByRole("button", { name: "Sell this" }).count(), 0, "a disc reported lost isn't offered for sale");
   bag("qa-one").lost = [];
-  console.log("My Bag: colour + private writing saved, private photo up/shown/deleted, bag + accessory photos, accessory add/edit/delete, I lost this disc hands off, switch saves");
+  // "Sell this": a disc, the whole bag and an accessory each open the marketplace sell form through this tab's
+  // sessionStorage, with their photo ids (and never the private writing).
+  bag("qa-one").accessories.push({ id: 99, kind: "cart", name: "Zuca all-terrain cart", notes: "Lives in the trunk" });
+  const wholePhoto = bag("qa-one").photos.find((photo) => photo.bag).id;
+  await page.route(/pro-shop\.html/, (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Pro Shop</title>" }));
+  // The same URL with a hash doesn't reload by itself; reload so My Bag fetches again.
+  const reopen = async () => {
+    await page.goto(origin + "/practice-qa.html#my-bag", { waitUntil: "commit" });
+    await page.reload({ waitUntil: "commit" });
+  };
+  const sellFrom = async (button) => {
+    await reopen();
+    await button().click();
+    await page.waitForURL(/pro-shop\.html#market\/sell\?from=bag$/);
+    return page.evaluate(() => JSON.parse(sessionStorage.getItem("gvdg_market_bag_handoff") || "null"));
+  };
+  await reopen();
+  await card.getByRole("button", { name: "Sell this" }).waitFor();
+  if (bagEvidence) await card.screenshot({ path: join(bagEvidence, "bag-disc-actions-390.png") });
+  assert.deepEqual(await sellFrom(() => card.getByRole("button", { name: "Sell this" })),
+    { ref: "disc:" + saved.id, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Orange", weightG: "172", photos: [] });
+  assert.doesNotMatch(page.url(), /555|QA One|Wave/, "nothing about the disc goes in the address");
+  assert.deepEqual(await sellFrom(() => page.locator("[data-bag-whole]").getByRole("button", { name: "Sell my bag" })), { ref: "bag", photos: [wholePhoto] });
+  assert.deepEqual(await sellFrom(() => page.locator("[data-bag-accessory='99']").getByRole("button", { name: "Sell this" })),
+    { ref: "accessory:99", gearType: "cart", mold: "Zuca all-terrain cart", photos: [] });
+  await page.unroute(/pro-shop\.html/);
+  // Listed: the card says so and links to the listing instead.
+  bag("qa-one").listings = [{ ref: "disc:" + saved.id, listingId: 77, status: "active" }, { ref: "accessory:99", listingId: 78, status: "pending" }];
+  await reopen();
+  const forSale = card.locator("[data-bag-for-sale]");
+  await forSale.getByText("For sale").waitFor();
+  assert.equal(await forSale.getByRole("link", { name: "View listing" }).getAttribute("href"), "pro-shop.html#market/listing/77");
+  assert.equal(await card.getByRole("button", { name: "Sell this" }).count(), 0);
+  await page.locator("[data-bag-accessory='99'] [data-bag-for-sale]").getByText("Sale pending").waitFor();
+  await page.locator("[data-bag-whole]").getByRole("button", { name: "Sell my bag" }).waitFor();
+  if (bagEvidence) await card.screenshot({ path: join(bagEvidence, "bag-disc-for-sale-390.png") });
+  bag("qa-one").listings = [];
+  bag("qa-one").accessories = [];
+  console.log("My Bag: colour + private writing saved, private photo up/shown/deleted, bag + accessory photos, accessory add/edit/delete, I lost this disc hands off, Sell this hands off a disc / the bag / an accessory and shows For sale, switch saves");
 }
 
 try {

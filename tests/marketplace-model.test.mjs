@@ -173,3 +173,67 @@ test("a withdrawn listing reads as relistable for the hours left in its 24-hour 
   assert.equal(withdrawnLabel({ status: "active" }, now), null);
   assert.equal(SELLER_EMAIL_LABEL, "Email for buyer alerts (required to sell)");
 });
+
+test("bags and accessories list without disc details; the kind filters browse", async () => {
+  const model = await import("../src/shared/market-model.js");
+  const base = { mold: "AX5", brand: "Grip", condition: "8", price: "60", quantity: "1" };
+  // A bag drops whatever disc details the form still holds.
+  const bag = model.listingPayload({ ...base, itemKind: "bag", plastic: "Star", discType: "driver", weightG: "175", speed: "12" });
+  assert.equal(bag.ok, true);
+  assert.deepEqual({ ...bag.value }, {
+    itemKind: "bag", gearType: "", brand: "Grip", mold: "AX5", plastic: "", discType: null, speed: null, glide: null, turn: null, fade: null,
+    weightG: null, color: "", condition: 8, conditionNotes: "", priceCents: 6000, openToTrade: false, tradeFor: "", quantity: 1, location: "",
+  });
+  assert.deepEqual(model.listingPayload({ ...base, itemKind: "accessory", mold: "Zuca cart" }), { ok: false, field: "gearType", message: "Choose what it is." });
+  assert.equal(model.listingPayload({ ...base, itemKind: "accessory", gearType: "cart", mold: "" }).message, "Enter what it is (the make and model).");
+  const cart = model.listingPayload({ ...base, itemKind: "accessory", gearType: "cart", mold: "Zuca cart" });
+  assert.equal(cart.value.gearType, "cart");
+  // A disc (and anything without a kind) still needs its disc type.
+  assert.equal(model.listingPayload({ ...base, mold: "Destroyer" }).field, "discType");
+  assert.equal(model.listingPayload({ ...base, itemKind: "hat", mold: "Destroyer", discType: "driver" }).value.itemKind, "disc");
+
+  assert.equal(model.itemKindLabel({ itemKind: "bag" }), "Bag");
+  assert.equal(model.itemKindLabel({ itemKind: "accessory", gearType: "rangefinder" }), "Rangefinder");
+  assert.equal(model.itemKindLabel({ itemKind: "accessory", gearType: "?" }), "Accessory");
+  assert.equal(model.itemKindLabel({ discType: "midrange" }), "Midrange");
+  assert.equal(model.listingMeta({ itemKind: "accessory", gearType: "cart", condition: 7, color: "Black" }), "Cart · Black · 7/10");
+  assert.equal(conditionText(10, "bag"), "10/10 · New, never used");
+  assert.equal(conditionText(7, "accessory"), "7/10 · Some wear, small marks");
+  assert.equal(conditionText(10), "10/10 · New, never thrown");
+  assert.equal(model.sellHeading("accessory"), "Sell an accessory");
+  assert.deepEqual(model.listingDraft({ itemKind: "accessory", gearType: "towel", mold: "Club towel", condition: 9 }).itemKind, "accessory");
+
+  assert.equal(listingsQuery({ kind: "bag" }), "?kind=bag");
+  assert.equal(listingsQuery({ kind: "hat" }), "");
+  assert.equal(model.activeFilterCount({ kind: "accessory" }), 1);
+});
+
+test("Sell this hand-off from My Bag is re-checked when it's read", async () => {
+  const store = new Map();
+  globalThis.sessionStorage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value), removeItem: (key) => store.delete(key) };
+  try {
+    const { MARKET_BAG_HANDOFF_KEY, bagRefKind, clearMarketBagHandoff, readMarketBagHandoff } = await import("../src/public-app/market-bag.js");
+    const disc = "disc:12345678-1234-4234-8234-123456789abc";
+    assert.equal(bagRefKind(disc), "disc");
+    assert.equal(bagRefKind("bag"), "bag");
+    assert.equal(bagRefKind("accessory:12"), "accessory");
+    for (const bad of ["disc:1", "accessory:0", "accessory:x", "bags", "", null]) assert.equal(bagRefKind(bad), "", String(bad));
+    const put = (value) => store.set(MARKET_BAG_HANDOFF_KEY, JSON.stringify(value));
+    put({ ref: disc, brand: "Innova", mold: "Destroyer", plastic: "Star", color: "Orange", weightG: "175", photos: [3, 4, "5", -1, 6, 7, 8] });
+    assert.deepEqual(readMarketBagHandoff(), {
+      ref: disc, itemKind: "disc", gearType: "", brand: "Innova", mold: "Destroyer", plastic: "Star", color: "Orange", weightG: "175", photos: [3, 4, 6, 7],
+    });
+    put({ ref: "accessory:4", gearType: "jetpack", mold: "x".repeat(80), plastic: "Star", weightG: 175, photos: [] });
+    assert.deepEqual(readMarketBagHandoff(), { ref: "accessory:4", itemKind: "accessory", gearType: "other", brand: "", mold: "x".repeat(40), plastic: "", color: "", weightG: "", photos: [] });
+    put({ ref: "bag", weightG: 300 });
+    assert.equal(readMarketBagHandoff().itemKind, "bag");
+    put({ ref: "../admin" });
+    assert.equal(readMarketBagHandoff(), null);
+    store.set(MARKET_BAG_HANDOFF_KEY, "{not json");
+    assert.equal(readMarketBagHandoff(), null);
+    clearMarketBagHandoff();
+    assert.equal(store.has(MARKET_BAG_HANDOFF_KEY), false);
+  } finally {
+    delete globalThis.sessionStorage;
+  }
+});

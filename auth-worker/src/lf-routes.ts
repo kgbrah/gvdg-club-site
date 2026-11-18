@@ -3,7 +3,7 @@
 // Who can do what (decided by the club owner):
 //   - anyone can browse found and lost posts, the Returned wall and finder profiles;
 //   - members and email-verified guests (the marketplace's guest identity) post, claim, mark returned,
-//     confirm, message about a claim, celebrate and report;
+//     confirm, message about a claim, celebrate and report; posters edit their own open posts and add photos;
 //   - admins moderate (reports, AI match review, hide / unhide, close / merge, karma reversal, photos).
 // All authorization happens here, server-side, from the bearer token; client-sent ids are never trusted.
 // No route calls the AI on a public GET.
@@ -11,7 +11,7 @@
 import type { Env } from "./env.js";
 import { handleLostFoundAdmin } from "./lf-admin.js";
 import { acceptMatch, claimAction, claimPost, declineMatch, getClaim, getMatch, postClaimMessage } from "./lf-claims.js";
-import { browsePosts, closePost, createPost, getPost, removePostPhoto, servePostOrCelebrationPhoto, turnInPost } from "./lf-posts.js";
+import { addPostPhoto, browsePosts, closePost, createPost, editPost, getPost, removePostPhoto, servePostOrCelebrationPhoto, turnInPost } from "./lf-posts.js";
 import { keepPhoto, removeOwnPhoto, replacePhoto } from "./lf-photos.js";
 import { createCelebration, fileReport, finderProfile, myLostFound, returnedWall } from "./lf-social.js";
 import { startGuest, verifyGuest } from "./market-guest.js";
@@ -74,6 +74,8 @@ export async function handleLostFound(
     const id = idOf(a);
     if (!id) return fail(c, 404, "not_found");
     if (seg.length === 3 && method === "GET") return getPost(c, id);
+    if (seg.length === 3 && method === "PATCH") return editPost(c, id);
+    if (seg.length === 4 && method === "POST" && b === "photos") return addPostPhoto(c, id);
     if (seg.length === 4 && method === "POST") {
       if (b === "close") return closePost(c, id);
       if (b === "turn-in") return turnInPost(c, id);

@@ -1,15 +1,17 @@
-// Post a found or a lost disc. Members post directly; anyone else verifies their email first (the club's guest
-// identity, shared with the marketplace). Photos are resized on the phone (which drops location data) and the
-// server strips metadata again. Photos are public as posted, so the form asks posters to cover names and
-// phone numbers; the club reads the writing privately to find the owner.
+// Post a found or a lost disc, or edit your own post. Members post directly; anyone else verifies their email first
+// (the club's guest identity, shared with the marketplace). Photos are resized on the phone (which drops location
+// data) and the server strips metadata again. Photos are public as posted, so the form asks posters to cover names
+// and phone numbers; the club reads the writing privately to find the owner.
 import React from "react";
 
 import { resizeImageFile } from "../shared/image-resize.js";
-import { LF_LIMITS, LF_MAX_PHOTOS, LF_PHOTO_TIP, lfErrorMessage, postHref, postPayload, validatePost } from "../shared/lost-found-model.js";
+import {
+  draftFromPost, LF_LIMITS, LF_MAX_PHOTOS, LF_PHOTO_TIP, lfErrorMessage, postEditPayload, postHref, postPayload, validatePost,
+} from "../shared/lost-found-model.js";
 import { plasticsFor } from "../shared/disc-catalog.js";
 import { holeCount, layoutHoles, matchSpokenCourse, nearestCourse, nearestHole } from "../shared/course-geo.js";
 import { Note, StatusLine, useAction } from "./market-ui.js";
-import { announceLfChange, lfRequest, PrivacyNote, useLfConfig, useLfIdentityGate } from "./lf-ui.js";
+import { announceLfChange, LfLoad, LfPhoto, lfRequest, PrivacyNote, useLfConfig, useLfIdentityGate, useLfResource } from "./lf-ui.js";
 import { useCourses } from "./lf-list.js";
 import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PickList, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
@@ -102,15 +104,76 @@ export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, cameraH
   ]);
 }
 
-/** `route.query` may carry course / hole from the scoring app ("Found a disc" on the hole you're playing). */
-export function NewPost({ kind, route }) {
+/** The photos already on a post being edited: each one comes off, or a new one goes on, straight away. */
+function EditPhotos({ post, photos, setPhotos, onError }) {
+  const [busy, setBusy] = React.useState(false);
+  const found = post.kind === "found";
+  const max = LF_MAX_PHOTOS[post.kind] || 0;
+  const remaining = max - photos.length;
+  async function change(path, body, failure) {
+    setBusy(true);
+    try {
+      const { ok, data } = await lfRequest(`/lost-found/posts/${post.id}/${path}`, { body, method: "POST" });
+      // Both routes answer with the post as it now stands.
+      if (ok && data.post) setPhotos(data.post.myPhotos || []);
+      else onError(lfErrorMessage(data, failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function add(files) {
+    for (const file of files.slice(0, remaining)) {
+      const image = await resizeImageFile(file, 1280);
+      if (!image || image.length > MAX_PHOTO_DATA_URL) { onError("One photo couldn't be used. Try a JPEG or PNG."); continue; }
+      await change("photos", { image }, "That photo didn't upload. Try again.");
+    }
+  }
+  return h("fieldset", { className: "market-fieldset market-photos", "data-lf-edit-photos": photos.length, "data-lf-field": "photos" }, [
+    h("legend", { key: "legend" }, found ? "Photos (1 to 3)" : "Photos (optional, up to 2)"),
+    h("p", { className: "lf-photo-tip", key: "tip" }, LF_PHOTO_TIP),
+    photos.length ? h("ul", { className: "market-photo-list", key: "list" }, photos.map((photo, index) => h("li", { className: "market-photo-item", key: photo.id }, [
+      h(LfPhoto, { alt: `Photo ${index + 1}`, className: "market-photo-thumb", key: "img", photo }),
+      h("button", {
+        "aria-label": `Remove photo ${index + 1}`, className: "shop-filter-reset", disabled: busy || (found && photos.length <= 1), key: "remove",
+        onClick: () => { void change("photos/" + photo.id + "/remove", {}, "That photo couldn't be removed."); }, type: "button",
+      }, "Remove"),
+    ]))) : null,
+    h(PhotoAddButtons, {
+      cameraHint: found ? "The top of the disc, then the bottom. Cover any name or phone number." : "Your disc, or one just like it.",
+      disabled: busy, hasPhotos: photos.length > 0, key: "add", multiple: remaining > 1, onFiles: (files) => { void add(files); }, remaining,
+    }),
+    h("small", { className: "market-hint", key: "hint" }, busy ? "Saving photo…" : "Photo changes save straight away."),
+  ]);
+}
+
+/** Edit your own post: the same form, filled in from the post. */
+export function EditPost({ id }) {
+  const state = useLfResource("/lost-found/posts/" + id);
+  const back = h("a", { className: "market-back", href: postHref(id), key: "back" }, "Back to your post");
+  if (state.status !== "ready") {
+    return h("section", { "data-lf-state": state.status, "data-lf-view": "edit" }, [back, h(LfLoad, { key: "load", missing: "This post is no longer up.", onRetry: state.retry, state })]);
+  }
+  const post = state.data.post;
+  if (!post.mine || !post.canEdit) {
+    return h("section", { "data-lf-state": "locked", "data-lf-view": "edit" }, [back, h(Note, { key: "locked" }, "Only the person who posted it can edit this post, while it's still up.")]);
+  }
+  return h(NewPost, { edit: post, kind: post.kind });
+}
+
+/** `route.query` may carry course / hole from the scoring app ("Found a disc" on the hole you're playing). `edit`: the
+ *  poster's own post, to edit instead of posting a new one. */
+export function NewPost({ kind, route, edit = null }) {
   const config = useLfConfig();
   const courses = useCourses();
+  const editing = Boolean(edit);
   // "I lost this disc" from My Bag fills the lost post in (a signed-in member's own bag disc only).
-  const [bag] = React.useState(() => (kind === "lost" && route?.query?.get("from") === "bag" ? readBagHandoff() : null));
+  const [bag] = React.useState(() => (!editing && kind === "lost" && route?.query?.get("from") === "bag" ? readBagHandoff() : null));
   const fromBag = bag && config.viewer?.kind === "member" ? bag : null;
-  const [bagChosen, setBagChosen] = React.useState([]);
+  // The bag's photos go on the post unless the owner unticks them (a lost post takes two).
+  const [bagChosen, setBagChosen] = React.useState(() => (bag ? bag.photos.slice(0, LF_MAX_PHOTOS.lost) : []));
+  const [remotePhotos, setRemotePhotos] = React.useState(() => edit?.myPhotos || []);
   const [draft, setDraft] = React.useState(() => {
+    if (edit) return draftFromPost(edit);
     if (bag) {
       return { ...EMPTY, brand: bag.brand, mold: bag.mold, plastic: bag.plastic, color: bag.color, weightG: bag.weightG, privateInk: bag.ink, eventDate: todayEastern() };
     }
@@ -124,7 +187,7 @@ export function NewPost({ kind, route }) {
   // Where you are: read on open when location is already allowed (never prompts by itself); "Use my location" asks.
   const here = useHere();
   // What location filled in (and was left alone since), for the notes under the fields.
-  const [located, setLocated] = React.useState(() => ({ course: "", hole: "", tried: route?.query?.get("course") ? "prefilled" : "" }));
+  const [located, setLocated] = React.useState(() => ({ course: "", hole: "", tried: editing ? "edit" : route?.query?.get("course") ? "prefilled" : "" }));
   React.useEffect(() => {
     if (here.status !== "ready" || !courses.length || located.tried || draft.courseId) return;
     const near = nearestCourse(courses, here.here);
@@ -132,7 +195,7 @@ export function NewPost({ kind, route }) {
     if (near) setDraft((current) => (current.courseId ? current : { ...current, courseId: String(near.course.id), hole: "" }));
   }, [here.status, here.here, courses, located.tried, draft.courseId]);
   React.useEffect(() => {
-    if (here.status !== "ready" || !layout.ready || draft.hole || located.holeFor === draft.courseId) return;
+    if (editing || here.status !== "ready" || !layout.ready || draft.hole || located.holeFor === draft.courseId) return;
     const near = nearestHole(layout.holes, here.here);
     setLocated((current) => ({ ...current, holeFor: draft.courseId, hole: near ? String(near.hole) : "" }));
     if (near) setDraft((current) => (current.hole ? current : { ...current, hole: String(near.hole) }));
@@ -163,6 +226,19 @@ export function NewPost({ kind, route }) {
   const text = (id, key, label, extra = {}) => h(Field, { error: problem?.field === key ? problem.text : "", hint: extra.hint, id, key, label },
     h("input", { id, key: "input", maxLength: LF_LIMITS[key], onChange: (event) => set(key, event.target.value), type: "text", value: draft[key], ...extra.input }));
 
+  async function save() {
+    await action.run(async () => {
+      const { ok, data } = await lfRequest("/lost-found/posts/" + edit.id, { body: postEditPayload(kind, draft), method: "PATCH" });
+      if (ok && data.post?.id) {
+        announceLfChange();
+        window.location.hash = postHref(data.post.id).slice(1);
+      } else {
+        if (data.field) setProblem({ field: data.field, text: lfErrorMessage(data) });
+        action.setMessage({ text: lfErrorMessage(data), tone: "error" });
+      }
+    });
+  }
+
   async function send() {
     await action.run(async () => {
       const body = postPayload(kind, draft, photos.map((photo) => photo.dataUrl));
@@ -184,19 +260,23 @@ export function NewPost({ kind, route }) {
 
   function submit(event) {
     event.preventDefault();
-    const issue = validatePost(kind, draft, photos.length);
+    const issue = validatePost(kind, draft, editing ? remotePhotos.length : photos.length + bagChosen.length);
     setProblem(issue);
     if (issue) {
       action.setMessage({ text: issue.text, tone: "error" });
       return;
     }
+    if (editing) { void save(); return; }
     identity.require(found ? "Verify your email to post the disc you found" : "Verify your email to post your lost disc", send);
   }
 
-  return h("section", { "data-lf-view": "new-" + kind }, [
-    h("a", { className: "market-back", href: found ? "#found" : "#lost", key: "back" }, found ? "Back to found discs" : "Back to lost discs"),
-    h("form", { "aria-label": found ? "Post a found disc" : "Post a lost disc", className: "market-form market-panel lf-form", key: "form", noValidate: true, onSubmit: submit }, [
-      h("h2", { className: "my-orders-title", key: "title" }, found ? "Post a found disc" : "Post a lost disc"),
+  const heading = editing ? "Edit your post" : found ? "Post a found disc" : "Post a lost disc";
+  return h("section", { "data-lf-state": editing ? "ready" : undefined, "data-lf-view": editing ? "edit" : "new-" + kind }, [
+    editing
+      ? h("a", { className: "market-back", href: postHref(edit.id), key: "back" }, "Back to your post")
+      : h("a", { className: "market-back", href: found ? "#found" : "#lost", key: "back" }, found ? "Back to found discs" : "Back to lost discs"),
+    h("form", { "aria-label": heading, className: "market-form market-panel lf-form", key: "form", noValidate: true, onSubmit: submit }, [
+      h("h2", { className: "my-orders-title", key: "title" }, heading),
       found
         ? h(PrivacyNote, { key: "privacy" }, "Anyone can see the photos you post. We also read any writing on the disc privately, only to find its owner.")
         : h(PrivacyNote, { key: "privacy" }, "What you type about the writing on your disc stays private: it's only used to match your disc with found ones and is never shown to anyone. Any photo you add is public."),
@@ -204,7 +284,8 @@ export function NewPost({ kind, route }) {
       fromBag ? h(BagPhotoChooser, {
         chosen: bagChosen, key: "bag-photos", photos: fromBag.photos, room: LF_MAX_PHOTOS[kind] - photos.length - bagChosen.length, setChosen: setBagChosen,
       }) : null,
-      h(PhotoPicker, {
+      editing ? h(EditPhotos, { key: "edit-photos", onError: (message) => action.setMessage({ text: message, tone: "error" }), photos: remotePhotos, post: edit, setPhotos: setRemotePhotos }) : null,
+      editing ? null : h(PhotoPicker, {
         key: "photos", max: Math.max(0, LF_MAX_PHOTOS[kind] - bagChosen.length), min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
         hint: found ? "Show the top and the bottom. Photos are resized on your phone and location data is removed." : "Optional: a photo of the same disc or one like it.",
         cameraHint: found ? "The top of the disc, then the bottom. Cover any name or phone number." : "Your disc, or one just like it.",
@@ -255,7 +336,8 @@ export function NewPost({ kind, route }) {
         error: problem?.field === "privateInk" ? problem.text : "", hint: "Your name, phone number, initials… Private: only used for matching.", id: "lfInk", key: "ink",
         label: "What's written on it (private)",
       }, h("textarea", { id: "lfInk", key: "input", maxLength: LF_LIMITS.privateInk, onChange: (event) => set("privateInk", event.target.value), rows: 2, value: draft.privateInk })) : null,
-      h("button", { className: "shop-btn market-submit", disabled: action.busy, key: "submit", type: "submit" }, action.busy ? "Posting…" : found ? "Post found disc" : "Post lost disc"),
+      h("button", { className: "shop-btn market-submit", disabled: action.busy, key: "submit", type: "submit" },
+        editing ? (action.busy ? "Saving…" : "Save changes") : action.busy ? "Posting…" : found ? "Post found disc" : "Post lost disc"),
       h(StatusLine, { key: "status", message: action.message }),
     ]),
     h("div", { className: "lf-gate", key: "gate", ref: gateBox }, identity.gate),
