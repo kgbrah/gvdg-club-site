@@ -226,6 +226,10 @@ standings are written to D1 (`results` for events, `casual_rounds`/`casual_resul
   member; `POST /admin/members/set-tier` (last-admin guarded), `POST /admin/members/lapsed-to-guest`. Guests: membership
   view `guest: true` (never lapsed), registration not blocked, and `requireListingSeller` refuses new listings, relists and
   Wanted offers (`guests_cannot_list`; the market viewer carries `canList`).
+- **PayPal from in-app browsers** (`src/shared/paypal-link.js`, installed by the home, public and members bundles): in
+  Facebook / Messenger / Instagram / TikTok's own browser a paypal.me / paypal.com link is handed off (Android: an
+  `intent://` link so the PayPal app or the real browser opens it; iOS 17+: `x-safari-https://`, falling back to the plain
+  link if nothing happens). Normal browsers are untouched (they already open the PayPal app).
 - **Guests verify once** (`guest-link.ts`): every email to a marketplace / Lost & Found guest carries a sign-in link
   (`?gl=` a 14-day `glink` JWT, marked `mkt` + `glink` so it is never a member or guest session). The page exchanges it
   once (`POST /market/guest/link` → a guest session, `consumeGuestLink` in `market-api.js`) and drops it from the address,
@@ -397,8 +401,8 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v319`, members `?v=211`, public/events `?v=202`, score `?v=241`,
-home `?v=192` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v320`, members `?v=212`, public/events `?v=203`, score `?v=241`,
+home `?v=193` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
 `.karma-chip` in `tokens.css`): every rendered player name gets `KarmaChip` (by `memberId` / `pdga` / payload `karmaKey` /
