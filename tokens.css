@@ -506,8 +506,13 @@ body.score-glove.player-theme-active.player-theme-glass {
 }
 
 /* Text that sits on the bare wallpaper (page titles, headings outside cards) gets a soft halo. */
-body.player-theme-glass[data-member-shell="members"] #members :is(.member-page-heading, .member-page-heading *, .member-section-title, #members > h2, .member-home-section > h2, .member-home-section > h3) {
+body.player-theme-glass[data-member-shell="members"] #members :is(.member-page-heading, .member-page-heading *, .member-section-title, #members > h2, .member-home-section > h2, .member-home-section > h3, .member-link-section > h2) {
   text-shadow: var(--glass-halo);
+}
+/* Grouped-list titles (Club hub, Account) sit straight on the lighter glass wallpaper: in dark glass their ink
+   leans a little toward white so they keep AA contrast wherever the wallpaper falls behind them. */
+:root[data-theme="dark"] body.player-theme-glass[data-member-shell="members"] #members .member-link-section > h2 {
+  color: color-mix(in srgb, var(--text-primary) 70%, white);
 }
 
 /* Member app: containers (cards, grouped lists, panels) */

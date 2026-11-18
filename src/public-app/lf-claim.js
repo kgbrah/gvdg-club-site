@@ -142,7 +142,8 @@ export function ClaimView({ id }) {
       h(Steps, { key: "steps", status: claim.status }),
       h("p", { className: "market-pending lf-claim-status", key: "claim-status" }, CLAIM_STATUS_LABELS[claim.status] || claim.status),
       h("p", { className: "market-deal-who", key: "other" }, h(PersonLine, { person: other, prefix: finder ? "Owner:" : "Finder:" })),
-      claim.message ? h("blockquote", { className: "market-quote", key: "msg" }, claim.message) : null,
+      // With relayed contact the claim message opens the thread below; with Messages it is shown here.
+      claim.message && claim.contact?.kind === "dm" ? h("blockquote", { className: "market-quote", key: "msg" }, claim.message) : null,
       post.id ? h("a", { className: "market-link", href: postHref(post.id), key: "post" }, "See the post") : null,
       claim.status === "confirmed" && claim.karma ? h("p", { className: "lf-karma-win", "data-lf-karma-awarded": claim.karma.awarded ? "true" : "false", key: "karma" }, [
         h(PartyPopper, { "aria-hidden": true, key: "i", size: 20 }),

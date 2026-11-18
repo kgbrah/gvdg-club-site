@@ -411,6 +411,10 @@ describe("lost & found photos and privacy", () => {
     expect(removed.data.post.photos).toEqual([]);
     expect((await call(post.photos[0].url)).status).toBe(404);
     expect(photos.objects.size).toBe(0);
+    // A read that puts the writing into a public field (here "mold") is not used for that field.
+    geminiReplies = [inkReply([{ text: "WENDY SMITH", type: "name", box_2d: [1, 1, 50, 50] }], { brand: "Innova", mold: "Wendy Smith", plastic: "Star 2525550199" })];
+    const echoed = await getPost((await createPost(finder, foundBody())).id);
+    expect(echoed).toMatchObject({ brand: "Innova", mold: "", plastic: "" });
     // Ink text never reaches a public payload.
     const list = await call("/lost-found/posts?kind=found");
     expect(list.raw).not.toMatch(/555|0134|ADA/);

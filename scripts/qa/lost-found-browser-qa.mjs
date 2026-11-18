@@ -581,7 +581,7 @@ async function runFlows() {
   await home.page.goto(origin + "/gvdg-members.html", { waitUntil: "domcontentloaded" });
   const homeCard = home.page.locator("[data-member-returned]");
   await homeCard.waitFor();
-  await homeCard.getByText("Gail Finder returned a Innova Star Destroyer").waitFor();
+  await homeCard.getByText("Gail Finder returned an Innova Star Destroyer").waitFor();
   await homeCard.locator("img").waitFor();
   console.log("member Home shows the Recently returned card");
   const site = await open(P);

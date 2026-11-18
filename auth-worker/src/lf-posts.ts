@@ -265,14 +265,15 @@ export async function removePostPhoto(c: MarketCtx, id: number, photoId: number)
 export async function servePublicPhoto(c: MarketCtx, photoId: number): Promise<Response> {
   const row = await c.env.DB.prepare(
     `SELECT ph.public_key, ph.redaction, p.status AS post_status, p.hidden AS post_hidden, p.expires_at,
-            e.hidden AS celebration_hidden, e.id AS celebration_id,
+            e.hidden AS celebration_hidden, e.id AS celebration_id, cp.hidden AS celebrated_post_hidden,
             (SELECT 1 FROM lf_karma k WHERE k.claim_id = e.claim_id AND k.reason = 'admin_reversal') AS reversed
      FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id LEFT JOIN lf_celebrations e ON e.id = ph.celebration_id
+       LEFT JOIN lf_claims cc ON cc.id = e.claim_id LEFT JOIN lf_posts cp ON cp.id = cc.found_id
      WHERE ph.id = ?`,
   ).bind(photoId).first<Row>();
   if (!row || str(row, "redaction") !== "public" || !row.public_key) return fail(c, 404, "not_found");
   if (row.celebration_id != null) {
-    if (num(row, "celebration_hidden") === 1 || row.reversed) return fail(c, 404, "not_found");
+    if (num(row, "celebration_hidden") === 1 || num(row, "celebrated_post_hidden") === 1 || row.reversed) return fail(c, 404, "not_found");
   } else {
     const status = postStatus({ status: row.post_status, expires_at: row.expires_at });
     if (num(row, "post_hidden") === 1 || !PUBLIC_STATUSES.includes(status)) return fail(c, 404, "not_found");

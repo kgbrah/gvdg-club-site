@@ -13,7 +13,7 @@ import { deliverLfNote } from "./lf-notify.js";
 import { redactImage } from "./lf-redact.js";
 import { rosterNameMatch, scoreMatch, STORE_THRESHOLD, type FoundSide, type LostSide } from "./lf-match.js";
 import { coursesById, getPostRow, postTitle } from "./lf-store.js";
-import { compareDiscPhotos, extractDisc, inkKeys, type InkItem, type InkKeys } from "./lf-vision.js";
+import { compareDiscPhotos, extractDisc, inkKeys, normalizeName, type InkItem, type InkKeys } from "./lf-vision.js";
 import { isGuestId } from "./market-notify.js";
 import { num, str, type Row } from "./market-store.js";
 import { getMember, listMembers } from "./roster.js";
@@ -130,10 +130,15 @@ export async function applyExtraction(env: Env, postId: number): Promise<void> {
   const post = await env.DB.prepare("SELECT brand, mold, plastic, color, ai_fields FROM lf_posts WHERE id = ?").bind(postId).first<Row>();
   if (!post) return;
   const reads = (await env.DB.prepare(
-    "SELECT brand, mold, plastic, colors FROM lf_extractions WHERE post_id = ? AND status IN ('ok', 'unsure') ORDER BY CASE status WHEN 'ok' THEN 0 ELSE 1 END, id",
+    `SELECT brand, mold, plastic, colors, ink_names, ink_phones FROM lf_extractions WHERE post_id = ? AND status IN ('ok', 'unsure')
+     ORDER BY CASE status WHEN 'ok' THEN 0 ELSE 1 END, id`,
   ).bind(postId).all<Row>()).results ?? [];
   if (!reads.length) return;
-  const pick = (field: string) => reads.map((read) => str(read, field)).find(Boolean) || "";
+  // Public details come from the printed stamp. Never let a read echo the PRIVATE writing (a name token, or a
+  // run of digits) into a public field.
+  const inkTokens = new Set(reads.flatMap((read) => str(read, "ink_names").split("|")).flatMap((name) => name.replace(/^#/, "").split(" ")).filter((token) => token.length >= 2));
+  const safe = (value: string) => value && !/\d{4}/.test(value) && !normalizeName(value).split(" ").some((token) => inkTokens.has(token));
+  const pick = (field: string) => reads.map((read) => str(read, field)).find(safe) || "";
   const fields = new Set(str(post, "ai_fields").split(",").filter(Boolean));
   const next: Record<string, string> = {};
   for (const field of ["brand", "mold", "plastic"]) {
