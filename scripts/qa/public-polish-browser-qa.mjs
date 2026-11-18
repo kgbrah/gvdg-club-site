@@ -298,6 +298,8 @@ async function checkEvents(page, profile) {
     await calendar.click();
     const menu = page.getByRole("menu", { name: "Add to calendar" });
     await menu.waitFor();
+    // Wait for every choice before counting (CI's slower runner once counted the menu mid-render).
+    await menu.getByRole("menuitem").nth(2).waitFor();
     assert.equal(await menu.getByRole("menuitem").count(), 3);
     assert.match(await menu.getByRole("menuitem", { name: "Google Calendar" }).getAttribute("href"), /^https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE&/);
     const box = await menu.boundingBox();

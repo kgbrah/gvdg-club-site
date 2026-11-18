@@ -353,6 +353,7 @@ async function checkCalendarMenu(page, card, width) {
   await button.click();
   const menu = page.getByRole("menu", { name: "Add to calendar" });
   await menu.waitFor();
+  await menu.getByRole("menuitem").nth(2).waitFor();
   assert.deepEqual(await menu.getByRole("menuitem").allInnerTexts(), ["Google Calendar", "Outlook", "Other calendar app (.ics file)"]);
   const google = new URL(await menu.getByRole("menuitem", { name: "Google Calendar" }).getAttribute("href"));
   assert.deepEqual([google.hostname, google.searchParams.get("dates"), google.searchParams.get("text")],
