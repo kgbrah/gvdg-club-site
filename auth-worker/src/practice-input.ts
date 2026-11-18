@@ -8,6 +8,8 @@ type Distance = { distance: number; unit: Unit; meters: number };
 type Point = { lat: number; lng: number; accuracyM?: number };
 export type DiscRecord = {
   brand: string; model: string; plastic: string; weightGrams: number | null; notes: string; inBag: boolean; archived: boolean;
+  /** Optional (newer clients): the disc's colour, and what's written on it (private; used only to match found discs). */
+  color?: string; ink?: string;
 };
 export type ThrowRecord = Distance & {
   discId: string; shotType: typeof SHOT_TYPES[number]; date: string; origin?: Point; end?: Point;
@@ -82,8 +84,11 @@ export function normalizeDistance(distance: unknown, unit: unknown, maxMeters: n
 }
 
 function disc(value: unknown): DiscRecord | null {
-  const row = object(value, ["brand", "model", "plastic", "weightGrams", "notes", "inBag", "archived"]);
+  const row = object(value, ["brand", "model", "plastic", "weightGrams", "notes", "inBag", "archived", "color", "ink"]);
   if (!row) return null;
+  const color = text(row.color, 30, true);
+  const ink = text(row.ink, 120, true);
+  if (color === null || ink === null) return null;
   const brand = text(row.brand, 80);
   const model = text(row.model, 80);
   const plastic = text(row.plastic, 80, true);
@@ -92,7 +97,11 @@ function disc(value: unknown): DiscRecord | null {
   if (brand === null || model === null || plastic === null || notes === null
     || (row.weightGrams != null && weightGrams === null)
     || typeof row.inBag !== "boolean" || typeof row.archived !== "boolean" || (row.archived && row.inBag)) return null;
-  return { brand, model, plastic, weightGrams, notes, inBag: row.inBag, archived: row.archived };
+  const record: DiscRecord = { brand, model, plastic, weightGrams, notes, inBag: row.inBag, archived: row.archived };
+  // Older records stay byte-for-byte as they were; the new fields appear only when set.
+  if (color) record.color = color;
+  if (ink) record.ink = ink;
+  return record;
 }
 
 function measuredThrow(value: unknown, now: number): ThrowRecord | null {

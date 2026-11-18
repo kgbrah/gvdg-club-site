@@ -11,6 +11,9 @@ import {
   CLAIM_COLUMNS, MATCH_COLUMNS, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards, postStatus, postTitle, strength,
 } from "./lf-store.js";
 import { ownPhotos, photosFrom, removeOwnPhoto, servePhoto, storePhotos } from "./lf-photos.js";
+import { bagDisc } from "./bag-routes.js";
+import { queueLostCheck } from "./market-lost-check.js";
+import type { DecodedImage } from "./photos.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
 
@@ -144,6 +147,24 @@ export async function createPost(c: MarketCtx): Promise<Response> {
   const v = parsed.value;
   const images = v.kind === "found" ? photosFrom(body.photos, 1, MAX_FOUND_PHOTOS) : photosFrom(body.photos, 0, MAX_LOST_PHOTOS);
   if (!images) return fail(c, 400, "invalid_photo");
+  // "I lost this disc" from My Bag: the member's own bag disc, plus the bag photos they chose to show on the post
+  // (copied; the bag keeps its private originals).
+  let bagDiscId: string | null = null;
+  if (body.bagDiscId != null && body.bagDiscId !== "") {
+    if (v.kind !== "lost" || poster.kind !== "member" || typeof body.bagDiscId !== "string" || !(await bagDisc(c.env, poster.id, body.bagDiscId))) {
+      return fail(c, 400, "invalid_post", "bagDiscId");
+    }
+    bagDiscId = body.bagDiscId;
+    const wanted = (Array.isArray(body.bagPhotoIds) ? body.bagPhotoIds : []).filter((id): id is number => Number.isInteger(id) && Number(id) > 0);
+    for (const photoId of wanted.slice(0, Math.max(0, MAX_LOST_PHOTOS - images.length))) {
+      const row = await c.env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE id = ? AND owner = ? AND disc_id = ?")
+        .bind(photoId, poster.id, bagDiscId).first<{ photo_key: string; photo_type: string }>();
+      const obj = row ? await c.env.PHOTOS.get(row.photo_key) : null;
+      if (!row || !obj) return fail(c, 400, "invalid_photo");
+      const type = row.photo_type as DecodedImage["contentType"];
+      images.push({ bytes: new Uint8Array(await obj.arrayBuffer()), contentType: type, ext: type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg" });
+    }
+  }
   let courseName = "";
   if (v.courseId != null) {
     const course = await c.env.DB.prepare("SELECT name FROM courses WHERE id = ?").bind(v.courseId).first<{ name: string }>();
@@ -155,10 +176,10 @@ export async function createPost(c: MarketCtx): Promise<Response> {
   await ensureTrader(c.env, poster);
   const created = await c.env.DB.prepare(
     `INSERT INTO lf_posts (kind, owner_id, brand, mold, plastic, color, course_id, course_name, area, weight_g, hole, event_date, holding,
-       bin_note, reward_note, private_ink, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+${POST_DAYS} days')) RETURNING id`,
+       bin_note, reward_note, private_ink, bag_disc_id, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+${POST_DAYS} days')) RETURNING id`,
   ).bind(v.kind, poster.id, v.brand, v.mold, v.plastic, v.color, v.courseId, courseName, v.area, v.weightG, v.hole, v.eventDate, v.holding,
-    v.binNote, v.rewardNote, v.privateInk).first<{ id: number }>();
+    v.binNote, v.rewardNote, v.privateInk, bagDiscId).first<{ id: number }>();
   const id = Number(created?.id);
   if (!id) return fail(c, 500, "server_error");
   let stored: string[] = [];
@@ -174,6 +195,8 @@ export async function createPost(c: MarketCtx): Promise<Response> {
   // The private AI read and matching happen after the response (and on the cron if the AI is unavailable).
   const job = processPost(c.env, c.ctx, id);
   try { c.ctx?.waitUntil?.(job); } catch { /* settles on its own */ }
+  // A lost disc may already be up for sale: its seller (only) hears on a strong match.
+  if (v.kind === "lost") queueLostCheck(c.env, c.ctx, id);
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) }, 201);
 }
 

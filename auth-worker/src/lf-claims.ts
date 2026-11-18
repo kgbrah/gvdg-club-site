@@ -24,6 +24,7 @@ import { emailConfigured, isGuestId, sendMarketEmail, traderEmail } from "./mark
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
 import { sendMemberDirectMessage } from "./member-messages.js";
+import { bagDisc, bagDiscLabel } from "./bag-routes.js";
 
 async function getMatchRow(c: MarketCtx, id: number): Promise<Row | null> {
   return c.env.DB.prepare(`SELECT ${MATCH_COLUMNS} FROM lf_matches m WHERE m.id = ?`).bind(id).first<Row>();
@@ -52,6 +53,8 @@ export async function getMatch(c: MarketCtx, id: number): Promise<Response> {
       reasons: matchReasonLabels(parseReasons(match.reasons)),
       found: card,
       lost: lost ? { id: num(lost, "id"), title: postTitle(lost) } : null,
+      // Only the possible owner learns which of their bag discs it matched.
+      bagDisc: match.bag_disc_id && str(match, "candidate_id") === me.id ? bagDiscLabel(await bagDisc(c.env, me.id, str(match, "bag_disc_id"))) : null,
       claim: claim ? { id: claim.id, status: claim.status } : null,
       canDecide: live && (status === "suggested" || status === "notified") && !(claim && (claim.status === "open" || claim.status === "returned")),
     },

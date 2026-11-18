@@ -86,6 +86,8 @@ let geminiReplies: string[];
 let geminiStatus: number;
 let geminiCalls: number;
 let openRouterReply: string | null;
+/** Gemini's answer to "is this the SAME physical disc?" (defaults to yes). */
+let compareReply: string;
 
 const NO_INK = JSON.stringify({ brand: "Innova", mold: "Destroyer", plastic: "Star", colors: ["orange"], stamp: "Star Destroyer", ink: [], unreadable_writing: false, ink_confidence: "high" });
 function inkReply(ink: Array<{ text: string; type: string }>, extra: Record<string, unknown> = {}) {
@@ -187,6 +189,7 @@ beforeEach(async () => {
   geminiStatus = 200;
   geminiCalls = 0;
   openRouterReply = null;
+  compareReply = '{"same":"yes"}';
   env = makeEnv();
   db.raw.prepare("INSERT INTO courses (id, name, lat, lng) VALUES (9001, 'Elm Street Park', 35.61, -77.37), (9002, 'Green Mill Run', 35.60, -77.36), (9003, 'Far Away DGC', 36.9, -80.1)").run();
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -200,7 +203,7 @@ beforeEach(async () => {
       geminiCalls += 1;
       if (geminiStatus !== 200) return new Response('{"error":{"status":"RESOURCE_EXHAUSTED"}}', { status: geminiStatus });
       const prompt = String(init?.body || "");
-      const text = prompt.includes("SAME physical disc") ? '{"same":"yes"}' : geminiReplies.shift() ?? NO_INK;
+      const text = prompt.includes("SAME physical disc") ? compareReply : geminiReplies.shift() ?? NO_INK;
       return Response.json({ candidates: [{ content: { parts: [{ text }] } }] });
     }
     if (target.startsWith("https://openrouter.ai/") && openRouterReply != null) {
@@ -721,6 +724,201 @@ describe("lost & found matching, claims, returns and karma", () => {
     expect(scrubKeys(finderView.raw)).not.toMatch(/young/i);
     const summary = await call("/me/messages/summary", "GET", await token("m_cy"));
     expect(summary.data.lostFound.waiting).toBe(1);
+  });
+});
+
+describe("lost & found and My Bag", () => {
+  /** A member's bag disc, as the practice sync stores it. */
+  function bagDiscRow(owner: string, record: Record<string, unknown>) {
+    const id = crypto.randomUUID();
+    db.raw.prepare(`INSERT INTO member_practice_records (owner, id, kind, revision, occurred_on, payload, last_op, updated_at)
+      VALUES (?, ?, 'disc', 1, '2026-11-01', ?, 'op-' || ?, ?)`)
+      .run(owner, id, JSON.stringify({ brand: "", model: "", plastic: "", weightGrams: null, notes: "", inBag: true, archived: false, ...record }), id, Date.now());
+    return id;
+  }
+
+  it("keeps bag photos private to their owner, three a disc, with matching on by default", async () => {
+    const ada = await token("m_ada");
+    const bo = await token("m_bo");
+    const disc = bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange" });
+    expect((await call("/me/bag")).status).toBe(401);
+    expect((await call("/me/bag", "GET", ada)).data).toEqual({ matchFound: true, photos: [], lost: [] });
+    expect((await call("/me/bag/photos", "POST", ada, { discId: crypto.randomUUID(), image: PHOTO })).status).toBe(404);
+    expect((await call("/me/bag/photos", "POST", bo, { discId: disc, image: PHOTO })).status).toBe(404);
+    expect((await call("/me/bag/photos", "POST", ada, { discId: disc, image: "data:image/svg+xml;base64,PHN2Zz4=" })).data.error).toBe("invalid_photo");
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const added = await call("/me/bag/photos", "POST", ada, { discId: disc, image: PHOTO });
+      expect(added.status).toBe(201);
+      ids.push(added.data.photo.id);
+    }
+    expect((await call("/me/bag/photos", "POST", ada, { discId: disc, image: PHOTO })).data.error).toBe("too_many_photos");
+    const key = (db.raw.prepare("SELECT photo_key FROM bag_photos WHERE id = ?").get(ids[0]) as any).photo_key;
+    expect(key).toMatch(/^bag\/m_ada\//);
+    const image = await call("/me/bag/photos/" + ids[0], "GET", ada);
+    expect(image.status).toBe(200);
+    expect(image.headers.get("Cache-Control")).toBe("private, no-store");
+    expect((await call("/me/bag/photos/" + ids[0], "GET", bo)).status).toBe(404);
+    expect((await call("/me/bag/photos/" + ids[0])).status).toBe(401);
+    expect((await call("/me/bag/photos/" + ids[2], "DELETE", ada)).status).toBe(200);
+    expect(photos.objects.has((db.raw.prepare("SELECT photo_key FROM bag_photos WHERE id = ?").get(ids[1]) as any).photo_key)).toBe(true);
+    expect((await call("/me/bag", "GET", ada)).data.photos).toEqual([{ id: ids[0], discId: disc }, { id: ids[1], discId: disc }]);
+    expect((await call("/me/bag/settings", "PUT", ada, { matchFound: false })).data).toEqual({ matchFound: false });
+    expect((await call("/me/bag", "GET", ada)).data.matchFound).toBe(false);
+    expect((await call("/me/bag/settings", "PUT", ada, { matchFound: "no" })).status).toBe(400);
+    // A deleted bag disc's photos leave storage on the next cron tick.
+    db.raw.prepare("UPDATE member_practice_records SET payload = NULL WHERE id = ?").run(disc);
+    await runLostFoundTick(env);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM bag_photos").get()).toEqual({ n: 0 });
+    expect([...photos.objects.keys()].some((name) => name.startsWith("bag/"))).toBe(false);
+  });
+
+  it("reports a bag disc lost with only the photos its owner picks, and the bag shows the post", async () => {
+    const ada = await token("m_ada");
+    const disc = bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange", ink: "Ada L 252-555-0101" });
+    const one = (await call("/me/bag/photos", "POST", ada, { discId: disc, image: PHOTO })).data.photo.id;
+    await call("/me/bag/photos", "POST", ada, { discId: disc, image: PHOTO });
+    const post = await createPost(ada, lostBody({ privateInk: "Ada L 252-555-0101", bagDiscId: disc, bagPhotoIds: [one] }));
+    expect(post.photos).toHaveLength(1);
+    expect(db.raw.prepare("SELECT bag_disc_id FROM lf_posts WHERE id = ?").get(post.id)).toEqual({ bag_disc_id: disc });
+    // The post has its own copy; the bag keeps its private original.
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM bag_photos WHERE disc_id = ?").get(disc)).toEqual({ n: 2 });
+    expect((await call("/me/bag", "GET", ada)).data.lost).toEqual([{ discId: disc, postId: post.id, status: "open", title: "Innova Star Destroyer" }]);
+    // Someone else's bag disc or photo, or a found post, can't be used.
+    expect((await call("/lost-found/posts", "POST", await token("m_bo"), lostBody({ bagDiscId: disc }))).data.field).toBe("bagDiscId");
+    expect((await call("/lost-found/posts", "POST", ada, foundBody({ bagDiscId: disc }))).data.field).toBe("bagDiscId");
+    expect((await call("/lost-found/posts", "POST", ada, lostBody({ bagDiscId: disc, bagPhotoIds: [999] }))).data.error).toBe("invalid_photo");
+  });
+
+  it("tells a member about a found disc that matches their bag only on strong evidence, and nobody else learns why", async () => {
+    // Ada wrote her phone number on hers; Cy has a photo of his; the admin's only shares the mold and colour.
+    const adaDisc = bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", plastic: "Star", color: "Orange", ink: "Ada L 252-555-0101" });
+    const cyDisc = bagDiscRow("m_cy", { brand: "Innova", model: "destroyer ", plastic: "Star", color: "Orange" });
+    await call("/me/bag/photos", "POST", await token("m_cy"), { discId: cyDisc, image: PHOTO });
+    bagDiscRow("m_admin", { brand: "Innova", model: "Destroyer", color: "Orange" });
+    bagDiscRow("m_ada", { brand: "Discraft", model: "Buzzz", color: "Orange", ink: "Ada L 252-555-0101" });
+    geminiReplies.push(inkReply([{ text: "252-555-0101", type: "phone" }]));
+    const bo = await token("m_bo");
+    const found = await createPost(bo, foundBody({ brand: "Innova", mold: "Destroyer", plastic: "Star" }));
+    const matches = db.raw.prepare("SELECT candidate_id, lost_id, bag_disc_id, status, reasons FROM lf_matches WHERE found_id = ? ORDER BY candidate_id").all(found.id) as any[];
+    expect(matches.map((row) => [row.candidate_id, row.bag_disc_id, row.status])).toEqual([["m_ada", adaDisc, "notified"], ["m_cy", cyDisc, "notified"]]);
+    expect(JSON.parse(matches[0].reasons)).toEqual(expect.arrayContaining(["ink_phone", "bag"]));
+    expect(JSON.parse(matches[1].reasons)).toEqual(expect.arrayContaining(["photo_same", "bag"]));
+    const toAda = db.raw.prepare("SELECT title, body FROM member_notices WHERE member_id = 'm_ada'").get() as any;
+    expect(toAda).toMatchObject({ title: "Is this your disc?" });
+    expect(toAda.body).toContain("looks like the Orange Innova Star Destroyer in your bag");
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM member_notices WHERE member_id = 'm_admin'").get()).toEqual({ n: 0 });
+    // The owner's match view names their bag disc; the finder can't open it; no payload carries the bag ink.
+    const adaMatch = await call("/lost-found/matches/" + (db.raw.prepare("SELECT id FROM lf_matches WHERE candidate_id = 'm_ada'").get() as any).id, "GET", await token("m_ada"));
+    expect(adaMatch.data.match).toMatchObject({ bagDisc: "Orange Innova Star Destroyer", strength: "strong", canDecide: true });
+    expect(adaMatch.data.match.reasons).toContain("The phone number on the disc matches");
+    expect((await call("/lost-found/matches/" + (db.raw.prepare("SELECT id FROM lf_matches WHERE candidate_id = 'm_ada'").get() as any).id, "GET", bo)).status).toBe(404);
+    for (const res of [await call("/lost-found/posts/" + found.id, "GET", bo), await call("/lost-found/posts?kind=found"), await call("/lost-found/me", "GET", bo)]) {
+      expect(scrubKeys(res.raw)).not.toMatch(/Ada L|0101|bag_disc|bagDisc|in your bag/i);
+    }
+    const toFinder = db.raw.prepare("SELECT body FROM member_notices WHERE member_id = 'm_bo'").all() as any[];
+    expect(JSON.stringify(toFinder)).not.toMatch(/Ada|bag/i);
+  });
+
+  it("leaves bags alone when the owner turned matching off, the disc is archived, or the photo isn't the same disc", async () => {
+    const ada = await token("m_ada");
+    bagDiscRow("m_ada", { brand: "Innova", model: "Destroyer", color: "Orange", ink: "Ada L 252-555-0101" });
+    await call("/me/bag/settings", "PUT", ada, { matchFound: false });
+    bagDiscRow("m_cy", { brand: "Innova", model: "Destroyer", color: "Orange", ink: "Cy 252-555-0102", archived: true, inBag: false });
+    const withPhoto = bagDiscRow("m_admin", { brand: "Innova", model: "Destroyer", color: "Orange" });
+    await call("/me/bag/photos", "POST", await token("m_admin"), { discId: withPhoto, image: PHOTO });
+    compareReply = '{"same":"no"}';
+    geminiReplies.push(inkReply([{ text: "252-555-0101", type: "phone" }, { text: "252-555-0102", type: "phone" }]));
+    const found = await createPost(await token("m_bo"), foundBody({ brand: "Innova", mold: "Destroyer" }));
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM lf_matches WHERE found_id = ? AND bag_disc_id IS NOT NULL").get(found.id)).toEqual({ n: 0 });
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM member_notices WHERE member_id IN ('m_ada', 'm_cy', 'm_admin')").get()).toEqual({ n: 0 });
+  });
+});
+
+describe("marketplace listings checked against lost posts", () => {
+  // These checks make several AI calls in a row; the free-tier pacing (4 a minute) is covered elsewhere.
+  beforeEach(() => { env = makeEnv({ LF_VISION_PER_MINUTE: "100" }); });
+  function listingBody(overrides: Record<string, unknown> = {}) {
+    return { brand: "Innova", mold: "Destroyer", plastic: "Star", discType: "driver", weightG: 175, color: "Orange", condition: 8, priceCents: 1800,
+      quantity: 1, photos: [PHOTO], ...overrides };
+  }
+  async function sellerToken(id: string) {
+    db.raw.prepare("INSERT OR REPLACE INTO market_seller_settings (member_id, notify_email) VALUES (?, ?)").run(id, id + "@example.test");
+    return token(id);
+  }
+  async function list(bearer: string, body: Record<string, unknown>) {
+    const res = await call("/market/listings", "POST", bearer, body);
+    expect(res.status, res.raw).toBe(201);
+    return res.data.listing;
+  }
+  const notices = (id: string) => db.raw.prepare("SELECT title, body FROM member_notices WHERE member_id = ? ORDER BY id").all(id) as any[];
+
+  it("alerts the seller (and the admins' review list) when the listing photo carries the lost owner's writing", async () => {
+    const lost = await createPost(await token("m_ada"), lostBody({ privateInk: "Ada L 252-555-0101" }));
+    const before = geminiCalls;
+    geminiReplies.push(inkReply([{ text: "252-555-0101", type: "phone" }]));
+    const bo = await sellerToken("m_bo");
+    const listing = await list(bo, listingBody());
+    expect(geminiCalls - before).toBe(1);
+    expect(db.raw.prepare("SELECT verdict, reasons FROM market_lost_checks WHERE listing_id = ? AND lost_id = ?").get(listing.id, lost.id))
+      .toMatchObject({ verdict: "strong" });
+    const toSeller = notices("m_bo").find((row) => row.title === "A disc you listed may be someone's lost disc");
+    expect(toSeller?.body).toContain("Your Innova Star Destroyer listing looks a lot like an Innova Star Destroyer someone reported lost at Elm Street Park");
+    expect(JSON.stringify(notices("m_bo"))).not.toMatch(/Ada|0101/);
+    expect(notices("m_ada").some((row) => /listed|sale/i.test(row.title + row.body))).toBe(false);
+    // Admins see it for review (and on the badge); the lost owner's private text never shows.
+    const admin = await token("m_admin");
+    const overview = await call("/admin/market/overview", "GET", admin);
+    expect(overview.data.lostMatches).toEqual([expect.objectContaining({
+      listing: expect.objectContaining({ id: listing.id }), lost: expect.objectContaining({ id: lost.id, href: "lost-found.html#post/" + lost.id }),
+      reasons: expect.arrayContaining(["The phone number on the disc matches"]),
+    })]);
+    expect(overview.raw).not.toMatch(/Ada L|0101/);
+    expect((await call("/admin/market/summary", "GET", admin)).data.openReports).toBe(1);
+    expect((await call(`/admin/market/lost-matches/${listing.id}/${lost.id}/review`, "POST", admin, { reason: "Asked the seller" })).status).toBe(200);
+    expect((await call("/admin/market/overview", "GET", admin)).data.lostMatches).toEqual([]);
+    expect((await call("/admin/market/summary", "GET", admin)).data.openReports).toBe(0);
+    expect((await call(`/admin/market/lost-matches/${listing.id}/${lost.id}/review`, "POST", admin, { reason: "again" })).status).toBe(409);
+    expect((await call(`/admin/market/lost-matches/${listing.id}/${lost.id}/review`, "POST", bo, { reason: "me" })).status).toBe(403);
+    // Editing the listing doesn't alert twice.
+    await call("/market/listings/" + listing.id, "PATCH", bo, { priceCents: 1500 });
+    expect(notices("m_bo").filter((row) => row.title === "A disc you listed may be someone's lost disc")).toHaveLength(1);
+  });
+
+  it("matches photos when the lost post has one, and stays quiet on details alone", async () => {
+    // A lost post with a photo but no writing: the AI compares the two photos.
+    const lost = await createPost(await token("m_ada"), lostBody({ privateInk: "", photos: [PHOTO] }));
+    const cy = await sellerToken("m_cy");
+    const same = await list(cy, listingBody());
+    expect(db.raw.prepare("SELECT verdict, reasons FROM market_lost_checks WHERE listing_id = ?").get(same.id)).toMatchObject({ verdict: "strong" });
+    compareReply = '{"same":"no"}';
+    const other = await list(cy, listingBody({ color: "Orange" }));
+    expect(db.raw.prepare("SELECT verdict FROM market_lost_checks WHERE listing_id = ?").get(other.id)).toEqual({ verdict: "weak" });
+    expect(notices("m_cy").filter((row) => row.title.startsWith("A disc you listed"))).toHaveLength(1);
+    // Different colour or mold: decided without the AI. The seller's own lost post never counts.
+    const before = geminiCalls;
+    const blue = await list(cy, listingBody({ color: "Blue" }));
+    expect(db.raw.prepare("SELECT verdict FROM market_lost_checks WHERE listing_id = ?").get(blue.id)).toEqual({ verdict: "weak" });
+    await list(cy, listingBody({ mold: "Firebird" }));
+    const mine = await list(await sellerToken("m_ada"), listingBody());
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM market_lost_checks WHERE listing_id = ?").get(mine.id)).toEqual({ n: 0 });
+    expect(geminiCalls).toBe(before);
+    expect(lost.id).toBeGreaterThan(0);
+  });
+
+  it("checks a new lost post against discs already for sale, alerting only their sellers", async () => {
+    // Nothing lost of that mold yet: the listing is not read (no AI spent).
+    const before = geminiCalls;
+    const listing = await list(await sellerToken("m_bo"), listingBody({ color: "Orange" }));
+    expect(geminiCalls).toBe(before);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM market_lost_checks").get()).toEqual({ n: 0 });
+    // A matching lost post arrives: the listing photo is read once, and its seller hears.
+    geminiReplies.push(inkReply([{ text: "Wendy Smith", type: "name" }]));
+    const lost = await createPost(await token("m_ada"), lostBody({ privateInk: "Wendy Smith" }));
+    expect(geminiCalls - before).toBe(1);
+    expect(db.raw.prepare("SELECT verdict FROM market_lost_checks WHERE listing_id = ? AND lost_id = ?").get(listing.id, lost.id)).toEqual({ verdict: "strong" });
+    expect(notices("m_bo").some((row) => row.title === "A disc you listed may be someone's lost disc")).toBe(true);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM market_listing_reads").get()).toEqual({ n: 1 });
   });
 });
 

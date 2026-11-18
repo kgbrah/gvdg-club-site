@@ -15,6 +15,13 @@ const blueTheme = buildTheme({ mode: "dark",
     "#415876", "#d1f29c", "#c2efcf", "#f5e0b6", "#8cb2ff", "#dbbbef", "#c3e3fe", "#f4f8ff"],
 });
 const records = new Map();
+// My Bag's server extras (/me/bag): photos, lost links and the found-disc switch, per owner.
+const bags = new Map();
+const QA_JPEG = Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=", "base64");
+function bag(owner) {
+  if (!bags.has(owner)) bags.set(owner, { matchFound: true, photos: [], lost: [], next: 1 });
+  return bags.get(owner);
+}
 const operations = new Map();
 let available = true;
 let loseNextResponse = false;
@@ -63,6 +70,31 @@ const vite = await createServer({
         function reply(body, status = 200) { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); }
         if (path === "/fixture/me") { reply({ sub: owner, name: owner, pdgaNo: "123" }); return; }
         if (path === "/fixture/me/dashboard-theme" && owner === "bag-390") { reply({ theme: blueTheme }); return; }
+        if (path === "/fixture/me/bag" || path.startsWith("/fixture/me/bag/")) {
+          if (!owner) { reply({ error: "unauthorized" }, 401); return; }
+          const mine = bag(owner);
+          const chunks = [];
+          for await (const chunk of req) chunks.push(chunk);
+          const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : null;
+          const photoId = Number(/\/photos\/(\d+)$/.exec(path)?.[1]);
+          if (path === "/fixture/me/bag" && req.method === "GET") { reply({ matchFound: mine.matchFound, photos: mine.photos.map(({ id, discId }) => ({ id, discId })), lost: mine.lost }); return; }
+          if (path === "/fixture/me/bag/settings" && req.method === "PUT") { mine.matchFound = body.matchFound === true; reply({ matchFound: mine.matchFound }); return; }
+          if (path === "/fixture/me/bag/photos" && req.method === "POST") {
+            assert.match(body.image, /^data:image\/jpeg;base64,/);
+            assert.ok(db(owner).has(body.discId), "photos only for a saved disc");
+            mine.photos.push({ id: mine.next, discId: body.discId });
+            reply({ photo: { id: mine.next++, discId: body.discId } }, 201);
+            return;
+          }
+          if (photoId && req.method === "GET" && mine.photos.some((photo) => photo.id === photoId)) {
+            res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "private, no-store" });
+            res.end(QA_JPEG);
+            return;
+          }
+          if (photoId && req.method === "DELETE") { mine.photos = mine.photos.filter((photo) => photo.id !== photoId); reply({ ok: true }); return; }
+          reply({ error: "not_found" }, 404);
+          return;
+        }
         if (!path.startsWith("/fixture/me/practice")) { reply({}); return; }
         if (!owner) { reply({ error: "unauthorized" }, 401); return; }
         if (!available) { reply({ error: "outage" }, 503); return; }
@@ -387,9 +419,65 @@ async function checkPractice() {
   const fieldwork = [...db("qa-one").values()].find((row) => row.kind === "throw");
   assert.ok(fieldwork.record.meters > 100);
   assert.equal(fieldwork.record.origin, undefined);
+  await checkBagExtras(page);
   assert.deepEqual(pageErrors, [], "Practice must not produce runtime errors");
   console.log("Practice mobile QA passed: quota failure, offline restart, owner isolation, lost acknowledgement, putting totals and private-by-default GPS.");
   await context.close();
+}
+
+/** My Bag meets Lost & Found: colour and private writing, private photos, "I lost this disc", and the switch. */
+async function checkBagExtras(page) {
+  await page.getByRole("button", { name: "My bag", exact: true }).click();
+  const card = page.locator("article.player-card").filter({ has: page.getByRole("heading", { name: "MVP Wave" }) });
+  await card.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("combobox", { name: /^Colour/ }).selectOption("Orange");
+  await page.getByLabel("What's written on it (private)").fill("QA One 555-0100");
+  await page.getByRole("button", { name: "Save disc" }).click();
+  await page.getByText("Practice record synced.").waitFor();
+  const saved = [...db("qa-one").values()].find((row) => row.kind === "disc");
+  assert.equal(saved.record.color, "Orange");
+  assert.equal(saved.record.ink, "QA One 555-0100");
+  await card.getByText("Orange · Neutron · 172 g", { exact: false }).waitFor();
+  // A private photo: picked with the photo picker, uploaded, shown from a private fetch, deleted. The picker button
+  // reads "Add photo" where the browser reports no camera and "Choose photo" next to Take photo otherwise (CI's
+  // headless browser lists no devices at all, which counts as "may have a camera").
+  const picker = card.getByRole("button", { name: /^(Add photo|Choose photo)$/ });
+  const chooser = page.waitForEvent("filechooser");
+  await picker.click();
+  await (await chooser).setFiles({ name: "wave.jpg", mimeType: "image/jpeg", buffer: QA_JPEG });
+  await card.locator(".bag-photo-list img").first().waitFor();
+  assert.equal(bag("qa-one").photos.length, 1);
+  assert.match(await card.locator(".bag-photo-list img").first().getAttribute("src"), /^blob:/, "a private photo is never a public link");
+  if (bagEvidence) await card.screenshot({ path: join(bagEvidence, "bag-disc-photo-390.png") });
+  await card.getByRole("button", { name: "Delete photo 1 of MVP Wave" }).click();
+  await card.locator(".bag-photo-list").waitFor({ state: "detached" });
+  assert.equal(bag("qa-one").photos.length, 0);
+  await picker.waitFor();
+  // The found-disc check: on by default, saved when turned off.
+  const toggle = page.getByRole("checkbox", { name: "Check found discs against my bag" });
+  assert.equal(await toggle.isChecked(), true);
+  await toggle.uncheck();
+  await page.locator("[data-bag-match=off]").waitFor();
+  assert.equal(bag("qa-one").matchFound, false);
+  await toggle.check();
+  await page.locator("[data-bag-match=on]").waitFor();
+  // "I lost this disc": the details go to the Lost & Found form through this tab's sessionStorage, not the address.
+  await page.route(/lost-found\.html/, (route) => route.fulfill({ contentType: "text/html", body: "<!doctype html><title>Lost & Found</title>" }));
+  await card.getByRole("button", { name: "I lost this disc" }).click();
+  await page.waitForURL(/lost-found\.html#new\/lost\?from=bag$/);
+  const handoff = await page.evaluate(() => JSON.parse(sessionStorage.getItem("gvdg_lf_bag_handoff") || "null"));
+  assert.deepEqual(handoff, { discId: saved.id, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Orange", weightG: "172", ink: "QA One 555-0100", photos: [] });
+  assert.doesNotMatch(page.url(), /555|QA One/, "the private writing never goes in the address");
+  await page.unroute(/lost-found\.html/);
+  // Reported lost: the card says so and links to the post.
+  bag("qa-one").lost = [{ discId: saved.id, postId: 41, status: "open", title: "MVP Neutron Wave" }];
+  await page.goto(origin + "/practice-qa.html#my-bag", { waitUntil: "commit" });
+  const reported = page.locator("[data-bag-lost=open]");
+  await reported.getByText("Reported lost").waitFor();
+  assert.equal(await reported.getByRole("link", { name: "View post" }).getAttribute("href"), "lost-found.html#post/41");
+  assert.equal(await page.getByRole("button", { name: "I lost this disc" }).count(), 0);
+  bag("qa-one").lost = [];
+  console.log("My Bag: colour + private writing saved, private photo up/shown/deleted, I lost this disc hands off, switch saves");
 }
 
 try {

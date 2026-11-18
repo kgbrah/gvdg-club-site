@@ -51,6 +51,7 @@ import { handleMarket } from "./market-routes.js";
 import { finalizeWithdrawals } from "./market-sweep.js";
 import { handleLostFound } from "./lf-routes.js";
 import { handleVoiceDisc } from "./voice-disc-route.js";
+import { handleBag } from "./bag-routes.js";
 import { runLostFoundTick } from "./lf-process.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 
@@ -142,6 +143,8 @@ export default {
       }
 
       if (pathname === "/voice/disc" && method === "POST") return await handleVoiceDisc(request, env, origin);
+      const bag = await handleBag(request, env, origin, pathname, method);
+      if (bag) return bag;
       const market = await handleMarket(request, env, origin, pathname, method, ctx);
       if (market) return market;
       const lostFound = await handleLostFound(request, env, origin, pathname, method, ctx);

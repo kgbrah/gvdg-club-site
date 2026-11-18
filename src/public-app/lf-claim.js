@@ -46,9 +46,11 @@ export function MatchView({ id }) {
     h("div", { className: "market-panel lf-match", "data-lf-match": match.id, "data-lf-strength": match.strength, key: "panel" }, [
       h("span", { className: "market-kicker", key: "kicker" }, match.strength === "strong" ? "STRONG MATCH" : "POSSIBLE MATCH"),
       h("h2", { className: "market-title", key: "title" }, "Is this yours?"),
-      h("p", { className: "market-note", key: "lead" }, match.lost
+      h("p", { className: "market-note", "data-lf-match-bag": match.bagDisc ? "true" : undefined, key: "lead" }, match.lost
         ? `Someone found ${withArticle(title)} that looks like your lost ${match.lost.title}.`
-        : `Someone found ${withArticle(title)}, and it may be yours.`),
+        : match.bagDisc
+          ? `Someone found ${withArticle(title)} that looks like the ${match.bagDisc} in your bag.`
+          : `Someone found ${withArticle(title)}, and it may be yours.`),
       h("div", { className: "market-detail", key: "detail" }, [
         h(Gallery, { key: "gallery", photos: post.photos, title }),
         h("div", { className: "lf-match-copy", key: "copy" }, [

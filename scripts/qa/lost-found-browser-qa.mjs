@@ -149,7 +149,7 @@ let env = null;
 let origin = "";
 let glassTheme = null;
 const tokenOwners = new Map();
-const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
+const WORKER_PATHS = /^\/(lost-found|admin\/lost-found|market|admin\/market|me\/messages|me\/notices|me\/bag|voice\/disc|courses\/\d+\/layouts)(\/|$)/;
 
 function fixture(path, authorization) {
   if (path === "/me") {
@@ -1350,6 +1350,125 @@ async function runLocation() {
   console.log("list filter: course search (type or near me), All courses clears it");
 }
 
+// ---------------------------------------------------------------------------------------------------
+// My Bag meets Lost & Found (real Worker): "I lost this disc" opens a lost post filled in from the bag, with the
+// bag's private photo shown on the post only when ticked; a found disc whose writing matches a bag disc tells its
+// owner "… in your bag" (and nobody else why).
+// ---------------------------------------------------------------------------------------------------
+
+function seedBagDisc(owner, record) {
+  const id = crypto.randomUUID();
+  db.raw.prepare(`INSERT INTO member_practice_records (owner, id, kind, revision, occurred_on, payload, last_op, updated_at)
+    VALUES (?, ?, 'disc', 1, '2026-11-01', ?, 'op-' || ?, ?)`)
+    .run(owner, id, JSON.stringify({ brand: "", model: "", plastic: "", weightGrams: null, notes: "", inBag: true, archived: false, ...record }), id, Date.now());
+  return id;
+}
+
+async function runBag() {
+  const P = profiles.light390;
+  const bagPhoto = await makeInkPhoto(join(workDir, "bag-wave.jpg"), []);
+  const photoUrl = "data:image/jpeg;base64," + (await readFile(bagPhoto.file)).toString("base64");
+  const discId = seedBagDisc(people.owner.memberId, { brand: "MVP", model: "Wave", plastic: "Neutron", color: "Blue", weightGrams: 171, ink: "JP 252-555-0166" });
+  const photoId = (await api("/me/bag/photos", { method: "POST", token: tokens.owner, body: { discId, image: photoUrl } })).photo.id;
+
+  // 1. I lost this disc: the form fills in from the bag; the bag photo goes on the post only once ticked.
+  const view = await cameraView(P, { member: tokens.owner });
+  await view.context.addInitScript(({ discId, photoId }) => {
+    if (!sessionStorage.getItem("gvdg_lf_bag_handoff")) sessionStorage.setItem("gvdg_lf_bag_handoff", JSON.stringify({
+      discId, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Blue", weightG: "171", ink: "JP 252-555-0166", photos: [photoId] }));
+  }, { discId, photoId });
+  await go(view.page, "new/lost?from=bag", "form[aria-label='Post a lost disc']");
+  const form = view.page.locator("form[aria-label='Post a lost disc']");
+  await form.getByText("Filled in from your bag. Add where you lost it, check the rest, and post.").waitFor();
+  assert.deepEqual(await Promise.all(["Brand", "Plastic", "Colour", "Weight (if you know it)", "Mold"].map((label) => form.getByLabel(label, { exact: true }).inputValue())),
+    ["MVP", "Neutron", "Blue", "171", "Wave"]);
+  assert.equal(await form.getByLabel("What's written on it (private)").inputValue(), "JP 252-555-0166");
+  const chooser = form.locator("[data-lf-bag-photos]");
+  await chooser.locator("img").first().waitFor();
+  assert.match(await chooser.locator("img").first().getAttribute("src"), /^blob:/, "the bag photo is fetched privately");
+  await pickCourse(form, "ecu", "ECU North Rec Complex");
+  await form.getByLabel("Hole lost on", { exact: true }).selectOption("4");
+  await assertFits(view.page, "lost form from the bag");
+  await shot(view.page, "bag-lost-form-390-light");
+  await chooser.getByLabel("Show on the post").check();
+  await form.getByRole("button", { name: "Post lost disc" }).click();
+  await view.page.waitForURL(/#post\/\d+$/);
+  const postId = Number(/post\/(\d+)$/.exec(view.page.url())[1]);
+  await view.page.locator("[data-lf-view=post][data-lf-state=ready] [data-lf-gallery='1']").waitFor();
+  assert.deepEqual({ ...db.raw.prepare("SELECT bag_disc_id, private_ink FROM lf_posts WHERE id = ?").get(postId) }, { bag_disc_id: discId, private_ink: "JP 252-555-0166" });
+  assert.equal(await view.page.evaluate(() => sessionStorage.getItem("gvdg_lf_bag_handoff")), null, "the handoff is cleared once posted");
+  assert.deepEqual((await api("/me/bag", { token: tokens.owner })).lost.map((row) => [row.discId, row.postId, row.status]), [[discId, postId, "open"]]);
+  await view.context.close();
+  console.log("My Bag: I lost this disc filled the lost post; the ticked bag photo went on it; the bag shows the post");
+
+  // 2. A found disc with a member's bag-disc writing on it: only that member hears, and the match names their bag disc.
+  const riley = seedBagDisc(people.other.memberId, { brand: "Innova", model: "Firebird", plastic: "Champion", color: "Red", ink: "RC 252-555-0177" });
+  const ink = await makeInkPhoto(join(workDir, "bag-firebird.jpg"), [["252 555 0177", 300, 520, 44]]);
+  geminiQueue.push(JSON.stringify({ brand: "Innova", mold: "Firebird", plastic: "Champion", colors: ["red"], stamp: "Champion Firebird",
+    ink: [{ text: "252 555 0177", type: "phone" }], unreadable_writing: false, ink_confidence: "high" }));
+  const finder = await cameraView(P, { member: tokens.finder2 });
+  await go(finder.page, "new/found", "form[aria-label='Post a found disc']");
+  const found = finder.page.locator("form[aria-label='Post a found disc']");
+  await found.getByLabel("Choose disc photos").setInputFiles(ink.file);
+  await found.locator(".market-photo-thumb").first().waitFor();
+  await found.getByLabel("Mold", { exact: true }).fill("Firebird");
+  await found.getByRole("button", { name: "Post found disc" }).click();
+  await finder.page.waitForURL(/#post\/\d+$/);
+  const foundId = Number(/post\/(\d+)$/.exec(finder.page.url())[1]);
+  await finder.context.close();
+  const match = db.raw.prepare("SELECT id, candidate_id, bag_disc_id, status FROM lf_matches WHERE found_id = ? AND bag_disc_id IS NOT NULL").get(foundId);
+  assert.deepEqual([match?.candidate_id, match?.bag_disc_id, match?.status], [people.other.memberId, riley, "notified"]);
+  const owner = await cameraView(P, { member: tokens.other });
+  await go(owner.page, "match/" + match.id, "[data-lf-match]");
+  await owner.page.locator("[data-lf-match-bag]").getByText("looks like the Red Innova Champion Firebird in your bag", { exact: false }).waitFor();
+  await assertFits(owner.page, "bag match view");
+  await shot(owner.page, "bag-match-390-light");
+  await owner.context.close();
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM member_notices WHERE member_id = ? AND body LIKE '%in your bag%'").get(people.other.memberId).n, 1);
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM member_notices WHERE member_id = ? AND body LIKE '%bag%'").get(people.finder2.memberId).n, 0);
+  console.log("My Bag: a found disc with a member's bag-disc writing told only that member, naming the disc in their bag");
+}
+
+// ---------------------------------------------------------------------------------------------------
+// A disc listed for sale that carries a lost owner's writing: the seller is told (privately), and the admins get it
+// under Admin > Marketplace > Possible lost discs for sale, where Mark reviewed clears it.
+// ---------------------------------------------------------------------------------------------------
+
+async function runMarketLost() {
+  const lost = (await api("/lost-found/posts", { method: "POST", token: tokens.owner, body: {
+    kind: "lost", brand: "Discmania", mold: "PD", plastic: "S-Line", color: "Yellow", courseId: null, area: "", privateInk: "Jordan P 252-555-0199" } })).post;
+  db.raw.prepare("INSERT OR REPLACE INTO market_seller_settings (member_id, notify_email) VALUES (?, ?)").run(people.finder2.memberId, "taylor@example.test");
+  const photo = await makeInkPhoto(join(workDir, "listing-pd.jpg"), [["252 555 0199", 300, 520, 44]]);
+  geminiQueue.push(JSON.stringify({ brand: "Discmania", mold: "PD", plastic: "S-Line", colors: ["yellow"], stamp: "PD", ink: [{ text: "252 555 0199", type: "phone" }],
+    unreadable_writing: false, ink_confidence: "high" }));
+  const listing = (await api("/market/listings", { method: "POST", token: tokens.finder2, body: {
+    brand: "Discmania", mold: "PD", plastic: "S-Line", discType: "driver", weightG: 173, color: "Yellow", condition: 7, priceCents: 1500, quantity: 1,
+    photos: ["data:image/jpeg;base64," + (await readFile(photo.file)).toString("base64")] } })).listing;
+  assert.equal(db.raw.prepare("SELECT verdict FROM market_lost_checks WHERE listing_id = ? AND lost_id = ?").get(listing.id, lost.id)?.verdict, "strong");
+  assert.equal(db.raw.prepare("SELECT COUNT(*) AS n FROM member_notices WHERE member_id = ? AND title = ?")
+    .get(people.finder2.memberId, "A disc you listed may be someone's lost disc").n, 1);
+  for (const profile of [profiles.light390, profiles.light1280]) {
+    const view = await open(profile, { member: tokens.admin });
+    await view.page.goto(origin + "/admin.html#marketplace", { waitUntil: "domcontentloaded" });
+    const card = view.page.locator(`[data-admin-market-lost="${listing.id}-${lost.id}"]`);
+    await card.waitFor();
+    await card.getByText("Looks like the lost", { exact: false }).waitFor();
+    assert.equal(await card.getByRole("link", { name: "Discmania S-Line PD" }).getAttribute("href"), "lost-found.html#post/" + lost.id);
+    assert.equal(await card.getByRole("link", { name: "Open the listing" }).getAttribute("href"), "pro-shop.html#market/listing/" + listing.id);
+    assert.doesNotMatch(await card.innerText(), /0199|Jordan P/, "the lost owner's private writing never shows");
+    await assertFits(view.page, profile.name + " admin possible lost discs");
+    await card.screenshot({ path: join(shotsDir, "admin-market-lost-" + profile.name + ".png") });
+    if (profile === profiles.light1280) {
+      await card.getByLabel("Reason (logged)").fill("Messaged the seller");
+      await card.getByRole("button", { name: "Mark reviewed" }).click();
+      await card.waitFor({ state: "detached" });
+      await view.page.getByText("No listings look like a reported lost disc.").waitFor();
+    }
+    await view.context.close();
+  }
+  console.log("Marketplace: a listing with a lost owner's writing alerted the seller and went to the admins' review list; Mark reviewed clears it");
+}
+
 // The public menu: Lost & Found sits next to Pro Shop on every page that renders it (public pages and the
 // homepage share src/shared/site-nav.js). Desktop widths keep one line; at 1024 and below the menu opens as a
 // panel; phones include 320 px with large text. Nothing wraps, overflows or clips.
@@ -1435,6 +1554,8 @@ try {
   await runCamera();
   await runPickers();
   await runLocation();
+  await runBag();
+  await runMarketLost();
   // The background cron path works too: nothing due right now, and a tick reads nothing.
   const tick = await lfProcess.runLostFoundTick(env);
   assert.equal(tick.reads, 0);

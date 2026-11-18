@@ -4,6 +4,8 @@ The app behind [gvdgclub.com](https://gvdgclub.com) for the **Greenville Disc Go
 
 It is the public club site, a signed-in player dashboard, and a phone scorecard other people can watch. A round is a satellite hole map, a live scoring mix, and a leaderboard that opens into each player's holes. Members see their PDGA rating, their theme, their messages, and what's next. Anyone can start a casual card or follow one that is already going. Club membership is a calendar year: people apply, pay dues, and an admin renews them for the next January 1.
 
+The Pro Shop also runs a **used-disc marketplace** (buy, sell, trade, WANTED posts), and the club runs a **Lost & Found** that reads the writing on found discs privately, matches them to lost posts and to players' bags, and rewards finders with karma when a disc goes home.
+
 It is two things in one repository, deployed together:
 
 1. **A static frontend** — hand-written HTML shells at the repo root, with Vite/React bundles for the home, public/events, admin, members, live-scoring, and tee-sign preview surfaces.
@@ -18,6 +20,7 @@ There is **no traditional backend or database server to boot** for the site itse
 ## Table of contents
 
 - [Live sites & environments](#live-sites--environments)
+- [Current state](#current-state)
 - [Feature overview](#feature-overview)
 - [Architecture](#architecture)
 - [Tech stack](#tech-stack)
@@ -47,6 +50,18 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 
 ---
 
+## Current state
+
+*As of November 18, 2026.* `main` is live on `gvdgclub.com`; check the exact commit with `curl -s https://gvdgclub.com/version.json`.
+
+- **Shipped in November 2026:** the used-disc marketplace (0063), Lost & Found (0064), the in-app camera, one-thumb disc pick-lists and "Say it" voice entry, Lost & Found weight and hole (0065), course search with the course and hole filled in from the phone's location, "Return to round", Lost & Found from the scoring app's Tools, and My Bag photos with bag and marketplace cross-checks against Lost & Found (0066).
+- **Cache versions** (bump on any change to a precached file): service worker `gvdg-club-v304`, members bundle `?v=202`, public/events bundle `?v=194`, score bundle `?v=239`, home bundle `?v=189`.
+- **Hosting plan: Cloudflare Workers Free, by the owner's choice.** Every Worker invocation (cron included) gets about 10 ms of CPU, and going over kills the whole invocation. Keep image decoding, re-encoding and heavy loops off the Worker: photos are resized in the browser, and the Worker only copies bytes and calls AI services. AI keys are free tiers too (Gemini for photo reads, Groq for Whisper), with daily budgets in the Worker.
+- **Waiting on the owner:** PayPal live credentials for automatic checkout of dues, event entry and the club shop (until then: store credit, pay at the event, or an admin marks it paid). Marketplace buyers always pay sellers directly (PayPal.me, Cash App or Zelle), so the marketplace doesn't wait on this.
+- **After every deploy** the read-only *Live QA drive* visits every member and admin screen on the live site (see [AGENTS.md](AGENTS.md)); the last runs found nothing.
+
+---
+
 ## Feature overview
 
 ### Public (no login required)
@@ -58,6 +73,11 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Blog** (`gvdg-blog.html`) and **Results archive** (`archive.html`).
 - **Crotts** — a floating AI assistant (named after club officer Max Crotts) available on public pages, grounded in the club's live calendar and courses.
 - **Watch a round** — a public link follows the card live. No join, no login.
+- **Used-disc marketplace** (Pro Shop → Marketplace) — browse used discs with photos, condition and flight numbers; sell, trade or post a WANTED. Members list discs (after saving a buyer-alert email); members and email-verified guests buy, offer trades, post WANTED, leave feedback and report. Buyers pay sellers directly (PayPal.me, Cash App, Zelle); admins handle reports and seller suspensions. When a listing strongly matches a disc someone reported lost, only its seller is told (privately) and the admins get it to review.
+- **Lost & Found** (`lost-found.html`, top-level menu) — post a found disc (1–3 photos) or a lost one; anyone can post after an email check. A private AI read of the photo (Gemini) fills in brand, mold, plastic and colour and reads any writing **privately** (never shown; used only to find the owner); the poster alone is nudged when a photo may show a name or phone number. Found and lost posts are matched (writing, details, course, hole, weight, dates, photo comparison) and likely owners are told. "Is this yours?" → That's mine → contact through the club → Returned → the owner confirms → the finder earns **+10 karma** and can post a celebration on the **Returned** wall, member Home and the homepage strip.
+- **One-thumb disc entry** (Marketplace and Lost & Found) — **Take photo** opens an in-app camera (several shots in a row; falls back to the phone's camera app); pick-lists for brand, plastic (the brand's own), colour, weight and hole with *Other…* for anything unlisted; **Say it** records a short description and Whisper turns it into the lists, the course and "where exactly".
+- **Course and hole from location** (Lost & Found) — search courses by name or town, or *Use my location*; when location is already allowed the course you're at and the hole whose tee-to-basket line is closest fill in by themselves. The position never leaves the phone.
+- **Return to round** — a pinned button on every Lost & Found screen while you're on a live card.
 
 ### Members (PDGA # or UDisc username + PIN)
 - **Login** with PDGA number **or** UDisc username + a 4-digit PIN; **forced PIN change** on first login; optional **passkeys / WebAuthn** for passwordless login afterward.
@@ -67,9 +87,10 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Member dashboard** (`gvdg-members.html`). The phone bar is **Home, Play, Events, Stats, Club**. Header icons, when signed in: theme, Help, Account, mail, bell. Mail is unread direct messages. The bell is other unseen notices. Both open Messages.
 - **Home** — rating, the last round, what is next, bag tags, and a membership line.
 - **Play** — start or join a card, watch, replay, film a throw, practice, my bag, and course discovery.
+- **My bag** — your discs (brand, mold, plastic, weight, colour), works offline. Each disc can carry up to three **private** photos (the in-app camera or the photo picker) and a private "what's written on it". **I lost this disc** opens a Lost & Found lost post filled in from the bag (each bag photo goes on the post only if ticked). **Check found discs against my bag** (on by default) privately compares new found discs with your bag and tells you only on a strong match: your name, number or initials on the disc, or the AI says your bag photo shows the same disc.
 - **Events** — register, withdraw, pick a division, add CTP / ace-pot entries, check in. Club rounds you are already in sit above open club events. Pay entry with PayPal (when enabled) or store credit, or pay at the event.
 - **Stats** — season numbers, and a separate UDisc CSV import that does not mix into club ranks.
-- **Club** — directory, message board, bag tags and challenges, standings, tee-sign photos, and meeting minutes.
+- **Club** — directory, message board, bag tags and challenges, standings, tee-sign photos, meeting minutes, and the **Marketplace** and **Lost & Found** hubs (what's waiting on you, links in).
 - **Messages** — one-to-one member messages. No group chat and no admin moderation queue.
 - **Account** — profile (PDGA #, UDisc, photo), wallet, Appearance, install, and notification prefs.
 - **Appearance** — drop a wallpaper, pick a color preset or tune a palette, set glass to Off, Frosted, Clear, or custom, and choose the disc color on the scoring map. Light and dark do not wipe a custom theme.
@@ -91,6 +112,7 @@ The frontend picks its API base automatically through `src/shared/api-base.js`: 
 - **Casual rounds and event cards**, one card or many. **Any cardmate keeps score**; members may only score **their own card**; admins can score anyone.
 - **Consensus scoring** — a hole's official score is set only when the active scorers agree; disagreement blanks the hole and blocks finishing until resolved.
 - **Singles, doubles, and match play**, including Ryder Cup coloring. Add guests, manage the card, and finish the round from the phone.
+- **Tools → Found a disc / Lost a disc** opens the Lost & Found form with the course and current hole filled in, and *Return to round* brings the player back to the card.
 
 ### Admin (`admin.html`)
 Five groups, not a long tab strip: **Today**, **Events**, **Members**, **Money**, **Tools**.
@@ -99,11 +121,13 @@ Five groups, not a long tab strip: **Today**, **Events**, **Members**, **Money**
 - **Events** — list, new event (including multiple course/layout assignments), import (Disc Golf Scene / CSV / UDisc), league seasons, registration (fees, divisions, CTPs, ace pots, teams, roster and check-in), and live scoring.
 - **Members** — pending applications (approve, reject, mark dues paid), create a login and issue a temporary PIN, reset a PIN, promote or demote admins (the last admin cannot be removed), **renew** a membership year, and **remove** a member.
 - **Money** — pro shop inventory, orders, wallets, and fundraiser campaigns.
-- **Tools** — courses, course health, layouts (including the SAFARI hole builder), tee-sign review, bag tags, meeting minutes, the community review queue, and the data archive.
+- **Tools** — courses, course health, layouts (including the SAFARI hole builder), tee-sign review, bag tags, meeting minutes, the community review queue, the data archive, **Lost & Found** (reports, AI match suggestions, karma and reversals, hidden items, close and merge), and **Marketplace** moderation (reports, hidden items, suspensions, the moderation log, and **Possible lost discs for sale** with Hide listing / Mark reviewed).
 
 ### Integrations
 - **Crotts AI** — provider chain OpenRouter → Cloudflare Workers AI → dev stub.
 - **Tee-sign OCR (vision)** — Gemini → OpenRouter → Workers AI.
+- **Lost & Found vision** — Gemini (free tier) reads found-disc photos privately and compares photos ("the same physical disc?"), with an OpenRouter free model as the fallback. Club-wide daily budget and per-minute pacing so tee-sign OCR keeps room; a quota answer means "try again later" on the 15-minute cron.
+- **Voice entry ("Say it")** — Whisper large-v3-turbo on **Groq's free plan** (with a disc-name spelling hint), then Whisper through OpenRouter as the paid backup (about $0.0002 a minute). The audio is forwarded as is and never stored.
 - **Weather** — Open-Meteo, with National Weather Service observations as fallback when the free quota trips (feeds both the app and the rating engine). Course observation clocks are Eastern.
 - **Email** — Resend (order/registration/application mail), best-effort.
 - **PayPal** — Orders v2 auto-capture for dues, event entry, and the shop, plus a `paypal.me` fallback.
@@ -129,10 +153,12 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
   │                  pro-shop/wallet, ratings, casual rounds, throw clips
   │                  (all queries parameterized)
   ├─ DO  LIVE        LiveEventDO — live scorecard state + WebSocket; writes to D1 only on finalize
-  ├─ R2  PHOTOS      tee-sign images
-  └─ AI  + OpenRouter/Gemini  Crotts assistant + tee-sign OCR
+  ├─ R2  PHOTOS      tee-sign images, marketplace listing photos, Lost & Found photos, private bag photos
+  └─ AI  + OpenRouter/Gemini/Groq  Crotts assistant, tee-sign OCR, Lost & Found reads, Whisper voice entry
   scheduled()  cron "17 8 * * *"   → daily ratings recompute, and the Dec 1 membership reminder
-               cron "*/15 * * * *" → UDisc layout import (similar names + city, unmapped only)
+               cron "*/15 * * * *" → marketplace withdrawal sweep, UDisc layout import (similar names + city,
+                                     unmapped only), then the Lost & Found tick last (expiry, photo purge,
+                                     due AI reads, matching, bag-photo cleanup)
                cron "7 * * * *"    → hourly PDGA events within 100 miles; Sunday 3pm Eastern
                                      UDisc league standings ride this tick
 ```
@@ -154,7 +180,9 @@ One Durable Object class, `LiveEventDO`, serves both event live-scoring and casu
 
 ### Data layer
 
-All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0061`; the `0007` gap is intentional and must not be back-filled). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, and membership dues. Do not reuse a number.
+All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered** (`0001`–`0066`; the `0007` gap is intentional and must not be back-filled; **the next is `0067`**). `0025_event_courses.sql` is the structured multi-course / multi-layout event assignment table. Later migrations add clips, bag tags, push, messages, membership dues, the marketplace (`0063`), Lost & Found (`0064`), Lost & Found weight and hole (`0065`), and bag photos, the bag / marketplace cross-checks (`0066`). Do not reuse a number.
+
+My Bag discs live in `member_practice_records` (JSON payloads synced by the offline-first practice engine); the bag's photos, its found-disc switch and the lost-post links live in their own tables so the sync engine never handles images.
 
 ---
 
@@ -179,7 +207,9 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
   src/score-app/          React shell + live-scoring app entry
   vite.score.config.mjs   Vite build for the generated score-app/ bundle
   score-app/              generated score bundle (created by npm run build, git-ignored)
-  pro-shop.html           pro shop + member wallet
+  pro-shop.html           pro shop + member wallet + used-disc marketplace
+  lost-found.html         Lost & Found (found / lost posts, claims, the Returned wall)
+  camera.css              the in-app camera (pro shop, Lost & Found, member app)
   ryder-cup.html          Ryder Cup standings
   gvdg-blog.html          blog
   archive.html            results archive
@@ -192,7 +222,7 @@ All D1 access is **parameterized** (`.bind()` with `?`). Migrations in `auth-wor
 
 auth-worker/              the Cloudflare Worker (server-side)
   src/                    TypeScript modules (index.ts, authz.ts, live.ts, db*.ts, club-*.ts, …)
-  migrations/             append-only D1 migrations (0001–0061; 0007 gap is intentional)
+  migrations/             append-only D1 migrations (0001–0066; 0007 gap is intentional; next is 0067)
   test/                   vitest suites
   scripts/                provision.mjs, dev-seed.mjs, validate-wrangler-config.mjs
   wrangler.toml           bindings, environments, vars
@@ -276,6 +306,10 @@ npm run qa:react              # react-doctor project scan; generated app bundles
 npm run qa:site-smoke         # Playwright browser smoke for migrated route bundles
 npm run qa:live-scoring       # Playwright live-scoring browser QA
 npm run qa:members-dashboard  # Playwright member-dashboard browser QA
+node scripts/qa/lost-found-browser-qa.mjs   # Lost & Found + camera + pick-lists + voice + location + My Bag cross-checks,
+                                             # against the real Worker in-process (mocked Gemini / Groq / OpenRouter)
+node scripts/qa/marketplace-browser-qa.mjs  # the used-disc marketplace
+node scripts/qa/practice-browser-qa.mjs     # practice + My Bag (photos, I lost this disc, the switch)
 npm run qa:staging-live-scoring  # live gvdgclub.com scoring E2E; requires QA credentials
 npm run qa:staging-member-dashboard # live gvdgclub.com member dashboard E2E; requires QA credentials
 ```
@@ -313,11 +347,11 @@ Production (`www.greenvillediscgolf.com`, GitHub Pages, pinned by `CNAME`) is **
 Worker bindings (per environment in `auth-worker/wrangler.toml`): `ROSTER` + `RATELIMIT` (KV), `DB` (D1), `PHOTOS` (R2), `AI` (Workers AI), `LIVE` (Durable Object `LiveEventDO`), `ASSISTANT_RL` (unsafe rate-limit). Crons: daily ratings (`17 8 * * *`), a UDisc layout import every 15 minutes, and an hourly PDGA refresh (`7 * * * *`). The Sunday league refresh and the December 1 membership reminder ride those existing ticks. Cloudflare has rejected extra cron triggers.
 
 **Secrets** (never committed; set via `wrangler secret put` or synced by CI):
-`JWT_SECRET`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`.
+`JWT_SECRET`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `PAYPAL_CLIENT_ID` / `PAYPAL_SECRET`, `RESEND_API_KEY`, `PIN_PEPPER`, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`. The deploy workflow uploads `GEMINI_API_KEY`, the VAPID keys and `GROQ_API_KEY` from GitHub secrets (and logs only whether Groq accepts the key).
 
-Optional vars: `MEMBERSHIP_DUES_CENTS` (default 1500) and `MEMBERSHIP_DUES_ONLINE=off` to force dues checkout off.
+Optional vars: `MEMBERSHIP_DUES_CENTS` (default 1500) and `MEMBERSHIP_DUES_ONLINE=off` to force dues checkout off; `LF_DAILY_VISION_BUDGET` (default 150) and `LF_VISION_PER_MINUTE` (default 4) for Lost & Found AI reads; `VOICE_DAILY_BUDGET` (default 300 clips) and `OPENROUTER_WHISPER_MODEL` for voice entry.
 
-**Feature-gating is by credential presence and fails _soft_:** PayPal auto-checkout needs both PayPal secrets (else dues and entry fall back to an admin "marked paid" / pay-at-the-event flag); Web Push is a no-op without VAPID keys; Crotts and OCR degrade down their provider chains; email is a no-op without `RESEND_API_KEY`. A missing credential looks like "nothing happened," not an error.
+**Feature-gating is by credential presence and fails _soft_:** PayPal auto-checkout needs both PayPal secrets (else dues and entry fall back to an admin "marked paid" / pay-at-the-event flag); Web Push is a no-op without VAPID keys; Crotts and OCR degrade down their provider chains; Lost & Found posts and matches still work on their typed details when the AI is unavailable (reads retry on the cron); "Say it" shows a plain message and the pick-lists still work when no Whisper provider answers; email is a no-op without `RESEND_API_KEY`. A missing credential looks like "nothing happened," not an error.
 
 `validate-wrangler-config.mjs` gates every deploy and aborts on any `REPLACE_WITH_*` placeholder in the targeted environment.
 
@@ -336,8 +370,14 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 ### Registration & shop (member, some guest-optional)
 `GET /events/:id/registration` · `POST /events/:id/{register,checkin}` · `POST /events/:id/pay/{create-order,capture}` · `GET /shop/products` · `POST /shop/pay/{create-order,capture}` · `GET /shop/wallet` · `GET /shop/orders`. A lapsed member gets `membership_lapsed` on a **new** event registration. Guests and admins are not blocked that way.
 
+### Marketplace, Lost & Found, My Bag and voice (members, and email-verified guests where noted)
+- **Marketplace** `/market/*`: `config`, `guest/{start,verify}` (the shared guest identity), `listings` (browse, create, edit, photos, withdraw / relist, buy), `offers`, `deals`, `wanted` (+ replies), `feedback`, `reports`, `traders/:key`, `settings`, `me`.
+- **Lost & Found** `/lost-found/*`: `config`, `posts` (browse, create, detail, close, turn-in, photo remove), `photos/:id` (public image; `keep` / `replace` / `remove` for its uploader), `matches/:id` (decide: mine / not mine), `claims/:id/...` (messages, returned, confirm, celebrate), `returned` (wall and homepage strip), `people/:key`, `me`, `reports`, `guest/{start,verify}`.
+- **My Bag** (member) `GET /me/bag` · `PUT /me/bag/settings` · `POST /me/bag/photos` · `GET|DELETE /me/bag/photos/:id` (owner only, never cached publicly).
+- **Voice** `POST /voice/disc` (an audio clip → `{ transcript }`; open, rate-limited per address and by a daily budget).
+
 ### Admin-gated and admin-only
-`/admin/events`, `/admin/courses`, `/admin/layouts`, `/admin/leagues`, `/admin/fundraisers`, `/admin/meetings`, `/admin/import`, `/admin/tee-signs`, `/admin/shop`, `/admin/wallets`, `/admin/orders`, `/admin/export`, `/admin/bag-tags`, and **`/admin/members`** (list / create / `reset-pin` / **`set-role`** / **`renew`** / **`remove`**, plus `/admin/members/applications` approve, reject, and mark-paid). Last-admin protection applies to demote and remove. An admin cannot remove their own login. Event live-scoring lifecycle is `start` / `finalize`. Admin-only casual round cancel is `POST /rounds/:code/cancel`.
+`/admin/events`, `/admin/courses`, `/admin/layouts`, `/admin/leagues`, `/admin/fundraisers`, `/admin/meetings`, `/admin/import`, `/admin/tee-signs`, `/admin/shop`, `/admin/wallets`, `/admin/orders`, `/admin/export`, `/admin/bag-tags`, `/admin/market` (overview, reports, hide / unhide, suspensions, feedback removal, `lost-matches/:listingId/:lostId/review`), `/admin/lost-found` (overview, reports, matches, hide, close, merge, karma reversal, photos), and **`/admin/members`** (list / create / `reset-pin` / **`set-role`** / **`renew`** / **`remove`**, plus `/admin/members/applications` approve, reject, and mark-paid). Last-admin protection applies to demote and remove. An admin cannot remove their own login. Event live-scoring lifecycle is `start` / `finalize`. Admin-only casual round cancel is `POST /rounds/:code/cancel`.
 
 ---
 
@@ -352,6 +392,8 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 - **WebAuthn challenges are single-use**; the stored credential counter advances each authentication.
 - **Imports are SSRF-guarded** — an https-only, public-host allowlist with redirect re-validation and byte/time caps.
 - **XSS-safe by construction** — live/API data is rendered with `createElement` / `textContent`, external hrefs pass a URL sanitizer.
+- **Photos carry no location.** Browsers re-encode uploads through a canvas and the Worker strips EXIF / XMP / text chunks again; it never decodes an image.
+- **Private stays private.** What's written on a lost disc, an AI read of a photo, a bag's photos and writing, and why a match was made are never in a public payload (tests assert it). Bag photos are served only to their owner. Marketplace "possible lost disc" alerts go only to the seller and the admins; the finder of a found disc is never told whose bag or lost post matched.
 
 ---
 

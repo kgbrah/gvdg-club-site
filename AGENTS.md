@@ -28,10 +28,13 @@ sessions thought their work was live; neither was. Nothing warned them.
 
 ## The rules
 
-1. **Never `wrangler pages deploy` or `wrangler deploy` by hand.** Deploy **only** through
-   **`./scripts/gvdg-deploy.sh`**. It takes a machine-wide lock, runs a freshness gate, stamps a version
-   marker, and deploys Pages + worker together.
+1. **Never `wrangler pages deploy` or `wrangler deploy` by hand.** The normal path is the GitHub Action
+   **Deploy to staging (gvdgclub.com)** on `main`: it runs the tests, applies D1 migrations *before* the
+   Worker deploy, deploys the Worker and Pages, uploads the GitHub-held keys (Gemini, VAPID, Groq), and
+   runs the post-deploy checks. The local alternative is **`./scripts/gvdg-deploy.sh`** (machine-wide lock,
+   freshness gate, version marker, Pages + worker together).
    ```bash
+   gh workflow run deploy-staging.yml -R kgbrah/gvdg-club-site --ref main   # the normal release
    CLOUDFLARE_ACCOUNT_ID=<private-account-id> GVDG_AGENT=<your-name> ./scripts/gvdg-deploy.sh
    ./scripts/gvdg-deploy.sh --status                          # what's live vs your HEAD (read-only)
    ./scripts/gvdg-deploy.sh --dry-run                         # run all gates, deploy nothing
@@ -51,7 +54,18 @@ sessions thought their work was live; neither was. Nothing warned them.
    `main`** — reconcile the fork into `main` first. (As of 2026-07-03, `main` and `GVDG-udisc-export` had
    BOTH forked with unique commits; that divergence is exactly what caused the clobber.)
 
-5. **Announce yourself.** Export `GVDG_AGENT=<short-name>` so the lock, `version.json`, and `.deploy-log`
+5. **The club owner ships.** A release goes live only after the owner says "ship it" for *that* release.
+   Prepare everything first (branch, tests, browser QA, PR), then wait. Approval for one release does not
+   carry over to the next.
+
+6. **Merge on proof, not on silence.** Before merging a PR, confirm every check finished and passed (count
+   of checks == count with conclusion `SUCCESS`, and more than zero), then merge pinned to that head:
+   ```bash
+   gh pr view <N> -R kgbrah/gvdg-club-site --json headRefOid,statusCheckRollup
+   gh pr merge <N> -R kgbrah/gvdg-club-site --merge --match-head-commit <sha>
+   ```
+
+7. **Announce yourself.** Export `GVDG_AGENT=<short-name>` so the lock, `version.json`, and `.deploy-log`
    record who deployed. If you start long shared-repo work, say so (commit message, PR, or a note the
    human can relay to other sessions).
 
@@ -75,6 +89,34 @@ gh run list -R kgbrah/gvdg-club-site --workflow "Live QA drive (read-only, gvdgc
 gh run download <run-id> -R kgbrah/gvdg-club-site -n live-drive    # summary.json + screenshots
 gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="admin:courses"   # on demand
 ```
+
+## Platform limits (decided by the owner; design within them)
+
+- **Cloudflare Workers Free plan.** Every invocation, cron included, gets about **10 ms of CPU**; going over
+  kills the whole invocation (uncatchable), including other `waitUntil` work and later cron steps. Never
+  decode, resize or re-encode images in the Worker, and avoid big crypto or parsing loops. Resize photos in
+  the browser; the Worker only validates, strips metadata at the byte level, stores, and calls AI services
+  (network wait is not CPU). Run anything slow or AI-bound **last** in `scheduled()`.
+- **Free AI tiers.** Gemini (Lost & Found photo reads and compares, tee-sign OCR) and Groq (Whisper voice
+  entry) are free tiers with tight quotas; OpenRouter is the fallback. Keep the daily budgets
+  (`LF_DAILY_VISION_BUDGET`, `LF_VISION_PER_MINUTE`, `VOICE_DAILY_BUDGET`) and treat a 429 as "try later".
+  Only call the AI when there's something to decide (for example, the marketplace check reads a listing
+  photo only when an open lost post of the same mold exists).
+- **KV writes are limited on Free** (about 1,000 a day). Prefer D1 for anything written often.
+
+## Conventions that bite if missed
+
+- **Next migration number is `0067`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
+  and hole, `0066` My Bag photos and the bag / marketplace cross-checks).
+- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v304`), plus the
+  `?v=` on the bundle you changed (members `202`, public/events `194`, score `239`, home `189`) and the
+  tests that pin them.
+- **Generated bundles conflict on merge.** Delete the generated outputs, `npm run build`, then `git add -A`.
+- **Private stays private.** Lost & Found writing ("what's written on it"), AI reads, My Bag photos and
+  writing, and match reasons never go in a public payload; the Worker tests assert this. Keep it so.
+- **Drive it before calling it done.** Unit tests are not enough for anything user-facing: run the browser
+  QA for the area (`scripts/qa/*-browser-qa.mjs`; Lost & Found, marketplace and My Bag run against the real
+  Worker in-process) and look at the screenshots.
 
 ## Branch hygiene
 

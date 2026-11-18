@@ -18,11 +18,12 @@ import type { Env } from "./env.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { deliverLfNote } from "./lf-notify.js";
 import { rosterNameMatch, scoreMatch, STORE_THRESHOLD, type FoundSide, type LostSide } from "./lf-match.js";
-import { coursesById, getPostRow, postTitle } from "./lf-store.js";
+import { coursesById, getPostRow, postTitle, withArticle } from "./lf-store.js";
 import { compareDiscPhotos, extractDisc, inkKeys, normalizeName, showsPersonalInfo, type InkKeys } from "./lf-vision.js";
 import { isGuestId } from "./market-notify.js";
 import { num, numOrNull, str, type Row } from "./market-store.js";
 import { getMember, listMembers } from "./roster.js";
+import { bagDisc, bagDiscLabel, sweepBagPhotos } from "./bag-routes.js";
 
 type WaitCtx = { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 
@@ -55,7 +56,7 @@ export function visionPerMinute(env: Env): number {
 
 /** A slot for one Lost & Found vision call, or the minutes to wait: cool-down after a 429, the per-minute cap,
  *  then the daily budget. */
-async function visionSlot(env: Env): Promise<number> {
+export async function visionSlot(env: Env): Promise<number> {
   if (await env.RATELIMIT.get("lfai:cooldown")) return 5;
   if (await kvRateLimited(env, "lfai:m:" + Math.floor(Date.now() / 60_000), visionPerMinute(env), 120)) return 2;
   if (await kvRateLimited(env, "lfai:" + new Date().toISOString().slice(0, 10), dailyVisionBudget(env), 2 * 86_400)) return 60;
@@ -289,6 +290,98 @@ export async function runMatching(env: Env, postId: number): Promise<Candidate[]
   return candidates;
 }
 
+export const BAG_CANDIDATES = 40;
+export const BAG_COMPARES = 2;
+const NO_INK: InkKeys = { names: [], phones: [], initials: [] };
+
+function bagRecord(payload: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Members' bags: a found disc against the bag discs of the same mold, for members who left "check found discs against
+ * my bag" on (the default). Only strong matches are kept, and so announced: the owner's name, phone or initials are on
+ * the disc (initials need the details to agree too), or the AI says one of their bag photos shows the same physical
+ * disc. Same mold and colour alone is never enough: plenty of players own an orange Star Destroyer.
+ */
+export async function matchBags(env: Env, postId: number, compare = true): Promise<number> {
+  const post = await env.DB.prepare("SELECT p.* FROM lf_posts p WHERE p.id = ?").bind(postId).first<Row>();
+  if (!post || str(post, "kind") !== "found" || str(post, "status") !== "open" || num(post, "hidden") === 1) return 0;
+  const mold = str(post, "mold").trim().toLowerCase();
+  if (!mold) return 0;
+  const finder = str(post, "owner_id");
+  const rows = (await env.DB.prepare(
+    `SELECT r.owner, r.id, r.payload FROM member_practice_records r LEFT JOIN bag_settings s ON s.owner = r.owner
+     WHERE r.kind = 'disc' AND r.payload IS NOT NULL AND r.owner <> ? AND COALESCE(s.match_found, 1) = 1
+       AND lower(trim(json_extract(r.payload, '$.model'))) = ? ORDER BY r.updated_at DESC LIMIT ?`,
+  ).bind(finder, mold, BAG_CANDIDATES).all<{ owner: string; id: string; payload: string }>()).results ?? [];
+  if (!rows.length) return 0;
+  const taken = new Set(((await env.DB.prepare("SELECT candidate_id FROM lf_matches WHERE found_id = ?").bind(postId)
+    .all<{ candidate_id: string }>()).results ?? []).map((row) => row.candidate_id));
+  const read = (await inkFor(env, [postId])).get(postId);
+  const found: FoundSide = {
+    courseId: null, lat: null, lng: null, brand: str(post, "brand"), mold: str(post, "mold"), plastic: str(post, "plastic"), color: str(post, "color"),
+    weightG: numOrNull(post, "weight_g"), hole: null, aiColors: read?.colors ?? [], date: null, ink: read?.keys ?? NO_INK,
+  };
+  const norm = (value: unknown) => String(value ?? "").trim().toLowerCase();
+  const strong: Array<{ owner: string; discId: string; score: number; reasons: string[] }> = [];
+  const photoChecks: Array<{ owner: string; discId: string; score: number; reasons: string[] }> = [];
+  for (const row of rows) {
+    if (taken.has(row.owner) || strong.some((hit) => hit.owner === row.owner)) continue;
+    const record = bagRecord(row.payload);
+    if (!record || record.archived === true) continue;
+    const side: LostSide = {
+      courseId: null, lat: null, lng: null, brand: String(record.brand ?? ""), mold: String(record.model ?? ""), plastic: String(record.plastic ?? ""),
+      color: String(record.color ?? ""), weightG: typeof record.weightGrams === "number" ? Math.round(record.weightGrams) : null, hole: null, date: null,
+      privateInk: String(record.ink ?? ""), memberName: await memberName(env, row.owner),
+    };
+    const result = scoreMatch(found, side);
+    const brandsAgree = !norm(found.brand) || !norm(side.brand) || norm(found.brand) === norm(side.brand);
+    const agree = brandsAgree && !result.reasons.some((code) => code.endsWith("_mismatch"));
+    const reasons = [...result.reasons, "bag"];
+    if (result.identity || (agree && result.reasons.includes("ink_initials"))) {
+      strong.push({ owner: row.owner, discId: row.id, score: Math.max(result.score, 70), reasons });
+    } else if (compare && agree) {
+      photoChecks.push({ owner: row.owner, discId: row.id, score: result.score, reasons });
+    }
+  }
+  // The AI photo check, for the closest few bag discs that have a photo (within the post's compare budget).
+  if (photoChecks.length && env.PHOTOS) {
+    const foundPhoto = await env.DB.prepare(
+      "SELECT photo_key, photo_type FROM lf_photos WHERE post_id = ? AND photo_key IS NOT NULL AND status = 'public' ORDER BY sort_order, id LIMIT 1",
+    ).bind(postId).first<{ photo_key: string; photo_type: string }>();
+    let checked = 0;
+    for (const check of photoChecks.sort((a, b) => b.score - a.score)) {
+      if (!foundPhoto || checked >= BAG_COMPARES || strong.some((hit) => hit.owner === check.owner)) continue;
+      const bagPhoto = await env.DB.prepare("SELECT photo_key, photo_type FROM bag_photos WHERE owner = ? AND disc_id = ? ORDER BY id LIMIT 1")
+        .bind(check.owner, check.discId).first<{ photo_key: string; photo_type: string }>();
+      if (!bagPhoto) continue;
+      if (await visionSlot(env)) break;
+      const claimed = await env.DB.prepare("UPDATE lf_posts SET ai_compares = ai_compares + 1 WHERE id = ? AND ai_compares < ?").bind(postId, MAX_COMPARES + BAG_COMPARES).run();
+      if (!((claimed.meta?.changes ?? 0) > 0)) break;
+      checked += 1;
+      const [a, b] = await Promise.all([env.PHOTOS.get(foundPhoto.photo_key), env.PHOTOS.get(bagPhoto.photo_key)]);
+      if (!a || !b) continue;
+      const verdict = await compareDiscPhotos(env,
+        { bytes: new Uint8Array(await a.arrayBuffer()), type: foundPhoto.photo_type },
+        { bytes: new Uint8Array(await b.arrayBuffer()), type: bagPhoto.photo_type });
+      if (verdict === "same") strong.push({ ...check, score: Math.max(check.score, 70), reasons: [...check.reasons, "photo_same"] });
+    }
+  }
+  for (const hit of strong) {
+    await env.DB.prepare(
+      `INSERT INTO lf_matches (found_id, lost_id, candidate_id, score, reasons, bag_disc_id) VALUES (?, NULL, ?, ?, ?, ?)
+       ON CONFLICT(found_id, candidate_id) DO NOTHING`,
+    ).bind(postId, hit.owner, hit.score, JSON.stringify(hit.reasons), hit.discId).run();
+  }
+  return strong.length;
+}
+
 /** Up to MAX_COMPARES Gemini "same physical disc?" checks for a post's middling matches. */
 export async function compareTopMatches(env: Env, postId: number): Promise<number> {
   if (!env.PHOTOS) return 0;
@@ -328,10 +421,10 @@ export async function compareTopMatches(env: Env, postId: number): Promise<numbe
 /** Tell both sides about strong suggestions that have not been announced yet. */
 export async function notifyStrongMatches(env: Env, ctx: WaitCtx, postId: number): Promise<number> {
   const rows = (await env.DB.prepare(
-    `SELECT m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons FROM lf_matches m JOIN lf_posts p ON p.id = m.found_id
+    `SELECT m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons, m.bag_disc_id FROM lf_matches m JOIN lf_posts p ON p.id = m.found_id
      WHERE (m.found_id = ? OR m.lost_id = ?) AND m.status = 'suggested' AND p.status = 'open' AND p.hidden = 0
        AND (m.score >= 55 OR m.reasons LIKE '%"ink_phone"%' OR (m.reasons LIKE '%name"%' AND m.score >= 45))`,
-  ).bind(postId, postId).all<{ id: number; found_id: number; lost_id: number | null; candidate_id: string; score: number; reasons: string }>()).results ?? [];
+  ).bind(postId, postId).all<{ id: number; found_id: number; lost_id: number | null; candidate_id: string; score: number; reasons: string; bag_disc_id: string | null }>()).results ?? [];
   let sent = 0;
   for (const match of rows) {
     const flipped = await env.DB.prepare("UPDATE lf_matches SET status = 'notified', notified_at = datetime('now') WHERE id = ? AND status = 'suggested'")
@@ -341,11 +434,14 @@ export async function notifyStrongMatches(env: Env, ctx: WaitCtx, postId: number
     if (!found) continue;
     const title = postTitle(found);
     const where = str(found, "course_name") ? " at " + str(found, "course_name") : "";
+    const inBag = match.bag_disc_id ? bagDiscLabel(await bagDisc(env, match.candidate_id, match.bag_disc_id)) : "";
     await deliverLfNote(env, ctx, match.candidate_id, {
       title: "Is this your disc?",
       body: match.lost_id
-        ? `A ${title} found${where} looks like the disc you lost. Take a look and tell us if it's yours.`
-        : `A disc that may be yours was found${where}: ${title}. Take a look and tell us if it's yours.`,
+        ? `${capital(withArticle(title))} found${where} looks like the disc you lost. Take a look and tell us if it's yours.`
+        : inBag
+          ? `${capital(withArticle(title))} found${where} looks like the ${inBag} in your bag. Take a look and tell us if it's yours.`
+          : `A disc that may be yours was found${where}: ${title}. Take a look and tell us if it's yours.`,
       refKey: "lf:match:" + match.id,
       hash: "match/" + match.id,
     });
@@ -360,6 +456,10 @@ export async function notifyStrongMatches(env: Env, ctx: WaitCtx, postId: number
     sent += 1;
   }
   return sent;
+}
+
+function capital(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function logFailure(message: string, id: number, error: unknown): void {
@@ -379,6 +479,11 @@ export async function matchPost(env: Env, ctx: WaitCtx, postId: number, compare 
   await applyExtraction(env, postId);
   await runMatching(env, postId);
   if (compare) await compareTopMatches(env, postId);
+  try {
+    await matchBags(env, postId, compare);
+  } catch (error) {
+    logFailure("lf_bag_match_failed", postId, error);
+  }
   await notifyStrongMatches(env, ctx, postId);
 }
 
@@ -460,6 +565,12 @@ export async function runLostFoundTick(env: Env): Promise<TickResult> {
     } catch (error) {
       logFailure("lf_tick_match_failed", postId, error);
     }
+  }
+  // Private bag photos whose bag disc was deleted.
+  try {
+    await sweepBagPhotos(env);
+  } catch (error) {
+    logFailure("lf_bag_sweep_failed", 0, error);
   }
   return result;
 }

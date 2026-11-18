@@ -14,6 +14,7 @@ import { useCourses } from "./lf-list.js";
 import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PickList, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
 import { CoursePicker, useHere } from "./course-picker.js";
+import { BagPhotoChooser, clearBagHandoff, readBagHandoff } from "./lf-bag.js";
 
 const LF_VOICE_FIELDS = ["brand", "mold", "plastic", "color", "weightG", "courseId", "hole", "area"];
 
@@ -105,7 +106,14 @@ export function PhotoPicker({ photos, setPhotos, max, min, legend, hint, cameraH
 export function NewPost({ kind, route }) {
   const config = useLfConfig();
   const courses = useCourses();
+  // "I lost this disc" from My Bag fills the lost post in (a signed-in member's own bag disc only).
+  const [bag] = React.useState(() => (kind === "lost" && route?.query?.get("from") === "bag" ? readBagHandoff() : null));
+  const fromBag = bag && config.viewer?.kind === "member" ? bag : null;
+  const [bagChosen, setBagChosen] = React.useState([]);
   const [draft, setDraft] = React.useState(() => {
+    if (bag) {
+      return { ...EMPTY, brand: bag.brand, mold: bag.mold, plastic: bag.plastic, color: bag.color, weightG: bag.weightG, privateInk: bag.ink, eventDate: todayEastern() };
+    }
     const query = route?.query;
     const course = /^\d{1,9}$/.test(query?.get("course") || "") ? query.get("course") : "";
     const hole = /^\d{1,2}$/.test(query?.get("hole") || "") && Number(query.get("hole")) >= 1 && Number(query.get("hole")) <= 40 ? query.get("hole") : "";
@@ -157,8 +165,14 @@ export function NewPost({ kind, route }) {
 
   async function send() {
     await action.run(async () => {
-      const { ok, data } = await lfRequest("/lost-found/posts", { body: postPayload(kind, draft, photos.map((photo) => photo.dataUrl)), method: "POST" });
+      const body = postPayload(kind, draft, photos.map((photo) => photo.dataUrl));
+      if (fromBag) {
+        body.bagDiscId = fromBag.discId;
+        body.bagPhotoIds = bagChosen;
+      }
+      const { ok, data } = await lfRequest("/lost-found/posts", { body, method: "POST" });
       if (ok && data.post?.id) {
+        if (fromBag) clearBagHandoff();
         announceLfChange();
         window.location.hash = postHref(data.post.id).slice(1);
       } else {
@@ -186,8 +200,12 @@ export function NewPost({ kind, route }) {
       found
         ? h(PrivacyNote, { key: "privacy" }, "Anyone can see the photos you post. We also read any writing on the disc privately, only to find its owner.")
         : h(PrivacyNote, { key: "privacy" }, "What you type about the writing on your disc stays private: it's only used to match your disc with found ones and is never shown to anyone. Any photo you add is public."),
+      fromBag ? h(Note, { key: "from-bag", tone: "success" }, "Filled in from your bag. Add where you lost it, check the rest, and post.") : null,
+      fromBag ? h(BagPhotoChooser, {
+        chosen: bagChosen, key: "bag-photos", photos: fromBag.photos, room: LF_MAX_PHOTOS[kind] - photos.length - bagChosen.length, setChosen: setBagChosen,
+      }) : null,
       h(PhotoPicker, {
-        key: "photos", max: LF_MAX_PHOTOS[kind], min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
+        key: "photos", max: Math.max(0, LF_MAX_PHOTOS[kind] - bagChosen.length), min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
         hint: found ? "Show the top and the bottom. Photos are resized on your phone and location data is removed." : "Optional: a photo of the same disc or one like it.",
         cameraHint: found ? "The top of the disc, then the bottom. Cover any name or phone number." : "Your disc, or one just like it.",
         legend: found ? "Photos (1 to 3)" : "Photos (optional, up to 2)",

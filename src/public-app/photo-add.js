@@ -58,7 +58,7 @@ export function openPhotoInput({ capture = false, multiple = false, onFiles }) {
   input.accept = PHOTO_ACCEPT;
   input.multiple = multiple;
   if (capture) input.setAttribute("capture", "environment");
-  input.className = "public-sr-only";
+  input.style.cssText = "position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;";
   input.tabIndex = -1;
   input.setAttribute("aria-hidden", "true");
   input.setAttribute("data-gv-photo-input", capture ? "camera" : "choose");
