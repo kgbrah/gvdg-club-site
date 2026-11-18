@@ -1,5 +1,5 @@
 import React from "react";
-import { Camera, ChevronRight, Disc3, CircleHelp, ExternalLink, Globe, KeyRound, Mail, MessageSquare, Palette,
+import { Camera, ChevronRight, CircleHelp, ClipboardList, Disc3, ExternalLink, FlaskConical, Globe, KeyRound, Mail, MessageSquare, Palette,
   ShieldCheck, Smartphone, Tag, Trophy, UserRound, Users, Wallet } from "lucide-react";
 
 import { ToolFinder } from "../shared/tool-finder.js";
@@ -16,6 +16,8 @@ import { DiscColorPicker } from "./disc-color-picker.js";
 import { DashboardThemeBuilder } from "./dashboard-theme.js";
 import { MemberPhoneActivityPanel } from "./phone-activity-panel.js";
 import { MemberNotificationsPanel } from "./notifications-panel.js";
+import { fieldTestUsed } from "../shared/field-test-gate.js";
+import { FieldTestSwitch, useFieldTestMode } from "../shared/field-test-ui.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -105,6 +107,22 @@ export function MemberMorePage() {
   ]);
 }
 
+// Account > Devices: the opt-in switch, plus the log once this phone has used field test mode.
+function FieldTestRows() {
+  const on = useFieldTestMode();
+  return h(React.Fragment, null, [
+    h(FieldTestSwitch, {
+      app: "members", key: "switch", rowClass: "member-link-row member-switch-row", copyClass: "member-link-copy",
+      trackClass: "member-switch", knobClass: "member-switch-knob",
+      icon: h(FlaskConical, { className: "member-link-icon", size: 19, "aria-hidden": true, key: "icon" }),
+    }),
+    on || fieldTestUsed() ? h(MemberLinkRow, {
+      tab: "field-test", title: "Field log", detail: "Summary, notes and export", icon: ClipboardList, key: "log",
+      "data-member-field-log-link": "ready",
+    }) : null,
+  ]);
+}
+
 function AdminPortalBanner() {
   const description = React.useId();
   return h("a", {
@@ -146,6 +164,7 @@ export function MemberAccountPage() {
         h(MemberLinkRow, { tab: "install", title: "Install app", detail: "Add GVDG to your home screen", icon: Smartphone, key: "install" }),
         h(MemberNotificationsPanel, { key: "notifications" }),
         h(MemberPhoneActivityPanel, { key: "phone-activity" }),
+        h(FieldTestRows, { key: "field-test" }),
       ]),
       h(MemberLinkSection, { title: "Support", key: "support" }, [
         h(MemberLinkRow, { title: "Club website", icon: Globe, href: "index.html", key: "site" }),

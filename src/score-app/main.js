@@ -14,12 +14,17 @@ import { CrottsWidget, requestCrottsHelp } from "../shared/crotts-widget.js";
 import { usePlayerThemeSession } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme, SCORE_AUTH_EVENT } from "../shared/player-theme-session.js";
 import { readMemberToken } from "../shared/member-session.js";
+import { CLUB_LOGO_MARK, CLUB_LOGO_MARK_SRCSET } from "../shared/club-logo.js";
 import { useDiscColorSession } from "../shared/disc-color.js";
+import { fieldTestOn, startFieldTest } from "../shared/field-test-gate.js";
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
   void import("react-scan");
 }
+
+// Field test mode loads its recorder only when a volunteer has turned it on for this phone.
+if (fieldTestOn()) void startFieldTest("score");
 
 const h = React.createElement;
 const INITIAL_SCORE_VIEW = { kind: "status", props: { mode: "loading" } };
@@ -135,7 +140,7 @@ function ScoreShell() {
 
   return h("div", { className: "wrap" }, [
     h("header", { key: "header", className: "topbar" }, [
-      h("img", { key: "logo", src: "img/logo.png", alt: "GVDG", className: "logo", width: 32, height: 32 }),
+      h("img", { key: "logo", src: CLUB_LOGO_MARK, srcSet: CLUB_LOGO_MARK_SRCSET, alt: "GVDG", className: "logo", width: 32, height: 32 }),
       h("h1", { key: "title", id: "barTitle" }, [
         header.title,
         h("small", { id: "barSub", key: "subtitle" }, header.subtitle),

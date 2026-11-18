@@ -18,7 +18,9 @@ import {
     relClass,
     relText,
     optimisticScores,
+    scoreForPlayerIndexes,
     scorePendingKey,
+    scoreRows,
     throwsByScorer,
     scorecardChoices,
     startingHoleForState,
@@ -41,7 +43,10 @@ import { createSpectatorTransport } from "./spectator-transport.js";
 import { casualReplaySnapshot, watchableLiveSnapshot } from "../shared/casual-replay.js";
 import { holeWinners, winnerColor } from "../shared/matchplay-colors.js";
 import { GPS_WATCH_OPTIONS, gpsErrorPolicy } from "../shared/hole-map-model.js";
-import { createRoundJournal, drainRoundJournal, resetJournalRetries, roundRecoveryScope } from "./round-recovery.js";
+import { createRoundJournal, drainRoundJournal, recoveryResult, resetJournalRetries, roundRecoveryScope } from "./round-recovery.js";
+import {
+    fieldLiveUpdate, fieldLog, fieldMark, fieldRedactNames, fieldSince, fieldTestOn, fieldTrackClip, fieldWatchSocket,
+} from "../shared/field-test-gate.js";
 import { parseShotRows, shotPoint } from "../shared/shot-ledger.js";
 import { shotLedgerState, statsFromShotLedgers } from "./shot-ledger-model.js";
 import { decodeJwtPayload, notifyScoreAuthChanged } from "../shared/player-theme-session.js";
@@ -402,13 +407,14 @@ export function startScoreApp(options) {
                         clientId: record.id, recoveryRoundId: scope.roundId, recoveryCardId: scope.cardId,
                         recoveryActorIndex: scope.actorIndex,
                     });
-                    return api(LIVE + '/clips?' + query, {
+                    const sent = api(LIVE + '/clips?' + query, {
                         method: 'POST', credential, guest: false, raw: true, body: record.blob, timeout: 120000,
                         headers: {
                             'Content-Type': record.blob.type || 'application/octet-stream',
                             ...(credential.type === 'guest' ? { Authorization: 'Guest ' + credential.token } : {}),
                         },
                     });
+                    return fieldTestOn() ? fieldTrackClip(sent, record, 'live') : sent;
                 };
                 recovery = context;
             }
@@ -426,7 +432,8 @@ export function startScoreApp(options) {
                 readRecovery(context);
                 const edit = prepare();
                 if (!edit) return false;
-                context.journal.enqueue(kind, edit.body, edit.previous);
+                const item = context.journal.enqueue(kind, edit.body, edit.previous);
+                if (fieldTestOn()) fieldQueued(context, item);
                 readRecovery(context);
                 return true;
             };
@@ -473,7 +480,10 @@ export function startScoreApp(options) {
                     const { roundId, cardId, actorIndex } = context.scope;
                     const body = { ...item.body, recovery: { roundId, cardId, actorIndex, order: item.order, stream: item.stream, previous: item.previous } };
                     const action = item.kind === 'shots' ? 'throws' : item.kind;
-                    return api(LIVE + '/' + action, { method: 'POST', body, credential: context.credential, timeout: 12000 });
+                    const sent = api(LIVE + '/' + action, { method: 'POST', body, credential: context.credential, timeout: 12000 });
+                    if (!fieldTestOn()) return sent;
+                    const mark = fieldMark();
+                    return sent.then((result) => { fieldAck(context, item, result, fieldSince(mark)); return result; });
                 }, {
                     active: () => isCurrentRecovery(context) && !finishing,
                     online: () => navigator.onLine,
@@ -525,7 +535,10 @@ export function startScoreApp(options) {
             const perform = () => {
                 if (!isCurrentRecovery(context)) return;
                 const item = context.journal.entries().find((row) => row.id === id && (row.state === 'error' || row.state === 'auth'));
-                if (item) context.journal.remove(item);
+                if (item) {
+                    context.journal.remove(item);
+                    fieldLog('sync.discard', { id: item.id, kind: item.kind, hole: item.body?.hole ?? null, roundId: context.scope.roundId });
+                }
                 readRecovery(context);
                 renderHole();
             };
@@ -537,6 +550,55 @@ export function startScoreApp(options) {
         }
 
         function setOnline(on) { notifications.setOnline(on); }
+
+        // ---------- field test mode (no-ops unless a volunteer turned it on) ----------
+        function fieldQueueLength(context) {
+            try { return context.journal.entries().length; } catch { return null; }
+        }
+        function fieldScoreKey(body) {
+            if (body && body.targetId) return 't:' + body.targetId;
+            return body && Number.isInteger(body.index) ? 'i:' + body.index : null;
+        }
+        function fieldQueued(context, item) {
+            const body = (item && item.body) || {};
+            fieldLog('sync.queue', {
+                id: item.id, kind: item.kind, hole: body.hole ?? null, roundId: context.scope.roundId,
+                ...(item.kind === 'score' ? { key: fieldScoreKey(body), strokes: body.strokes ?? null, scorer: body.scorerIndex ?? null } : {}),
+                queue: fieldQueueLength(context),
+            });
+        }
+        function fieldAck(context, item, result, ms) {
+            const queuedAt = Number(String(item.order || '').split(':')[0]);
+            fieldLog('sync.ack', {
+                id: item.id, kind: item.kind, hole: item.body?.hole ?? null, roundId: context.scope.roundId, ms,
+                queuedMs: Number.isFinite(queuedAt) && queuedAt > 0 ? Math.max(0, Date.now() - queuedAt) : null,
+                status: result?.status ?? null, state: recoveryResult(result), attempt: item.attempt || 0,
+                error: result?.data?.error || null, queue: fieldQueueLength(context),
+            });
+        }
+        const fieldChecked = new Set();
+        // Once the card is locked or the round is final, compare this phone's entries with the server's card.
+        function fieldFinalCheck() {
+            if (!fieldTestOn() || !isCurrentRecovery(recovery)) return;
+            const reason = S.status === 'final' ? 'final' : S.cardLocked ? 'locked' : null;
+            if (!reason) return;
+            const key = recovery.scope.roundId + ':' + reason;
+            if (fieldChecked.has(key)) return;
+            fieldChecked.add(key);
+            const players = Array.isArray(S.snap?.players) && S.snap.players.length ? S.snap.players : S.cardmates;
+            const holes = (S.holes || []).map((hole) => hole.hole);
+            const rows = scoreRows(S).map((row) => ({
+                key: row.targetId ? 't:' + row.targetId : 'i:' + row.index,
+                holes: Object.fromEntries(holes.map((hole) => [hole, scoreForPlayerIndexes(players, row.playerIndexes, hole)])),
+            }));
+            fieldLog('round.server', { roundId: recovery.scope.roundId, reason, status: S.status, rows });
+        }
+        function fieldRoundNames(d) {
+            const people = [].concat(Array.isArray(d?.players) ? d.players : [], Array.isArray(d?.cardmates) ? d.cardmates : []);
+            const targets = Array.isArray(d?.scoreTargets) ? d.scoreTargets : [];
+            return people.map((row) => row && row.name)
+                .concat(targets.flatMap((target) => [target && target.label].concat(Array.isArray(target?.members) ? target.members : [])));
+        }
         window.addEventListener('online', function () {
             setOnline(true);
             void flushRecovery('online');
@@ -807,6 +869,7 @@ export function startScoreApp(options) {
             if (lbOpen) renderLeaderboard();
             if (managePlayersOpen) renderManagePlayers();
             persistMineCache();
+            fieldFinalCheck();
         }
 
         // ---------- WebSocket live sync ----------
@@ -814,17 +877,24 @@ export function startScoreApp(options) {
             if (MODE === 'home' || WATCH || !isCurrentRecovery(recovery)) return;
             if (S.ws && (S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING)) return;
             let ws;
-            try { ws = new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws', scorerSocketProtocols(scoringCredential())); }
+            try { ws = fieldWatchSocket(new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws', scorerSocketProtocols(scoringCredential())), 'scorer'); }
             catch (e) { return; }
             S.ws = ws;
             ws.addEventListener('message', function (ev) {
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
-                if (msg && msg.type === 'conflict') { if (msg.cardId === S.cardId) { upsertConflict(msg); conflictAlert(msg); renderHole(); } return; }
+                if (msg && msg.type === 'conflict') {
+                    if (msg.cardId === S.cardId) {
+                        fieldLog('sync.conflict', { hole: msg.hole ?? null, source: 'ws' });
+                        upsertConflict(msg); conflictAlert(msg); renderHole();
+                    }
+                    return;
+                }
                 if (msg && msg.type === 'snapshot') {
                     if (!isCurrentRecovery(recovery)) return;
                     if (msg.recoveryRoundId !== recovery.scope.roundId) { void loadMine(); return; }
                     if (msg.rev != null && msg.rev < S.lastRev) return;
+                    fieldLiveUpdate('scorer', msg);
                     S.snap = msg;
                     mergeFromSnap();
                 }
@@ -1206,9 +1276,17 @@ export function startScoreApp(options) {
         async function submitFinish(playerIndex, { credential, scope, journal }) {
             if (S.cardLocked && S.status !== 'final') { toast('This card is already submitted'); return; }
             const { roundId, cardId, actorIndex } = scope;
+            const finishMark = fieldMark();
             const r = await api(LIVE + '/finish-card', {
                 method: 'POST', credential, body: { playerIndex, recovery: { roundId, cardId, actorIndex } }, timeout: 12000,
             });
+            if (finishMark) {
+                const locked = r.data?.lockedCardIds?.includes(String(cardId));
+                fieldLog('round.finish', {
+                    roundId, roundCode: ROUND_CODE || null, eventId: EVENT_ID || null, ms: fieldSince(finishMark), status: r.status,
+                    result: r.ok ? (r.data?.status === 'final' ? 'final' : locked ? 'locked' : 'agreed') : (r.data?.error || 'error'),
+                });
+            }
             if (r.ok && (r.data?.status === 'final' || r.data?.lockedCardIds?.includes(String(cardId)))) {
                 try { journal.markSubmitted(); } catch { /* the server already locked the card */ }
             }
@@ -1233,6 +1311,7 @@ export function startScoreApp(options) {
                 }
                 renderHole();
                 if (lbOpen) renderLeaderboard();
+                fieldFinalCheck();
             } else if (r.status === 409 && r.data && r.data.error === 'scorecard_incomplete') {
                 if (Array.isArray(r.data.conflicts)) setConflicts(r.data.conflicts);
                 if (Array.isArray(r.data.missing)) setMissing(r.data.missing);
@@ -1281,6 +1360,7 @@ export function startScoreApp(options) {
             const sameScope = scope && recovery && scope.key === recovery.scope.key;
             if (sameScope && !offline && d.rev != null && d.rev < S.lastRev && S.snap?.players) return;
             bindRecovery(scope, credential, cacheKey);
+            if (fieldTestOn()) fieldRedactNames(fieldRoundNames(d));
             S.snap = d;
             S.lastRev = d.rev ?? -1;
             S.status = d.status || null;
@@ -1315,6 +1395,15 @@ export function startScoreApp(options) {
                 subtitle: [S.courseName, S.layoutName].filter(Boolean).join(' · ') || 'Greenville Disc Golf Club',
                 title: MODE === 'round' ? ('Round ' + ROUND_CODE) : ('Card ' + (S.cardId || ''))
             });
+            if (!sameScope && fieldTestOn()) {
+                fieldLog('round.open', {
+                    mode: MODE, roundCode: ROUND_CODE || null, eventId: EVENT_ID || null, roundId: d.recoveryRoundId || null,
+                    cardId: d.cardId ?? null, courseId: d.courseId ?? S.courseId ?? null, layoutId: S.layoutId ?? null,
+                    holeCount: S.holes.length, playerCount: Array.isArray(d.cardmates) ? d.cardmates.length : 0,
+                    doubles: isDoublesScoring(S), status: S.status, cached: Boolean(offline), rev: d.rev ?? null,
+                    pendingEdits: (S.recoveryItems || []).length,
+                });
+            }
             renderHole();
             if (!offline) connectWs();
             startPotsPolling();
@@ -1324,6 +1413,7 @@ export function startScoreApp(options) {
             void wakeLock.start();
             if (offline) { connectWs(); toast('Offline — showing your saved card. Changes sync when reconnected.'); }
             else persistMineCache();
+            fieldFinalCheck();
         }
         let ratingAnchorStarted = false;
         async function loadPlayingAnchor() {
@@ -1377,6 +1467,7 @@ export function startScoreApp(options) {
                 if (!active()) return;
             }
             if (r.status === 401 || r.status === 403) {
+                fieldLog('auth.expired', { status: r.status, where: 'card' });
                 stopRecovery();
                 renderLogin('Sign in to sync any saved scores, lies and clips.');
                 return;
@@ -1562,7 +1653,12 @@ export function startScoreApp(options) {
             renderLoading();
             const body = { course_id: course.id, layout_id: layout.id, liveScoringConfig: { groupFormat: liveScoringConfig.groupFormat, scoringStyle: liveScoringConfig.scoringStyle, handicap: liveScoringConfig.handicap === true && liveScoringConfig.scoringStyle !== 'matchplay' } };
             if (requested) body.code = requested;
+            const createMark = fieldMark();
             const r = await api('/rounds', { method: 'POST', body: body });
+            if (createMark) {
+                fieldLog('round.create', { ok: r.ok, status: r.status, ms: fieldSince(createMark), roundCode: r.data?.code || null,
+                    courseId: course.id ?? null, layoutId: layout.id ?? null, groupFormat: body.liveScoringConfig.groupFormat });
+            }
             if (r.ok && r.data && r.data.code) {
                 rememberLastCourse(course);
                 location.search = '?round=' + r.data.code;
@@ -1815,13 +1911,17 @@ export function startScoreApp(options) {
                     }
                     return { status: response.status };
                 },
-                openSocket: () => new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws',
-                    spectatorSocketProtocols(WATCH_KEY, ROUND_CODE ? scoringToken() : null)),
+                openSocket: () => fieldWatchSocket(new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws',
+                    spectatorSocketProtocols(WATCH_KEY, ROUND_CODE ? scoringToken() : null)), 'spectator'),
                 onState: (next) => {
                     const changed = next.snapshot !== watchState.snapshot;
                     watchState = next;
                     if (changed && next.snapshot) {
                         const d = next.snapshot;
+                        if (fieldTestOn()) {
+                            fieldRedactNames(fieldRoundNames(d));
+                            fieldLiveUpdate('spectator', d);
+                        }
                         S.snap = d;
                         if (d.viewerAudience) S.watchAudience = d.viewerAudience;
                         S.status = d.status;

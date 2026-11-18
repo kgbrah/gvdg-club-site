@@ -136,6 +136,10 @@ async function verifyMembers(viewport) {
     await page.goto(origin + "/member-navigation.html?course=7#tee", { waitUntil: "commit", timeout: 30000 });
     await page.getByRole("heading", { name: "Tee signs", level: 1 }).waitFor();
     await page.locator("#membersReactTeeSignsPanel select").first().waitFor();
+    // The course picker exists as soon as the (lazily loaded) panel mounts; it takes the deep-linked course
+    // only once the course list arrives. Wait for that instead of reading it immediately (a CI flake).
+    await page.waitForFunction(() => document.querySelector("#membersReactTeeSignsPanel select")?.value === "7", null, { timeout: 15000 })
+      .catch(() => {});
     assert.equal(await page.locator("#membersReactTeeSignsPanel select").first().inputValue(), "7");
     await page.goto(origin + "/member-navigation.html#events?event=42", { waitUntil: "commit", timeout: 30000 });
     await page.locator("[data-member-event-id='42']").waitFor();

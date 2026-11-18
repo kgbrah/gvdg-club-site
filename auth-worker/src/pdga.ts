@@ -435,11 +435,9 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   const pdga = (new URL(request.url).searchParams.get("pdga") ?? "").replace(/\D/g, "");
   if (!pdga || pdga.length > 8) return json({ error: "invalid_pdga" }, 400, origin);
 
-  // The endpoint makes outbound pdga.com requests on user input, so rate-limit per IP (cache covers repeats).
-  if (await kvRateLimited(env, "pdga:" + clientIp(request), 30, 60)) return json({ error: "rate_limited" }, 429, origin);
-
   const now = Date.now();
   const headers = { "Cache-Control": "public, max-age=300" };
+  let stale: unknown = null;
   try {
     const row = await readD1OrFallback(
       () => env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>(),
@@ -450,16 +448,27 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
       if (isFreshPdgaCache(cached, Number(row.fetched_at), now)) {
         return json(cached, 200, origin, headers);
       }
+      stale = cached;
     }
   } catch (error) {
     console.warn(JSON.stringify({ message: "pdga_cache_read_failed", error: error instanceof Error ? error.message : String(error) }));
   }
 
+  // The per-IP limit protects pdga.com from lookups on user input, so only a request that would actually go
+  // out counts. Fresh cache hits and the built-in QA stats are free: many members share one IP behind a
+  // carrier NAT or event Wi-Fi, and counting cached reads blanked their ratings (and tripped the live QA drive).
+  const fallback = fallbackPdgaStats(pdga);
+  if (!fallback && await kvRateLimited(env, "pdga:" + clientIp(request), 30, 60)) {
+    // An older copy beats an error.
+    if (stale) return json(stale, 200, origin, { "Cache-Control": "no-store" });
+    return json({ error: "rate_limited" }, 429, origin);
+  }
+
   let stats: PdgaStats;
   try {
-    stats = fallbackPdgaStats(pdga) ?? await fetchPdgaStats(pdga);
+    stats = fallback ?? await fetchPdgaStats(pdga);
   } catch {
-    stats = fallbackPdgaStats(pdga) ?? emptyPdgaStats(pdga);
+    stats = fallback ?? emptyPdgaStats(pdga);
   }
   stats = withStatsVersion(stats);
   // Only cache a useful result, so a transient pdga.com outage isn't pinned for the full TTL.

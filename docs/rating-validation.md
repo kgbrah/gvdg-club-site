@@ -84,4 +84,63 @@ The recency window changed nothing here because no layout had more than six matc
 - Formula check: from SSARdN the engine reproduced 797 published ratings within 2.1 points on average, with a largest gap of 10 from shared-SSA rounds. On layouts an event played only once, it matched 312 of 445 exactly, was one point high on 113, one low on 17 and two high on 3. PDGA published 974 where `1000 + (SSA − score) × ppt` gives 974.6.
 - Club comparison: there were no club layout baselines in this dry run.
 
+### Tuning on a wider sample (2026-11-17)
+
+The 7-round sample above was too small to tune anything, so the evidence was widened first:
+
+- Discovery used the public rating histories of the 80 most regular players from the 17 seed events, out of 400 players.
+- That found 629 local events in the 3-year window and towns-with-our-courses filter, and 36 new ones were read.
+- For new events, only enough divisions per round were read to see each layout.
+- The cost was exactly 400 new pdga.com requests at 1.6 s spacing (no HTTP 429s), plus 23 Open-Meteo archive requests. Every body is cached outside the repository.
+
+The resulting dataset:
+
+- 53 events, 157 PDGA rounds, 101 PDGA layouts.
+- 67 rounds from 28 events (2024-04 to 2026-11) matched 10 of our layouts. West Meadowbrook Purple had 21 rounds and Gold 13; Covenant Covey, Ayden Park Main, ECU DEPC Purple, ECU Gold and Oakwood Eagles' Nest had 5–7 each.
+- Every matched round has wind and temperature: gusts 11–35 mph (42 above 18 mph), temperature 47–91 °F.
+
+Method: leave one event out. Each event's published ratings are predicted only from other events played on earlier days on the same layout. The prediction is the baseline plus the event's own conditions, rated as the engine rates a round. That gives 52 predicted rounds from 19 events and 1,784 published ratings.
+
+- Every candidate is compared with the current model by the paired per-event difference in mean absolute error, with a 95% interval over the 19 events.
+- Fitted parameters (gust slope, temperature slope, time trend) are re-fitted without the held-out event.
+- Regressions are run within layouts at the event-day level, because rounds of one event on one day share their wind and often their SSA.
+
+The harness is `GVDG_RATING_TUNING=1 GVDG_RATING_TUNING_CACHE=<dir> npx vitest run test/rating-tuning-research.test.ts`. Add `GVDG_RATING_TUNING_FETCH=1` to allow network reads.
+
+| Candidate | MAE (pts) | Bias (pts) | Per-event Δ MAE vs current (95% CI) |
+|---|---|---|---|
+| **Current: median of 6 most recent in 3 years, gust 0.035/mph over 18 (cap 1.5)** | **13.5** | **−5.9** | — |
+| No wind normalisation | 14.4 | −6.2 | +1.3 (+0.4 to +2.2), worse |
+| Gust 0.02/mph over 18 | 13.8 | −6.0 | +0.4 (+0.1 to +0.7), worse |
+| Gust 0.05 / 0.07 / 0.10 per mph over 18 | 13.5 / 13.5 / 13.6 | −5.8 / −5.7 / −5.4 | 0.0 / 0.0 / −0.3 (CIs ±0.5 to ±2) |
+| Gust 0.035 over 0 / 10 / 14 mph | 13.9 / 13.4 / 13.3 | −7.0 / −6.1 / −5.8 | 0.0 / −0.1 / −0.2 (CIs include 0) |
+| Gust slope fitted per held-out event | 14.2 | −4.6 | −0.4 (−6.2 to +5.4) |
+| Median of 4 / 8 / 12 / all in 3 years | 13.5 / 13.2 / 13.0 / 13.0 | −5.9 / −6.5 / −6.8 / −6.9 | −0.5 / −0.3 / −1.2 / −1.2 (CIs include 0) |
+| Weighted median, half-life 6 / 12 / 24 months | 13.7 / 13.0 / 13.3 | −6.5 / −6.2 / −6.3 | +1.1 / −2.1 (−4.1 to −0.1) / −1.6 (−3.5 to +0.2) |
+| Mean / 20% trimmed mean of 6 | 13.3 / 13.2 | −7.3 / −7.0 | −0.7 / −0.6 (CIs include 0) |
+| Temperature fitted per held-out event | 11.2 | −5.1 | −1.4 (−4.6 to +1.9) |
+| Temperature-normalised baseline only | 11.5 | −1.3 | −0.4 (−3.1 to +2.4) |
+| Gust and temperature fitted jointly | 13.9 | −5.3 | −0.2 (−6.5 to +6.0) |
+| Linear time trend fitted per held-out event | 13.4 | −3.4 | +0.6 (−1.8 to +2.9) |
+
+The regressions, within layouts at the event-day level (n = 37 over 7 layouts):
+
+- SSA rises 0.21 strokes per mph of gust above 18 (95% CI 0.10–0.32), or 0.18 per mph on a linear scale (0.09–0.27).
+- Temperature alone: −0.056 strokes per °F (−0.109 to −0.003).
+- Fitted together: gust 0.185 (0.066–0.304) and temperature −0.028 (−0.078 to +0.021). The two are correlated (r = −0.35) because the cooler months are windier.
+
+Decision: no engine or baseline parameter changed, so no club or PDGA rating changes.
+
+- Wind normalisation is confirmed: removing it, or halving the coefficient, is clearly worse.
+- The regression says gusts matter several times more than 0.035 per mph. Using a larger coefficient does not improve held-out prediction, though, and the fitted slope is unstable from one held-out event to the next.
+- The coefficient also drives every club round's live weather adjustment, so it was left unchanged.
+- Recency, half-life weighting, the statistic and the threshold differ by less than their uncertainty. The one interval that excludes zero (half-life 12 months) was picked from a grid of three, so it is not evidence on its own.
+- Temperature shows the largest pooled gain. Its per-event interval includes zero, and its effect largely disappears once gust is in the model. Club rounds also do not store temperature yet.
+
+Recommended for a later re-test, once the hourly ingest has gathered more events:
+
+- a larger gust coefficient, around 0.07–0.2 per mph above 18;
+- recency by a 12-month half-life;
+- a temperature term. This would first need the club to store each round's temperature at finalize.
+
 The dry run is `GVDG_PDGA_DRY_RUN=1 GVDG_PDGA_DRY_RUN_EVENTS=<ids> GVDG_PDGA_DRY_RUN_CACHE=<dir> npx vitest run test/pdga-baseline-dry-run.test.ts` in `auth-worker`. It loads our public course list into an in-memory database and runs the production ingest path against pdga.com, caching the responses so a rerun makes no requests.
