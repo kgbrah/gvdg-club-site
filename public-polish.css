@@ -1300,6 +1300,7 @@
 [data-page="lost-found"] .lf-reasons { display: grid; gap: 6px; }
 [data-page="lost-found"] .lf-reason-list { display: grid; gap: 4px; margin: 0; padding-left: 1.2rem; color: var(--text-primary); font: 550 .93rem/1.45 Archivo, system-ui, sans-serif; }
 [data-page="lost-found"] :is(.lf-decide, .lf-match-copy) { display: grid; gap: 10px; min-width: 0; }
+[data-page="lost-found"] .lf-decide textarea { width: 100%; min-height: 44px; padding: .55rem .7rem; border: 1px solid var(--site-line); border-radius: 8px; background: var(--site-paper); color: var(--text-primary); }
 [data-page="lost-found"] .lf-match .market-detail { margin: 2px 0; }
 [data-page="lost-found"] .lf-wall-layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
 @media (min-width: 900px) {
@@ -1339,7 +1340,7 @@
 [data-page="lost-found"] .market-field.has-error :is(input, select, textarea) { border-color: var(--site-error) !important; }
 [data-page="lost-found"] .lf-gate:empty { display: none; }
 [data-page="lost-found"] .market-actions .shop-btn { display: inline-flex; align-items: center; gap: 6px; }
-[data-page="lost-found"] .market-form textarea { font: 500 1rem/1.45 Archivo, system-ui, sans-serif; }
+[data-page="lost-found"] textarea { font: 500 1rem/1.45 Archivo, system-ui, sans-serif; }
 [data-page="lost-found"] .lf-wall-main .lf-grid,
 [data-page="lost-found"] [data-lf-view="person"] .lf-grid:has(.lf-celebration) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
 [data-page="lost-found"] .lf-photo-tools { display: grid; gap: 8px; }
