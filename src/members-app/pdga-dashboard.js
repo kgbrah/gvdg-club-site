@@ -239,7 +239,8 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
     h("div", { className: "dash-rating-row", key: "ratings" }, [
       h(RatingTile, { label: "Live rating estimate", value: live, delta, live: true, key: "live" }),
       h(RatingTile, { label: "PDGA official rating", value: official, key: "official" }),
-      h(RatingTile, { label: "PDGA peak", value: stats?.peak_rating, key: "peak" }),
+      // The highest single round rating among the player's PDGA rounds (not a peak official rating).
+      h(RatingTile, { label: "Best round rating", value: stats?.peak_rating, key: "peak" }),
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
     ...extras,
