@@ -417,7 +417,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v331`, members `?v=219`, public/events `?v=206`, score `?v=244`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v332`, members `?v=219`, public/events `?v=207`, score `?v=245`,
 home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -494,6 +494,10 @@ first load on a throttled phone profile.
   - Scoring: a saved card (`readMineCache`) shows at once as a preview (`applyMinePayload(..., { cached: true })`
     draws only; the server's card always replaces it and starts the socket/location/saving); round chat polls every
     4 s and never while hidden; `overlayLiveSnapshot` reads pins/positions/consensus in parallel.
+  - Live rounds send a member's photo as a signed link (`memberPhotoLink` in profile-photo.ts; `photoRef` kept on
+    each player, refreshed in `persist()`/`load()`), served once by `GET /member-photos/:memberId/:sig?v=` with
+    `immutable` caching; `playerPhotoSrc` resolves it against the API host. Without `JWT_SECRET` (some tests) or for
+    guests/PDGA photos the photo stays inline.
   - `score.html` and `gvdg-members.html` preconnect to the API host from an inline head script (admin.html uses a
     static link: its tests forbid DOM calls in the page).
   - Not done yet (bigger changes, proposed separately): ratings validated on every read (`makeRatingValidator`;

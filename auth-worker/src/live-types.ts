@@ -5,6 +5,8 @@ import type { WeatherLocation, WeatherState } from "./weather.js";
 
 export interface LiveEnv {
   DB: db.D1Like;
+  /** Signs photo links (profile-photo.ts); absent in some tests, where photos stay inline. */
+  JWT_SECRET?: string;
 }
 
 export type LiveSocket = {

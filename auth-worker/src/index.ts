@@ -1,4 +1,5 @@
 import type { Env, RawEnv } from "./env.js";
+import { handleMemberPhoto } from "./profile-photo.js";
 import { handleEmailStart, handleEmailVerify, handlePinResetStart, handlePinResetVerify } from "./account-recovery.js";
 import { historyGate, secretOk } from "./authz.js";
 import { allowedOrigin, corsHeaders, json, RequestBodyTooLargeError } from "./http.js";
@@ -113,6 +114,10 @@ export default {
       if (isPdgaBaselineRoute(pathname)) return await handlePdgaBaselines(request, env, origin);
       if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
         return await handleCourseFavorites(request, env, origin);
+      }
+      if (method === "GET" && pathname.startsWith("/member-photos/")) {
+        const photo = await handleMemberPhoto(pathname, env);
+        if (photo) return photo;
       }
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);

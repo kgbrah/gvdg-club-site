@@ -379,3 +379,11 @@ test("projectHoleMap stamps GPS and PDGA circles; map taps invert", () => {
   assert.ok(Math.abs(back.lat - map.tee.lat) < 1e-8);
   assert.ok(Math.abs(back.lng - map.tee.lng) < 1e-8);
 });
+
+test("playerPhotoSrc turns a member's signed photo link into the API address, and refuses anything else", () => {
+  const link = "/member-photos/m_80024/0123456789abcdef?v=abcdef012345";
+  assert.equal(playerPhotoSrc(link), "https://auth.gvdgclub.com" + link);
+  for (const bad of ["/member-photos/m_80024/0123456789abcdef", "/member-photos/../x/0123456789abcdef?v=abcdef012345", "//evil.example/member-photos/m_a/0123456789abcdef?v=abcdef012345", "javascript:alert(1)"]) {
+    assert.equal(playerPhotoSrc(bad), "", bad);
+  }
+});

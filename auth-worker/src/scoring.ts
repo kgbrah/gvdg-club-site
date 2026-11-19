@@ -25,6 +25,10 @@ export interface PlayerState {
   throws?: Record<number, { lat: number; lng: number; n: number }[]>;
   discColor?: string | null;
   photo?: string | null;
+  /** The photo as a signed link (profile-photo.ts memberPhotoLink), sent in place of the image; photoRefOf tells
+   *  whether it still belongs to `photo`. */
+  photoRef?: string | null;
+  photoRefOf?: string | null;
   throwAt?: number;
   removed?: boolean; // tombstoned (accidental join / left early / no-show): kept in the array so positional
   // indexes never shift under live scorers, but filtered out of the card, snapshot, and standings.
