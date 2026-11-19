@@ -222,6 +222,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  // The API on the site's own address (gvdgclub.com/api/*, the Worker): straight to the network, exactly as when it
+  // was another host. Never cached here, never answered with the offline page (the browser's own cache still applies).
+  if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return;
 
   // A notification image fetch has no window. Answer it from the cache and
   // Brave draws its own lion instead of the club mark.
