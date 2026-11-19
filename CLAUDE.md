@@ -448,6 +448,10 @@ first load on a throttled phone profile.
   never `isAdmin`). Roster records still come from `provision.mjs`, admin-gated `POST /admin/members`,
   or admin approve of an application; all set `mustChangePin:true`.
 - **WebAuthn challenges are single-use** (read-and-delete); advance the stored credential counter each auth.
+- **Every session mint stamps the member's `pinVer`** (PIN login, `/set-pin`, passkey `/webauthn/auth/verify`).
+  `requireAuth` and `/me` both reject a token whose `pinVer` differs from the record's (a PIN change/reset revokes
+  older sessions). A passkey session without it read as revoked on every member route while `/me` said signed in
+  (test/passkey-session.test.ts).
 - **Imports go through `safeFetch`** with a per-kind host allowlist (https-only, reject userinfo /
   IP-literal / IPv6, `redirect:manual` re-validating every hop, byte/time caps). ⚠️ There is **no
   private-CIDR filter** — SSRF safety rests entirely on the fixed public-host allowlist; never add an

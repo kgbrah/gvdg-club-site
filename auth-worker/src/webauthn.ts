@@ -197,7 +197,10 @@ export async function authenticationVerify(
   if (!verification.verified) return { status: 401, data: { verified: false } };
 
   await updateCredentialCounter(env.ROSTER, memberId, stored.id, verification.authenticationInfo.newCounter);
-  const token = await signToken({ sub: member.memberId, mustChangePin: member.mustChangePin });
+  // Stamp the member's PIN version like a PIN sign-in does: without it every passkey session read as revoked to
+  // requireAuth (pinVer 0 vs the member's >= 1 after their first PIN change), so listing, notifications and every
+  // other member route answered "not signed in" while /me still showed them signed in.
+  const token = await signToken({ sub: member.memberId, mustChangePin: member.mustChangePin, pinVer: member.pinVer ?? 0 });
   return {
     status: 200,
     data: {
