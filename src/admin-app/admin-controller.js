@@ -770,10 +770,12 @@ export function startAdminController() {
             if (!quiet) {
                 window.dispatchEvent(new CustomEvent('gvdg:admin-members-list', { detail: { status: 'loading', members: [], currentMemberId: ME_ID } }));
             }
+            // Members and applications load side by side (one after the other made the Members tab slow).
+            const applications = adminLoadMembershipApplications(quiet);
             let members = [];
             try { const r = await adminApi('/admin/members'); if (r.ok) members = (await r.json()).members || []; } catch (e) {}
             window.dispatchEvent(new CustomEvent('gvdg:admin-members-list', { detail: { status: 'ready', members, currentMemberId: ME_ID } }));
-            await adminLoadMembershipApplications(quiet);
+            await applications;
         }
         async function adminLoadMembershipApplications(quiet) {
             if (!quiet) {

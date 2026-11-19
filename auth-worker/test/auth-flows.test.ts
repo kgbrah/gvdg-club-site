@@ -549,3 +549,30 @@ describe("lockouts", () => {
     }
   });
 });
+
+describe("admin lists", () => {
+  it("Admin › Members reads member records side by side, a batch at a time (not one after another)", async () => {
+    for (let i = 0; i < 60; i++) await putMember(roster as never, { memberId: "m_" + (5000 + i), name: "Player " + i, pdgaNo: String(5000 + i), pinHash: "h", mustChangePin: false });
+    let inFlight = 0;
+    let most = 0;
+    const realGet = roster.get;
+    roster.get = async (key: string) => {
+      if (!key.startsWith("member:")) return realGet(key);
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      inFlight -= 1;
+      return realGet(key);
+    };
+    try {
+      const res = await call("/admin/members", { token: await admin() });
+      expect(res.status).toBe(200);
+      expect(res.data.members).toHaveLength(61);
+      expect(res.data.members.map((m: { name: string }) => m.name)).toEqual([...res.data.members.map((m: { name: string }) => m.name)].sort((a: string, b: string) => a.localeCompare(b)));
+      expect(most).toBeGreaterThan(1);
+      expect(most).toBeLessThanOrEqual(25);
+    } finally {
+      roster.get = realGet;
+    }
+  });
+});

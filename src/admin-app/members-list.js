@@ -118,7 +118,7 @@ function LinkHeld({ member, members }) {
     });
     if (confirmed) dispatchRequest("gvdg:admin-member-link-held-request", { heldId: member.memberId, memberId });
   }
-  return h("label", { className: "admin-member-tier", htmlFor: id, key: "link" }, [
+  return h("label", { className: "admin-member-tier admin-member-wide", htmlFor: id, key: "link" }, [
     h("select", { "aria-label": `Link ${member.name} to a member already in the app`, id, key: "s", onChange: (event) => { void choose(event.target.value); }, value: "" }, [
       h("option", { key: "none", value: "" }, "Link to member…"),
       ...choices.map((other) => h("option", { key: other.memberId, value: other.memberId }, other.name)),
@@ -169,46 +169,74 @@ function AdminMemberRow({ adminCount, currentMemberId, member, members = [] }) {
     dispatchRequest("gvdg:admin-member-remove-request", { member: member.source });
   }
 
+  const renew = member.renewalYear && member.tier !== "guest" && !member.held;
   return h("div", {
-    className: "admin-evrow", "data-admin-member-id": member.memberId || member.identifier, "data-member-lapsed": member.lapsed ? "true" : "false",
+    className: "admin-evrow admin-member-row", "data-admin-member-id": member.memberId || member.identifier, "data-member-lapsed": member.lapsed ? "true" : "false",
     "data-member-tier": member.tier, "data-member-held": member.held ? "true" : "false",
   }, [
-    h("span", { className: "ev-name", key: "name" }, [memberSummary(member), h(KarmaChip, { key: "karma", memberId: member.memberId })]),
-    h("button", {
-      className: "admin-btn secondary", disabled: !member.identifier, key: "wallet", type: "button",
-      onClick: () => dispatchRequest("gvdg:admin-tab-request", { tab: "wallets", memberId: member.identifier }),
-    }, "Wallet"),
-    member.held ? null : h("button", {
-      className: "admin-btn",
-      disabled: !member.identifier,
-      key: "pin",
-      onClick: requestPinReset,
+    h("div", { className: "admin-member-head", key: "head" }, [
+      h("span", { className: "ev-name", key: "name" }, memberSummary(member)),
+      h(KarmaChip, { key: "karma", memberId: member.memberId }),
+    ]),
+    h("div", { className: "admin-member-actions", key: "actions" }, [
+      // The one thing to do now, full width: renew when it's due, or match a held account from the sheets.
+      renew ? h("button", { className: "admin-btn admin-member-wide", key: "renew", onClick: requestRenew, type: "button" }, `Renew for ${member.renewalYear}`) : null,
+      member.held ? h(LinkHeld, { key: "link", member, members }) : null,
+      h(TierPicker, { isLastAdmin, isSelf, key: "tier", member }),
+      h("button", {
+        className: "admin-btn secondary", disabled: !member.identifier, key: "wallet", type: "button",
+        onClick: () => dispatchRequest("gvdg:admin-tab-request", { tab: "wallets", memberId: member.identifier }),
+      }, "Wallet"),
+      h(MemberMoreMenu, {
+        key: "more", member,
+        items: [
+          member.held || !member.identifier ? null : { key: "pin", label: "Reissue PIN", onSelect: requestPinReset },
+          member.held || !member.memberId ? null : {
+            key: "locks", label: "Clear lockouts", attrs: { "data-admin-clear-locks": member.memberId },
+            onSelect: () => dispatchRequest("gvdg:admin-member-clear-locks-request", { member: member.source }),
+          },
+          { key: "remove", label: "Remove member", danger: true, disabled: removeBlocked || !member.memberId, title: removeTitle, onSelect: requestRemove },
+        ].filter(Boolean),
+      }),
+    ]),
+  ]);
+}
+
+/** The member actions you need now and then (Reissue PIN, Clear lockouts, Remove member), behind one "More". */
+function MemberMoreMenu({ member, items }) {
+  const ref = React.useRef(null);
+  const summary = React.useRef(null);
+  React.useEffect(() => {
+    function outside(event) {
+      if (ref.current?.open && !ref.current.contains(event.target)) ref.current.open = false;
+    }
+    function escape(event) {
+      if (event.key !== "Escape" || !ref.current?.open) return;
+      ref.current.open = false;
+      summary.current?.focus();
+    }
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, []);
+  return h("details", { className: "admin-member-more", ref }, [
+    h("summary", { className: "admin-btn secondary", "aria-label": `More for ${member.name}`, key: "summary", ref: summary }, "More"),
+    h("div", { className: "admin-member-more-menu", role: "menu", key: "menu" }, items.map((item) => h("button", {
+      ...(item.attrs || {}),
+      className: item.danger ? "admin-member-more-item is-danger" : "admin-member-more-item",
+      disabled: item.disabled,
+      key: item.key,
+      onClick: () => {
+        if (ref.current) ref.current.open = false;
+        item.onSelect();
+      },
+      role: "menuitem",
+      title: item.title,
       type: "button",
-    }, "Reissue PIN"),
-    member.held || !member.memberId ? null : h("button", {
-      className: "admin-btn secondary",
-      "data-admin-clear-locks": member.memberId,
-      key: "locks",
-      onClick: () => dispatchRequest("gvdg:admin-member-clear-locks-request", { member: member.source }),
-      title: "Lift wrong-PIN lockouts and \"too many tries\" limits so they can try again now",
-      type: "button",
-    }, "Clear lockouts"),
-    h(TierPicker, { isLastAdmin, isSelf, key: "tier", member }),
-    member.held ? h(LinkHeld, { key: "link", member, members }) : null,
-    member.renewalYear && member.tier !== "guest" && !member.held ? h("button", {
-      className: "admin-btn",
-      key: "renew",
-      onClick: requestRenew,
-      type: "button",
-    }, `Renew for ${member.renewalYear}`) : null,
-    h("button", {
-      className: "admin-btn danger",
-      disabled: removeBlocked || !member.memberId,
-      key: "remove",
-      onClick: requestRemove,
-      title: removeTitle,
-      type: "button",
-    }, "Remove member"),
+    }, item.label))),
   ]);
 }
 

@@ -184,6 +184,7 @@ function fixture(path, method, query, authorization, body) {
     { memberId: "m_casey", name: "Casey Lapsed", pdgaNo: "456789", tier: "member", memberThroughYear: 2025, membershipCurrent: false, renewalYear: 2026 },
     { memberId: "m_drew", name: "Drew Visitor", udisc: "drewv", tier: "guest", memberThroughYear: 2026, membershipCurrent: false, renewalYear: null },
     { memberId: "m_h_nsamlee", name: "Sam Lee", tier: "member", held: true, memberThroughYear: 2026, membershipCurrent: true }] };
+  if (path === "/me/messages/summary") return { unread: 3, unseen: 1 };
   if (path === "/admin/members/clear-locks") return { cleared: 2, member: { memberId: body.memberId } };
   if (path === "/admin/members/set-tier" || path === "/admin/members/link-held") return { member: { memberId: body.memberId || body.heldId }, carriedOver: path.endsWith("link-held") ? "Matched Sam Lee from the club's sheets: $12.50 store credit came over." : undefined };
   if (path === "/admin/members/lapsed-to-guest") return { moved: 1 };
@@ -427,7 +428,7 @@ async function verifyRoutes(variant) {
     pane = await route(page, "import");
     await pane.locator("#csvImportText").fill("name,date,type,format\nPreview Spring Open,2099-04-01,tournament,stroke");
     await pane.getByRole("button", { name: "Preview CSV" }).click();
-    await pane.getByText(/Preview Spring Open/).waitFor();
+    await pane.getByText(/Preview Spring Open \(2099-04-01\)/).waitFor();
     await fit(page, variant.name + " import candidates");
 
     await route(page, "check-in");
@@ -447,6 +448,12 @@ async function verifyRoutes(variant) {
     await shot(page, "registration-fees-" + variant.name);
 
     pane = await route(page, "members");
+    // The top bar's envelope and bell: the member app's counts, opening Messages there.
+    const mail = page.locator("[data-admin-header='messages']");
+    assert.match(await mail.getAttribute("href"), /gvdg-members\.html#messages$/);
+    await mail.locator(".admin-header-badge", { hasText: "3" }).waitFor();
+    assert.equal(await page.locator("[data-admin-header='notices']").getAttribute("aria-label"), "Notifications, 1 new");
+    await shot(page.locator(".admin-app-header"), "header-inbox-" + variant.name);
     await pane.getByText("Add a member", { exact: true }).click();
     const memberForm = pane.locator("#adminMemberForm");
     await memberForm.getByLabel("Name", { exact: true }).fill("New QA Member");
@@ -468,12 +475,21 @@ async function verifyRoutes(variant) {
     await page.getByRole("dialog", { name: "Make Jordan Reyes a guest?" }).getByRole("button", { name: "Make guest" }).click();
     const heldRow = members.locator("[data-member-held='true']");
     await heldRow.getByText("Sam Lee - held: no sign-in yet - through 2026").waitFor();
-    assert.equal(await heldRow.getByRole("button", { name: "Reissue PIN" }).count(), 0, "a held account has no sign-in to reset");
-    assert.equal(await heldRow.getByRole("button", { name: "Clear lockouts" }).count(), 0, "a held account has no sign-in to unlock");
+    assert.equal(await heldRow.getByRole("menuitem", { name: "Reissue PIN", includeHidden: true }).count(), 0, "a held account has no sign-in to reset");
+    assert.equal(await heldRow.getByRole("menuitem", { name: "Clear lockouts", includeHidden: true }).count(), 0, "a held account has no sign-in to unlock");
+    // One tidy row: tier, Renew, Wallet and More; the now-and-then actions are in More.
+    const jordanRow = members.locator("[data-admin-member-id='m_jordan']");
+    await shot(jordanRow, "member-row-" + variant.name);
+    await shot(members.locator("[data-admin-member-id='m_casey']"), "member-row-renew-" + variant.name);
+    await jordanRow.locator(".admin-member-more > summary").click();
+    const more = jordanRow.getByRole("menu");
+    assert.deepEqual(await more.getByRole("menuitem").allTextContents(), ["Reissue PIN", "Clear lockouts", "Remove member"]);
+    await jordanRow.scrollIntoViewIfNeeded();
+    await shot(page, "member-row-more-" + variant.name);
     // Clear lockouts: one tap lifts wrong-PIN lockouts and "too many tries" limits.
-    await members.locator("[data-admin-clear-locks='m_jordan']").click();
+    await more.getByRole("menuitem", { name: "Clear lockouts" }).click();
     await page.getByText("Lockouts cleared for Jordan Reyes - they can try again now").waitFor();
-    await shot(members.locator("[data-admin-member-id='m_jordan']"), "member-row-" + variant.name);
+    assert.equal(await jordanRow.locator(".admin-member-more[open]").count(), 0, "the menu closes after a choice");
     assert.ok(requested.some((call) => call.path === "/admin/members/clear-locks" && call.body?.memberId === "m_jordan"));
     await heldRow.scrollIntoViewIfNeeded();
     await shot(heldRow, "member-held-" + variant.name);

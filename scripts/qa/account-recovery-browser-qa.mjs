@@ -229,6 +229,12 @@ for (const width of [360, 1280]) {
   await page.locator("#identifierInput").fill("80024");
   await page.locator('[data-react-auth-action="reset-open"]').click();
   await page.locator('[data-react-auth-gate="reset"]').waitFor();
+  // Back from Forgot PIN returns to the sign-in screen, still on the member page.
+  await page.goBack();
+  await page.locator('[data-react-auth-gate="login"]').waitFor();
+  assert.match(page.url(), /gvdg-members\.html/);
+  await page.locator('[data-react-auth-action="reset-open"]').click();
+  await page.locator('[data-react-auth-gate="reset"]').waitFor();
   assert.equal(await page.locator(".login-title").textContent(), "Reset your PIN");
   assert.equal(await page.locator("#resetIdentifierInput").inputValue(), "80024", "the sign-in name carries over");
   await noOverflow(page, `reset start ${width}`);
@@ -285,6 +291,25 @@ for (const width of [360, 1280]) {
   assert.equal(await page.locator(".login-title").textContent(), "Your email");
   await page.locator('[data-react-auth-action="email-cancel"]').click();
   await shellIs(page, "members");
+  // A back swipe on "Your email" (or Edit profile) returns to the app, not out of it.
+  const appUrl = page.url();
+  await reminder.click();
+  await page.locator('[data-react-auth-gate="email"]').waitFor();
+  await page.goBack();
+  await shellIs(page, "members");
+  assert.equal(page.url(), appUrl, "still in the member app");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("gvdg:member-edit-profile-requested")));
+  await page.locator('[data-react-auth-gate="profile"]').waitFor();
+  await page.locator('[data-react-auth-action="email-change"]').click();
+  await page.locator('[data-react-auth-gate="email"]').waitFor();
+  await page.goBack();
+  await shellIs(page, "members");
+  assert.equal(page.url(), appUrl, "one back from two screens deep returns to the app");
+  // Closing the screen normally leaves no extra back step behind.
+  await reminder.click();
+  await page.locator('[data-react-auth-action="email-cancel"]').click();
+  await shellIs(page, "members");
+  assert.equal(await page.evaluate(() => Boolean(history.state?.gvdgAuthOverlay)), false);
   await context.close();
 }
 
