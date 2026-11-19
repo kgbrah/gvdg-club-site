@@ -129,6 +129,12 @@ const vite = await createServer({
         return reply({ settings: state.settings });
       }
       if (key === "/admin/pdga-events/104547") return reply({ event: state.settings.pdgaEvent });
+      if (key === "/admin/events/7/pdga-results") {
+        const header = ["DivCode", "T.O.", "Place", "First Name", "Last Name", "PDGA", "Rd1", "Rd2"];
+        const rows = [["MA3", "", "1", "Ada", "Lovelace", "80024", "54", "52"], ["MPO", "", "", "Cy", "Young", "70007", "50", ""]];
+        return reply({ pdgaEventId: 104547, rounds: [{ eventId: 7, name: "Greenville Fall Classic", date: "2026-12-12" }, { eventId: 8, name: "Greenville Fall Classic R2", date: "2026-12-13" }],
+          header, rows, text: [header, ...rows].map((row) => row.join("\t")).join("\n") + "\n", players: 2, missingScores: 1, noDivision: 0, noPdga: 0, extraRounds: 0 });
+      }
       if (key === "/admin/events/7/registrations") return reply({ registrations: state.regs.map((r) => ({ ...r, amount_paid_cents: r.paid_entry ? 5000 : 0 })) });
       const act = key.match(/^\/admin\/events\/7\/registrations\/(\d+)\/(zelle-received|offer)$/);
       if (act) {
@@ -225,6 +231,18 @@ try {
     await page.getByText("Saved.").waitFor();
     assert.deepEqual(state.saved.at(-1).rules.divisionLimits, { MA3: "850" });
     assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
+    // Results for PDGA Tournament Manager: the rows to paste, what to fix there, and a copy button.
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+    await page.getByRole("button", { name: "Get results for PDGA" }).click();
+    const results = page.locator("[data-admin-pdga-results=ready]");
+    await results.waitFor();
+    assert.match(await page.getByLabel("Results for PDGA").inputValue(), /^DivCode\tT\.O\.\tPlace\tFirst Name\tLast Name\tPDGA\tRd1\tRd2\nMA3\t\t1\tAda\tLovelace\t80024\t54\t52\n/);
+    assert.ok((await results.innerText()).includes("2 players · Rd1: Greenville Fall Classic (2026-12-12) · Rd2: Greenville Fall Classic R2 (2026-12-13)"));
+    assert.ok((await results.innerText()).includes("1 player is missing a round score"));
+    await page.getByRole("button", { name: "Copy for PDGA" }).click();
+    await page.getByRole("button", { name: "Copied" }).waitFor();
+    assert.ok((await page.evaluate(() => navigator.clipboard.readText())).startsWith("DivCode\tT.O.\tPlace"));
+    await results.screenshot({ path: join(shots, "admin-pdga-results-1100.png") });
     await page.screenshot({ path: join(shots, "admin-tournament-1100.png"), fullPage: true });
     assert.deepEqual(errors, []);
     await context.close();
@@ -238,6 +256,14 @@ try {
     await page.getByRole("link", { name: "Greenville Fall Classic" }).waitFor();
     assert.equal(await page.getByRole("link", { name: "Greenville Fall Classic" }).getAttribute("href"), "https://www.pdga.com/tour/event/104547");
     assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
+    // The PDGA number comes first and fills the name and date from PDGA; "Use PDGA's name and date" puts them back.
+    assert.ok((await page.locator("[data-admin-event-pdga]").boundingBox()).y < (await page.locator("#aeName").boundingBox()).y, "the PDGA section sits above Name");
+    assert.equal(await page.locator("#aeName").inputValue(), "Greenville Fall Classic");
+    assert.equal(await page.locator("#aeDate").inputValue(), "2026-12-12");
+    await page.locator("#aeName").fill("Fall Classic (club name)");
+    await page.getByRole("button", { name: "Use PDGA's name and date" }).click();
+    assert.equal(await page.locator("#aeName").inputValue(), "Greenville Fall Classic");
+    assert.equal(await page.getByRole("button", { name: "Use PDGA's name and date" }).count(), 0, "nothing to use once they match");
     await page.locator("[data-admin-event-pdga=on]").screenshot({ path: join(shots, "admin-event-form-pdga-1100.png") });
     assert.deepEqual(errors, []);
     await context.close();

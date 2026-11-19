@@ -164,3 +164,69 @@ export function zelleCode(eventId: number, registrationId: number): string {
   for (let index = 0; index < 3; index++) { tail += alphabet[mix % alphabet.length]; mix = Math.floor(mix / alphabet.length); }
   return `GV${eventId}-${registrationId}${tail}`;
 }
+
+/**
+ * Results for PDGA Tournament Manager's score upload (its Upload page takes rows pasted from the TD Report's Scores
+ * tab, with this header row). Each club event linked to the PDGA event is one round, in date order (up to 4). Players
+ * match across rounds by member id, else by name; their division and PDGA number come from their registration.
+ * Places are per division over all rounds (ties share a place); a player missing a round gets no place and an empty
+ * cell, for the TD to fill with PDGA's code. Owner: "results for PDGA after the event".
+ */
+export const PDGA_UPLOAD_HEADER = ["DivCode", "T.O.", "Place", "First Name", "Last Name", "PDGA"] as const;
+
+export type UploadRound = { eventId: number; name: string; date: string | null };
+export type UploadResult = { event_id: number; member_id: string | null; name: string; total: number | null };
+export type UploadRegistration = { event_id: number; member_id: string | null; name: string; division: string | null; pdga_number: string | null };
+
+const nameKey = (name: string) => String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
+const cell = (value: unknown) => (value == null ? "" : String(value).replace(/[\t\r\n]+/g, " ").trim());
+
+export function pdgaResultsUpload(rounds: UploadRound[], results: UploadResult[], registrations: UploadRegistration[]) {
+  const used = rounds.slice(0, 4);
+  const roundOf = new Map(used.map((round, index) => [round.eventId, index]));
+  const byMember = new Map<string, UploadRegistration>();
+  const byName = new Map<string, UploadRegistration>();
+  for (const reg of registrations) {
+    if (reg.member_id && !byMember.has(reg.member_id)) byMember.set(reg.member_id, reg);
+    const key = nameKey(reg.name);
+    if (key && !byName.has(key)) byName.set(key, reg);
+  }
+  type Player = { name: string; division: string; pdga: string; scores: (number | null)[] };
+  const players = new Map<string, Player>();
+  for (const result of results) {
+    const round = roundOf.get(result.event_id);
+    if (round == null || !nameKey(result.name)) continue;
+    const reg = (result.member_id && byMember.get(result.member_id)) || byName.get(nameKey(result.name)) || null;
+    const key = result.member_id ? "m:" + result.member_id : reg?.member_id ? "m:" + reg.member_id : "n:" + nameKey(result.name);
+    const player = players.get(key) ?? { name: (reg?.name || result.name).trim(), division: cell(reg?.division).toUpperCase(), pdga: cell(reg?.pdga_number), scores: used.map(() => null) };
+    const total = Number(result.total);
+    if (Number.isFinite(total) && total > 0) player.scores[round] = total;
+    players.set(key, player);
+  }
+  const list = [...players.values()];
+  const complete = (player: Player) => player.scores.every((score) => score != null);
+  const sum = (player: Player) => player.scores.reduce<number>((total, score) => total + (score ?? 0), 0);
+  const places = new Map<Player, number>();
+  for (const division of new Set(list.map((player) => player.division))) {
+    const ranked = list.filter((player) => player.division === division && complete(player)).sort((a, b) => sum(a) - sum(b));
+    ranked.forEach((player, index) => {
+      const before = index > 0 ? ranked[index - 1] : undefined;
+      places.set(player, before && sum(before) === sum(player) ? places.get(before) ?? index + 1 : index + 1);
+    });
+  }
+  list.sort((a, b) => a.division.localeCompare(b.division) || (places.get(a) ?? 9999) - (places.get(b) ?? 9999) || a.name.localeCompare(b.name));
+  const header = [...PDGA_UPLOAD_HEADER, ...used.map((_, index) => `Rd${index + 1}`)];
+  const rows = list.map((player) => {
+    const [first, ...rest] = player.name.split(/\s+/);
+    return [player.division, "", places.get(player) ?? "", first ?? "", rest.join(" "), player.pdga, ...player.scores.map((score) => score ?? "")].map(cell);
+  });
+  return {
+    header, rows,
+    text: [header, ...rows].map((row) => row.join("\t")).join("\n") + "\n",
+    players: list.length,
+    missingScores: list.filter((player) => !complete(player)).length,
+    noDivision: list.filter((player) => !player.division).length,
+    noPdga: list.filter((player) => !player.pdga).length,
+    extraRounds: Math.max(0, rounds.length - used.length),
+  };
+}

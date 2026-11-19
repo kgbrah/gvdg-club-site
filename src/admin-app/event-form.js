@@ -270,8 +270,18 @@ function layoutOption(layout) {
 
 const NO_PDGA = { on: false, number: "", initial: null, info: null, message: "" };
 
-/** "PDGA-sanctioned event": the PDGA event this club event is (players register on this site, with its PDGA rules). */
-function PdgaEventFields({ pdga, setPdga }) {
+/** PDGA's "YYYY-MM-DD" date, or "" (anything else). */
+export function pdgaDay(value) {
+  const day = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : "";
+}
+
+/**
+ * "PDGA-sanctioned event": the PDGA event this club event is (players register on this site, with its PDGA rules).
+ * Entering the number first fills the event's name and date from PDGA (owner: "enter the PDGA number first, and the
+ * event's name and dates come in from PDGA"); typed ones are kept unless "Use PDGA's name and date" is chosen.
+ */
+function PdgaEventFields({ pdga, setPdga, form, onUse }) {
   async function lookUp() {
     const number = String(pdga.number).trim();
     if (!number) return;
@@ -280,6 +290,7 @@ function PdgaEventFields({ pdga, setPdga }) {
       const data = await response.json().catch(() => ({}));
       setPdga((current) => ({ ...current, info: response.ok ? data.event : null,
         message: response.ok ? "" : data.error === "pdga_event_not_found" ? "PDGA has no event with that number." : "PDGA couldn't be reached; the number is saved anyway." }));
+      if (response.ok && data.event) onUse(data.event, false);
     } catch {
       setPdga((current) => ({ ...current, message: "PDGA couldn't be reached; the number is saved anyway." }));
     }
@@ -295,6 +306,10 @@ function PdgaEventFields({ pdga, setPdga }) {
       h(PdgaLink, { href: pdgaEventHref(pdga.info.id), key: "link" }, pdga.info.name),
       ` · ${pdga.info.tier || "?"}-tier · ${pdga.info.startDate || ""}${pdga.info.endDate && pdga.info.endDate !== pdga.info.startDate ? ` to ${pdga.info.endDate}` : ""}`,
     ]) : null,
+    pdga.on && pdga.info && (form.name !== pdga.info.name || (pdgaDay(pdga.info.startDate) && form.date !== pdgaDay(pdga.info.startDate)))
+      ? h("button", { className: "admin-btn secondary", type: "button", key: "use", onClick: () => onUse(pdga.info, true) }, "Use PDGA's name and date") : null,
+    pdga.on && pdga.info && pdgaDay(pdga.info.endDate) && pdgaDay(pdga.info.endDate) !== pdgaDay(pdga.info.startDate)
+      ? h("p", { className: "al-note", key: "rounds" }, "More than one day: make a club event for each round and link each one to this PDGA number. Results for PDGA (on the Registration screen) puts the rounds together.") : null,
     pdga.on && pdga.message ? h("p", { className: "al-note", role: "status", key: "message" }, pdga.message) : null,
     pdga.on ? h("p", { className: "al-note", key: "next" }, "Cap, rating limits, fees and payment options: the event's Registration screen.") : null,
     pdga.on && pdga.info ? h(PdgaCredit, { key: "credit" }) : null,
@@ -320,6 +335,16 @@ export function AdminEventForm() {
   const requestCounter = React.useRef(0);
   const rowCounter = React.useRef(0);
   const nameInput = React.useRef(null);
+
+  /** Fill the name and date from PDGA's event: empty ones on lookup, or both when asked. */
+  function usePdgaEvent(info, replace) {
+    const day = pdgaDay(info && info.startDate);
+    setForm((current) => ({
+      ...current,
+      name: info && info.name && (replace || !String(current.name || "").trim()) ? info.name : current.name,
+      date: day && (replace || !current.date) ? day : current.date,
+    }));
+  }
 
   function resetForm() {
     setPdga(NO_PDGA);
@@ -573,6 +598,8 @@ export function AdminEventForm() {
     }),
     h("form", { className: "admin-form", id: "adminCreateForm", key: "form", onSubmit: submit }, [
       formField({ id: "aeType", label: "Type", children: h("select", { id: "aeType", key: "input", onChange: (event) => updateField("type", event.target.value), value: form.type }, [option("tournament", "Tournament"), option("league_round", "League round"), option("fundraiser", "Fundraiser"), option("meeting", "Meeting")]) }),
+      // First, so the PDGA number can fill the name and date below.
+      h(PdgaEventFields, { pdga, setPdga, form, onUse: usePdgaEvent, key: "pdga" }),
       formField({ id: "aeName", label: "Name", children: h("input", { id: "aeName", key: "input", maxLength: 200, onChange: (event) => updateField("name", event.target.value), ref: nameInput, required: true, value: form.name }) }),
       formField({ id: "aeDate", label: "Date", children: h("input", { id: "aeDate", key: "input", onChange: (event) => updateField("date", event.target.value), type: "date", value: form.date }) }),
       formField({ id: "aeStartsAt", label: "Start time (ET)", children: h("input", { id: "aeStartsAt", key: "input", onChange: (event) => updateField("startsAt", event.target.value), type: "datetime-local", value: form.startsAt }) }),
@@ -624,7 +651,6 @@ export function AdminEventForm() {
           h("span", { key: "par" }, ["Par ", h("input", { id: "aeDefaultPar", key: "input", max: 15, min: 1, onChange: (event) => setQuickLayout((current) => ({ ...current, defaultPar: event.target.value })), style: { width: "4.5rem" }, type: "number", value: quickLayout.defaultPar })]),
         ]),
       ]) : null,
-      h(PdgaEventFields, { pdga, setPdga, key: "pdga" }),
       formField({ id: "aeLeague", label: "League (for league rounds)", children: h("select", { id: "aeLeague", key: "input", onChange: (event) => updateField("leagueId", event.target.value), value: form.leagueId }, [option("", "-"), ...leagues.map((league) => option(league.id, league.label))]) }),
       formField({ id: "aeNotes", label: "Notes", children: h("textarea", { id: "aeNotes", key: "input", maxLength: 5000, onChange: (event) => updateField("notes", event.target.value), rows: 3, value: form.notes }) }),
       h("div", { className: "admin-form-actions", key: "actions" }, [

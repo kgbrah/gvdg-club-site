@@ -252,3 +252,32 @@ describe("marking an event as a PDGA event from the event form", () => {
     expect((await call("/admin/events/99/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 1 } })).status).toBe(404);
   });
 });
+
+describe("results for PDGA Tournament Manager", () => {
+  it("builds PDGA's upload rows from every club event linked to the PDGA event, a round each", async () => {
+    await setup();
+    db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (8, 'Greenville Fall Classic R2', 'tournament', 'final', '2099-12-13')`);
+    expect((await call("/admin/events/8/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 104547 } })).status).toBe(200);
+    db.raw.exec(`INSERT INTO registrations (event_id, member_id, name, division, pdga_number, paid_entry) VALUES
+      (7, 'm_ada', 'Ada Lovelace', 'MA3', '80024', 1), (7, 'g_cy', 'Cy Young', 'MPO', '70007', 1), (7, 'g_al', 'Al Tie', 'MA3', NULL, 1)`);
+    db.raw.exec(`INSERT INTO results (event_id, member_id, name, total) VALUES
+      (7, 'm_ada', 'Ada Lovelace', 54), (8, 'm_ada', 'Ada Lovelace', 52),
+      (7, NULL, 'Al  Tie', 55), (8, NULL, 'al tie', 51),
+      (7, NULL, 'Cy Young', 50)`);
+    const upload = await call("/admin/events/8/pdga-results", { token: adminToken });
+    expect(upload.status).toBe(200);
+    expect(upload.data.rounds.map((round: { eventId: number }) => round.eventId)).toEqual([7, 8]);
+    expect(upload.data.header).toEqual(["DivCode", "T.O.", "Place", "First Name", "Last Name", "PDGA", "Rd1", "Rd2"]);
+    expect(upload.data.rows).toEqual([
+      ["MA3", "", "1", "Ada", "Lovelace", "80024", "54", "52"],
+      ["MA3", "", "1", "Al", "Tie", "", "55", "51"],
+      ["MPO", "", "", "Cy", "Young", "70007", "50", ""],
+    ]);
+    expect(upload.data).toMatchObject({ players: 3, missingScores: 1, noDivision: 0, noPdga: 1, extraRounds: 0 });
+    expect(upload.data.text.split("\n")[0]).toBe("DivCode\tT.O.\tPlace\tFirst Name\tLast Name\tPDGA\tRd1\tRd2");
+    expect((await call("/admin/events/8/pdga-results")).status).toBe(401);
+    db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (9, 'League night', 'league', 'final', '2099-12-14')`);
+    db.raw.exec(`INSERT INTO event_config (event_id) VALUES (9)`);
+    expect((await call("/admin/events/9/pdga-results", { token: adminToken })).data.error).toBe("not_pdga_event");
+  });
+});

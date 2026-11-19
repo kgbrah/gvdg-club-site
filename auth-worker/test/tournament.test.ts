@@ -75,3 +75,27 @@ describe("tournament rules", () => {
     expect(zelleCode(42, 7)).toBe(zelleCode(42, 7));
   });
 });
+
+describe("pdgaResultsUpload", () => {
+  it("places each division over all rounds (ties share a place) and leaves players missing a round unplaced", async () => {
+    const { pdgaResultsUpload } = await import("../src/tournament.js");
+    const upload = pdgaResultsUpload(
+      [{ eventId: 1, name: "R1", date: "2099-01-01" }],
+      [
+        { event_id: 1, member_id: "a", name: "Ann Lee", total: 60 },
+        { event_id: 1, member_id: "b", name: "Bo", total: 58 },
+        { event_id: 1, member_id: "c", name: "Cal Ray Jr", total: 60 },
+        { event_id: 1, member_id: "d", name: "Dee Dee", total: null },
+        { event_id: 2, member_id: "a", name: "Ann Lee", total: 40 },
+      ],
+      [{ event_id: 1, member_id: "a", name: "Ann Lee", division: "ma1", pdga_number: "1" }, { event_id: 1, member_id: "c", name: "Cal Ray Jr", division: "MA1", pdga_number: "3" }],
+    );
+    expect(upload.rows).toEqual([
+      ["", "", "1", "Bo", "", "", "58"],
+      ["", "", "", "Dee", "Dee", "", ""],
+      ["MA1", "", "1", "Ann", "Lee", "1", "60"],
+      ["MA1", "", "1", "Cal", "Ray Jr", "3", "60"],
+    ]);
+    expect(upload).toMatchObject({ players: 4, missingScores: 1, noDivision: 2, noPdga: 2 });
+  });
+});
