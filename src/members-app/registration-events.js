@@ -12,6 +12,7 @@ import { dollars, formatEventDay } from "./format.js";
 import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { PayPalButtons, WalletPayButton } from "./registration-payments.js";
 import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, isTeamRegistration, parseArray, parseObject, sortRegistrations } from "./registration-utils.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 
@@ -267,7 +268,7 @@ export function EventRegistrationSections({ events, registrations, token, paymen
       paymentsConfig,
       onReload,
       key: `registered-${row.event_id}`,
-    })), ...pdgaCards]));
+    })), ...pdgaCards, pdgaCards.length ? h(PdgaCredit, { key: "pdga-credit" }) : null]));
   } else if (finishedCount) {
     sections.push(h("section", { className: "member-event-section", "aria-label": "My events", key: "mine" }, [
       h("h2", { className: "register-subhead", key: "title" }, "My events"),

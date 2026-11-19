@@ -19,6 +19,7 @@ import { PhoneActivityPairing } from "../shared/phone-activity-view.js";
 import { ShotLedgerPanel } from "./shot-ledger-view.js";
 import { FieldTestBadge, FieldTestToolSwitch } from "./field-test-chip.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 
@@ -251,6 +252,7 @@ function LiveRoundStats(props) {
           `${props.formatLabel || "Singles · Stroke"} · Thru ${thru}/${holeCount}`),
       ])),
     putting ? null : h(PlayingRating, { delta: props.playingDelta, key: "rating", rating: props.playingRating }),
+    !putting && props.ratingUsesPdga ? h(PdgaCredit, { className: "live-stats-pdga-credit", key: "pdga-credit" }) : null,
     h("div", { className: "live-stats-body", key: "body" }, putting
       ? h(LivePuttingStations, { stations })
       : [
@@ -1544,7 +1546,7 @@ export function ScorecardView(props) {
   const roundDetails = [
     h(LiveRoundStats, {
       key: "live-stats", formatLabel: props.formatLabel, holeGrid: props.holeGrid, holes: statsHoles, stats,
-      playingDelta: props.playingDelta, playingRating: props.playingRating, putting: props.putting,
+      playingDelta: props.playingDelta, playingRating: props.playingRating, putting: props.putting, ratingUsesPdga: props.ratingUsesPdga,
     }),
     !props.offline && h(RoundHighlights, { canStar: true, generation: props.clipGeneration, holes: props.holeGrid, key: "clips", putting: props.putting === true }),
     props.putting ? null : h(HoleStatChips, { key: "hole-stats", chips: holeStatChips(holePlayStats(statsHole, statsRows, ((props.holeGrid || []).find((hole) => hole.current) || {}).score)) }),

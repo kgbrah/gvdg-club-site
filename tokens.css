@@ -864,3 +864,10 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
 /* A name that trims with "…" and its karma chip, which always shows. */
 .karma-line { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; vertical-align: bottom; }
 .karma-line > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* PDGA Developer Program attribution (src/shared/pdga-credit.js): a quiet line wherever PDGA data shows. */
+.pdga-credit { margin: .75rem 0 0; color: var(--text-muted); font-size: .75rem; line-height: 1.4; }
+.pdga-credit a, .pdga-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.pdga-link:hover, .pdga-credit a:hover { color: var(--text-primary); }
+/* A linked name inside a block name (event titles): the link is the block, so long names trim inside the screen. */
+:is(div, .register-name) > .pdga-link { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: inherit; }

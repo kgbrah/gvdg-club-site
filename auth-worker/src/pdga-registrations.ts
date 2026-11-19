@@ -16,6 +16,7 @@
 //   where going = the other club members on that event's list (names only, for signed-in members).
 //   GET /admin/pdga-registrations/status (admin) -> counts only: is the hourly check running, and what has it found.
 import { karmaKey } from "./karma-directory.js";
+import { pdgaApiConfigured, searchPdgaEvents, type PdgaApiEnv } from "./pdga-api.js";
 import { adminGate, requireAuth } from "./authz.js";
 import type { D1Like } from "./db-types.js";
 import type { Env } from "./env.js";
@@ -180,10 +181,27 @@ async function clubPdgaNumbers(kv: KVListLike): Promise<Set<string>> {
   return numbers;
 }
 
-async function refreshState(db: D1Like, state: WatchState, now: number, fetchText: (url: string) => Promise<string>) {
-  const seen: WatchEvent[] = [];
-  let complete = false;
-  for (let page = 0; page < SEARCH_PAGES_PER_TICK; page++) {
+/** The state's upcoming events from the official PDGA API (the club's developer account); null = not available. */
+async function apiWatchEvents(env: Env, state: WatchState, now: number): Promise<WatchEvent[] | null> {
+  const apiEnv = env as unknown as PdgaApiEnv;
+  if (!pdgaApiConfigured(apiEnv)) return null;
+  try {
+    const events = await searchPdgaEvents(apiEnv, { startDate: clubDay(now), endDate: clubDay(now, WATCH_DAYS), states: [state] });
+    return events.map((event) => ({
+      eventId: event.id, name: event.name, tier: event.tier, location: [event.city, event.state].filter(Boolean).join(", "),
+      start: event.startDate, end: event.endDate || event.startDate,
+    }));
+  } catch (error) {
+    console.warn(JSON.stringify({ message: "pdga_api_event_search_failed", state, error: error instanceof Error ? error.message : String(error) }));
+    return null;
+  }
+}
+
+async function refreshState(env: Env, db: D1Like, state: WatchState, now: number, fetchText: (url: string) => Promise<string>) {
+  const fromApi = await apiWatchEvents(env, state, now);
+  const seen: WatchEvent[] = fromApi ?? [];
+  let complete = fromApi != null;
+  for (let page = 0; !fromApi && page < SEARCH_PAGES_PER_TICK; page++) {
     const parsed = parsePdgaSearch(await fetchText(pdgaSearchUrl(state, now, page)));
     seen.push(...parsed.events);
     if (!parsed.more) { complete = true; break; }
@@ -249,7 +267,7 @@ export async function runPdgaRegistrationTick(
   await db.prepare("DELETE FROM pdga_registrations WHERE event_id IN (SELECT event_id FROM pdga_watch_events WHERE end_date < ?)").bind(today).run();
   summary.pruned = Number((await db.prepare("DELETE FROM pdga_watch_events WHERE end_date < ?").bind(today).run()).meta?.changes ?? 0);
   try {
-    Object.assign(summary, await refreshState(db, state, now, fetchText));
+    Object.assign(summary, await refreshState(env, db, state, now, fetchText));
   } catch {
     summary.skipped = "search_failed";
   }
@@ -324,6 +342,7 @@ export async function handlePdgaRegistrations(request: Request, env: Env, origin
   for (const { event, rows: entries } of byEvent.values()) {
     const me = entries.find((row) => row.member_id === claims.sub);
     const going = entries.filter((row) => row.member_id !== claims.sub)
+      // Clubmates' PDGA numbers stay private here (the linked PDGA event page lists its players).
       .map((row) => ({ name: row.member_name, division: row.division, karmaKey: karmaKey(row.member_id) }));
     if (me) mine.push({ ...event, division: me.division, going });
     else club.push({ ...event, going });

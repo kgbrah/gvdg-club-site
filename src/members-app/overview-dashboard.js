@@ -24,6 +24,7 @@ import { useInboxSummary } from "./inbox-summary.js";
 import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration } from "../shared/event-calendar.js";
 import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
 import { KarmaChip } from "../shared/karma.js";
+import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 
@@ -163,7 +164,7 @@ function NextPdgaCard({ token }) {
   if (mine) {
     return h("div", { className: "player-story-block", "data-react-home-pdga": "registered", key: "pdga" }, [
       h("h3", { key: "title" }, "Next PDGA"),
-      h("div", { className: "player-event-name", key: "name" }, mine.name),
+      h(PdgaLink, { as: "div", className: "player-event-name", href: mine.url, key: "name" }, mine.name),
       h("div", { className: "player-card-meta", key: "meta" }, pdgaEventMeta(mine)),
       h("div", { className: "player-chip-row", key: "chips" }, h("span", { className: "player-chip" }, "You're registered" + (mine.division ? " · " + mine.division : ""))),
       mine.going?.length ? h(GoingLine, { className: "player-card-meta", going: mine.going, key: "going", prefix: "Also going: " }) : null,
@@ -179,7 +180,7 @@ function NextPdgaCard({ token }) {
   const meta = [event.date, event.course, miles].filter(Boolean).join(" · ");
   return h("div", { className: "player-story-block", "data-react-home-pdga": "ready", key: "pdga" }, [
     h("h3", { key: "title" }, "Next PDGA"),
-    h("div", { className: "player-event-name", key: "name" }, event.name),
+    h(PdgaLink, { as: "div", className: "player-event-name", href: event.pdgaUrl, key: "name" }, event.name),
     meta ? h("div", { className: "player-card-meta", key: "meta" }, meta) : null,
     h("div", { className: "member-action-grid", key: "actions" }, [
       h("a", {
@@ -281,7 +282,7 @@ function PdgaHistory({ stats }) {
     h("div", { className: "player-story-events", key: "list" }, events.slice(0, 6).map((event, index) =>
       h("div", { className: "player-list-row", key: `${event.tournament || "event"}-${event.epoch || index}` }, [
         h("div", { className: "member-list-copy", key: "copy" }, [
-          h("div", { className: "player-event-name", key: "name" }, pdgaEventTitle(event.tournament) || "Event"),
+          h(PdgaLink, { as: "div", className: "player-event-name", href: pdgaEventHref(event.eventId), key: "name" }, pdgaEventTitle(event.tournament) || "Event"),
           h("div", { className: "player-card-meta", key: "meta" }, [event.date, event.division].filter(Boolean).join(" · ")),
         ]),
         h("div", { className: "player-score", key: "score" }, [
@@ -346,6 +347,7 @@ export function MemberOverviewDashboard() {
       h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
       h(NextPdgaCard, { key: "next-pdga", token }),
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
+      h(PdgaCredit, { key: "pdga-credit" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
     h(HomeReturned, { key: "returned", token }),

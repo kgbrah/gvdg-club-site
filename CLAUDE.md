@@ -387,6 +387,15 @@ freeform notes.
   Workers AI → empty**; output is a *suggestion* an admin confirms.
 - **Weather** — Open-Meteo (no key), polled by the DO alarm; also feeds the rating engine (wind gust adds
   SSA strokes). **Email** — Resend, best-effort (`waitUntil`), senders on the verified `gvdgclub.com` domain.
+- **PDGA data (Developer Program terms).** The official REST API client is `auth-worker/src/pdga-api.ts`
+  (secrets `PDGA_API_USERNAME` / `PDGA_API_PASSWORD`, uploaded by `deploy-staging.yml` when the GitHub secrets exist;
+  login session reused, players cached 6 h in `pdga_api_players`, limit 70 requests / 10 s per IP). With the login set,
+  rating anchors, the Stats panel's official rating, the clubmates' PDGA event list and nearby PDGA events come from
+  the API; without it each falls back to its earlier source. Round history, who's registered for an event and
+  rated rounds for PDGA baselines are not in the API and still come from pdga.com (owner's call, pending PDGA).
+  **Every screen that shows PDGA data renders `PdgaCredit` ("Player, event, and course data provided by PDGA.") and
+  links PDGA player/event names with `PdgaLink` (`src/shared/pdga-credit.js`)** — `tests/pdga-credit.test.mjs`
+  lists those screens; add any new one there. Clubmates' PDGA numbers stay private (names aren't linked).
 - **Feature-gating is by credential presence, at runtime, and fails *soft*:** PayPal auto-checkout needs
   both `PAYPAL_CLIENT_ID`+`PAYPAL_SECRET` (else 503 → manual flag); Crotts/vision degrade down their chains;
   email is a no-op without `RESEND_API_KEY`. A missing credential looks like "nothing happened," not an error.
@@ -429,7 +438,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v333`, members `?v=219`, public/events `?v=207`, score `?v=245`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v334`, members `?v=220`, public/events `?v=207`, score `?v=246`,
 home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
