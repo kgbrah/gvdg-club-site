@@ -4,20 +4,22 @@ import { COMPETITION_FIELD_REVISION, singlesStrokeEvidence } from "./rating-sour
 import { makeRatingValidator, RATING_EVIDENCE_FIELDS } from "./ratings.js";
 
 async function validateListedResultRatings(db: D1Like, stream: RatingStream, rows: Record<string, unknown>[]) {
-  const validate = makeRatingValidator(db);
-  return Promise.all(rows.map(async (row) => {
+  const checked = rows.filter((row) => singlesStrokeEvidence(row, "competition") && row.source_result_id != null);
+  const verdicts = await makeRatingValidator(db)(checked, stream);
+  const stillValid = new Map(checked.map((row, index) => [row, verdicts[index]]));
+  return rows.map((row) => {
     const { source_result_id, source_fingerprint, rating_total, rating_to_par, layout_revision, rating_method, anchor_count,
       propagator_count, baseline_event_id, unrated_reason, round_date, wind_gust_mph, event_status, starts_at,
-      format, play_format, scoring_config, started_at, layout_holes, field_revision, pdga_baseline_ssa, pdga_baseline_rounds,
+      format, play_format, scoring_config, started_at, layout_holes, field_revision, pdga_baseline_ssa, pdga_baseline_rounds, rated_at,
       ...result } = row;
-    if (!singlesStrokeEvidence(row, "competition") || (source_result_id != null && !await validate(row, stream))) {
+    if (!singlesStrokeEvidence(row, "competition") || (source_result_id != null && !stillValid.get(row))) {
       result.round_rating = null;
       if (stream === "competition") result.rating = null;
     } else if (stream === "competition" && source_result_id != null) {
       result.rating = result.round_rating;
     }
     return result;
-  }));
+  });
 }
 
 /** Run statements as ONE atomic D1 transaction when the binding supports batch() (real D1 does); otherwise

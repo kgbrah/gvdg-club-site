@@ -272,8 +272,8 @@ lists and SET/table fragments built from **hardcoded** column literals — never
 `.prepare()` also lives outside `db*.ts` (e.g. `shop-db.ts`, `ratings*.ts`, `wallet-idempotency.ts`) —
 keep any new one parameterized.
 
-`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0072`; next is
-`0073`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
+`auth-worker/migrations/NNNN_*.sql` are **append-only and globally ordered**. Highest is **`0073`; next is
+`0074`**. The **`0007` gap is intentional** — never back-fill it. Two branches must not claim the same
 number. Domains: core courses/events/results (`0001-0003`), board (`0004`), registration/ctps/ace-pots
 (`0005-0006`), tee-signs (`0008`), pro-shop + wallet (`0009`, `0012`, `0017`, `0023`), KV fallback
 (`0010`), PDGA cache (`0011`), guest reg (`0013`), casual-round requests/rounds (`0014`, `0016`), UDisc
@@ -370,6 +370,18 @@ freeform notes.
 - **Ratings — two systems that can disagree:** `ratings.ts` is a simple display estimate (base 900) for
   the member dashboard; the leaderboard/`round_ratings` use the real **PDGA SSA engine** (`rating-engine.ts`,
   base 1000, iterative propagator drop) written at finalize and re-solved by the daily cron. Don't conflate.
+- **Showing ratings re-checks them** (`makeRatingValidator` in `ratings.ts`; also `/my-results` lists) — and must
+  stay within D1's 50 queries/request. It checks **whole batches**, never one query per rating:
+  - PDGA-based ratings are **checked when written**: `round_ratings.rated_at` (D1 clock) vs migration 0073's
+    triggers, which record every change to the PDGA evidence (`pdga_rated_rounds`, `pdga_layout_matches`) per club
+    layout and PDGA round date (`''` = all dates) in `pdga_evidence_changes`. A rating written after every change in
+    its baseline window is trusted (`pdgaEvidenceUnchanged`); the rest are re-derived in one read per layout
+    (`pdgaBaselinesForPlayed`). **Changing `pdgaBaselineFor`, its window, or the PDGA rating math? Move
+    `PDGA_RATINGS_TRUSTED_SINCE` to the deploy time** so ratings written under the old rules are re-checked.
+  - Club-calibrated (`layout`) ratings depend on earlier ratings (a chain triggers can't follow), so they are
+    re-verified on read, batched: `getSourceRatingBaselines` reads calibrations, fields and prior anchors in one
+    pass each (selection identical to `priorRatingAnchors`).
+  - Rows equal in everything the check reads share one verdict (the list and the 12-month rating overlap).
 - **Crotts assistant** (`/assistant`) — provider chain **OpenRouter → Workers AI → dev stub**, prompt built
   with club calendar + courses. **Tee-sign OCR vision** (`vision.ts`) — chain **Gemini → OpenRouter →
   Workers AI → empty**; output is a *suggestion* an admin confirms.

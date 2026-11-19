@@ -16,6 +16,16 @@ export const CURRENT_RESULT_FIELDS = {
     cround.holes AS layout_holes, cround.scoring_config`,
 } as const;
 
+/** RATING_SOURCE_ROWS.competition for several events in one query: every row, in event then result order (callers
+ *  apply the per-event cap). */
+export function competitionSourceRowsSql(events: number): string {
+  const one = "WHERE e.id = ? AND";
+  const order = "ORDER BY res.id LIMIT ?";
+  const sql = RATING_SOURCE_ROWS.competition;
+  if (!sql.includes(one) || !sql.endsWith(order)) throw new Error("RATING_SOURCE_ROWS.competition changed shape");
+  return sql.replace(one, `WHERE e.id IN (${Array.from({ length: events }, () => "?").join(", ")}) AND`).replace(order, "ORDER BY e.id, res.id");
+}
+
 export const STORED_EVIDENCE_FIELDS = `rr.source_result_id, rr.source_fingerprint, rr.total AS rating_total,
   rr.to_par AS rating_to_par, rr.layout_revision`;
 

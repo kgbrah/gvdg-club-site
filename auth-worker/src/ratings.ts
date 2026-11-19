@@ -2,9 +2,9 @@ import type { D1Like } from "./db-types.js";
 
 import { aggregatePlayerRating, roundRatingForScoreWithWeather, MIN_OVERALL_ROUNDS, type RatingMethod, type RatingRound as EngineRound, type RatingStream } from "./rating-engine.js";
 import { CURRENT_RESULT_FIELDS, STORED_EVIDENCE_FIELDS, matchesStoredRatingEvidence, singlesStrokeEvidence } from "./rating-source.js";
-import { getSourceRatingBaseline, type LayoutRatingBaseline } from "./rating-store.js";
-import { pdgaBaselineForPlayed, playedHolesFromShape } from "./pdga-baseline-store.js";
-import type { PdgaBaseline } from "./pdga-baselines.js";
+import { getSourceRatingBaselines, type LayoutRatingBaseline, type SourceBaselineKey } from "./rating-store.js";
+import { pdgaBaselinesForPlayed, pdgaEvidenceUnchanged, playedHolesFromShape, type PlayedBaselineRequest } from "./pdga-baseline-store.js";
+import { clubCalendarDay, type PdgaBaseline } from "./pdga-baselines.js";
 import { readArchivedRatingHoles, ratingGeometrySnapshot } from "./rating-layout.js";
 
 export type RatingKind = "competitive" | "casual";
@@ -156,59 +156,121 @@ export function summarizeRatingRows(
 }
 
 export const RATING_EVIDENCE_FIELDS = `${STORED_EVIDENCE_FIELDS}, rr.rating_method, rr.anchor_count, rr.propagator_count,
-  rr.baseline_event_id, rr.unrated_reason, rr.round_date, rr.round_rating, rr.wind_gust_mph, rr.pdga_baseline_ssa, rr.pdga_baseline_rounds`;
+  rr.baseline_event_id, rr.unrated_reason, rr.round_date, rr.round_rating, rr.wind_gust_mph, rr.pdga_baseline_ssa, rr.pdga_baseline_rounds,
+  rr.rated_at`;
 const JOINS = {
   competition: `JOIN events e ON e.id = res.event_id LEFT JOIN event_config ec ON ec.event_id = e.id`,
   casual: `JOIN casual_rounds cround ON cround.id = res.casual_round_id`,
 } as const;
 
 type RatingRow = Record<string, unknown>;
-type ValidRating = (row: RatingRow, stream: RatingStream) => Promise<boolean>;
+/** Checks a batch of stored ratings against their current sources (one verdict per row, in order). */
+type ValidRatings = (rows: readonly RatingRow[], stream: RatingStream) => Promise<boolean[]>;
+type PdgaCheck = { layoutId: number; roundDate: string; total: number; holes: NonNullable<ReturnType<typeof readArchivedRatingHoles>> };
+type PdgaRederive = PlayedBaselineRequest & { key: string };
 
-/** A PDGA-based rating must still match the baseline the current PDGA evidence gives that round. */
-async function validPdgaRating(row: RatingRow, pdgaBaselines: Map<string, Promise<PdgaBaseline | null>>, db: D1Like): Promise<boolean> {
+/** What a PDGA-based rating's baseline is read from: its as-played layout and club day (and, to re-derive it, hole shape). */
+function pdgaCheckFor(row: RatingRow): PdgaCheck | null {
   const holes = readArchivedRatingHoles(row.scorecard, true);
   const layoutId = holes?.[0]?.layoutId ?? null;
   const roundDate = stringOrNull(row.round_date);
   const total = intOrNull(row.total);
-  if (!holes || layoutId == null || !roundDate || total == null) return false;
-  const shape = ratingGeometrySnapshot(holes);
-  const key = layoutId + ":" + roundDate.slice(0, 10) + ":" + shape;
-  const retrieved = pdgaBaselines.get(key) ?? pdgaBaselineForPlayed(db, layoutId, playedHolesFromShape(shape), roundDate);
-  pdgaBaselines.set(key, retrieved);
-  const baseline = await retrieved;
+  if (!holes || layoutId == null || !roundDate || total == null) return null;
+  return { layoutId, roundDate, total, holes };
+}
+
+function pdgaRederive(check: PdgaCheck): PdgaRederive {
+  const shape = ratingGeometrySnapshot(check.holes);
+  return { key: check.layoutId + ":" + (clubCalendarDay(check.roundDate) ?? check.roundDate) + ":" + shape,
+    layoutId: check.layoutId, played: playedHolesFromShape(shape), roundDate: check.roundDate };
+}
+
+// Columns only the ratings list shows; the check never reads them.
+const DISPLAY_ONLY_FIELDS = new Set(["rating", "event_name", "course_name", "layout_name", "udisc_course_id"]);
+
+/** Rows equal in every column the check can read get the same verdict (recent rounds are both listed and rated on). */
+function verdictKey(row: RatingRow, stream: RatingStream): string {
+  return stream + JSON.stringify(Object.keys(row).filter((key) => !DISPLAY_ONLY_FIELDS.has(key)).sort().map((key) => [key, row[key]]));
+}
+
+/** The club calibration a casual estimate was made from, when its row names one. */
+function layoutBaselineKey(row: RatingRow): (SourceBaselineKey & { key: string }) | null {
+  if (row.rating_method !== "layout" || row.round_rating == null) return null;
+  const revision = stringOrNull(row.layout_revision);
+  const eventId = intOrNull(row.baseline_event_id);
+  return revision && eventId != null && intOrNull(row.total) != null ? { key: revision + ":" + eventId, revision, eventId } : null;
+}
+
+/** A PDGA-based rating must still match the baseline the current PDGA evidence gives that round. */
+function pdgaRatingMatches(row: RatingRow, check: PdgaCheck, baseline: PdgaBaseline | null): boolean {
   if (!baseline || baseline.ssa !== numberOrNull(row.pdga_baseline_ssa) || baseline.rounds !== intOrNull(row.pdga_baseline_rounds)) return false;
   const predicted = roundRatingForScoreWithWeather({
-    score: total, ssa: baseline.ssa, ppt: baseline.ppt, weather: { windGustMph: numberOrNull(row.wind_gust_mph) },
+    score: check.total, ssa: baseline.ssa, ppt: baseline.ppt, weather: { windGustMph: numberOrNull(row.wind_gust_mph) },
   });
   return predicted.roundRating === row.round_rating;
 }
 
-export function makeRatingValidator(db: D1Like): ValidRating {
+export function makeRatingValidator(db: D1Like): ValidRatings {
   const baselines = new Map<string, Promise<LayoutRatingBaseline | null>>();
   const pdgaBaselines = new Map<string, Promise<PdgaBaseline | null>>();
-  return async (row, stream) => {
-    if (!await matchesStoredRatingEvidence(row, stream)) return false;
-    if (row.rating_method === "pdga" && row.round_rating != null) return validPdgaRating(row, pdgaBaselines, db);
+  const evidenceChanges: NonNullable<Parameters<typeof pdgaEvidenceUnchanged>[2]> = new Map();
+  const verdicts = new Map<string, Promise<boolean>>();
+  return (rows, stream) => {
+    const keys = rows.map((row) => verdictKey(row, stream));
+    const fresh = new Map<string, RatingRow>();
+    keys.forEach((key, index) => { if (!verdicts.has(key) && !fresh.has(key)) fresh.set(key, rows[index]!); });
+    if (fresh.size) {
+      const checked = checkRows([...fresh.values()], stream);
+      [...fresh.keys()].forEach((key, index) => verdicts.set(key, checked.then((found) => found[index] === true)));
+    }
+    return Promise.all(keys.map((key) => verdicts.get(key)!));
+  };
+  async function checkRows(rows: readonly RatingRow[], stream: RatingStream): Promise<boolean[]> {
+    const evidence = await Promise.all(rows.map((row) => matchesStoredRatingEvidence(row, stream)));
+    const pdga = rows.map((row, index) => evidence[index] && row.rating_method === "pdga" && row.round_rating != null ? pdgaCheckFor(row) : null);
+    // A PDGA rating written after the last change to the evidence its baseline reads is still right (checked when written).
+    const unchanged = await pdgaEvidenceUnchanged(db, pdga.map((check, index) => check
+      ? { layoutId: check.layoutId, roundDate: check.roundDate, ratedAt: stringOrNull(rows[index]!.rated_at) } : null), evidenceChanges);
+    // The rest are re-derived from the current evidence, every baseline still needed read together.
+    const rederive = pdga.map((check, index) => check && !unchanged[index] ? pdgaRederive(check) : null);
+    const needed = [...new Map(rederive.flatMap((request) => request && !pdgaBaselines.has(request.key)
+      ? [[request.key, request] as const] : [])).values()];
+    if (needed.length) {
+      const batch = pdgaBaselinesForPlayed(db, needed);
+      needed.forEach((request, index) => pdgaBaselines.set(request.key, batch.then((found) => found[index] ?? null)));
+    }
+    // Every club calibration still to verify, verified together.
+    const calibrations = [...new Map(rows.flatMap((row, index) => {
+      const source = evidence[index] ? layoutBaselineKey(row) : null;
+      return source && !baselines.has(source.key) ? [[source.key, source] as const] : [];
+    })).values()];
+    if (calibrations.length) {
+      const batch = getSourceRatingBaselines(db, calibrations);
+      calibrations.forEach((source, index) => baselines.set(source.key, batch.then((found) => found[index] ?? null)));
+    }
+    return Promise.all(rows.map((row, index) => evidence[index]
+      ? validStoredRating(row, pdga[index] ?? null, unchanged[index] === true, rederive[index] ?? null) : false));
+  }
+  async function validStoredRating(row: RatingRow, check: PdgaCheck | null, unchanged: boolean, rederive: PdgaRederive | null): Promise<boolean> {
+    if (row.rating_method === "pdga" && row.round_rating != null) {
+      if (!check) return false;
+      return unchanged || (rederive != null && pdgaRatingMatches(row, check, await pdgaBaselines.get(rederive.key)!));
+    }
     // A casual estimate must still agree with its source event's current valid calibration.
     if (row.rating_method !== "layout" || row.round_rating == null) return true;
-    const revision = stringOrNull(row.layout_revision);
-    const baselineId = intOrNull(row.baseline_event_id);
+    const source = layoutBaselineKey(row);
     const total = intOrNull(row.total);
-    if (!revision || baselineId == null || total == null) return false;
-    const key = revision + ":" + baselineId;
-    const retrieved = baselines.get(key) ?? getSourceRatingBaseline(db, revision, baselineId);
-    baselines.set(key, retrieved);
-    const baseline = await retrieved;
+    if (!source || total == null) return false;
+    const baseline = await baselines.get(source.key)!;
     if (!baseline || baseline.availableAt >= String(row.round_date ?? "")) return false;
     const predicted = roundRatingForScoreWithWeather({
       score: total, ssa: baseline.ssa, ppt: baseline.ppt, weather: { windGustMph: numberOrNull(row.wind_gust_mph) },
     });
     return predicted.roundRating === row.round_rating && baseline.propagatorCount === row.propagator_count;
-  };
+  }
 }
 
-async function eligibleRatingHistory(db: D1Like, memberId: string, stream: RatingStream, now: string, valid: ValidRating): Promise<EngineRound[]> {
+async function eligibleRatingHistory(db: D1Like, memberId: string, stream: RatingStream, now: string, valid: ValidRatings): Promise<EngineRound[]> {
   const source = stream === "competition" ? "results" : "casual_results";
   const since = new Date(Date.parse(now) - 365 * 86_400_000).toISOString();
   const rows = await db.prepare(
@@ -218,9 +280,9 @@ async function eligibleRatingHistory(db: D1Like, memberId: string, stream: Ratin
        WHERE rr.member_id = ? AND rr.stream = ? AND rr.round_rating IS NOT NULL
        AND rr.round_date >= ? AND rr.round_date <= ?`,
   ).bind(memberId, stream, since, now).all<RatingRow>();
-  const validated = await Promise.all(rows.results.map(async (row) => await valid(row, stream)
-    ? { roundRating: intOrNull(row.round_rating), roundDate: String(row.round_date) } : null));
-  return validated.filter((row): row is EngineRound => row != null);
+  const verdicts = await valid(rows.results, stream);
+  return rows.results.flatMap((row, index) => verdicts[index]
+    ? [{ roundRating: intOrNull(row.round_rating), roundDate: String(row.round_date) } as EngineRound] : []);
 }
 
 async function ratingDisplayRows(
@@ -228,7 +290,7 @@ async function ratingDisplayRows(
   memberId: string,
   stream: RatingStream,
   opts: { limit?: number | null; offset?: number | null },
-  valid: ValidRating,
+  valid: ValidRatings,
 ): Promise<RatingRow[]> {
   const binds: unknown[] = [memberId];
   const limit = Number.isInteger(opts.limit) && opts.limit != null ? opts.limit : null;
@@ -256,11 +318,14 @@ async function ratingDisplayRows(
     if (offset) { sql += " OFFSET ?"; binds.push(offset); }
   }
   const { results } = await db.prepare(sql).bind(...binds).all<RatingRow>();
-  return Promise.all(results.map(async (row) => {
-    if (row.source_result_id == null || await valid(row, stream)) return row;
+  const sourced = results.filter((row) => row.source_result_id != null);
+  const verdicts = await valid(sourced, stream);
+  const stillValid = new Map(sourced.map((row, index) => [row, verdicts[index]]));
+  return results.map((row) => {
+    if (row.source_result_id == null || stillValid.get(row)) return row;
     return { ...row, rating: null, anchor_count: 0, propagator_count: 0, baseline_event_id: null, pdga_baseline_rounds: null,
       pdga_baseline_ssa: null, unrated_reason: "rating-source-changed" };
-  }));
+  });
 }
 
 export async function getMemberRatings(

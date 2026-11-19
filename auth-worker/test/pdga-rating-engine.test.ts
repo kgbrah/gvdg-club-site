@@ -78,7 +78,7 @@ describe("migration 0062", () => {
     const { DatabaseSync } = await import("node:sqlite");
     const sqlite = new DatabaseSync(":memory:");
     sqlite.exec("PRAGMA foreign_keys = ON");
-    const migrations = PDGA_TEST_MIGRATIONS.filter((file) => !file.startsWith("0062"));
+    const migrations = PDGA_TEST_MIGRATIONS.filter((file) => file < "0062");
     for (const file of migrations) sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
     sqlite.exec(`INSERT INTO courses (id, name) VALUES (1, 'Park');
       INSERT INTO course_layouts (id, course_id, name) VALUES (4, 1, 'Main');

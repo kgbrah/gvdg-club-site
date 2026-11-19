@@ -38,12 +38,15 @@ const EFFECTIVE_SSA = "COALESCE(r.ratings_ssa, r.official_ssa)";
 // Wind counts only when it was measured at the course the PDGA layout is matched to now.
 const ROUND_GUST = "CASE WHEN r.weather_status = 'ok' AND r.weather_course_id = m.course_id THEN r.wind_gust_mph END";
 
-const BASELINE_ROUNDS_SQL = `SELECT r.tourn_id, r.round_number, r.pdga_layout_id, r.round_date, ${EFFECTIVE_SSA} AS ssa, r.ratings_status,
+// One layout's matched PDGA rounds in [from, before), newest first. A round's baseline takes the first MAX_BASELINE_ROUNDS
+// of its own window; BASELINE_SPAN_SQL reads the span of many rounds' windows at once and each takes the same cut.
+const BASELINE_SPAN_SQL = `SELECT r.tourn_id, r.round_number, r.pdga_layout_id, r.round_date, ${EFFECTIVE_SSA} AS ssa, r.ratings_status,
     r.holes_json, m.review_status, ${ROUND_GUST} AS gust_mph
   FROM pdga_rated_rounds r JOIN pdga_layout_matches m ON m.pdga_layout_id = r.pdga_layout_id
   WHERE m.layout_id = ? AND m.review_status IN ('auto', 'confirmed') AND ${EFFECTIVE_SSA} IS NOT NULL
     AND r.round_date >= ? AND r.round_date < ?
-  ORDER BY r.round_date DESC, r.tourn_id DESC, r.round_number DESC, r.pdga_layout_id DESC LIMIT ${MAX_BASELINE_ROUNDS}`;
+  ORDER BY r.round_date DESC, r.tourn_id DESC, r.round_number DESC, r.pdga_layout_id DESC`;
+const BASELINE_ROUNDS_SQL = `${BASELINE_SPAN_SQL} LIMIT ${MAX_BASELINE_ROUNDS}`;
 
 function baselineRound(row: Row): BaselineRound {
   return {
@@ -95,6 +98,84 @@ export async function pdgaBaselineForPlayed(
   const day = clubCalendarDay(roundDate);
   if (layoutId == null || !Number.isSafeInteger(layoutId) || layoutId <= 0 || !day || !played?.length) return null;
   return pdgaBaselineFor(await loadMatchedPdgaRounds(db, layoutId, day, guards), played, day);
+}
+
+export type PlayedBaselineRequest = { layoutId: number | null; played: readonly OurHole[] | null; roundDate: string };
+
+/**
+ * Ratings written before this time are re-derived when shown (they predate rated_at, or the rules below). Move it to
+ * the deploy time of any change to pdgaBaselineFor, its window, or the PDGA rating math, so ratings written under the
+ * old rules are re-checked rather than trusted.
+ */
+export const PDGA_RATINGS_TRUSTED_SINCE = "2026-11-19T00:00:00.000Z";
+
+type EvidenceChange = { day: string; at: string };
+export type EvidenceCheck = { layoutId: number; roundDate: string; ratedAt: string | null } | null;
+
+/**
+ * Whether each PDGA-based rating's evidence is unchanged since the rating was written (migration 0073's triggers
+ * record every change by club layout and PDGA round date; '' = every date). Such a rating is still exactly what its
+ * baseline gives, so it needs no re-derivation. One query for every layout asked about; `cache` shares it per request.
+ */
+export async function pdgaEvidenceUnchanged(
+  db: D1Like, checks: readonly EvidenceCheck[], cache = new Map<number, Promise<EvidenceChange[]>>(),
+): Promise<boolean[]> {
+  const usable = (check: EvidenceCheck): check is NonNullable<EvidenceCheck> & { ratedAt: string } =>
+    check != null && typeof check.ratedAt === "string" && check.ratedAt >= PDGA_RATINGS_TRUSTED_SINCE;
+  const missing = [...new Set(checks.filter(usable).map((check) => check.layoutId))].filter((id) => !cache.has(id));
+  for (let offset = 0; offset < missing.length; offset += 90) {
+    const group = missing.slice(offset, offset + 90);
+    const read = db.prepare(`SELECT layout_id, round_day, changed_at FROM pdga_evidence_changes WHERE layout_id IN (${group.map(() => "?").join(", ")})`)
+      .bind(...group).all<Row>().then((result) => {
+        if (!result.success) throw new Error("PDGA evidence changes unavailable");
+        return result.results;
+      });
+    for (const id of group) {
+      cache.set(id, read.then((rows) => rows.filter((row) => Number(row.layout_id) === id)
+        .map((row) => ({ day: String(row.round_day), at: String(row.changed_at) }))));
+    }
+  }
+  return Promise.all(checks.map(async (check) => {
+    if (!usable(check)) return false;
+    const day = clubCalendarDay(check.roundDate);
+    if (!day) return false;
+    const from = windowStart(day);
+    const changes = await cache.get(check.layoutId)!;
+    return !changes.some((change) => change.at >= check.ratedAt && (change.day === "" || (change.day >= from && change.day < day)));
+  }));
+}
+
+/**
+ * pdgaBaselineForPlayed for many rounds at once (showing a member's ratings re-checks each one): each layout's evidence
+ * is read once, over the span of every window asked for, and each round takes its own window and newest-first cut
+ * from it, exactly as its own query would. One query per round put a busy member past D1's per-request query cap.
+ */
+export async function pdgaBaselinesForPlayed(db: D1Like, requests: readonly PlayedBaselineRequest[]): Promise<(PdgaBaseline | null)[]> {
+  const days = requests.map(({ layoutId, played, roundDate }) => {
+    const day = clubCalendarDay(roundDate);
+    return layoutId != null && Number.isSafeInteger(layoutId) && layoutId > 0 && day && played?.length ? day : null;
+  });
+  const spans = new Map<number, { from: string; before: string }>();
+  requests.forEach(({ layoutId }, index) => {
+    const day = days[index];
+    if (!day || layoutId == null) return;
+    const from = windowStart(day);
+    const span = spans.get(layoutId);
+    spans.set(layoutId, span ? { from: from < span.from ? from : span.from, before: day > span.before ? day : span.before } : { from, before: day });
+  });
+  const evidence = new Map<number, BaselineRound[]>();
+  await Promise.all([...spans].map(async ([layoutId, span]) => {
+    const result = await db.prepare(BASELINE_SPAN_SQL).bind(layoutId, span.from, span.before).all<Row>();
+    if (!result.success) throw new Error("PDGA baseline rounds unavailable");
+    evidence.set(layoutId, result.results.map(baselineRound));
+  }));
+  return requests.map(({ layoutId, played }, index) => {
+    const day = days[index];
+    if (!day || layoutId == null) return null;
+    const from = windowStart(day);
+    const rounds = (evidence.get(layoutId) ?? []).filter((round) => round.roundDate >= from && round.roundDate < day).slice(0, MAX_BASELINE_ROUNDS);
+    return pdgaBaselineFor(rounds, played, day);
+  });
 }
 
 /** Live projected ratings use the same precedence as casual finalize: PDGA baseline, then club field. */

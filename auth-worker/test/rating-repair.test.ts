@@ -36,7 +36,7 @@ async function fixture() {
   sqlite.exec("PRAGMA foreign_keys = ON");
   for (const file of ["0001_init.sql", "0005_registration.sql", "0015_udisc_export.sql", "0016_casual_rounds.sql",
     "0018_live_scoring_metadata.sql", "0022_ratings.sql", "0024_event_schedule_deadlines.sql", "0050_rating_repair.sql",
-    "0062_pdga_layout_baselines.sql"]) {
+    "0062_pdga_layout_baselines.sql", "0073_pdga_evidence_changes.sql"]) {
     sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
   }
   const startingLayout = sqlite.prepare("INSERT INTO course_layouts (id, course_id, name, holes) VALUES (?,1,'Renamed since first event',?)");
