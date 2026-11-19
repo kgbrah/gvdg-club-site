@@ -15,12 +15,12 @@ jobs:
         run: |
           set -u
           [ -n "$U" ] && [ -n "$P" ] || { echo "secrets missing"; exit 1; }
-          echo "username length: ${#U}, password length: ${#P}"
+          echo "username length: ${#U}, password length: ${#P}; username has @: $(case "$U" in *@*) echo yes;; *) echo no;; esac); all digits: $(case "$U" in *[!0-9]*) echo no;; *) echo yes;; esac); spaces at ends: $([ "$U" != "$(echo "$U" | xargs)" ] && echo yes || echo no)"
           body=$(jq -n --arg u "$U" --arg p "$P" '{username:$u,password:$p}')
           code=$(curl -s -o login.json -w '%{http_code}' --max-time 20 -X POST https://api.pdga.com/services/json/user/login \
             -H 'Content-Type: application/json' -H 'Accept: application/json' -d "$body")
           echo "login HTTP $code; content: $(head -c 1 login.json | od -An -c | tr -d ' ')..."
-          jq -r 'if type=="object" then "login keys: " + (keys|join(",")) else "login body type: " + type end' login.json 2>/dev/null || { echo "login body (not JSON, first 200 chars):"; head -c 200 login.json | tr -d '\r' | sed 's/[A-Za-z0-9]\{24,\}/<long>/g'; echo; }
+          jq -r 'if type=="object" then "login keys: " + (keys|join(",")) elif type=="array" then "login says: " + (map(tostring)|join(" | ")) else "login body type: " + type end' login.json 2>/dev/null || { echo "login body (not JSON, first 200 chars):"; head -c 200 login.json | tr -d '\r' | sed 's/[A-Za-z0-9]\{24,\}/<long>/g'; echo; }
           name=$(jq -r '.session_name // empty' login.json 2>/dev/null); sid=$(jq -r '.sessid // empty' login.json 2>/dev/null)
           tok=$(jq -r '.token // empty' login.json 2>/dev/null)
           [ -n "$sid" ] && echo "::add-mask::$sid" && echo "::add-mask::$tok"
