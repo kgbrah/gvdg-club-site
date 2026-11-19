@@ -168,6 +168,12 @@ try {
       assert.ok(rules.includes(text), "rules show: " + text);
     }
     assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
+    // An expired PDGA member is pointed to PDGA's renewal (the club code is for signed-in members only).
+    await page.getByLabel("PDGA number").fill("70007");
+    await page.getByRole("button", { name: "Check" }).click();
+    await page.locator("[data-pdga-renew]").waitFor();
+    assert.equal(await page.getByRole("link", { name: "Renew with PDGA" }).getAttribute("href"), "https://www.pdga.com/membership/renew");
+    assert.ok((await page.locator("[data-pdga-renew]").innerText()).includes("sign in to see it"));
     await page.getByLabel("PDGA number").fill("80024");
     await page.getByRole("button", { name: "Check" }).click();
     await page.getByRole("link", { name: "Ada Lovelace #80024" }).waitFor();

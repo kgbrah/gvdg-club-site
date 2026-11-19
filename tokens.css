@@ -893,3 +893,14 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
 .tournament-register a:not(.reg-btn) { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 [data-admin-tournament] :is(ol, ul) { margin: .5rem 0; padding-left: 1.5rem; }
 [data-admin-tournament] li { margin: .35rem 0; overflow-wrap: anywhere; }
+
+/* PDGA membership card (src/shared/pdga-membership.js). */
+.pdga-membership { display: grid; gap: .5rem; }
+.pdga-membership h3 { margin: 0; }
+.pdga-membership p { margin: 0; }
+.pdga-promo { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+.pdga-promo p { flex: 1 1 14rem; min-width: 0; overflow-wrap: anywhere; }
+.pdga-promo-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .04em; }
+.pdga-membership .member-action-grid { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+.pdga-membership a.player-btn, .pdga-membership button.player-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+  padding: .55rem 1rem; border-radius: 12px; font-weight: 700; text-decoration: none; }

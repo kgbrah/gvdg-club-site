@@ -25,6 +25,8 @@ import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegi
 import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
 import { KarmaChip } from "../shared/karma.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
+import { PdgaMembershipCard, pdgaMembershipNeedsAttention } from "../shared/pdga-membership.js";
+import { usePdgaMembership } from "./pdga-membership.js";
 
 const h = React.createElement;
 
@@ -188,8 +190,8 @@ function NextPdgaCard({ token }) {
         className: "player-btn primary",
         href: event.url,
         key: "register",
-        rel: "noopener noreferrer",
-        target: "_blank",
+        // The club's own PDGA events register on the club site (a path here): open it in place.
+        ...(String(event.url || "").startsWith("/") ? {} : { rel: "noopener noreferrer", target: "_blank" }),
       }, "Register"),
       h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdga(event), key: "cal", label: "Calendar" }),
       h("button", {
@@ -299,6 +301,7 @@ export function MemberOverviewDashboard() {
   const context = useMemberContext();
   const token = storageGet(TOKEN_KEY);
   const pdgaState = usePdgaStats(context.pdgaNo);
+  const pdgaMembership = usePdgaMembership();
   const registration = useRegistrationData();
 
   const [activeRound, setActiveRound] = React.useState(false);
@@ -348,6 +351,9 @@ export function MemberOverviewDashboard() {
       h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
       h(NextPdgaCard, { key: "next-pdga", token }),
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
+      // Renewal nudge: only when the member's PDGA membership has lapsed or ends soon.
+      pdgaMembershipNeedsAttention(pdgaMembership)
+        ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true })) : null,
       h(PdgaCredit, { key: "pdga-credit" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),

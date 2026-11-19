@@ -48,8 +48,8 @@ function EventCard({ event }) {
         className: "passkey-btn",
         href: event.url,
         key: "register",
-        rel: "noopener noreferrer",
-        target: "_blank",
+        // The club's own PDGA events register on the club site (a path here): open it in place.
+        ...(String(event.url || "").startsWith("/") ? {} : { rel: "noopener noreferrer", target: "_blank" }),
       }, "Register"),
       h(AddToCalendarButton, { item: calendarEventFromPdga(event), key: "cal" }),
     ]),
