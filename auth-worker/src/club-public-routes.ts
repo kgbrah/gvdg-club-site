@@ -29,6 +29,7 @@ async function cachedCourseCatalogJson(
   request: Request,
   origin: string | null,
   load: () => Promise<{ payload: unknown; cacheable: boolean }>,
+  ctx?: { waitUntil?: (promise: Promise<unknown>) => void },
 ): Promise<Response> {
   const cache = typeof caches === "undefined" ? null : await caches.open(COURSE_CATALOG_CACHE_NAME);
   const cacheKey = cache ? courseCatalogCacheKey(request) : null;
@@ -37,17 +38,24 @@ async function cachedCourseCatalogJson(
   const cached = cache && cacheKey ? await cache.match(cacheKey) : undefined;
   const cachedAt = Number(cached?.headers.get(CATALOG_STAMP));
   if (cached && Number.isFinite(cachedAt) && cachedAt > 0 && Date.now() - cachedAt < CATALOG_FRESH_MS) return forClient(cached);
+  // The edge copy must itself be cacheable: Cloudflare's Cache API silently refuses responses marked
+  // private/no-store, which is why this cache never held anything before. It is kept a day as the
+  // last-good fallback; freshness is decided by the stamp above, and clients always get no-store.
+  const store = async (payload: unknown, stamp: string) => {
+    if (!cache || !cacheKey) return;
+    await cache.put(cacheKey, json(payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": `public, max-age=${CATALOG_KEEP_S}`, [CATALOG_STAMP]: stamp }));
+  };
+  // Older than a minute: answer with it now and rebuild it after the response, so no visitor waits the 1-3 s the
+  // bulk read takes (an admin course or map change still drops the copy, so the next request rebuilds it first).
+  if (cached && Number.isFinite(cachedAt) && cachedAt > 0 && typeof ctx?.waitUntil === "function") {
+    ctx.waitUntil(load().then((loaded) => (loaded.cacheable ? store(loaded.payload, String(Date.now())) : undefined)).catch(() => {}));
+    return forClient(cached);
+  }
   const loaded = await load();
   if (loaded.cacheable) {
     const stamp = String(Date.now());
     const response = json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": "private, no-store", [CATALOG_STAMP]: stamp });
-    // The edge copy must itself be cacheable: Cloudflare's Cache API silently refuses responses marked
-    // private/no-store, which is why this cache never held anything before. It is kept a day as the
-    // last-good fallback; freshness is decided by the stamp above, and clients always get no-store.
-    if (cache && cacheKey) {
-      const edgeCopy = json(loaded.payload, 200, origin, { ...CATALOG_CORS, "Cache-Control": `public, max-age=${CATALOG_KEEP_S}`, [CATALOG_STAMP]: stamp });
-      await cache.put(cacheKey, edgeCopy);
-    }
+    await store(loaded.payload, stamp);
     return response;
   }
   // D1 is degraded: a previous good catalog (even an older one) beats the built-in fallback.
@@ -69,12 +77,13 @@ export async function handleClubPublic(
   pathname: string,
   method: string,
   seg: string[],
+  ctx?: { waitUntil?: (promise: Promise<unknown>) => void },
 ): Promise<Response | null> {
   if (method === "GET" && pathname === "/courses") {
     return cachedCourseCatalogJson(request, origin, async () => {
       const listed = await db.listCoursesCatalog(env.DB);
       return { payload: { courses: listed.results }, cacheable: listed.cacheable };
-    });
+    }, ctx);
   }
   if (method === "GET" && pathname === "/course-traffic") {
     const payload = await courseTrafficPayload(env);
@@ -243,12 +252,12 @@ export async function handleClubPublic(
       return cachedCourseCatalogJson(request, origin, async () => {
         const listed = await db.listPublicLayoutsCatalog(env.DB, cid);
         return { payload: { layouts: listed.results }, cacheable: listed.cacheable };
-      });
+      }, ctx);
     }
     return cachedCourseCatalogJson(request, origin, async () => {
       const listed = await db.listPositionsCatalog(env.DB, cid);
       return { payload: { positions: listed.results }, cacheable: listed.cacheable };
-    });
+    }, ctx);
   }
   if (method === "GET" && seg[0] === "courses" && seg.length === 3 && seg[2] === "tee-signs") {
     const cid = asInt(seg[1]);

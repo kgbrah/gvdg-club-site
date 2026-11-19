@@ -105,7 +105,32 @@ describe("public course catalog cache", () => {
     expect((await second.json() as { courses: unknown[] }).courses).toHaveLength(2);
   });
 
-  it("keeps the last good catalog when D1 fails after the freshness window", async () => {
+  it("after the freshness window, answers with the saved catalog at once and rebuilds it after the response", async () => {
+    installCache();
+    const courses = courseDb("full-then-loss");
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const first = await worker.fetch(request(), env(courses.db));
+    const firstStamp = first.headers.get("X-Gvdg-Catalog-At");
+    expect(courses.calls()).toBe(3);
+    // A minute later (D1 healthy again for the rebuild): the visitor doesn't wait on the three bulk reads.
+    const healthy = courseDb("layouts-loss");
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil: (job: Promise<unknown>) => { pending.push(job); }, passThroughOnException() {} };
+    vi.spyOn(Date, "now").mockReturnValue(now + 61_000);
+    const stale = await worker.fetch(request(), env(courseDb("full-then-loss").db), ctx as unknown as ExecutionContext);
+    expect(stale.status).toBe(200);
+    expect(stale.headers.get("X-Gvdg-Catalog-At")).toBe(firstStamp);
+    expect(pending).toHaveLength(1);
+    await Promise.all(pending);
+    // The rebuilt copy is what the next visitor gets.
+    vi.spyOn(Date, "now").mockReturnValue(now + 62_000);
+    const next = await worker.fetch(request(), env(healthy.db));
+    expect(Number(next.headers.get("X-Gvdg-Catalog-At"))).toBe(now + 61_000);
+    expect(healthy.calls()).toBe(0);
+  });
+
+    it("keeps the last good catalog when D1 fails after the freshness window", async () => {
     installCache();
     const courses = courseDb("full-then-loss");
     const now = Date.now();
