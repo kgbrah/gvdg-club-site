@@ -203,12 +203,18 @@ describe("features using the official API when the club's login is set", () => {
         start_date: "2026-12-05", end_date: "2026-12-05", tier: "C" },
       { tournament_id: "703", tournament_name: "Far", city: "Atlanta", state_prov: "GA", latitude: "33.75", longitude: "-84.39",
         start_date: "2026-12-01", end_date: "2026-12-01", tier: "A" },
+      // A weekly league that began in September and is still running: not listed (no "Register" for it).
+      { tournament_id: "704", tournament_name: "Shelob's Web (Flex Start)", city: "New Hill", state_prov: "NC", latitude: "35.66", longitude: "-78.93",
+        start_date: "2026-09-22", end_date: "2026-12-15", tier: "L" },
     ] });
     vi.stubGlobal("fetch", pdga.handler);
+    // The club runs "Later B" (PDGA 702) as club event 9: its Register opens the club's event page.
+    db.raw.exec("INSERT INTO events (id, name, type, status, date) VALUES (9, 'Later B', 'tournament', 'scheduled', '2027-01-09')");
+    db.raw.exec("INSERT INTO event_config (event_id, pdga_event_id) VALUES (9, 702)");
     const events = await listNearbyPdgaEvents({ ...apiEnv() } as unknown as Env, { lat: 35.6127, lng: -77.3664 }, NOW);
     expect(events.map((event) => [event.name, event.date, event.tier, event.place, event.url, event.pdgaUrl])).toEqual([
       ["Soon C", "Dec 5, 2026", "C-tier", "Greenville, NC", "https://www.pdga.com/tour/event/701", "https://www.pdga.com/tour/event/701"],
-      ["Later B", "Jan 9-10, 2027", "B-tier", "Raleigh, NC", "https://www.discgolfscene.com/tournaments/later", "https://www.pdga.com/tour/event/702"],
+      ["Later B", "Jan 9-10, 2027", "B-tier", "Raleigh, NC", "/events#event/9", "https://www.pdga.com/tour/event/702"],
     ]);
     const search = new URL(pdga.calls.find((call) => call.url.includes("/event?"))!.url).searchParams;
     expect([search.get("latitude"), search.get("longitude"), search.get("proximity_radius")]).toEqual(["35.6127", "-77.3664", "100"]);
