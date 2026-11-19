@@ -18,7 +18,7 @@ test("admin today can turn on push alerts and open the right tab", () => {
   assert.match(controller, /readAppRoute/);
   assert.match(controller, /queryTab === 'members'/);
   assert.match(controller, /queryTab === 'tee-signs'/);
-  assert.match(sw, /const CACHE = "gvdg-club-v329"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v330"/);
   assert.match(sw, /new URL\("\/img\/icons\/app-icon-192\.png", self\.location\.origin\)/);
   assert.match(sw, /new URL\("\/img\/icons\/notification-badge\.png", self\.location\.origin\)/);
   assert.match(sw, /Brave draws its own lion/);

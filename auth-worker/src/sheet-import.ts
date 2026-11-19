@@ -35,6 +35,9 @@ export interface SheetRow {
   value: number | null;
   /** apply only: the member the plan matched, or "" for a new held account. */
   memberId?: string;
+  /** A value the app can't use (a balance over $10,000, a dues year past next year, tag #0): this row is skipped and
+   *  says why, instead of the whole sheet being refused. */
+  problem?: string;
 }
 
 const UDISC_RE = /^[A-Za-z0-9._-]{1,50}$/;
@@ -50,13 +53,15 @@ function cleanRow(raw: unknown, kind: SheetKind): SheetRow | null {
   const tier = row.tier === "member" || row.tier === "guest" ? row.tier : "";
   let value: number | null = row.value == null || row.value === "" ? null : Number(row.value);
   if (value != null && !Number.isInteger(value)) return null;
-  if (kind === "balances" && value != null && Math.abs(value) > 10_000_00) return null;
-  if (kind === "dues" && value != null && (value < 2000 || value > easternCalendarYear() + 1)) return null;
-  if (kind === "tags" && value != null && (value < 1 || value > 9999)) return null;
+  let problem = "";
+  if (kind === "balances" && value != null && Math.abs(value) > 10_000_00) problem = `${money(value)} is more than $10,000; check the sheet.`;
+  if (kind === "dues" && value != null && (value < 2000 || value > easternCalendarYear() + 1)) problem = `${value} isn't a dues year the app can use (2000 to ${easternCalendarYear() + 1}).`;
+  if (kind === "tags" && value != null && (value < 1 || value > 9999)) problem = `Tag #${value} isn't a tag number (1 to 9999).`;
+  if (problem) value = null;
   if (kind === "people") value = null;
   if (!Number.isInteger(line) || line < 1 || (!name && !pdga && !udisc)) return null;
   const memberId = typeof row.memberId === "string" && /^m_[A-Za-z0-9_.-]{1,80}$/.test(row.memberId) ? row.memberId : "";
-  return { line, name, pdga, udisc, tier, value, memberId };
+  return { line, name, pdga, udisc, tier, value, memberId, ...(problem ? { problem } : {}) };
 }
 
 function readRows(body: Record<string, unknown>, kind: SheetKind): SheetRow[] | null {
@@ -72,13 +77,35 @@ function readRows(body: Record<string, unknown>, kind: SheetKind): SheetRow[] | 
 
 // --- matching ---------------------------------------------------------------------------------------------------
 
-interface Roster { all: AdminMember[]; byPdga: Map<string, AdminMember>; byUdisc: Map<string, AdminMember>; byName: Map<string, AdminMember[]> }
+interface NameEntry { member: AdminMember; order: number; name: string; first: string; last: string }
+interface Roster {
+  all: AdminMember[];
+  byPdga: Map<string, AdminMember>;
+  byUdisc: Map<string, AdminMember>;
+  byName: Map<string, AdminMember[]>;
+  /** People in the app (not held), their names prepared once: by last name, and by first letter + length (for
+   *  suggestions: a typo rarely hits the first letter, and a name within 2 edits is within 2 letters' length). */
+  byLast: Map<string, NameEntry[]>;
+  byStart: Map<string, NameEntry[]>;
+}
 
 async function loadRoster(env: Env): Promise<Roster> {
   const all = await listMembers(env.ROSTER as unknown as KVListLike);
   const byPdga = new Map<string, AdminMember>();
   const byUdisc = new Map<string, AdminMember>();
   const byName = new Map<string, AdminMember[]>();
+  const byLast = new Map<string, NameEntry[]>();
+  const byStart = new Map<string, NameEntry[]>();
+  all.forEach((member, order) => {
+    if (member.held === true) return;
+    const name = normalizePersonName(member.name);
+    if (!name) return;
+    const [first = "", ...rest] = name.split(" ");
+    const entry = { member, order, name, first, last: rest[rest.length - 1] ?? "" };
+    if (entry.last) byLast.set(entry.last, [...(byLast.get(entry.last) ?? []), entry]);
+    const start = name[0] + ":" + name.length;
+    byStart.set(start, [...(byStart.get(start) ?? []), entry]);
+  });
   // Real accounts win over held ones when both carry the same PDGA # / UDisc name.
   for (const m of [...all].sort((a, b) => Number(a.held === true) - Number(b.held === true))) {
     const pdga = String(m.pdgaNo ?? "").replace(/\D/g, "");
@@ -87,8 +114,10 @@ async function loadRoster(env: Env): Promise<Roster> {
     if (udisc && !byUdisc.has(udisc)) byUdisc.set(udisc, m);
     const name = normalizePersonName(m.name);
     if (name) byName.set(name, [...(byName.get(name) ?? []), m]);
+    // The sheets' own spelling for them, remembered when an admin linked a row to them.
+    for (const alias of m.sheetNames ?? []) if (alias && alias !== name) byName.set(alias, [...(byName.get(alias) ?? []), m]);
   }
-  return { all, byPdga, byUdisc, byName };
+  return { all, byPdga, byUdisc, byName, byLast, byStart };
 }
 
 type How = "pdga" | "udisc" | "name";
@@ -130,19 +159,20 @@ function distance(a: string, b: string, max = 3): number {
   return previous[b.length]!;
 }
 
-/** Members already in the app whose name is close ("Bob Smith" / "Robert Smith", a typo): the admin can link them. */
+/** Members already in the app whose name is close (a typo, or the same last name and first initial): the admin can
+ *  link them. Only names that could be close are compared - the same last name, or the same first letter and a length
+ *  within 2 - so a big first import (hundreds of new names) stays inside the Worker's CPU budget. */
 function suggestionsFor(roster: Roster, row: SheetRow): { memberId: string; name: string }[] {
   const name = normalizePersonName(row.name);
   if (!name) return [];
   const [first = "", ...rest] = name.split(" ");
   const last = rest[rest.length - 1] ?? "";
-  return roster.all.filter((m) => m.held !== true).map((m) => {
-    const other = normalizePersonName(m.name);
-    const [otherFirst = "", ...otherRest] = other.split(" ");
-    const otherLast = otherRest[otherRest.length - 1] ?? "";
-    const close = distance(name, other) <= 2 || (last && last === otherLast && first[0] === otherFirst[0]);
-    return close ? { memberId: m.memberId, name: m.name } : null;
-  }).filter((m): m is { memberId: string; name: string } => m != null).slice(0, 2);
+  const close = new Map<number, NameEntry>();
+  for (const entry of last ? roster.byLast.get(last) ?? [] : []) if (entry.first[0] === first[0]) close.set(entry.order, entry);
+  for (let length = name.length - 2; length <= name.length + 2; length++) {
+    for (const entry of roster.byStart.get(name[0] + ":" + length) ?? []) if (!close.has(entry.order) && distance(name, entry.name, 2) <= 2) close.set(entry.order, entry);
+  }
+  return [...close.values()].sort((a, b) => a.order - b.order).slice(0, 2).map((entry) => ({ memberId: entry.member.memberId, name: entry.member.name }));
 }
 
 // --- plan -------------------------------------------------------------------------------------------------------
@@ -159,7 +189,7 @@ async function balancesOf(env: Env, ids: string[]): Promise<Map<string, number>>
   return out;
 }
 
-const money = (cents: number) => `${cents < 0 ? "-" : ""}$${(Math.abs(cents) / 100).toFixed(2)}`;
+const money = (cents: number) => `${cents < 0 ? "-" : ""}$${(Math.abs(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tierLabel = (tier: string) => tier === "admin" ? "Admin" : tier === "guest" ? "Guest" : "Member";
 
 export interface PlanRow {
@@ -194,6 +224,10 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
       match: member ? { memberId: member.memberId, name: member.name, how: (found as { how: How }).how, held: member.held === true, tier: memberTier(member) } : null,
       action: member ? "same" : "new", before: "", after: "", notes, suggestions: member ? [] : suggestionsFor(roster, row),
     };
+    if (row.problem) {
+      notes.push(row.problem);
+      return { ...base, action: "skip" };
+    }
     if (found && "ambiguous" in found) notes.push(`${found.ambiguous.length} people in the app are named ${row.name}: add a PDGA # or UDisc name to this row to pick one.`);
     if (!member && !row.name) {
       notes.push("No name on this row, and nobody in the app has that PDGA # / UDisc name.");
@@ -210,7 +244,8 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
     const tierChange = tier && member && memberTier(member) !== "admin" && memberTier(member) !== tier ? tierLabel(tier) : "";
     if (member && tier && memberTier(member) === "admin" && tier !== "member") notes.push("An admin: their tier isn't changed by an import.");
     if (member && member.held !== true) {
-      if (row.name && normalizePersonName(row.name) !== normalizePersonName(member.name)) notes.push(`In the app as ${member.name}; their name stays.`);
+      if (row.name && (member.sheetNames ?? []).includes(normalizePersonName(row.name))) notes.push(`Linked to ${member.name} on an earlier import.`);
+      else if (row.name && normalizePersonName(row.name) !== normalizePersonName(member.name)) notes.push(`In the app as ${member.name}; their name stays.`);
       const pdga = String(member.pdgaNo ?? "").replace(/\D/g, "");
       if (row.pdga && pdga && pdga !== row.pdga) notes.push(`PDGA # in the app is ${pdga}; it stays (it's how they sign in).`);
       if (row.udisc && member.udisc && member.udisc.toLowerCase() !== row.udisc.toLowerCase()) notes.push(`UDisc name in the app is ${member.udisc}; it stays.`);
@@ -272,6 +307,20 @@ async function target(env: Env, row: SheetRow, defaultTier: Tier): Promise<Membe
   return (await createHeldMember(env.ROSTER, { name: row.name, pdgaNo: row.pdga || null, udisc: row.udisc || null, guest: (row.tier || defaultTier) === "guest" })).member;
 }
 
+/** An admin linked this row to someone whose name the sheet spells differently: remember the sheet's spelling, so the
+ *  same sheet matches them next time instead of offering a new held account again. */
+async function rememberSheetName(env: Env, member: Member, row: SheetRow): Promise<Member> {
+  if (!row.memberId || !row.name || member.held === true) return member;
+  const alias = normalizePersonName(row.name);
+  const own = normalizePersonName(member.name);
+  const samePdga = row.pdga && String(member.pdgaNo ?? "").replace(/\D/g, "") === row.pdga;
+  const sameUdisc = row.udisc && member.udisc && member.udisc.toLowerCase() === row.udisc.toLowerCase();
+  if (!alias || alias === own || samePdga || sameUdisc || (member.sheetNames ?? []).includes(alias)) return member;
+  const next: Member = { ...member, sheetNames: [...(member.sheetNames ?? []), alias].slice(-5) };
+  await saveMemberRecord(env.ROSTER, next);
+  return next;
+}
+
 async function applyTier(env: Env, member: Member, row: SheetRow): Promise<Member> {
   if (!row.tier || memberTier(member) === "admin" || memberTier(member) === row.tier) return member;
   return (await setMemberTier(env.ROSTER, member.memberId, row.tier)) ?? member;
@@ -290,10 +339,12 @@ async function setBalance(env: Env, member: Member, cents: number, adminId: stri
 async function applyRows(env: Env, kind: SheetKind, rows: SheetRow[], defaultTier: Tier, adminId: string) {
   const results: { line: number; memberId: string; status: "done" | "same" | "error"; error?: string }[] = [];
   for (const row of rows) {
+    if (row.problem) { results.push({ line: row.line, memberId: row.memberId ?? "", status: "error", error: "unusable_value" }); continue; }
     try {
       let member = await target(env, row, defaultTier);
       if (!member) { results.push({ line: row.line, memberId: "", status: "error", error: "not_found" }); continue; }
       const before = JSON.stringify(member);
+      member = await rememberSheetName(env, member, row);
       member = await applyTier(env, member, row);
       let status: "done" | "same" = JSON.stringify(member) === before ? "same" : "done";
       if (kind === "balances" && row.value != null) {
@@ -325,12 +376,13 @@ async function applyRows(env: Env, kind: SheetKind, rows: SheetRow[], defaultTie
 
 /** Bag tags: the series becomes exactly the sheet, in one batch. */
 async function applyTags(env: Env, seriesId: number, rows: SheetRow[], defaultTier: Tier, adminId: string) {
-  const tags = rows.filter((row) => row.value != null);
+  const tags = rows.filter((row) => row.value != null && !row.problem);
   if (new Set(tags.map((row) => row.value)).size !== tags.length) return { error: "duplicate_tag" as const };
   const holders: { tag: number; member: Member }[] = [];
   for (const row of tags) {
     let member = await target(env, row, defaultTier);
     if (!member) continue;
+    member = await rememberSheetName(env, member, row);
     member = await applyTier(env, member, row);
     if (holders.some((holder) => holder.member.memberId === member!.memberId)) return { error: "duplicate_member" as const };
     holders.push({ tag: row.value!, member });

@@ -86,6 +86,9 @@ export function AdminSheetImport() {
     try {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) throw new Error(String(response.status));
+      // A sheet that isn't shared answers with Google's sign-in page, not the cells.
+      const type = String(response.headers.get("content-type") || "");
+      if (!/csv|text\/plain/i.test(type)) throw new Error("not csv: " + type);
       loadTable(await response.text());
     } catch {
       setMessage("The sheet couldn't be read. Share it as \"Anyone with the link can view\" (or File › Share › Publish to web), or copy its cells and paste them below.");

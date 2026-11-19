@@ -285,3 +285,57 @@ describe("account tiers (assigned by an admin)", () => {
     expect((await call("/admin/members/lapsed-to-guest", {})).data).toEqual({ moved: 0 });
   });
 });
+
+describe("a smooth first import (owner QA run)", () => {
+  it("a value the app can't use skips that row with a note instead of refusing the whole sheet", async () => {
+    const year = new Date().getUTCFullYear();
+    const balances = await call("/admin/sheet-import/plan", { kind: "balances", rows: [
+      { line: 2, name: "Jordan Parker", pdga: "80024", value: 1200 },
+      { line: 3, name: "Big Spender", value: 1_200_000 },
+    ] });
+    expect(balances.status).toBe(200);
+    expect(balances.data.rows[1]).toMatchObject({ action: "skip", notes: ["$12,000.00 is more than $10,000; check the sheet."] });
+    expect(balances.data.rows[0]).toMatchObject({ action: "update" });
+    const dues = await call("/admin/sheet-import/plan", { kind: "dues", rows: [{ line: 2, name: "Future Person", value: year + 6 }] });
+    expect(dues.data.rows[0].action).toBe("skip");
+    expect(dues.data.rows[0].notes[0]).toMatch(/isn't a dues year the app can use/);
+    const tags = await call("/admin/sheet-import/plan", { kind: "tags", rows: [{ line: 2, name: "Jordan Parker", value: 0 }], seriesId: 1 });
+    expect([200, 404]).toContain(tags.status); // no series in this setup: refused for that reason, not the tag
+    // Applying the usable rows works; the unusable one (if sent anyway) does nothing.
+    const applied = await call("/admin/sheet-import/apply", { kind: "balances", rows: [{ line: 3, name: "Big Spender", value: 1_200_000 }] });
+    expect(applied.data.results).toEqual([{ line: 3, memberId: "", status: "error", error: "unusable_value" }]);
+    expect([...roster.rows.values()].some((value) => value.includes("Big Spender"))).toBe(false);
+  });
+
+  it("linking a misspelled row to someone remembers the spelling, so the same sheet matches them next time", async () => {
+    const rows = [{ line: 2, name: "Jordon Parkar", value: 1500 }];
+    const first = await call("/admin/sheet-import/plan", { kind: "balances", rows });
+    expect(first.data.rows[0]).toMatchObject({ action: "new", suggestions: [{ memberId: "m_80024", name: "Jordan Parker" }] });
+    // The admin picks Jordan Parker for that row.
+    expect((await call("/admin/sheet-import/apply", { kind: "balances", rows: [{ ...rows[0], memberId: "m_80024" }] })).status).toBe(200);
+    expect(record("m_80024")?.sheetNames).toEqual(["jordon parkar"]);
+    expect(wallet("m_80024")).toBe(1500);
+    const again = await call("/admin/sheet-import/plan", { kind: "balances", rows });
+    expect(again.data.rows[0]).toMatchObject({ action: "same", match: { memberId: "m_80024", how: "name" } });
+    expect(again.data.rows[0].notes).toContain("Linked to Jordan Parker on an earlier import.");
+    // A row matched by PDGA # under another name isn't remembered as a spelling (the PDGA # already finds them).
+    await call("/admin/sheet-import/apply", { kind: "balances", rows: [{ line: 2, name: "J Parker", pdga: "80024", value: 1500, memberId: "m_80024" }] });
+    expect(record("m_80024")?.sheetNames).toEqual(["jordon parkar"]);
+  });
+
+  it("checking a big first sheet stays quick: 200 new names against a few hundred members", async () => {
+    for (let i = 0; i < 280; i++) await putMember(roster as never, base("m_" + (20000 + i), `Member${i} Surname${i % 23}`, { pdgaNo: String(20000 + i) }));
+    const rows = Array.from({ length: 200 }, (_, i) => ({ line: i + 2, name: `Newcomer${i} Family${i % 31}`, value: 100 }));
+    await call("/admin/sheet-import/plan", { kind: "balances", rows: rows.slice(0, 5) }); // warm up
+    let best = Infinity;
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now();
+      const planned = await call("/admin/sheet-import/plan", { kind: "balances", rows });
+      best = Math.min(best, performance.now() - started);
+      expect(planned.status).toBe(200);
+      expect(planned.data.counts.new).toBe(200);
+    }
+    // Was ~50ms of CPU warm (every new name against every member); the free plan allows ~10ms per request.
+    expect(best).toBeLessThan(30);
+  });
+});
