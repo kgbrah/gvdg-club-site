@@ -129,7 +129,8 @@ Browser (static page)
   ▼
 Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled })
   ├─ KV  ROSTER      members (member:<id> = source of truth incl. pinHash) + idx:pdga/idx:udisc + wa:creds
-  ├─ KV  RATELIMIT   login lockout + generic counters + one-time WebAuthn challenges (wa:chal:*)
+  ├─ D1  kv_store ns "ratelimit" (RATELIMIT_BACKEND = "d1"): login lockout + generic counters + one-time WebAuthn
+  │                  challenges (wa:chal:*) + emailed codes; the KV RATELIMIT binding stays for "kv" (the way back)
   ├─ D1  DB          club data: events, courses/layouts, registration, results, board, pro-shop/wallet,
   │                  ratings, casual rounds, messages, practice + My Bag, marketplace, Lost & Found
   │                  (gvdg-staging; all queries parameterized)
@@ -517,6 +518,10 @@ Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.**
   or "Use my passkey instead" (a passkey check is a fresh sign-in), unless they signed in within 15 minutes.
 - **`-staging` is production:** deploy the Worker with `--env gvdgclub`; a bare `wrangler deploy` ships to
   the deleted base Worker. `env.staging`/`env.gvdgclub` share one DB/KV/R2 — there is no isolated staging.
+- **Sign-in counters are in D1, not KV** (`RATELIMIT_BACKEND = "d1"` in every env, `limitsInD1` in index.ts): KV's
+  free plan allows 1,000 writes a day and every sign-in attempt writes a counter, so a busy day (a Sheets import also
+  writes member records to KV) could stop sign-in; D1 allows 100,000 row writes and reads its own writes at once. The
+  15-minute cron deletes expired rows (`purgeExpired`). `"kv"` switches back. Tests that build a full env set it.
 - **`kvRateLimited` is a non-atomic GET-then-PUT** (backs login/board/setpin/webauthn) — a concurrent burst
   can slip past. Only `/assistant` uses the atomic `ASSISTANT_RL` binding, and only on the deployed Worker.
 - `asIsoTimestamp` **rejects zone-less `YYYY-MM-DDTHH:MM`** (Worker runs UTC) → deadline PATCHes silently 400.

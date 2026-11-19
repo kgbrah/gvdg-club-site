@@ -25,7 +25,7 @@ import { handleClubFeed } from "./feeds.js";
 import { handleMembershipApply } from "./membership-apply.js";
 import { handleMembershipPublic } from "./membership-dues.js";
 import { clubApi } from "./club-api.js";
-import { D1KV } from "./d1kv.js";
+import { D1KV, purgeExpired } from "./d1kv.js";
 
 export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
@@ -66,11 +66,19 @@ import { sendMembershipRenewalReminders } from "./membership-renewal.js";
  * plane is degraded), back missing ROSTER + RATELIMIT bindings with D1 instead. Tests inject KV mocks and
  * production binds real KV, so those stores are preserved when present.
  */
+/** Sign-in counters (lockouts, rate limits, passkey challenges, emailed codes) live in D1 when RATELIMIT_BACKEND is
+ *  "d1" (the deployed setting): Workers KV allows 1,000 writes a day on the free plan and every sign-in attempt
+ *  writes a counter, so a busy day (a big Sheets import writes member records to KV too) could stop sign-in. D1
+ *  allows 100,000 row writes a day and reads its own writes at once. Set it to "kv" to go back. */
+export function limitsInD1(env: RawEnv): boolean {
+  return String((env as { RATELIMIT_BACKEND?: unknown }).RATELIMIT_BACKEND ?? "").toLowerCase() === "d1";
+}
+
 function withKvFallback(env: RawEnv): Env {
   return {
     ...env,
     ROSTER: env.ROSTER ?? new D1KV(env.DB, "roster"),
-    RATELIMIT: env.RATELIMIT ?? new D1KV(env.DB, "ratelimit"),
+    RATELIMIT: limitsInD1(env) || !env.RATELIMIT ? new D1KV(env.DB, "ratelimit") : env.RATELIMIT,
   };
 }
 
@@ -190,6 +198,13 @@ export default {
       (async () => {
         try {
           if (isUdiscLayoutCron(controller.cron)) {
+            // Sign-in counters in D1 expire on read; clear the ones nobody read again (one IP's minute window etc.).
+            try {
+              const purged = await purgeExpired(env.DB, "ratelimit");
+              if (purged) console.log(JSON.stringify({ message: "ratelimit_purged", rows: purged }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "ratelimit_purge_failed", error: error instanceof Error ? error.message : String(error) }));
+            }
             // Marketplace: make 24-hour-old withdrawals final and delete their photos. Isolated from the import.
             try {
               const sweep = await finalizeWithdrawals(env);

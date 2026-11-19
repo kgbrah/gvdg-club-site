@@ -1,12 +1,11 @@
 // D1-backed implementation of the small KV surface (`KVLike`/`KVListLike`) that roster.ts and
-// ratelimit.ts depend on. This is a STOPGAP: it lets the member roster, login lockouts, rate
-// counters and WebAuthn challenges run on D1 (which is healthy on this account) while Workers KV
-// is degraded. When KV recovers, re-add the `[[kv_namespaces]]` bindings and this adapter is
-// bypassed automatically (see withKvFallback in index.ts).
+// ratelimit.ts depend on. The sign-in counters (lockouts, rate counters, WebAuthn challenges, emailed codes) live
+// here when RATELIMIT_BACKEND = "d1" (the deployed setting; see limitsInD1 in index.ts): KV allows 1,000 writes a
+// day on the free plan, D1 100,000 rows. It also stands in for a missing KV binding (the member roster included).
 //
 // Storage: one `kv_store` table, namespaced by `ns` ("roster" | "ratelimit"), with an optional
-// `expires_at` (epoch ms) replicating KV's expirationTtl. Expiry is lazy (filtered on read), which
-// is sufficient because the only TTL'd keys are tiny, self-replacing rate-limit counters.
+// `expires_at` (epoch ms) replicating KV's expirationTtl. Expiry is lazy (filtered on read), and the 15-minute cron
+// clears expired rows nobody read again (purgeExpired), so the table stays small.
 
 import type { KVListLike } from "./roster.js";
 
@@ -58,4 +57,13 @@ export class D1KV implements KVListLike {
       .all<{ key: string }>();
     return { keys: (res.results ?? []).map((r) => ({ name: r.key })), list_complete: true };
   }
+}
+
+/** Delete a namespace's expired rows (the 15-minute cron). Returns how many went. */
+export async function purgeExpired(db: D1Database, ns: string, now = Date.now()): Promise<number> {
+  const result = await db
+    .prepare("DELETE FROM kv_store WHERE ns = ?1 AND expires_at IS NOT NULL AND expires_at <= ?2")
+    .bind(ns, now)
+    .run();
+  return Number(result.meta?.changes) || 0;
 }

@@ -85,7 +85,7 @@ const SECRET = "qa-secret-" + "s".repeat(40);
 const roster = memoryKv();
 const env = {
   ROSTER: roster, RATELIMIT: memoryKv(), DB: await memoryD1(), JWT_SECRET: SECRET, PIN_PEPPER: PEPPER, SESSION_TTL_SEC: "2592000",
-  ALLOWED_ORIGINS: "", RESEND_API_KEY: "re_qa", RP_ID: "127.0.0.1", EXPECTED_ORIGIN: "",
+  ALLOWED_ORIGINS: "", RESEND_API_KEY: "re_qa", RP_ID: "127.0.0.1", EXPECTED_ORIGIN: "", RATELIMIT_BACKEND: "d1",
 };
 // Like the owner: an admin with a PIN changed a couple of times, no email on file.
 await putMember(roster, { memberId: "m_7001", name: "Avery Admin", pdgaNo: "7001", isAdmin: true, pinHash: await hashPin("4821", PEPPER), mustChangePin: false, pinVer: 2 });

@@ -75,6 +75,7 @@ simple = { limit = 20, period = 60 }
 [vars]
 ALLOWED_ORIGINS = "https://www.greenvillediscgolf.com,https://greenvillediscgolf.com"
 SESSION_TTL_SEC = "2592000" # 30 days; renewed daily while the app is used (/me)
+RATELIMIT_BACKEND = "d1" # sign-in counters in D1 (KV allows 1,000 writes/day on the free plan); "kv" to go back
 OPENROUTER_MODEL = "openrouter/free"
 OPENROUTER_FALLBACK_MODEL = "google/gemma-4-26b-a4b-it:free"
 ASSISTANT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
@@ -163,6 +164,7 @@ simple = { limit = 20, period = 60 }
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
 SESSION_TTL_SEC = "2592000" # 30 days; renewed daily while the app is used (/me)
+RATELIMIT_BACKEND = "d1" # sign-in counters in D1 (KV allows 1,000 writes/day on the free plan); "kv" to go back
 OPENROUTER_MODEL = "openrouter/free"
 OPENROUTER_FALLBACK_MODEL = "google/gemma-4-26b-a4b-it:free"
 ASSISTANT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
@@ -239,6 +241,7 @@ simple = { limit = 20, period = 60 }
 [env.gvdgclub.vars]
 ALLOWED_ORIGINS = "https://gvdgclub.com,https://www.gvdgclub.com"
 SESSION_TTL_SEC = "2592000" # 30 days; renewed daily while the app is used (/me)
+RATELIMIT_BACKEND = "d1" # sign-in counters in D1 (KV allows 1,000 writes/day on the free plan); "kv" to go back
 OPENROUTER_MODEL = "openrouter/free"
 OPENROUTER_FALLBACK_MODEL = "google/gemma-4-26b-a4b-it:free"
 ASSISTANT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
