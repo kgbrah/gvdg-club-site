@@ -91,7 +91,8 @@ describe("applying for a guest account", () => {
     const ok = await call("/membership/apply", guestApp(), null);
     expect(ok.status).toBe(201);
     expect(ok.data).toMatchObject({ application: { kind: "guest", name: "Drew Visitor" }, duesOnline: false, guestSpots: { limit: 100, left: 100 } });
-    expect(JSON.stringify(ok.data)).not.toMatch(/555|example\.com/i);
+    // The reply never carries their contact details (match the whole number: a random id can contain "555").
+    expect(JSON.stringify(ok.data)).not.toMatch(/555-?0123|5550123|example\.com/i);
     expect((await call("/membership/apply", guestApp({ name: "Drew Again" }), null)).data.error).toBe("already_pending");
     // A member application still needs a PDGA # or UDisc name.
     expect((await call("/membership/apply", { name: "Pat", pin: "1234" }, null, "203.0.113.77")).data.error).toBe("pdga_or_udisc_required");
