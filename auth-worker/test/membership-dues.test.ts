@@ -107,7 +107,7 @@ const jsonOf = async (r: Response) => (await r.json()) as Record<string, any>;
 const token = (sub: string) => signSession({ sub, mustChangePin: false }, SECRET, 900);
 
 async function apply(env: Env, extra: Record<string, unknown> = {}, c?: ExecutionContext) {
-  const res = await worker.fetch(req("/membership/apply", "POST", { name: "Nina Newbie", pdgaNo: "123456", pin: "2468", ...extra }), env, c);
+  const res = await worker.fetch(req("/membership/apply", "POST", { name: "Nina Newbie", pdgaNo: "123456", pin: "2468", email: "nina@example.com", ...extra }), env, c);
   return { res, data: await jsonOf(res) };
 }
 
@@ -140,9 +140,10 @@ describe("duesOnline switch", () => {
 });
 
 describe("application email field", () => {
-  it("is optional, validated, normalized, and never returned publicly", async () => {
+  it("is required, validated, normalized, and never returned publicly", async () => {
     const env = await makeEnv();
-    expect((await apply(env)).res.status).toBe(201);
+    expect((await apply(env, { email: "" })).data.error).toBe("email_required");
+    expect((await apply(env, { email: undefined })).data.error).toBe("email_required");
     const env2 = await makeEnv();
     expect((await apply(env2, { email: "not-an-email" })).res.status).toBe(400);
     expect((await apply(env2, { email: "a".repeat(130) + "@x.com" })).res.status).toBe(400);
@@ -221,7 +222,7 @@ describe("dues order + capture (server-trusted)", () => {
   it("blocks a second application from reusing the same PayPal order", async () => {
     const { env, id, payToken } = await ready();
     await cap(env, id, payToken);
-    const other = await apply(env, { name: "Other", pdgaNo: "777" });
+    const other = await apply(env, { name: "Other", pdgaNo: "777", email: "other@example.com" });
     const r = await cap(env, other.data.application.id, other.data.payToken);
     expect(r.status).toBe(409);
   });
@@ -256,7 +257,7 @@ describe("admin mark-paid", () => {
     expect(listed.applications[0].payment).toMatchObject({ status: "manual", method: "manual", markedBy: "Ada Admin", note: "cash at league" });
     expect(listed.applications[0].payment.paidAt).toBeTruthy();
     // paypal-paid rows are protected
-    const second = await apply(env, { name: "P", pdgaNo: "888" });
+    const second = await apply(env, { name: "P", pdgaNo: "888", email: "p@example.com" });
     await worker.fetch(req(`/membership/apply/${second.data.application.id}/dues/capture`, "POST", { payToken: second.data.payToken, orderId: "ORDER1" }), env);
     const blocked = await worker.fetch(req(`/admin/members/applications/${second.data.application.id}/mark-paid`, "POST", { note: "x" }, admin), env);
     expect(blocked.status).toBe(409);
@@ -288,18 +289,12 @@ describe("welcome email + push + in-app flag", () => {
     for (const part of [payload.html, payload.text, payload.subject]) expect(part).not.toContain("2468");
     expect(sent[0]!.body).not.toContain("2468");
   });
-  it("is a no-op without RESEND_API_KEY or without an email", async () => {
+  it("is a no-op without RESEND_API_KEY", async () => {
     const env = await makeEnv();
     const a = ctx();
     const { data } = await apply(env, { email: "nina@example.com" }, a.c);
     await approve(env, data.application.id, a.c);
     await Promise.all(a.jobs);
-    expect(resendCalls()).toHaveLength(0);
-    const env2 = await makeEnv({ RESEND_API_KEY: "re_key" });
-    const b = ctx();
-    const d2 = await apply(env2, {}, b.c);
-    await approve(env2, d2.data.application.id, b.c);
-    await Promise.all(b.jobs);
     expect(resendCalls()).toHaveLength(0);
   });
   it("sends one approval push and discards the subscription", async () => {

@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import { hashPin, verifyPin, pinHashNeedsUpgrade } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, clearAttempts, recordFailure } from "./ratelimit.js";
-import { canonicalLoginKey, getMember, putMember, rehashPin, resolveMember, setPin, updateProfile, type ProfilePatch } from "./roster.js";
+import { canonicalLoginKey, getMember, putMember, rehashPin, resolveMember, setPin, updateProfile, type Member, type ProfilePatch } from "./roster.js";
 import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
 import { requireAuth, ttl } from "./authz.js";
@@ -27,6 +27,28 @@ const MAX_PHOTO_LEN = 200_000;
 
 function validPhoto(p: string): boolean {
   return p.length <= MAX_PHOTO_LEN && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(p);
+}
+
+/** Renew a session once it has used a day of its life whenever the app checks in (/me), so a member stays signed in
+ *  while they use the app and is signed out only after SESSION_TTL_SEC (30 days) without opening it. Measured by the
+ *  time left, so a shorter session from before the 30-day change is upgraded the first time the app opens. */
+export const RENEW_AFTER_SEC = 24 * 60 * 60;
+
+/** What every sign-in (PIN, passkey, PIN reset) answers with, besides the token. `needsEmail`: no email on file, so
+ *  the app asks for one (it's how a forgotten PIN gets reset without an admin). */
+export function memberSessionBody(member: Member): Record<string, unknown> {
+  return {
+    mustChangePin: member.mustChangePin,
+    name: member.name,
+    pdgaNo: member.pdgaNo ?? null,
+    udisc: member.udisc ?? null,
+    photo: member.photo ?? null,
+    isAdmin: member.isAdmin === true,
+    welcome: member.welcomePending === true,
+    membership: publicMembership(member),
+    email: member.email ?? null,
+    needsEmail: !member.email,
+  };
 }
 
 export async function handleLogin(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -64,21 +86,7 @@ export async function handleLogin(request: Request, env: Env, origin: string | n
     try { await rehashPin(env.ROSTER, member.memberId, await hashPin(pin, env.PIN_PEPPER)); } catch { /* best-effort; login still succeeds */ }
   }
   const token = await signSession({ sub: member.memberId, mustChangePin: member.mustChangePin, pinVer: member.pinVer ?? 0 }, env.JWT_SECRET, ttl(env));
-  return json(
-    {
-      token,
-      mustChangePin: member.mustChangePin,
-      name: member.name,
-      pdgaNo: member.pdgaNo ?? null,
-      udisc: member.udisc ?? null,
-      photo: member.photo ?? null,
-      isAdmin: member.isAdmin === true,
-      welcome: member.welcomePending === true,
-      membership: publicMembership(member),
-    },
-    200,
-    origin,
-  );
+  return json({ token, ...memberSessionBody(member) }, 200, origin);
 }
 
 export async function handleMe(request: Request, env: Env, origin: string | null): Promise<Response> {
@@ -90,21 +98,13 @@ export async function handleMe(request: Request, env: Env, origin: string | null
   // The same revocation rule as requireAuth: a session from before a PIN change/reset signs out here too, instead of
   // looking signed in while every member route turns it away. (A forced first-login change still gets through.)
   if ((member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return json({ error: "unauthorized" }, 401, origin);
-  return json(
-    {
-      sub: member.memberId,
-      mustChangePin: member.mustChangePin,
-      name: member.name,
-      pdgaNo: member.pdgaNo ?? null,
-      udisc: member.udisc ?? null,
-      photo: member.photo ?? null,
-      isAdmin: member.isAdmin === true,
-      welcome: member.welcomePending === true,
-      membership: publicMembership(member),
-    },
-    200,
-    origin,
-  );
+  // Once a day the app's check-in hands back a fresh 30-day session (same sign-in time), so active members stay in.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const renew = !claims.mustChangePin && (claims.exp ?? 0) - nowSec < ttl(env) - RENEW_AFTER_SEC;
+  const renewed = renew
+    ? await signSession({ sub: member.memberId, mustChangePin: false, pinVer: member.pinVer ?? 0, at: claims.at }, env.JWT_SECRET, ttl(env))
+    : undefined;
+  return json({ sub: member.memberId, ...memberSessionBody(member), ...(renewed ? { token: renewed } : {}) }, 200, origin);
 }
 
 export async function handleMyResults(request: Request, env: Env, origin: string | null): Promise<Response> {

@@ -12,7 +12,7 @@
     <link rel="icon" type="image/png" href="img/logo-small.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
-    <link rel="modulepreload" href="members-app/members-app.js?v=213">
+    <link rel="modulepreload" href="members-app/members-app.js?v=214">
     <link rel="stylesheet" href="tokens.css">
     <script>try{var m=localStorage.getItem('theme')||'light';if(m==='dark')document.documentElement.setAttribute('data-theme','dark');var c=m==='dark'?'#0F0F1E':'#1A1A2E';var tags=document.getElementsByTagName('meta');for(var i=0;i<tags.length;i++){if(tags[i].getAttribute('name')==='theme-color')tags[i].setAttribute('content',c)}}catch(e){}</script>
     <style>
@@ -123,6 +123,9 @@
 
         .back-link { display: inline-block; margin-top: 1.5rem; color: var(--text-muted); text-decoration: none; font-size: 0.9rem; transition: color 0.3s ease; background: none; border: none; cursor: pointer; font-family: inherit; }
         .back-link:hover { color: var(--primary); }
+        .login-forgot { align-self: center; margin: -0.25rem 0 0; padding: 0.25rem 0.5rem; background: none; border: none; color: var(--text-muted); font: inherit; font-size: 0.9rem; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+        .login-forgot:hover, .login-forgot:focus-visible { color: var(--primary); }
+        .profile-email-value { margin: 0 0 0.5rem; color: var(--text-color); font-size: 0.95rem; overflow-wrap: anywhere; }
 
         .members-content { display: none; padding-top: 100px; }
         body[data-member-shell="auth"] .login-gate { display: flex; }
@@ -1999,6 +2002,6 @@
 
     <div id="membersReactDialogsApp"></div>
     <div id="crottsReactApp"></div>
-    <script type="module" src="members-app/members-app.js?v=213"></script>
+    <script type="module" src="members-app/members-app.js?v=214"></script>
 </body>
 </html>

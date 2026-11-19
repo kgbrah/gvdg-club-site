@@ -72,7 +72,7 @@ beforeEach(async () => {
   roster = memoryKv();
   mail = [];
   env = {
-    ROSTER: roster, RATELIMIT: memoryKv(), DB: await sqliteDb(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: ORIGIN, SESSION_TTL_SEC: "43200",
+    ROSTER: roster, RATELIMIT: memoryKv(), DB: await sqliteDb(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: ORIGIN, SESSION_TTL_SEC: "2592000",
     RP_ID: "gvdgclub.com", EXPECTED_ORIGIN: ORIGIN, RESEND_API_KEY: "re_test",
     LIVE: { idFromName: (name: string) => name, get: () => ({ fetch: async () => new Response(JSON.stringify({ status: "none" }), { headers: { "Content-Type": "application/json" } }) }) },
   } as unknown as Env;
@@ -167,7 +167,7 @@ describe("signing in with a PIN", () => {
     expect((await login("2019", "1111")).status).toBe(200);
     expect((await login("PDGA #2019", "1111")).status).toBe(200);
     // And someone else with digits in their UDisc name can still apply.
-    const applied = await call("/membership/apply", { method: "POST", body: { name: "Rae Third", udisc: "rae2019", pin: "1593" } });
+    const applied = await call("/membership/apply", { method: "POST", body: { name: "Rae Third", udisc: "rae2019", pin: "1593", email: "rae@example.com" } });
     expect(applied.status, JSON.stringify(applied.data)).toBe(201);
   });
 
@@ -189,11 +189,37 @@ describe("signing in with a PIN", () => {
     expect((await login("80024")).status).toBe(200);
   });
 
-  it("a session ends after its 12 hours: signed out everywhere (the app shows sign-in)", async () => {
-    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+  it("every deployed environment keeps sessions 30 days (renewed while the app is used)", () => {
+    const toml = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+    const values = [...toml.matchAll(/^SESSION_TTL_SEC\s*=\s*"(\d+)"/gm)].map((m) => m[1]);
+    expect(values.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(values)).toEqual(new Set(["2592000"]));
+  });
+
+  it("stays signed in while the app is used: renewed daily, signed out only after 30 days away", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "jordan@example.com" });
+    const start = Date.now();
     const token = (await login("80024")).data.token as string;
-    clockAt(Date.now() + 12 * 3600_000 + 60_000);
-    await signedOutEverywhere(token, "expired");
+    // Same day: no renewal needed.
+    expect((await call("/me", { token })).data.token).toBeUndefined();
+    // Two weeks of opening the app every few days: each check-in hands back a fresh session.
+    let current = token;
+    for (const day of [3, 7, 11, 15, 25, 40, 55]) {
+      clockAt(start + day * 86400_000);
+      const me = await call("/me", { token: current });
+      expect(me.status, "day " + day).toBe(200);
+      expect(typeof me.data.token, "day " + day).toBe("string");
+      current = me.data.token;
+    }
+    await worksEverywhere(current, "renewed session on day 55");
+    // A 12-hour session from before the change is upgraded on its first check-in.
+    const legacy = await signSession({ sub: "m_80024", mustChangePin: false, pinVer: 0 }, SECRET, 43200);
+    expect(typeof (await call("/me", { token: legacy })).data.token).toBe("string");
+    // The original token ended 30 days after sign-in.
+    await signedOutEverywhere(token, "the day-0 token on day 55");
+    // 30 days without opening the app: signed out.
+    clockAt(start + (55 + 31) * 86400_000);
+    await signedOutEverywhere(current, "31 days away");
   });
 });
 
@@ -271,7 +297,7 @@ describe("passkeys", () => {
 
 describe("joining", () => {
   it("a member application: sign in with the PIN you chose, straight in (no second PIN to choose)", async () => {
-    const applied = await call("/membership/apply", { method: "POST", body: { name: "Casey Jones", pdgaNo: "4242", pin: "1593" } });
+    const applied = await call("/membership/apply", { method: "POST", body: { name: "Casey Jones", pdgaNo: "4242", pin: "1593", email: "casey@example.com" } });
     expect(applied.status).toBe(201);
     const approved = await call(`/admin/members/applications/${applied.data.application.id}/approve`, { method: "POST", token: await admin(), body: {} });
     expect(approved.status).toBe(200);
@@ -356,5 +382,111 @@ describe("other doors", () => {
     await worksEverywhere(token, "after a profile change");
     expect((await login("80025")).status).toBe(200);
     expect((await login("80024")).status).toBe(401);
+  });
+});
+
+async function codeFrom(to: string): Promise<string> {
+  const message = [...mail].reverse().find((m) => m.to === to);
+  expect(message, "an email to " + to).toBeTruthy();
+  return /\b(\d{6})\b/.exec(message!.text)![1]!;
+}
+
+describe("email on every account (the self-service way back in)", () => {
+  it("a member with no email is asked for one, confirms it with a code, and can then sign in with it", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    const signedIn = await login("80024");
+    expect(signedIn.data).toMatchObject({ needsEmail: true, email: null });
+    const token = signedIn.data.token as string;
+    // Just signed in: no PIN needed to add it.
+    expect((await call("/me/email/start", { method: "POST", token, body: { email: "Jordan@Example.com" } })).status).toBe(200);
+    const code = await codeFrom("jordan@example.com");
+    expect((await call("/me/email/verify", { method: "POST", token, body: { code: code === "000000" ? "111111" : "000000" } })).data.error).toBe("invalid_code");
+    expect((await call("/me/email/verify", { method: "POST", token, body: { code } })).data).toEqual({ email: "jordan@example.com", needsEmail: false });
+    expect((await call("/me", { token })).data).toMatchObject({ email: "jordan@example.com", needsEmail: false });
+    expect((await login("jordan@example.com")).status).toBe(200);
+    // A code works once.
+    expect((await call("/me/email/verify", { method: "POST", token, body: { code } })).data.error).toBe("code_expired");
+  });
+
+  it("changing it later needs the PIN; the old address is told and stops signing in", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "old@example.com" });
+    await putMember(roster as never, { ...(JSON.parse(roster.rows.get("member:m_80024")!) as Member) });
+    roster.rows.set("idx:email:old@example.com", "m_80024");
+    const token = (await login("80024")).data.token as string;
+    clockAt(Date.now() + 2 * 86400_000);
+    const renewed = (await call("/me", { token })).data.token as string;
+    expect((await call("/me/email/start", { method: "POST", token: renewed, body: { email: "new@example.com" } })).data.error).toBe("pin_required");
+    expect((await call("/me/email/start", { method: "POST", token: renewed, body: { email: "new@example.com", pin: "0000" } })).data.error).toBe("wrong_pin");
+    expect((await call("/me/email/start", { method: "POST", token: renewed, body: { email: "new@example.com", pin: PIN } })).status).toBe(200);
+    expect((await call("/me/email/verify", { method: "POST", token: renewed, body: { code: await codeFrom("new@example.com") } })).status).toBe(200);
+    expect(mail.some((m) => m.to === "old@example.com" && /changed/.test(m.subject))).toBe(true);
+    expect((await login("old@example.com")).status).toBe(401);
+    expect((await login("new@example.com")).status).toBe(200);
+  });
+
+  it("refuses an email another account uses, and five wrong codes use the code up", async () => {
+    await member({ memberId: "m_e_taken", name: "Taken", email: "taken@example.com", guest: true });
+    roster.rows.set("idx:email:taken@example.com", "m_e_taken");
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    const token = (await login("80024")).data.token as string;
+    expect((await call("/me/email/start", { method: "POST", token, body: { email: "taken@example.com" } })).data.error).toBe("email_in_use");
+    expect((await call("/me/email/start", { method: "POST", token, body: { email: "not an email" } })).data.error).toBe("invalid_email");
+    expect((await call("/me/email/start", { method: "POST", token, body: { email: "jordan@example.com" } })).status).toBe(200);
+    const code = await codeFrom("jordan@example.com");
+    const wrong = code === "123456" ? "654321" : "123456";
+    for (let i = 0; i < 4; i++) expect((await call("/me/email/verify", { method: "POST", token, body: { code: wrong } })).data.error).toBe("invalid_code");
+    expect((await call("/me/email/verify", { method: "POST", token, body: { code: wrong } })).data.error).toBe("code_expired");
+    expect((await call("/me/email/verify", { method: "POST", token, body: { code } })).data.error).toBe("code_expired");
+  });
+
+  it("an application needs an email (member or guest), and the approved member has it on file", async () => {
+    expect((await call("/membership/apply", { method: "POST", body: { name: "Casey Jones", pdgaNo: "4242", pin: "1593" } })).data.error).toBe("email_required");
+    const applied = await call("/membership/apply", { method: "POST", body: { name: "Casey Jones", pdgaNo: "4242", pin: "1593", email: "Casey@Example.com" } });
+    expect((await call(`/admin/members/applications/${applied.data.application.id}/approve`, { method: "POST", token: await admin(), body: {} })).status).toBe(200);
+    expect((await login("4242", "1593")).data).toMatchObject({ needsEmail: false, email: "casey@example.com" });
+    expect((await login("casey@example.com", "1593")).status).toBe(200);
+  });
+});
+
+describe("Forgot PIN", () => {
+  it("emails a code, sets the new PIN, signs them in, signs out other phones and lifts a lockout", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "jordan@example.com" });
+    const otherPhone = (await login("80024")).data.token as string;
+    for (let i = 0; i < 5; i++) await login("80024", "0000");
+    expect((await login("80024")).status).toBe(423);
+    expect((await call("/pin-reset/start", { method: "POST", body: { identifier: "#80024" } })).data).toMatchObject({ ok: true });
+    const code = await codeFrom("jordan@example.com");
+    expect(mail.at(-1)!.subject).toMatch(/PIN reset/);
+    expect((await call("/pin-reset/verify", { method: "POST", body: { identifier: "80024", code, newPin: "12" } })).data.error).toBe("invalid_pin_format");
+    expect((await call("/pin-reset/verify", { method: "POST", body: { identifier: "80024", code: code === "000000" ? "111111" : "000000", newPin: "2580" } })).data.error).toBe("invalid_code");
+    const reset = await call("/pin-reset/verify", { method: "POST", body: { identifier: "80024", code, newPin: "2580" } });
+    expect(reset.status).toBe(200);
+    expect(reset.data).toMatchObject({ mustChangePin: false, name: "Jordan Parker", needsEmail: false });
+    await worksEverywhere(reset.data.token, "after a PIN reset");
+    await signedOutEverywhere(otherPhone, "the other phone");
+    expect((await login("80024", PIN)).status).toBe(401);
+    expect((await login("80024", "2580")).status).toBe(200);
+    // The code is used up.
+    expect((await call("/pin-reset/verify", { method: "POST", body: { identifier: "80024", code, newPin: "1111" } })).data.error).toBe("code_expired");
+  });
+
+  it("answers the same for an unknown name or an account with no email, and sends nothing", async () => {
+    await member({ memberId: "m_77", name: "No Email", pdgaNo: "77" });
+    const unknown = await call("/pin-reset/start", { method: "POST", body: { identifier: "99999" } });
+    const noEmail = await call("/pin-reset/start", { method: "POST", body: { identifier: "77" } });
+    expect(unknown.status).toBe(200);
+    expect(noEmail.data).toEqual(unknown.data);
+    expect(mail).toHaveLength(0);
+    expect((await call("/pin-reset/verify", { method: "POST", body: { identifier: "99999", code: "123456", newPin: "2580" } })).data.error).toBe("code_expired");
+  });
+
+  it("works from an email sign-in name and from a UDisc name", async () => {
+    await member({ memberId: "m_u_jparker", name: "Jordan Parker", udisc: "JParker", email: "jordan@example.com" });
+    roster.rows.set("idx:email:jordan@example.com", "m_u_jparker");
+    for (const identifier of ["@jparker", "Jordan@Example.com"]) {
+      expect((await call("/pin-reset/start", { method: "POST", body: { identifier } })).status).toBe(200);
+      const res = await call("/pin-reset/verify", { method: "POST", body: { identifier, code: await codeFrom("jordan@example.com"), newPin: "2580" } });
+      expect(res.status, identifier).toBe(200);
+    }
   });
 });

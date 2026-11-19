@@ -54,7 +54,7 @@ function LoginView(props) {
     h("h2", { className: "section", key: "title" }, "Sign in to keep score"),
     props.message ? h("p", { className: "muted", key: "message" }, props.message) : null,
     h("form", { className: "stack", key: "form", onSubmit: submit }, [
-      h("label", { className: "lbl", htmlFor: "idIn", key: "id-label" }, "PDGA # or UDisc username"),
+      h("label", { className: "lbl", htmlFor: "idIn", key: "id-label" }, "PDGA #, UDisc username or email"),
       h("input", {
         autoCapitalize: "none",
         className: "field",
@@ -75,6 +75,9 @@ function LoginView(props) {
       }),
       h("p", { className: "muted auth-error", key: "error", role: "alert" }, error),
       h("button", { className: "btn", disabled: pending || passkeyPending, key: "submit", type: "submit" }, pending ? "Signing in..." : "Sign in"),
+      h("p", { className: "muted center", key: "forgot" },
+        h("a", { className: "link", href: (props.membersHref || "gvdg-members.html") + "#forgot-pin" }, "Forgot PIN?"),
+      ),
     ]),
     props.passkeysSupported
       ? h(

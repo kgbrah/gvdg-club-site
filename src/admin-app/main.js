@@ -42,6 +42,11 @@ import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { startAdminController } from "./admin-controller.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
+import { renewMemberSession } from "../shared/member-session.js";
+import { resolveApiBase } from "../shared/api-base.js";
+
+// Keep a signed-in member signed in while they use the app (a fresh 30-day session once a day).
+void renewMemberSession({ apiBase: resolveApiBase() });
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");

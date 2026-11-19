@@ -11,6 +11,8 @@ let memberProfile = {
   sub: null,
   udisc: null,
   welcome: false,
+  email: null,
+  needsEmail: false,
 };
 
 export function memberDashboardContext() {
@@ -22,6 +24,8 @@ export function memberDashboardContext() {
     photo: memberProfile.photo || null,
     sub: memberProfile.sub || null,
     welcome: memberProfile.welcome === true,
+    email: memberProfile.email || null,
+    needsEmail: memberProfile.needsEmail === true,
   };
 }
 
@@ -44,6 +48,9 @@ export function applyProfile(data = {}) {
     sub: data.sub || memberProfile.sub || null,
     udisc: data.udisc || null,
     welcome: data.welcome === true,
+    // Older payloads have no email fields: keep what we knew.
+    email: data.email === undefined ? memberProfile.email || null : data.email || null,
+    needsEmail: data.needsEmail === undefined ? memberProfile.needsEmail === true : data.needsEmail === true,
   };
 
   if (data.name) writeMemberSessionValue(NAME_KEY, data.name);
@@ -63,6 +70,14 @@ export function resetMemberProfile() {
     sub: null,
     udisc: null,
     welcome: false,
+    email: null,
+    needsEmail: false,
   };
+  publishMemberProfile(memberDashboardContext());
+}
+
+/** The member just confirmed an email (POST /me/email/verify). */
+export function markEmailSaved(email) {
+  memberProfile = { ...memberProfile, email: email || memberProfile.email || null, needsEmail: false };
   publishMemberProfile(memberDashboardContext());
 }

@@ -1,7 +1,8 @@
 import React from "react";
-import { Camera, KeyRound, LockKeyhole, UserRound } from "lucide-react";
+import { Camera, KeyRound, LockKeyhole, Mail, UserRound } from "lucide-react";
 import { ApplySubmitted } from "./apply-submitted.js";
 import { requestJson } from "./api.js";
+import { useMemberContext } from "./member-context.js";
 
 const h = React.createElement;
 
@@ -18,7 +19,7 @@ function FormGroup({ label, htmlFor, hint, children }) {
 }
 
 export function AuthIcon({ mode }) {
-  const Icon = mode === "profile" ? UserRound : mode === "pin" ? KeyRound : LockKeyhole;
+  const Icon = mode === "profile" ? UserRound : mode === "pin" || mode === "reset" ? KeyRound : mode === "email" ? Mail : LockKeyhole;
   return h("div", { className: "login-icon", "aria-hidden": "true" }, h(Icon, { size: 28, strokeWidth: 1.8 }));
 }
 
@@ -87,6 +88,14 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
     })),
     h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": "login", key: "login" }, loginBusy ? "Please wait…" : "Log In"),
     h(ErrorMessage, { form: "login", state, key: "error" }),
+    h("button", {
+      type: "button",
+      className: "login-forgot",
+      disabled: busy,
+      "data-react-auth-action": "reset-open",
+      onClick: () => request("gvdg:member-reset-open", { identifier }),
+      key: "forgot",
+    }, "Forgot PIN?"),
     supportsPasskeys ? h("div", { className: "login-divider", key: "divider" }, h("span", null, "or")) : null,
     supportsPasskeys
       ? h("button", {
@@ -193,8 +202,8 @@ export function ApplyForm({ active, state, onValuesChange }) {
       onChange: (event) => onValuesChange("apply", { udisc: event.target.value }),
     })),
     h(FormGroup, {
-      label: guest ? "Email" : "Email (optional)", htmlFor: "applyEmailInput", key: "email",
-      hint: guest ? "You sign in with it. Never shown publicly." : "For a welcome message when you're approved. Never shown publicly.",
+      label: "Email", htmlFor: "applyEmailInput", key: "email",
+      hint: guest ? "You sign in with it, and it's how you reset a forgotten PIN. Never shown publicly." : "It's how you reset a forgotten PIN yourself. Never shown publicly.",
     }, h("input", {
       type: "email",
       className: "form-input",
@@ -202,7 +211,7 @@ export function ApplyForm({ active, state, onValuesChange }) {
       name: "email",
       autoComplete: "email",
       maxLength: 120,
-      required: guest,
+      required: true,
       value: email,
       onChange: (event) => onValuesChange("apply", { email: event.target.value }),
     })),
@@ -299,6 +308,156 @@ export function PinChangeForm({ active, state, onValuesChange }) {
   ]);
 }
 
+export function EmailForm({ active, state, onValuesChange }) {
+  const values = state.values;
+  const step = values.step === "code" ? "code" : "email";
+  const busy = Boolean(state.busyAction);
+  const set = (changes) => onValuesChange("email", changes);
+  const copy = step === "code"
+    ? `We sent a 6-digit code to ${values.sentTo || "your email"}. Enter it to confirm your email.`
+    : values.required
+      ? "Add your email so you can reset your PIN yourself if you ever forget it. It's never shown publicly."
+      : "Your email is how you reset a forgotten PIN yourself. It's never shown publicly.";
+  return h("form", {
+    className: "login-form",
+    id: "emailForm",
+    autoComplete: "on",
+    hidden: !active,
+    "data-email-step": step,
+    onSubmit: (event) => {
+      event.preventDefault();
+      if (step === "code") request("gvdg:member-email-verify-requested", { code: values.code || "" });
+      else request("gvdg:member-email-start-requested", { email: values.email || "", pin: values.pin || "" });
+    },
+  }, [
+    h("p", { className: "login-subtitle", key: "copy" }, copy),
+    step === "email" ? h(FormGroup, { label: "Email", htmlFor: "memberEmailInput", key: "email" }, h("input", {
+      type: "email",
+      className: "form-input",
+      id: "memberEmailInput",
+      name: "email",
+      autoComplete: "email",
+      inputMode: "email",
+      maxLength: 120,
+      value: values.email || "",
+      onChange: (event) => set({ email: event.target.value }),
+    })) : null,
+    step === "email" && values.pinNeeded ? h(FormGroup, { label: "Your PIN", htmlFor: "memberEmailPinInput", hint: "To confirm it's you.", key: "pin" }, h("input", {
+      type: "password",
+      className: "form-input",
+      id: "memberEmailPinInput",
+      name: "pin",
+      inputMode: "numeric",
+      autoComplete: "current-password",
+      maxLength: 4,
+      value: values.pin || "",
+      onChange: (event) => set({ pin: event.target.value }),
+    })) : null,
+    step === "code" ? h(FormGroup, { label: "Code", htmlFor: "memberEmailCodeInput", key: "code" }, h("input", {
+      type: "text",
+      className: "form-input",
+      id: "memberEmailCodeInput",
+      name: "one-time-code",
+      inputMode: "numeric",
+      autoComplete: "one-time-code",
+      maxLength: 6,
+      placeholder: "6-digit code",
+      value: values.code || "",
+      onChange: (event) => set({ code: event.target.value }),
+    })) : null,
+    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": step === "code" ? "email-verify" : "email-start", key: "submit" },
+      busy ? "Please wait…" : step === "code" ? "Confirm email" : "Send code"),
+    h(ErrorMessage, { form: "email", state, key: "error" }),
+    step === "code" ? h("button", {
+      type: "button", className: "login-btn login-btn-secondary", disabled: busy, "data-react-auth-action": "email-resend", key: "resend",
+      onClick: () => request("gvdg:member-email-start-requested", { email: values.sentTo || values.email || "", pin: values.pin || "" }),
+    }, "Send a new code") : null,
+    step === "code" ? h("button", {
+      type: "button", className: "login-btn login-btn-secondary", disabled: busy, "data-react-auth-action": "email-different", key: "different",
+      onClick: () => set({ step: "email", code: "" }),
+    }, "Use a different email") : null,
+    values.required
+      ? h("button", { type: "button", className: "login-forgot", disabled: busy, "data-react-auth-action": "email-signout", key: "signout", onClick: () => request("gvdg:member-logout-requested") }, "Sign out")
+      : h("button", { type: "button", className: "login-forgot", disabled: busy, "data-react-auth-action": "email-cancel", key: "cancel", onClick: () => request("gvdg:member-email-cancel") }, "Cancel"),
+  ]);
+}
+
+export function ResetPinForm({ active, state, onValuesChange }) {
+  const values = state.values;
+  const step = values.step === "code" ? "code" : "start";
+  const busy = Boolean(state.busyAction);
+  const set = (changes) => onValuesChange("reset", changes);
+  const pinInput = (id, name, field, label, placeholder) => h(FormGroup, { label, htmlFor: id, key: field }, h("input", {
+    type: "password", className: "form-input", id, name, inputMode: "numeric", autoComplete: "new-password", maxLength: 4, placeholder,
+    value: values[field] || "", onChange: (event) => set({ [field]: event.target.value }),
+  }));
+  return h("form", {
+    className: "login-form",
+    id: "resetPinForm",
+    autoComplete: "on",
+    hidden: !active,
+    "data-reset-step": step,
+    onSubmit: (event) => {
+      event.preventDefault();
+      if (step === "code") {
+        request("gvdg:member-reset-verify-requested", {
+          identifier: values.identifier || "", code: values.code || "", newPin: values.newPin || "", confirmPin: values.confirmPin || "",
+        });
+      } else request("gvdg:member-reset-start-requested", { identifier: values.identifier || "" });
+    },
+  }, [
+    h("p", { className: "login-subtitle", key: "copy" }, step === "code"
+      ? "If your account has an email, a 6-digit code is on its way to it. Enter it and choose a new PIN. No email on your account? A club admin can reset your PIN."
+      : "Enter your PDGA #, UDisc username or email. We'll email a code to the address on your account."),
+    step === "start" ? h(FormGroup, { label: "PDGA #, UDisc username or email", htmlFor: "resetIdentifierInput", key: "identifier" }, h("input", {
+      type: "text",
+      className: "form-input",
+      id: "resetIdentifierInput",
+      name: "identifier",
+      autoComplete: "username",
+      value: values.identifier || "",
+      onChange: (event) => set({ identifier: event.target.value }),
+    })) : null,
+    step === "code" ? h(FormGroup, { label: "Code", htmlFor: "resetCodeInput", key: "code" }, h("input", {
+      type: "text",
+      className: "form-input",
+      id: "resetCodeInput",
+      name: "one-time-code",
+      inputMode: "numeric",
+      autoComplete: "one-time-code",
+      maxLength: 6,
+      placeholder: "6-digit code",
+      value: values.code || "",
+      onChange: (event) => set({ code: event.target.value }),
+    })) : null,
+    step === "code" ? pinInput("resetNewPinInput", "new-pin", "newPin", "New PIN", "Choose a 4-digit PIN") : null,
+    step === "code" ? pinInput("resetConfirmPinInput", "confirm-pin", "confirmPin", "Confirm PIN", "Re-enter your PIN") : null,
+    h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": step === "code" ? "reset-verify" : "reset-start", key: "submit" },
+      busy ? "Please wait…" : step === "code" ? "Set PIN & sign in" : "Email me a code"),
+    h(ErrorMessage, { form: "reset", state, key: "error" }),
+    step === "code" ? h("button", {
+      type: "button", className: "login-btn login-btn-secondary", disabled: busy, "data-react-auth-action": "reset-resend", key: "resend",
+      onClick: () => request("gvdg:member-reset-start-requested", { identifier: values.identifier || "" }),
+    }, "Send a new code") : null,
+    h("button", { type: "button", className: "login-forgot", disabled: busy, "data-react-auth-action": "reset-cancel", key: "cancel", onClick: () => request("gvdg:member-reset-cancel") }, "Back to sign in"),
+  ]);
+}
+
+function ProfileEmailRow() {
+  const { email } = useMemberContext();
+  return h("div", { className: "form-group", "data-profile-email": email ? "set" : "missing" }, [
+    h("span", { className: "form-label", key: "label" }, "Email"),
+    h("p", { className: "profile-email-value", key: "value" }, email || "None yet. Add one so you can reset your PIN yourself."),
+    h("button", {
+      type: "button",
+      className: "login-btn login-btn-secondary",
+      "data-react-auth-action": "email-change",
+      onClick: () => request("gvdg:member-email-change-requested"),
+      key: "change",
+    }, email ? "Change email" : "Add email"),
+  ]);
+}
+
 export function ProfileForm({ active, state, onValuesChange }) {
   const [previewSrc, setPreviewSrc] = React.useState("");
   const pdga = state.values.pdga || "";
@@ -324,6 +483,7 @@ export function ProfileForm({ active, state, onValuesChange }) {
     },
   }, [
     h("p", { className: "login-subtitle", key: "copy" }, "Add your details so your ratings, stats and photo show up. All optional - you can do this later."),
+    h(ProfileEmailRow, { key: "email" }),
     h("div", { className: "profile-photo-row", key: "photo" }, [
       h("img", { className: "profile-photo-preview", "data-react-profile-preview": previewSrc ? "ready" : "empty", src: previewSrc || undefined, hidden: !previewSrc, alt: "Profile photo preview", key: "preview" }),
       h("label", { className: "passkey-btn", htmlFor: "photoInput", key: "label" }, h(IconLabel, {

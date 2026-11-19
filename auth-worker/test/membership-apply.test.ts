@@ -57,6 +57,7 @@ describe("self-serve membership applications", () => {
       name: "New Player",
       pdgaNo: "273070",
       pin: "2468",
+      email: "new.player@example.com",
     }), env);
     expect(apply.status).toBe(201);
     const created = await json(apply);
@@ -88,7 +89,7 @@ describe("self-serve membership applications", () => {
   });
 
   it("rejects a pending application without creating a member", async () => {
-    await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Waiter", udisc: "waiter.u", pin: "1357" }), env);
+    await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Waiter", udisc: "waiter.u", pin: "1357", email: "waiter@example.com" }), env);
     const admin = await login("1", "4821");
     const listed = await json(await worker.fetch(req("/admin/members/applications", "GET", admin), env));
     const id = listed.applications[0].id as string;
@@ -99,15 +100,15 @@ describe("self-serve membership applications", () => {
 
   it("does not let a non-admin approve, and blocks duplicate applies", async () => {
     await putMember(env.ROSTER as never, { memberId: "m_999", name: "Normal Member", pdgaNo: "999", pinHash: await hashPin("4821"), mustChangePin: false });
-    const first = await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Dup", pdgaNo: "555", pin: "1111" }), env);
+    const first = await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Dup", pdgaNo: "555", pin: "1111", email: "dup@example.com" }), env);
     expect(first.status).toBe(201);
-    expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Dup2", pdgaNo: "555", pin: "2222" }), env)).status).toBe(409);
-    expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Admin Person", pdgaNo: "1", pin: "3333" }), env)).status).toBe(409);
+    expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Dup2", pdgaNo: "555", pin: "2222", email: "dup2@example.com" }), env)).status).toBe(409);
+    expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "Admin Person", pdgaNo: "1", pin: "3333", email: "admin.person@example.com" }), env)).status).toBe(409);
 
     const memberToken = await login("999", "4821");
     expect((await worker.fetch(req("/admin/members/applications", "GET", memberToken), env)).status).toBe(403);
 
     expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "NoId", pin: "4444" }), env)).status).toBe(400);
-    expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "BadPin", pdgaNo: "888", pin: "12" }), env)).status).toBe(400);
+    expect((await worker.fetch(req("/membership/apply", "POST", undefined, { name: "BadPin", pdgaNo: "888", pin: "12", email: "badpin@example.com" }), env)).status).toBe(400);
   });
 });

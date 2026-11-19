@@ -29,6 +29,8 @@ export function setMemberContext(detail = {}) {
     photo: detail.photo || null,
     sub: detail.sub || null,
     welcome: detail.welcome === true,
+    email: typeof detail.email === "string" && detail.email ? detail.email : null,
+    needsEmail: detail.needsEmail === true,
   };
   return readMemberContext(memberContext);
 }
@@ -46,6 +48,9 @@ export function readMemberContext(detail = null) {
     // Routing events (e.g. gvdg:member-dashboard-ready) carry no `welcome`; only an explicit value may change
     // it, otherwise a just-approved member's welcome card vanished whenever that event landed after /me.
     welcome: source.welcome === undefined ? stored.welcome === true : source.welcome === true,
+    // Same rule: only a payload that says so changes the email (routing events don't carry it).
+    email: source.email === undefined ? stored.email || null : source.email || null,
+    needsEmail: source.needsEmail === undefined ? stored.needsEmail === true : source.needsEmail === true,
   };
 }
 
@@ -81,6 +86,9 @@ export function useMemberContext() {
           membership: profile.membership || null,
           sub: profile.sub || null,
           welcome: profile.welcome === true,
+          // Keep the email fields too: without them this refresh wiped the email for every screen.
+          email: profile.email || null,
+          needsEmail: profile.needsEmail === true,
         });
         setContext(next);
       })

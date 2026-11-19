@@ -17,7 +17,7 @@ import { latestHomeRound } from "./play-page-model.js";
 import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
-import { WelcomeCard } from "./welcome-card.js";
+import { EmailReminderCard, WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
 import { InboxHomeAlert } from "./inbox-home-alert.js";
 import { useInboxSummary } from "./inbox-summary.js";
@@ -306,6 +306,7 @@ export function MemberOverviewDashboard() {
 
   return h("div", { className: "react-overview-dashboard player-home", "data-react-overview-dashboard": "ready" }, [
     h(WelcomeCard, { key: "welcome" }),
+    h(EmailReminderCard, { key: "email-reminder" }),
     h(InboxHomeAlert, { key: "inbox" }),
     h(HomeHero, { context, pdgaState, key: "hero" }),
     h("div", { className: "member-home-feature", key: "feature" }, [

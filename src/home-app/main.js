@@ -12,6 +12,11 @@ import { HomeScoringTeaser } from "./scoring-teaser.js";
 import { HomeReturnedStrip } from "./returned-strip.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 import { installPayPalHandoff } from "../shared/paypal-link.js";
+import { renewMemberSession } from "../shared/member-session.js";
+import { resolveApiBase } from "../shared/api-base.js";
+
+// Keep a signed-in member signed in while they use the app (a fresh 30-day session once a day).
+void renewMemberSession({ apiBase: resolveApiBase() });
 
 // PayPal links opened inside Facebook / Instagram / Messenger go to the PayPal app (or the real browser), not the
 // in-app browser where no one is signed in. Does nothing in a normal browser.

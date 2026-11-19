@@ -37,6 +37,16 @@ export function showLoginShell(passkeysSupported) {
   clearAuthError("apply");
 }
 
+export function showEmailShell(passkeysSupported) {
+  setAuthMode("email", passkeysSupported);
+  clearAuthError("email");
+}
+
+export function showResetShell(passkeysSupported) {
+  setAuthMode("reset", passkeysSupported);
+  clearAuthError("reset");
+}
+
 export function showApplyShell(passkeysSupported) {
   setAuthMode("apply", passkeysSupported);
   clearAuthError("apply");

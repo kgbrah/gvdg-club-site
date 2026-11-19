@@ -17,6 +17,11 @@ import { readMemberToken } from "../shared/member-session.js";
 import { CLUB_LOGO_MARK, CLUB_LOGO_MARK_SRCSET } from "../shared/club-logo.js";
 import { useDiscColorSession } from "../shared/disc-color.js";
 import { fieldTestOn, startFieldTest } from "../shared/field-test-gate.js";
+import { renewMemberSession } from "../shared/member-session.js";
+import { resolveApiBase } from "../shared/api-base.js";
+
+// Keep a signed-in member signed in while they use the app (a fresh 30-day session once a day).
+void renewMemberSession({ apiBase: resolveApiBase() });
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");
