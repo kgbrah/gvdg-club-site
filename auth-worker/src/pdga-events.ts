@@ -36,6 +36,8 @@ export interface PdgaEvent {
   miles: number | null;
   /** Set when the event came from the official PDGA API: its PDGA event page (names link there, with PDGA credit). */
   pdgaUrl?: string;
+  /** The club event this PDGA event is, when the club runs it (its Register goes to the club's event page). */
+  clubEventId?: number;
 }
 
 // How far ahead the official PDGA event search looks.
@@ -79,12 +81,27 @@ async function apiPlacedPdgaEvents(env: Env, origin: { lat: number; lng: number 
     const events = await searchPdgaEvents(apiEnv, {
       startDate: civilDay(now), endDate: civilDay(now, API_EVENT_DAYS), near: { ...origin, miles: PDGA_EVENT_MILES },
     });
+    const today = civilDay(now);
+    // The club's own PDGA events register here, not on the link PDGA lists (Disc Golf Scene, Flipt, ...).
+    const ids = events.map((event) => event.id);
+    const clubRun = new Map<number, number>();
+    for (let offset = 0; offset < ids.length; offset += 90) {
+      const group = ids.slice(offset, offset + 90);
+      const rows = await env.DB.prepare(`SELECT event_id, pdga_event_id FROM event_config WHERE pdga_event_id IN (${group.map(() => "?").join(", ")})`)
+        .bind(...group).all<{ event_id: number; pdga_event_id: number }>().catch(() => ({ results: [] as { event_id: number; pdga_event_id: number }[] }));
+      for (const row of rows.results ?? []) clubRun.set(Number(row.pdga_event_id), Number(row.event_id));
+    }
     return events
+      // PDGA's search includes everything not over yet, e.g. a weekly league that began in September; the list (and
+      // its Register buttons) is for events still to start, as Disc Golf Scene's list was.
+      .filter((event) => !event.startDate || event.startDate >= today)
       .map((event) => {
         const point = event.lat != null && event.lng != null ? { lat: event.lat, lng: event.lng } : null;
         return {
           name: event.name, date: pdgaApiEventDate(event.startDate, event.endDate), tier: pdgaApiTierLabel(event.tier), course: "",
-          place: [event.city, event.state].filter(Boolean).join(", "), url: event.registrationUrl || event.url, pdgaUrl: event.url,
+          place: [event.city, event.state].filter(Boolean).join(", "), pdgaUrl: event.url,
+          url: clubRun.has(event.id) ? `/events#event/${clubRun.get(event.id)}` : event.registrationUrl || event.url,
+          ...(clubRun.has(event.id) ? { clubEventId: clubRun.get(event.id) } : {}),
           lat: point?.lat ?? null, lng: point?.lng ?? null, miles: point ? Math.round(haversineMiles(origin, point) * 10) / 10 : null,
         };
       })
@@ -266,7 +283,7 @@ export function placePdgaEvents(
 }
 
 function cacheKey(lat: number, lng: number): string {
-  return `v4:${lat.toFixed(1)}:${lng.toFixed(1)}`;
+  return `v5:${lat.toFixed(1)}:${lng.toFixed(1)}`;
 }
 
 export function isPdgaEventCron(cron: string): boolean {
