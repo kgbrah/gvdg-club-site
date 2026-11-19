@@ -7,6 +7,7 @@ import { PlayerThemeToggle, themeRoot } from "../shared/player-theme-chrome.js";
 import { paintPlayerTheme } from "../shared/player-theme-session.js";
 import { ADMIN_DESTINATIONS } from "../shared/app-navigation.js";
 import { AdminNeedsBadge } from "./admin-needs.js";
+import { AdminPdgaPromo } from "./pdga-promo-panel.js";
 
 const h = React.createElement;
 
@@ -81,6 +82,7 @@ export function AdminMorePage() {
         h(ChevronRight, { "aria-hidden": true, size: 16, key: "chev" }),
       ]))),
     ])),
+    h(AdminPdgaPromo, { key: "pdga-promo" }),
     h(AccountLinks, { key: "account" }),
   ]);
 }

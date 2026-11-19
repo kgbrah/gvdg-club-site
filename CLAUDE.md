@@ -400,6 +400,12 @@ freeform notes.
   Players can cover PayPal's fee (`PAYPAL_FEE_PERCENT`/`PAYPAL_FEE_FIXED_CENTS`), pay by Zelle (admin confirms with
   the arrival time), and give the club what Disc Golf Scene would have charged (`DGS_FEE`). Regular club events keep
   the old flow; the member app sends PDGA events to the event page.
+- **PDGA membership join/renew + the club's PDGA discount code:** admins set the code (Admin › More, stored in
+  `club_settings`, migration 0076; `pdga-membership-routes.ts`). `GET /pdga/membership` gives the signed-in member's
+  PDGA status/expiry (official API), join/renew links, and the code **only for current club members and admins** —
+  PDGA asks clubs not to share it outside the club, so guests, lapsed members and the public never get it. PDGA's
+  checkout can't take the code from a link, so the card shows it with "Copy code" (`src/shared/pdga-membership.js`;
+  More page always, Home when lapsed/ending within 45 days; PDGA event pages link renewal for expired numbers).
 - **PDGA data (Developer Program terms).** The official REST API client is `auth-worker/src/pdga-api.ts`
   (secrets `PDGA_API_USERNAME` / `PDGA_API_PASSWORD`, uploaded by `deploy-staging.yml` when the GitHub secrets exist;
   login session reused, players cached 6 h in `pdga_api_players`, limit 70 requests / 10 s per IP). With the login set,
@@ -451,7 +457,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v338`, members `?v=224`, public/events `?v=209`, score `?v=247`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v339`, members `?v=225`, public/events `?v=210`, score `?v=247`,
 home `?v=196` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,

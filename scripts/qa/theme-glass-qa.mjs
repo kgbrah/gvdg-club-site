@@ -44,6 +44,10 @@ function themeFor(query) {
 function response(path, query) {
   if (path === "/me") return member;
   if (path === "/me/dashboard-theme") return { theme: themeFor(query) };
+  // PDGA membership (an expired one, so Home shows the renewal card) with the club's code.
+  if (path === "/pdga/membership") return { pdgaNumber: "123456", lookup: "ok", joinUrl: "https://www.pdga.com/membership", renewUrl: "https://www.pdga.com/membership/renew",
+    player: { name: member.name, membershipStatus: "expired", membershipExpires: "2025-12-31", url: "https://www.pdga.com/player/123456" },
+    promo: { code: "GVDG2026", validThrough: "2026" }, clubDiscountAvailable: true, attribution: "Player, event, and course data provided by PDGA" };
   if (path === "/rounds/RIVER7/live/mine") return { status: "live", cardId: 1, cardmates: [{ name: "Morgan" }] };
   if (path === "/my-live-rounds") return { rounds: [] };
   if (path === "/pdga-stats") return { name: member.name, official_rating: 913, live_rating: 918, previous_rating: 910,

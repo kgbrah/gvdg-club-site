@@ -98,14 +98,30 @@ function FieldLists({ tournament }) {
   ]);
 }
 
-function PlayerCheck({ player }) {
+function RenewHint({ token }) {
+  const [promo, setPromo] = React.useState(null);
+  React.useEffect(() => {
+    if (!token) return undefined;
+    let live = true;
+    api("/pdga/membership", { token }).then((result) => { if (live && result.ok) setPromo(result.data.promo || null); });
+    return () => { live = false; };
+  }, [token]);
+  return h("p", { className: "tournament-renew", "data-pdga-renew": "" }, [
+    h("a", { href: "https://www.pdga.com/membership/renew", target: "_blank", rel: "noopener noreferrer", key: "renew" }, "Renew with PDGA"),
+    promo ? [" with the club's code ", h("b", { key: "code" }, promo.code), " ($5 off)."]
+      : " (GVDG members get $5 off with the club's code: sign in to see it).",
+  ]);
+}
+
+function PlayerCheck({ player, token }) {
   if (!player) return null;
   const membership = player.membershipStatus === "current"
     ? `current PDGA member${player.membershipExpires ? ` through ${player.membershipExpires}` : ""}`
     : `PDGA membership ${player.membershipStatus}`;
-  return h("p", { className: "tournament-player", "data-pdga-player": player.pdgaNumber }, [
+  return h("div", { className: "tournament-player", "data-pdga-player": player.pdgaNumber }, [
     h(PdgaLink, { href: pdgaPlayerHref(player.pdgaNumber), key: "name" }, `${player.name} #${player.pdgaNumber}`),
     ` · ${membership}${player.rating ? ` · rated ${player.rating}` : " · unrated"}`,
+    player.membershipStatus !== "current" ? h(RenewHint, { token, key: "renew" }) : null,
   ]);
 }
 
@@ -115,6 +131,7 @@ function SignUp({ event, config, tournament, token, onDone }) {
   const [player, setPlayer] = React.useState(null);
   const [division, setDivision] = React.useState(divisions[0] || "");
   const [name, setName] = React.useState("");
+  const [nameTyped, setNameTyped] = React.useState(false); // filled from PDGA until the player types their own
   const [email, setEmail] = React.useState("");
   const [addons, setAddons] = React.useState({ ctp: false, ace: false });
   const [busy, setBusy] = React.useState(false);
@@ -129,7 +146,7 @@ function SignUp({ event, config, tournament, token, onDone }) {
     if (!result.ok) { setError(errorText(result.data)); return; }
     if (!result.data.player) { setError(errorText({ error: "pdga_not_found" })); return; }
     setPlayer(result.data.player);
-    if (!name) setName(result.data.player.name);
+    if (!nameTyped || !name) setName(result.data.player.name);
   }
 
   async function submit(formEvent) {
@@ -156,10 +173,11 @@ function SignUp({ event, config, tournament, token, onDone }) {
         h("button", { className: "reg-btn tertiary", type: "button", key: "check", onClick: check }, "Check"),
       ]),
     ]),
-    h(PlayerCheck, { player, key: "player" }),
+    h(PlayerCheck, { player, token, key: "player" }),
     divisions.length ? h("label", { key: "division" }, ["Division", h("select", { key: "select", value: division, onChange: (e) => setDivision(e.target.value) },
       divisions.map((div) => h("option", { key: div, value: div, disabled: overLimit(div) }, limits[div] != null ? `${div} (rated ${limits[div]} or below)` : div)))]) : null,
-    token ? null : h("label", { key: "name" }, ["Name", h("input", { key: "input", value: name, autoComplete: "name", onChange: (e) => setName(e.target.value) })]),
+    token ? null : h("label", { key: "name" }, ["Name", h("input", { key: "input", value: name, autoComplete: "name",
+      onChange: (e) => { setName(e.target.value); setNameTyped(true); } })]),
     token ? null : h("label", { key: "email" }, ["Email (for your confirmation)", h("input", { key: "input", type: "email", value: email, autoComplete: "email", onChange: (e) => setEmail(e.target.value) })]),
     config.ctp_fee_cents ? h("label", { className: "tournament-check", key: "ctp" }, [
       h("input", { key: "box", type: "checkbox", checked: addons.ctp, onChange: (e) => setAddons({ ...addons, ctp: e.target.checked }) }), ` CTP pot (${dollars(config.ctp_fee_cents)})`]) : null,
