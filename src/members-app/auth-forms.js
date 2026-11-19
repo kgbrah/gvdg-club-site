@@ -71,7 +71,7 @@ export function LoginForm({ active, supportsPasskeys, state, onValuesChange }) {
     h(FormGroup, {
       label: "PIN",
       htmlFor: "pinInput",
-      hint: "New members: use the temporary PIN from an admin",
+      hint: "New? Use the PIN you chose when you applied, or the temporary one from an admin",
       key: "pin",
     }, h("input", {
       type: "password",

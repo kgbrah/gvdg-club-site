@@ -136,8 +136,9 @@ function normEmail(s: string): string {
   return s.trim().toLowerCase();
 }
 
+/** Text on both sides of an "@" (so "@name", the way UDisc shows usernames, is a UDisc name, not an email). */
 function isEmail(s: string): boolean {
-  return s.includes("@");
+  return /^[^@\s]+@[^@\s]+$/.test(s.trim());
 }
 
 function normPdga(s: string): string {
@@ -145,6 +146,18 @@ function normPdga(s: string): string {
 }
 function normUdisc(s: string): string {
   return s.trim().toLowerCase();
+}
+
+/** The PDGA # a sign-in name stands for ("80024", "#80024", "PDGA 80024", "80-024"), or "" for anything else - so a UDisc
+ *  name with digits in it ("discgolfer2019") is never read as PDGA #2019 (a wrong-PIN for the player, a lockout and
+ *  a false "already a member" for whoever holds that number). */
+function pdgaOf(s: string): string {
+  return /^\s*(?:pdga\s*)?#?\s*\d[\d\s.-]*$/i.test(s) ? normPdga(s) : "";
+}
+
+/** UDisc shows usernames as "@name"; sign-in takes either form. */
+function bareUdisc(s: string): string {
+  return normUdisc(s).replace(/^@+/, "");
 }
 
 /**
@@ -155,8 +168,8 @@ function normUdisc(s: string): string {
  */
 export function canonicalLoginKey(identifier: string): string {
   if (isEmail(identifier)) return `email:${normEmail(identifier)}`;
-  const digits = normPdga(identifier);
-  return digits ? `pdga:${digits}` : `udisc:${normUdisc(identifier)}`;
+  const digits = pdgaOf(identifier);
+  return digits ? `pdga:${digits}` : `udisc:${bareUdisc(identifier)}`;
 }
 
 /** Write a member record and its login indexes. Used by the admin seeding script. */
@@ -191,12 +204,12 @@ export async function resolveMember(kv: KVLike, identifier: string): Promise<Mem
     return byEmail ? getMember(kv, byEmail) : null;
   }
 
-  const pdgaDigits = normPdga(id);
+  const pdgaDigits = pdgaOf(id);
   if (pdgaDigits) {
     const memberId = await kv.get(IDX_PDGA(pdgaDigits));
     if (memberId) return getMember(kv, memberId);
   }
-  const memberId = await kv.get(IDX_UDISC(id));
+  const memberId = await kv.get(IDX_UDISC(id)) ?? (bareUdisc(id) !== normUdisc(id) ? await kv.get(IDX_UDISC(bareUdisc(id))) : null);
   if (memberId) return getMember(kv, memberId);
 
   return null;
@@ -312,10 +325,11 @@ export type CreateMemberInput = {
 export type CreateResult = { ok: true; member: Member } | { ok: false; reason: "exists" | "conflict" | "invalid" };
 export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear" | "guest" | "held" | "email" | "phone" | "guestPromo">;
 
-/** Create a NEW member with an admin-issued temporary PIN (mustChangePin: true). Fails with `exists`
+/** Create a NEW member. An admin-issued temporary PIN must be changed at first sign-in (mustChangePin: true); a PIN
+ *  the person chose themselves (an approved application) is theirs already (`pinChosenByMember`). Fails with `exists`
  *  if the member id is taken, or `conflict` if a PDGA#/UDisc index already points at someone else —
  *  use resetMemberPin to reissue a PIN for an existing member instead. */
-export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash: string): Promise<CreateResult> {
+export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash: string, opts: { pinChosenByMember?: boolean } = {}): Promise<CreateResult> {
   const memberId = memberIdFor(input);
   if (!memberId || !input.name?.trim()) return { ok: false, reason: "invalid" };
   if (await kv.get(RECORD(memberId))) return { ok: false, reason: "exists" };
@@ -335,7 +349,7 @@ export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash
     ...(input.phone ? { phone: input.phone } : {}),
     ...(input.guest && !input.isAdmin ? { guest: true } : {}),
     pinHash,
-    mustChangePin: true,
+    mustChangePin: opts.pinChosenByMember !== true,
     memberThroughYear: easternCalendarYear(),
   };
   await putMember(kv, m);

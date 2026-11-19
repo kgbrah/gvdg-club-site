@@ -216,7 +216,8 @@ export async function handleAdminMembershipApplications(
         udisc: row.udisc,
         isAdmin: false,
         ...(guest ? { email: row.email ?? null, phone: row.phone ?? null, guest: true } : {}),
-      }, row.pinHash);
+        // The applicant chose (and confirmed) this PIN on the form: no second "choose a PIN" at first sign-in.
+      }, row.pinHash, { pinChosenByMember: true });
       if (!result.ok) return json({ error: "member_" + result.reason }, result.reason === "invalid" ? 400 : 409, origin);
       // The promotion: the first 100 approved guests also get round history and stats.
       let guestPromo = false;
@@ -246,7 +247,7 @@ export async function handleAdminMembershipApplications(
           pdgaNo: result.member.pdgaNo ?? null,
           udisc: result.member.udisc ?? null,
           isAdmin: false,
-          mustChangePin: true,
+          mustChangePin: false,
           tier: guest ? "guest" : "member",
           guestPromo,
         },
