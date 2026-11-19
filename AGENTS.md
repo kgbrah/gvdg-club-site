@@ -119,7 +119,7 @@ gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="a
 - **Changing a CHECK constraint means rebuilding the table.** Do it the way `0068` does: `PRAGMA defer_foreign_keys = on`,
   create the new table, copy every row with its id, drop the old, rename, recreate the indexes, `PRAGMA defer_foreign_keys = off`,
   and replay it on a seeded database inside a transaction with foreign keys on (`auth-worker/test/market-gear-migration.test.ts`).
-- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v327`), plus the
+- **Bump cache versions** when a precached file changes: `sw.js` `CACHE` (now `gvdg-club-v328`), plus the
   `?v=` on the bundle you changed (members `217`, public/events `205`, score `243`, home `195`) and the
   tests that pin them.
 - **Generated bundles conflict on merge.** Delete the generated outputs, `npm run build`, then `git add -A`.
