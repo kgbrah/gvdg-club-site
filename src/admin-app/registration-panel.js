@@ -11,11 +11,13 @@ import { AdminRegistrationMemberPicker } from "./registration-member-picker.js";
 import { AdminRegistrationManualPlayerForm } from "./registration-manual-player-form.js";
 import { AdminRegistrationRoster } from "./registration-roster.js";
 import { AdminRegistrationAcePot, AdminRegistrationCreditsList, AdminRegistrationCtpsList } from "./registration-widgets.js";
+import { AdminTournamentPanel } from "./tournament-panel.js";
 
 const h = React.createElement;
 
 function RegistrationBody({ eventId, eventStatus }) {
   return h("div", { "data-react-admin-registration-panel": "ready", style: { marginTop: "1rem" } }, [
+    h(AdminTournamentPanel, { eventId, key: "tournament-" + eventId }),
     h(AdminRegistrationRoster, { key: "roster" }),
     h(AdminRegistrationMemberPicker, { eventStatus, key: "picker-" + eventId }),
     h(AdminRegistrationAssignControls, { key: "assign" }),

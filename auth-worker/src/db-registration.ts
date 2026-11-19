@@ -112,9 +112,12 @@ export async function adminUpdateRegistration(
 ) {
   return db
     .prepare(
+      // Marking paid records when (a tournament's field is in order of payment); unmarking clears it.
       `UPDATE registrations SET division=COALESCE(?,division), team=COALESCE(?,team), starting_hole=COALESCE(?,starting_hole),
-        checked_in=COALESCE(?,checked_in), paid_entry=COALESCE(?,paid_entry) WHERE id=? RETURNING *`,
+        checked_in=COALESCE(?,checked_in), paid_at = CASE WHEN ? IS NULL THEN paid_at WHEN ? = 1 THEN COALESCE(paid_at, ?) ELSE NULL END,
+        paid_entry=COALESCE(?,paid_entry) WHERE id=? RETURNING *`,
     )
-    .bind(p.division ?? null, p.team ?? null, p.starting_hole ?? null, p.checked_in ?? null, p.paid_entry ?? null, id)
+    .bind(p.division ?? null, p.team ?? null, p.starting_hole ?? null, p.checked_in ?? null, p.paid_entry ?? null, p.paid_entry ?? null,
+      new Date().toISOString(), p.paid_entry ?? null, id)
     .first();
 }

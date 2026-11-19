@@ -164,6 +164,8 @@ function OpenEventForm({ event, token, onReload }) {
 export function EventRegistrationCard({ event, registration, token, paymentsConfig, onReload }) {
   const addons = registration ? parseObject(registration.addons) : {};
   const owed = registration ? clientOwed(event, addons) : 0;
+  // A club-run PDGA event registers and pays on its event page (PDGA number check, fees, Zelle, waitlist).
+  const tournament = Boolean(event.pdga_event_id);
   return h("div", {
     className: `register-card${event.status === "live" ? " live" : ""}`,
     "data-member-event-id": event.id,
@@ -189,19 +191,22 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
       ? h("div", { className: "register-status", "data-event-state": "in", key: "registered" }, `You're in${registration.division ? ` · ${registration.division}` : ""}${registration.checked_in ? " · checked in" : ""}`)
       : null,
     registration?.paid_entry ? h("div", { className: "register-status", key: "paid" }, "Paid") : null,
-    registration && !registration.paid_entry && owed > 0
+    registration && !registration.paid_entry && owed > 0 && !tournament
       ? h("div", { className: "register-fee", key: "owed" }, `Amount due: ${dollars(owed)}`)
       : null,
-    registration && !registration.paid_entry && owed > 0
+    registration && !registration.paid_entry && owed > 0 && !tournament
       ? h(WalletPayButton, { eventId: event.id, eventName: event.name, owed, token, onReload, key: "wallet" })
       : null,
-    registration && !registration.paid_entry && owed > 0 && paymentsConfig?.enabled
+    registration && !registration.paid_entry && owed > 0 && paymentsConfig?.enabled && !tournament
       ? h(PayPalButtons, { eventId: event.id, token, paymentsConfig, onReload, key: "paypal" })
       : null,
-    registration && !registration.paid_entry && owed > 0 && !paymentsConfig?.enabled
+    registration && !registration.paid_entry && owed > 0 && !paymentsConfig?.enabled && !tournament
       ? h("div", { className: "register-fee", key: "offline" }, "Or pay at the event (an admin will mark you paid).")
       : null,
-    registration
+    tournament && event.status !== "final"
+      ? h("div", { className: "register-actions", key: "actions" }, h("a", { className: "passkey-btn", href: `/events#event/${encodeURIComponent(event.id)}` },
+        !registration ? "Register on the event page" : registration.paid_entry ? "Event page" : "Pay on the event page"))
+      : registration
       ? h(RegisteredEventActions, { event, registration, token, onReload, key: "actions" })
       : event.status === "final"
         ? h("div", { className: "register-actions", key: "actions" }, h(ResultsLink, { event }))

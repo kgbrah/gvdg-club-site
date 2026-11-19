@@ -389,6 +389,17 @@ freeform notes.
   Workers AI → empty**; output is a *suggestion* an admin confirms.
 - **Weather** — Open-Meteo (no key), polled by the DO alarm; also feeds the rating engine (wind gust adds
   SSA strokes). **Email** — Resend, best-effort (`waitUntil`), senders on the verified `gvdgclub.com` domain.
+- **Club-run PDGA events register on the club site** (no Disc Golf Scene fee): a club event with
+  `event_config.pdga_event_id` (admin › Registration › "PDGA event registration", `src/admin-app/tournament-panel.js`,
+  `PUT /admin/events/:id/tournament`) takes sign-ups on its event page (`/events#event/<id>`, the link the TD puts on
+  PDGA; `src/public-app/tournament-registration.js`). Server: `tournament-routes.ts` (routes), `tournament.ts` (rules,
+  fees, quotes; pure), `db-tournament.ts` (field/claims/waitlist SQL), migration 0075. PDGA Competition Manual 1.02/1.03
+  rules it follows: entered only once paid (`paid_at` = field order; ties lowest PDGA #), cap counts paid + PayPal
+  claims (15 min) + waitlist offers (48 h), the last spot is claimed in one statement before PayPal is charged, only
+  paid players are listed, the waitlist shows on the page, withdrawals go to the TD's email, refunds per PDGA's policy.
+  Players can cover PayPal's fee (`PAYPAL_FEE_PERCENT`/`PAYPAL_FEE_FIXED_CENTS`), pay by Zelle (admin confirms with
+  the arrival time), and give the club what Disc Golf Scene would have charged (`DGS_FEE`). Regular club events keep
+  the old flow; the member app sends PDGA events to the event page.
 - **PDGA data (Developer Program terms).** The official REST API client is `auth-worker/src/pdga-api.ts`
   (secrets `PDGA_API_USERNAME` / `PDGA_API_PASSWORD`, uploaded by `deploy-staging.yml` when the GitHub secrets exist;
   login session reused, players cached 6 h in `pdga_api_players`, limit 70 requests / 10 s per IP). With the login set,
@@ -440,7 +451,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v336`, members `?v=222`, public/events `?v=208`, score `?v=247`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v337`, members `?v=223`, public/events `?v=209`, score `?v=247`,
 home `?v=196` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,

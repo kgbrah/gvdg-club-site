@@ -292,6 +292,8 @@ function liveRouteEnv(state: LiveRouteState) {
     AI: missingBinding<Ai>("AI"),
     SESSION_TTL_SEC: "900",
     RATELIMIT_BACKEND: "kv",
+    PAYPAL_FEE_PERCENT: "3.49",
+    PAYPAL_FEE_FIXED_CENTS: "49",
     PDGA_API_USERNAME: "",
     PDGA_API_PASSWORD: "",
     PDGA_API_BASE: "",

@@ -16,6 +16,7 @@ import { handleAdminShop } from "./club-admin-shop.js";
 import { handleAdminTeeSigns } from "./club-admin-tee-signs.js";
 import { handleAdminVoiceFill } from "./voice-fill-route.js";
 import { handleSheetImport } from "./sheet-import.js";
+import { handleTournamentAdmin } from "./tournament-routes.js";
 
 export async function handleClubAdmin(
   request: Request,
@@ -36,6 +37,8 @@ export async function handleClubAdmin(
 
   if (sub === "courses") response = await handleAdminCourses(request, env, origin, method, seg, adminId, id);
   else if (sub === "bag-tags") response = await handleAdminBagTags(request, env, origin, method, seg, adminId, ctx);
+  else if ((sub === "events" && (seg[3] === "tournament" || (seg[3] === "registrations" && (seg[5] === "zelle-received" || seg[5] === "offer"))))
+    || sub === "pdga-events") response = await handleTournamentAdmin(request, env, origin, method, seg);
   else if (sub === "events") response = await handleAdminEvents(request, env, origin, method, seg, adminId, id);
   else if (sub === "leagues" && method === "POST" && seg[3] === "nights" && id != null) response = await handleAdminLeagueNight(request, env, origin, adminId, id);
   else if (sub === "leagues") response = await handleAdminLeagues(request, env, origin, method, adminId, id);

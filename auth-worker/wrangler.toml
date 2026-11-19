@@ -85,6 +85,10 @@ ASSISTANT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
 #   wrangler secret put PAYPAL_SECRET       (your PayPal app's secret)
 # Set PAYPAL_ENV = "live" to switch from the sandbox to production.
 PAYPAL_ENV = "sandbox"
+# PayPal's fee when an event has players cover it (3.49% + 49¢ standard; 1.99% + 49¢ once PayPal confirms the club
+# as a charity).
+PAYPAL_FEE_PERCENT = "3.49"
+PAYPAL_FEE_FIXED_CENTS = "49"
 # Passkeys / WebAuthn. RP_ID must be the registrable domain (covers the www subdomain);
 # EXPECTED_ORIGIN must exactly match the page origin the browser reports.
 RP_ID = "greenvillediscgolf.com"
@@ -170,6 +174,10 @@ OPENROUTER_FALLBACK_MODEL = "google/gemma-4-26b-a4b-it:free"
 ASSISTANT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
 # Payments stay OFF (manual paid flag) on staging unless you add sandbox PayPal secrets; never live here.
 PAYPAL_ENV = "sandbox"
+# PayPal's fee when an event has players cover it (3.49% + 49¢ standard; 1.99% + 49¢ once PayPal confirms the club
+# as a charity).
+PAYPAL_FEE_PERCENT = "3.49"
+PAYPAL_FEE_FIXED_CENTS = "49"
 # Transactional email via Resend. RESEND_API_KEY is a secret (wrangler secret put --env staging); the
 # senders below are on the Resend-verified gvdgclub.com domain so mail delivers to anyone. The admin
 # Orders tab + in-app flows work regardless; email just adds a push.
@@ -246,6 +254,10 @@ OPENROUTER_MODEL = "openrouter/free"
 OPENROUTER_FALLBACK_MODEL = "google/gemma-4-26b-a4b-it:free"
 ASSISTANT_MODEL = "@cf/google/gemma-4-26b-a4b-it"
 PAYPAL_ENV = "sandbox"
+# PayPal's fee when an event has players cover it (3.49% + 49¢ standard; 1.99% + 49¢ once PayPal confirms the club
+# as a charity).
+PAYPAL_FEE_PERCENT = "3.49"
+PAYPAL_FEE_FIXED_CENTS = "49"
 ORDER_NOTIFY_EMAIL = "greenvillediscgolf@gmail.com"
 ORDER_NOTIFY_FROM = "GVDG Pro Shop <shop@gvdgclub.com>"
 REGISTER_NOTIFY_FROM = "GVDG Events <events@gvdgclub.com>"

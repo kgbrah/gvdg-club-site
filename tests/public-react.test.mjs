@@ -55,7 +55,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v336"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v337"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -404,7 +404,8 @@ test('Events registration is rendered by the public React bundle', () => {
   assert.match(app, /\/registration\/open/);
   assert.match(app, /\/my-registrations/);
   assert.match(app, /`\/events\/\$\{encodeURIComponent\(event\.id\)\}\/register/);
-  assert.match(app, /gvdg_guest_regs/);
+  assert.match(app, /from "\.\/guest-registrations\.js"/);
+  assert.match(readFileSync("src/public-app/guest-registrations.js", "utf8"), /gvdg_guest_regs/);
   assert.match(app, /Confirm withdraw/);
   assert.match(app, /CalendarDays, CheckCircle2/);
   assert.doesNotMatch(app, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️|📅|📍|✅/);
