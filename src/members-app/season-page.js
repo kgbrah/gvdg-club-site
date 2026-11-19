@@ -33,25 +33,26 @@ function fallbackUnlessAborted(error, fallback) {
   return fallback;
 }
 
+// The club's own data. The Ryder Cup tally (a Google Sheets download, often the slowest call) is applied when it
+// arrives, so Stats shows as soon as this is in instead of waiting on Google.
 async function loadSeasonPayload(token, signal) {
-  const [resultsData, ratings, registrationData, leagueData, ryderTally] = await Promise.all([
+  const [resultsData, ratings, registrationData, leagueData] = await Promise.all([
     requestJson("/my-results?all=1", { token, signal }).catch((error) => fallbackUnlessAborted(error, { results: [] })),
-    requestJson("/my-ratings?competitiveLimit=250&casualLimit=250", { token, signal }).catch((error) => fallbackUnlessAborted(error, null)),
+    requestJson("/my-ratings?competitiveLimit=250&casualLimit=250&competitiveOffset=0&casualOffset=0", { token, signal }).catch((error) => fallbackUnlessAborted(error, null)),
     requestJson("/my-registrations", { token, signal }).catch((error) => fallbackUnlessAborted(error, { registrations: [] })),
     requestJson("/leagues/active", { signal }).catch((error) => fallbackUnlessAborted(error, { leagues: [] })),
-    fetchMergedRyderData().catch(() => null),
   ]);
   return {
     results: Array.isArray(resultsData?.results) ? resultsData.results : [],
     casual: Array.isArray(resultsData?.casual) ? resultsData.casual : [],
     ratings,
     registrations: Array.isArray(registrationData?.registrations) ? registrationData.registrations : [],
-    leagues: applyOfficialRyderTally(
-      Array.isArray(leagueData?.leagues) ? leagueData.leagues : [],
-      ryderTally,
-    ),
-    ryderTally,
+    rawLeagues: Array.isArray(leagueData?.leagues) ? leagueData.leagues : [],
   };
+}
+
+function withRyder(payload, ryderTally) {
+  return { ...payload, leagues: applyOfficialRyderTally(payload.rawLeagues, ryderTally), ryderTally };
 }
 
 function StatTile({ label, value }) {
@@ -142,16 +143,17 @@ function SeasonPageBody({ resultsOnly = false } = {}) {
     }
     const controller = new AbortController();
     setState({ status: "loading", page: null, ratings: null });
+    let core = null;
+    let ryder;
+    const show = () => {
+      if (!core || controller.signal.aborted) return;
+      setState({ status: "ready", ratings: core.ratings, page: buildSeasonPage({ ...withRyder(core, ryder), memberName: context.name }) });
+    };
+    fetchMergedRyderData().then((tally) => { ryder = tally; show(); }, () => { ryder = null; show(); });
     loadSeasonPayload(token, controller.signal)
       .then((payload) => {
-        setState({
-          status: "ready",
-          ratings: payload.ratings,
-          page: buildSeasonPage({
-            ...payload,
-            memberName: context.name,
-          }),
-        });
+        core = payload;
+        show();
       })
       .catch((error) => {
         if (error.name !== "AbortError") {

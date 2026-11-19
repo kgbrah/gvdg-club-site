@@ -847,14 +847,14 @@ export function startAdminController() {
         function setAdminProductsListState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-products-list', { detail: state }));
         }
+        // Today's "Low on the shelf": a count, not the whole product list with its photos.
         async function adminLoadShelf() {
-            let products = [];
+            let shelf = { count: 0, name: '' };
             try {
-                const r = await adminApi('/admin/shop/products?status=active');
-                if (r.ok) products = (await r.json()).products || [];
+                const r = await adminApi('/admin/shop/low-stock');
+                if (r.ok) shelf = await r.json();
             } catch (e) {}
-            const low = products.filter((product) => Number(product.stock_qty) <= 2);
-            window.dispatchEvent(new CustomEvent('gvdg:admin-shelf', { detail: { count: low.length, name: low[0] && low[0].name || '' } }));
+            window.dispatchEvent(new CustomEvent('gvdg:admin-shelf', { detail: { count: Number(shelf.count) || 0, name: shelf.name || '' } }));
         }
         async function adminCreateProductFromReact(detail) {
             const body = detail.body || {};
@@ -927,11 +927,11 @@ export function startAdminController() {
             adminMsg('Order delete failed' + (d.error ? ' (' + d.error + ')' : ''), false);
             return false;
         }
+        // Keeps the last count while it checks (it used to blink to 0 every minute); a failed check clears it.
         async function refreshOrdersBadge() {
-            setOrdersBadge(0);
             try {
                 const r = await adminApi('/admin/orders');
-                if (!r.ok) return;
+                if (!r.ok) { setOrdersBadge(0); return; }
                 setOrdersBadge((await r.json()).unfulfilled || 0);
             } catch (e) { setOrdersBadge(0); }
         }
@@ -1799,11 +1799,20 @@ export function startAdminController() {
             window.addEventListener('popstate', () => navigationFromUrl());
             window.addEventListener('hashchange', () => navigationFromUrl());
             refreshOrdersBadge();                          // show the new-order count on load
-            refreshAdminNeeds();
-            adminLoadShelf();
-            setInterval(refreshOrdersBadge, 60000);        // and keep it current while the page is open
-            setInterval(refreshAdminNeeds, 60000);
-            setInterval(adminLoadShelf, 60000);
+            // Today loads its needs and shelf itself; any other first screen still gets the counts for the nav.
+            if (currentAdminRoute().tab !== 'today') { refreshAdminNeeds(); adminLoadShelf(); }
+            // Kept current while the admin page is in front. In the background they wait (each needs check lists the
+            // applications, and KV allows 1,000 lists a day on the free plan), and catch up on return.
+            let lastPoll = Date.now();
+            const poll = () => {
+                if (document.hidden) return;
+                lastPoll = Date.now();
+                refreshOrdersBadge();
+                refreshAdminNeeds();
+                adminLoadShelf();
+            };
+            setInterval(poll, 60000);
+            document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - lastPoll > 60000) poll(); });
             navigationFromUrl(true);
             if (!['today', 'events'].includes(currentAdminRoute().tab)) adminLoadEvents();
             adminLoadCourses();

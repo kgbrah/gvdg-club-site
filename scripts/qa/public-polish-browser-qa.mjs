@@ -397,7 +397,8 @@ async function checkOtherPublicControls(page, profile) {
   await open(page, "/ryder-cup.html", "[data-react-ryder-scoreboard]", profile);
   const roster = page.locator(".team-panel.red .ryder-roster");
   await roster.locator("summary").click();
-  await roster.getByText("Taylor Morgan").waitFor();
+  // The 2026 season's final roster, saved in the app (the sheet isn't downloaded any more).
+  await roster.getByText('Juan "Him" Martinez').waitFor();
   await page.locator(".match-link").first().click();
   await page.waitForURL(origin + "/events.html#event/2");
   await open(page, "/gvdg-blog.html", ".construction-card", profile);

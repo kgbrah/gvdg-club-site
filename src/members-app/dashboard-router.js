@@ -14,6 +14,12 @@ function emitDashboardState(eventName, route, extra = {}) {
 }
 
 export function currentDashboardTab() { return selected.tab; }
+
+/** True while the app is in front and one of these screens is open: background polling waits otherwise (a screen
+ *  stays mounted after you leave it, so its timers kept running on every other screen and in the background). */
+export function dashboardShowing(...tabs) {
+  return !(typeof document !== "undefined" && document.hidden) && (!dashboardOpen || tabs.includes(selected.tab));
+}
 export function currentDashboardRoute() { return selected; }
 
 export function selectDashboardTab(tabValue, options = {}) {

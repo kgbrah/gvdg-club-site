@@ -1,53 +1,33 @@
-import { parseMatchGrid, parseRyderWorkbook, parseScoreboard } from "../../ryder-cup.js";
 import { resolveApiBase } from "./api-base.js";
 import { mergeRyderCupData } from "../public-app/ryder-board-merge.js";
+import { RYDER_CUP_2026_FINAL } from "./ryder-cup-2026-final.js";
 
 export const RYDER_CUP_LEAGUE_ID = 4;
-const SHEET_ID = "1PSP5bZaG-db04YeREGjQHzlQlLT6QT97np7WBbEGq5I";
 
-function gvizUrl(gid) {
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`;
-}
-
-function config() {
-  const data = globalThis.document?.body?.dataset || {};
-  return {
-    gridCsvUrl: String(data.gridCsv || "").trim() || gvizUrl("2109671762"),
-    scoreboardCsvUrl: String(data.scoreboardCsv || "").trim() || gvizUrl("932426467"),
-    workbookUrl: String(data.workbookUrl || "").trim() ||
-      `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx&id=${SHEET_ID}`,
-  };
-}
-
-async function fetchCsv(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Sheet request failed (${response.status})`);
-  return response.text();
-}
-
-async function fetchWorkbook(url) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Workbook request failed (${response.status})`);
-  return response.arrayBuffer();
-}
-
+/** The season's official tally. The 2026 Ryder Cup is over, so this is the club's Google Sheet as it stood at the
+ *  end, saved in the app (ryder-cup-2026-final.js): no download from Google, and the standings stay exactly as they
+ *  were (the sheet has all 66 matches; the app's own results only the 22 it imported). */
 export async function fetchRyderSheetData() {
-  const urls = config();
-  try {
-    const workbook = await fetchWorkbook(urls.workbookUrl);
-    return await parseRyderWorkbook(workbook);
-  } catch {
-    const [gridCsv, scoreboardCsv] = await Promise.all([
-      fetchCsv(urls.gridCsvUrl),
-      fetchCsv(urls.scoreboardCsvUrl),
-    ]);
-    const { weeks, teamPoints } = parseMatchGrid(gridCsv);
-    const scoreboard = parseScoreboard(scoreboardCsv);
-    return { weeks, teamPoints, scoreboard };
-  }
+  return RYDER_CUP_2026_FINAL;
 }
 
-export async function fetchMergedRyderData() {
+// One merge per visit, shared by every panel that shows Ryder Cup standings (Stats and the league panel both asked).
+// Kept 5 minutes; a failure isn't kept.
+const RYDER_FRESH_MS = 5 * 60_000;
+let mergedRyder = null;
+
+export function fetchMergedRyderData() {
+  const now = Date.now();
+  if (mergedRyder && now - mergedRyder.at < RYDER_FRESH_MS) return mergedRyder.promise;
+  const promise = loadMergedRyderData().catch((error) => {
+    if (mergedRyder?.promise === promise) mergedRyder = null;
+    throw error;
+  });
+  mergedRyder = { at: now, promise };
+  return promise;
+}
+
+async function loadMergedRyderData() {
   const sheetPromise = fetchRyderSheetData().catch(() => null);
   let live = null;
   try {

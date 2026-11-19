@@ -1,4 +1,5 @@
 import React from "react";
+import { dashboardShowing } from "./dashboard-router.js";
 import { ArrowRight, ChevronRight, MapPin } from "lucide-react";
 import { MoreLink } from "./more-link.js";
 
@@ -36,7 +37,7 @@ function CourseTrafficCard() {
         });
     }
     load();
-    const timer = window.setInterval(load, 45000);
+    const timer = window.setInterval(() => { if (dashboardShowing("play")) load(); }, 45000);
     return () => {
       dead = true;
       window.clearInterval(timer);

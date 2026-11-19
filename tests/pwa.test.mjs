@@ -59,7 +59,7 @@ test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
   const shellSource = readFileSync('src/score-app/main.js', 'utf8');
   const authSource = readFileSync('src/score-app/auth-flow.js', 'utf8');
-  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=243"><\/script>/);
+  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=244"><\/script>/);
   assert.match(shellSource, /href: "gvdg-members\.html"/);
   assert.match(shellSource, /"aria-label": "Return to members"/);
   assert.match(shellSource, /showApplyBar/);
@@ -137,6 +137,6 @@ test('admin order badge clears stale counts when refresh fails closed', () => {
   assert.match(controller, /function setOrdersBadge\(n\) \{[\s\S]*publishAdminOrdersBadgeCount\(n\)/);
   assert.match(shellState, /export function publishAdminOrdersBadgeCount\(count\)[\s\S]*gvdg:admin-orders-badge/);
   assert.doesNotMatch(controller, /__gvdgAdminOrdersBadgeCount/);
-  assert.match(controller, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
+  assert.match(controller, /async function refreshOrdersBadge\(\) \{[\s\S]*if \(!r\.ok\) \{ setOrdersBadge\(0\); return; \}[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
   assert.doesNotMatch(html, /id="ordersBadge" class="orders-badge" hidden/);
 });

@@ -128,7 +128,8 @@ export default defineConfig({
     outDir,
     emptyOutDir: true,
     sourcemap: true,
-    modulePreload: false,
+    // A screen's code and the shared pieces it imports download together (one round, not two) when it opens.
+    modulePreload: { polyfill: false },
     rolldownOptions: {
       input: resolve(root, "src/members-app/main.js"),
       output: {

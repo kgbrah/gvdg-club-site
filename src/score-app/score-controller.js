@@ -1356,10 +1356,14 @@ export function startScoreApp(options) {
             });
         }
         function applyMinePayload(d, options) {
-            const { offline, credential, cacheKey } = options;
+            // cached: a quick look at the card saved on this phone while the server's copy loads (weak signal at the
+            // course meant a spinner for up to 10 s with a whole card saved). The server's card, applied next, always
+            // replaces it (even with a lower rev) and is what connects, shares location and saves.
+            const { offline, cached, credential, cacheKey } = options;
             const scope = roundRecoveryScope({ roundCode: ROUND_CODE, eventId: EVENT_ID, roundId: d.recoveryRoundId, cardId: d.cardId, playerIndex: d.playerIndex });
             const sameScope = scope && recovery && scope.key === recovery.scope.key;
-            if (sameScope && !offline && d.rev != null && d.rev < S.lastRev && S.snap?.players) return;
+            if (sameScope && !offline && !S.cardPreview && d.rev != null && d.rev < S.lastRev && S.snap?.players) return;
+            S.cardPreview = Boolean(cached);
             bindRecovery(scope, credential, cacheKey);
             if (fieldTestOn()) fieldRedactNames(fieldRoundNames(d));
             S.snap = d;
@@ -1375,7 +1379,7 @@ export function startScoreApp(options) {
             S.roundConfig = d.roundConfig || null; S.scoreTargets = Array.isArray(d.scoreTargets) ? d.scoreTargets : []; S.scoreTargetError = d.scoreTargetError || null;
             S.courseName = d.courseName || null; S.layoutName = d.layoutName || null; S.udiscCourseId = d.udiscCourseId || null;
             S.layoutId = d.layoutId || null;
-            if (!offline) ensureHandicaps(S.layoutId);
+            if (!offline && !cached) ensureHandicaps(S.layoutId);
             S.weather = d.weather || null;
             S.playerLocations = Array.isArray(d.playerLocations) ? d.playerLocations : [];
             if (!sameScope) S.scorerIndex = d.playerIndex;
@@ -1401,11 +1405,12 @@ export function startScoreApp(options) {
                     mode: MODE, roundCode: ROUND_CODE || null, eventId: EVENT_ID || null, roundId: d.recoveryRoundId || null,
                     cardId: d.cardId ?? null, courseId: d.courseId ?? S.courseId ?? null, layoutId: S.layoutId ?? null,
                     holeCount: S.holes.length, playerCount: Array.isArray(d.cardmates) ? d.cardmates.length : 0,
-                    doubles: isDoublesScoring(S), status: S.status, cached: Boolean(offline), rev: d.rev ?? null,
+                    doubles: isDoublesScoring(S), status: S.status, cached: Boolean(offline || cached), rev: d.rev ?? null,
                     pendingEdits: (S.recoveryItems || []).length,
                 });
             }
             renderHole();
+            if (cached) return;
             if (!offline) connectWs();
             startPotsPolling();
             if (!offline) startLiveLocation();
@@ -1435,6 +1440,11 @@ export function startScoreApp(options) {
             const active = () => ticket === mineRequest && sameCredential(credential);
             const cacheKey = await secureMineCacheKey(ROUND_CODE, EVENT_ID, credential.token).catch(() => '');
             if (!active()) return;
+            // Show the card saved on this phone at once; the server's copy replaces it as soon as it arrives.
+            if (!S.snap) {
+                const preview = readMineCache(cacheKey);
+                if (preview) applyMinePayload(preview, { cached: true, credential, cacheKey });
+            }
             let r = await api(LIVE + '/mine', { credential, timeout: 10000 });
             if (!active()) return;
             // Casual round: if we're not on it yet, join with the code, then re-load our card.

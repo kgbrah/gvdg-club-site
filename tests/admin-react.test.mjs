@@ -77,7 +77,7 @@ test('admin order badge updates through React instead of DOM text mutation', () 
   assert.match(shellState, /gvdg:admin-orders-badge/);
   assert.doesNotMatch(`${html}\n${badge}`, /__gvdgAdminOrdersBadgeCount/);
   assert.doesNotMatch(setBadge, /textContent|hidden|getElementById/);
-  assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*setOrdersBadge\(0\);[\s\S]*catch \(e\) \{ setOrdersBadge\(0\); \}/);
+  assert.match(html, /async function refreshOrdersBadge\(\) \{[\s\S]*if \(!r\.ok\) \{ setOrdersBadge\(0\); return; \}[\s\S]*catch \(e\) \{ setOrdersBadge\(0\); \}/);
   assert.doesNotMatch(main, /ordersBadgeMount|ordersBadgeReactApp/);
   assert.match(nav, /import \{ AdminOrdersBadge \} from "\.\/orders-badge\.js"/);
   assert.match(readFileSync("src/admin-app/today-dashboard.js", "utf8"), /requestTab\("orders", \{ filter: "new" \}\)/);

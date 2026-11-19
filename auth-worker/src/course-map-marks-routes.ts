@@ -45,19 +45,28 @@ export async function overlayLiveSnapshot(env: Env, snapshot: Record<string, unk
     return !markerHasPin(row?.tee) || !markerHasPin(row?.target);
   });
   let next = holes as LiveHole[];
-  const consensus = layoutOk ? await db.listPublishedConsensus(env.DB, layoutId) : [];
+  // Every card load runs this: the reads go out together instead of one after another (each is a D1 round trip).
+  const consensusRead = layoutOk ? db.listPublishedConsensus(env.DB, layoutId) : Promise.resolve([]);
+  let consensus: Awaited<typeof consensusRead>;
   if (needsPins) {
-    let layoutHoles: LiveHole[] = [];
-    if (layoutOk) {
-      layoutHoles = await db.getLayoutHoles(env.DB, layoutId);
-      if (consensus.length) layoutHoles = applyMapConsensus(layoutHoles, consensus);
-    }
-    if (!courseOk && layoutOk) {
-      const layout = (await db.getLayout(env.DB, layoutId)) as { course_id?: number | null } | null;
-      courseId = Number(layout?.course_id);
-    }
-    const positions = Number.isInteger(courseId) && courseId > 0 ? await db.listPositions(env.DB, courseId) : [];
+    const courseRead = courseOk
+      ? Promise.resolve(courseId)
+      : layoutOk
+        ? db.getLayout(env.DB, layoutId).then((layout) => Number((layout as { course_id?: number | null } | null)?.course_id))
+        : Promise.resolve(Number.NaN);
+    const [found, rawHoles, positions] = await Promise.all([
+      consensusRead,
+      layoutOk ? db.getLayoutHoles(env.DB, layoutId) : Promise.resolve([] as LiveHole[]),
+      courseRead.then((id) => {
+        courseId = id;
+        return Number.isInteger(id) && id > 0 ? db.listPositions(env.DB, id) : [];
+      }),
+    ]);
+    consensus = found;
+    const layoutHoles = consensus.length ? applyMapConsensus(rawHoles as LiveHole[], consensus) : rawHoles as LiveHole[];
     next = fillMissingHolePins(next, [holesFromPositionLabels(positions), layoutHoles]);
+  } else {
+    consensus = await consensusRead;
   }
   if (consensus.length) next = applyMapConsensus(next, consensus);
   if (next === holes) return snapshot;

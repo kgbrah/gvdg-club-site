@@ -55,7 +55,7 @@ test('public React page chrome owns menu, active link, theme, and scroll state',
   assert.match(themeChrome, /localStorage\.getItem\("theme"\)/);
   assert.match(themeChrome, /localStorage\.setItem\("theme", theme\)/);
   assert.match(deploy, /home-app public-app admin-app tee-sign-preview-app members-app score-app/);
-  assert.match(sw, /const CACHE = "gvdg-club-v330"/);
+  assert.match(sw, /const CACHE = "gvdg-club-v331"/);
   assert.match(sw, /"public-app\/public-app\.js"/);
   assert.doesNotMatch(sw, /"nav\.js"/);
   assert.doesNotMatch(chrome, /innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|☰|✕|🌙|☀️/);
@@ -444,12 +444,12 @@ test('Ryder Cup body results are rendered by the public React bundle', () => {
   assert.match(app, /data-react-ryder-cup/);
   assert.match(app, /data-react-ryder-scoreboard/);
   const shared = readFileSync('src/shared/ryder-cup-data.js', 'utf8');
-  assert.match(shared, /parseRyderWorkbook/);
-  assert.match(shared, /parseMatchGrid/);
-  assert.match(shared, /parseScoreboard/);
+  // The season is over: the final tally is saved in the app and the Google Sheet is no longer downloaded.
+  assert.match(shared, /RYDER_CUP_2026_FINAL/);
+  assert.doesNotMatch(shared, /docs\.google\.com|parseRyderWorkbook/);
   assert.match(app, /seedPairNames/);
   assert.match(app, /export \{ fetchMergedRyderData \}/);
-  assert.match(shared, /export async function fetchMergedRyderData/);
+  assert.match(shared, /export (?:async )?function fetchMergedRyderData/);
   assert.match(app, /fetchMergedRyderData/);
   assert.match(app, /events\.html#league\/4/);
   assert.match(app, /window\.setInterval\(\(\) => guardedLoad\(\{ quiet: true \}\), REFRESH_MS\)/);

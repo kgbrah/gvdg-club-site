@@ -1,4 +1,5 @@
 import React from "react";
+import { dashboardShowing } from "./dashboard-router.js";
 import { KarmaChip } from "../shared/karma.js";
 
 import { requestJson } from "./api.js";
@@ -83,6 +84,7 @@ function LiveEventStandings({ event }) {
   React.useEffect(() => {
     let cancelled = false;
     async function poll() {
+      if (cancelled || !dashboardShowing("season", "standings")) return;
       try {
         const data = await requestJson(`/events/${encodeURIComponent(event.id)}/live`);
         if (!cancelled) setSnapshot(data);
