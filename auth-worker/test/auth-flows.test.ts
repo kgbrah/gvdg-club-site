@@ -38,6 +38,9 @@ function memoryKv() {
   };
 }
 
+/** Makes the next DELETE on kv_store fail (a D1 hiccup) while set. */
+let failKvDeletes = false;
+
 async function sqliteDb() {
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(":memory:");
@@ -51,7 +54,11 @@ async function sqliteDb() {
       bind(...args: unknown[]) { bound = args; return stmt; },
       async all() { return { results: db.prepare(sql).all(...(bound as never[])), success: true }; },
       async first() { return db.prepare(sql).get(...(bound as never[])) ?? null; },
-      async run() { const info = db.prepare(sql).run(...(bound as never[])); return { results: [], success: true, meta: { changes: Number(info.changes), last_row_id: Number((info as { lastInsertRowid?: number | bigint }).lastInsertRowid ?? 0) } }; },
+      async run() {
+        if (failKvDeletes && /^DELETE FROM kv_store/.test(sql)) throw new Error("D1 hiccup");
+        const info = db.prepare(sql).run(...(bound as never[]));
+        return { results: [], success: true, meta: { changes: Number(info.changes), last_row_id: Number((info as { lastInsertRowid?: number | bigint }).lastInsertRowid ?? 0) } };
+      },
     };
     return stmt;
   };
@@ -72,7 +79,8 @@ beforeEach(async () => {
   roster = memoryKv();
   mail = [];
   env = {
-    ROSTER: roster, RATELIMIT: memoryKv(), DB: await sqliteDb(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: ORIGIN, SESSION_TTL_SEC: "2592000",
+    // Sign-in counters in D1, as deployed (RATELIMIT_BACKEND = "d1"); the KV binding is there and must stay unused.
+    ROSTER: roster, RATELIMIT: memoryKv(), DB: await sqliteDb(), JWT_SECRET: SECRET, ALLOWED_ORIGINS: ORIGIN, SESSION_TTL_SEC: "2592000", RATELIMIT_BACKEND: "d1",
     RP_ID: "gvdgclub.com", EXPECTED_ORIGIN: ORIGIN, RESEND_API_KEY: "re_test",
     LIVE: { idFromName: (name: string) => name, get: () => ({ fetch: async () => new Response(JSON.stringify({ status: "none" }), { headers: { "Content-Type": "application/json" } }) }) },
   } as unknown as Env;
@@ -537,15 +545,13 @@ describe("lockouts", () => {
   it("a correct PIN signs in even if the failed-attempt counter can't be cleared", async () => {
     await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
     await login("80024", "0000");
-    const limits = env.RATELIMIT as unknown as { delete: (key: string) => Promise<void> };
-    const realDelete = limits.delete;
-    limits.delete = async () => { throw new Error("KV delete limit reached"); };
+    failKvDeletes = true;
     try {
       const res = await login("80024");
       expect(res.status).toBe(200);
       await worksEverywhere(res.data.token, "signed in while deletes fail");
     } finally {
-      limits.delete = realDelete;
+      failKvDeletes = false;
     }
   });
 });
@@ -574,5 +580,49 @@ describe("admin lists", () => {
     } finally {
       roster.get = realGet;
     }
+  });
+});
+
+describe("sign-in counters live in D1 (RATELIMIT_BACKEND = d1)", () => {
+  const limitRows = () => ((env.DB as unknown as { raw: { prepare(sql: string): { all(): Array<{ key: string; expires_at: number | null }> } } }).raw
+    .prepare("SELECT key, expires_at FROM kv_store WHERE ns = 'ratelimit' ORDER BY key").all());
+  const kvRows = () => (env.RATELIMIT as unknown as { rows: Map<string, string> }).rows;
+
+  it("lockouts, rate counters, passkey challenges and emailed codes go to D1, never to KV", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "jordan@example.com" });
+    for (let i = 0; i < 5; i++) await login("80024", "0000");
+    expect((await login("80024")).status).toBe(423);
+    await call("/webauthn/auth/options", { method: "POST", body: {} });
+    await call("/pin-reset/start", { method: "POST", body: { identifier: "80024" } });
+    const keys = limitRows().map((row) => row.key);
+    expect(keys).toContain("ratelimit:pdga:80024");
+    expect(keys.some((key) => key.startsWith("login:ip:"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("wa:chal:auth:"))).toBe(true);
+    expect(keys).toContain("acct:pinreset:m_80024");
+    expect(kvRows().size).toBe(0);
+    // An admin's Clear lockouts reaches them there too.
+    expect((await call("/admin/members/clear-locks", { method: "POST", token: await admin(), body: { memberId: "m_80024" } })).data.cleared).toBeGreaterThan(0);
+    expect((await login("80024")).status).toBe(200);
+  });
+
+  it("the 15-minute cron clears expired counters nobody read again; live ones stay", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    await login("80024", "0000");
+    const before = limitRows();
+    expect(before.length).toBeGreaterThan(0);
+    // An hour later every per-minute counter has expired; the 15-minute lockout window too.
+    clockAt(Date.now() + 3600_000);
+    const jobs: Promise<unknown>[] = [];
+    await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: Date.now() } as unknown as ScheduledController, env as never, { waitUntil: (job: Promise<unknown>) => jobs.push(job) } as unknown as ExecutionContext);
+    await Promise.allSettled(jobs);
+    expect(limitRows()).toEqual([]);
+  });
+
+  it("RATELIMIT_BACKEND = kv puts them back in KV (the way back)", async () => {
+    (env as unknown as { RATELIMIT_BACKEND: string }).RATELIMIT_BACKEND = "kv";
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    await login("80024", "0000");
+    expect(kvRows().size).toBeGreaterThan(0);
+    expect(limitRows()).toEqual([]);
   });
 });

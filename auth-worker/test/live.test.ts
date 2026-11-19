@@ -290,6 +290,7 @@ function liveRouteEnv(state: LiveRouteState) {
     DB: d1Database(liveRouteDb(state)),
     AI: missingBinding<Ai>("AI"),
     SESSION_TTL_SEC: "900",
+    RATELIMIT_BACKEND: "kv",
     OPENROUTER_MODEL: "test",
     OPENROUTER_FALLBACK_MODEL: "test",
     ASSISTANT_MODEL: "test",
