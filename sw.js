@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v320";
+const CACHE = "gvdg-club-v321";
 // Member app screens past Home are content-hashed chunks. They live in their own cache, which keeps the
 // chunks of this version and the one before it, so a page that was open across an update can still open
 // its screens (online or offline) after their files are gone from the server.
@@ -140,24 +140,48 @@ self.addEventListener("message", (event) => {
   }
 });
 
+const MAP_CACHE = "gvdg-maps-v2";
+const MAP_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
+const MAP_MAX_ENTRIES = 3000;
+let mapPuts = 0;
+
+// Image tags are no-cors, so a failed Esri response would be opaque and get pinned forever: fetch with CORS and keep
+// only real images. Every so often the oldest entries go, so the map cache stays a few tens of MB.
+async function fetchMap(cache, req) {
+  const res = await fetch(req.url, { mode: "cors", credentials: "omit", cache: "no-store" });
+  const type = res.headers.get("content-type") || "";
+  if (res.ok && type.startsWith("image/")) {
+    await cache.put(req, res.clone()).catch(() => {});
+    mapPuts += 1;
+    if (mapPuts % 50 === 0) trimMaps(cache).catch(() => {});
+  }
+  return res;
+}
+
+async function trimMaps(cache) {
+  const keys = await cache.keys();
+  if (keys.length <= MAP_MAX_ENTRIES) return;
+  await Promise.all(keys.slice(0, keys.length - Math.floor(MAP_MAX_ENTRIES * 0.8)).map((key) => cache.delete(key)));
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method === "GET" && url.hostname.endsWith("arcgisonline.com") && url.pathname.includes("/World_Imagery/")) {
+    // Satellite tiles and pictures: the saved copy straight away (aerial photos hardly change), refreshed in the
+    // background once it's MAP_REFRESH_MS old; the network only for what this phone hasn't seen yet.
     event.respondWith((async () => {
-      const cache = await caches.open("gvdg-maps-v2");
+      const cache = await caches.open(MAP_CACHE);
       const cached = await cache.match(req);
+      if (cached) {
+        const saved = Date.parse(cached.headers.get("date") || "");
+        if (!Number.isFinite(saved) || Date.now() - saved > MAP_REFRESH_MS) event.waitUntil(fetchMap(cache, req).catch(() => {}));
+        return cached;
+      }
       try {
-        // Image tags are no-cors, so a failed Esri response is opaque and used to get pinned forever.
-        const res = await fetch(req.url, { mode: "cors", credentials: "omit", cache: "no-store" });
-        const type = res.headers.get("content-type") || "";
-        if (res.ok && type.startsWith("image/")) {
-          cache.put(req, res.clone()).catch(() => {});
-          return res;
-        }
-        return cached || res;
+        return await fetchMap(cache, req);
       } catch {
-        return cached || Response.error();
+        return Response.error();
       }
     })());
     return;

@@ -429,7 +429,31 @@ function worldY(lat, zoom) {
   return ((1 - merc / Math.PI) / 2) * 2 ** zoom;
 }
 
-/** Slippy-map tiles covering the same bounds as the export image, in percent of the map frame. */
+export const SATELLITE_MAX_ZOOM = 19;
+export const SATELLITE_MAX_TILES = 24;
+
+function tileSpan(bounds, zoom) {
+  const cols = Math.floor(worldX(bounds.maxLng, zoom)) - Math.floor(worldX(bounds.minLng, zoom)) + 1;
+  const rows = Math.floor(worldY(bounds.minLat, zoom)) - Math.floor(worldY(bounds.maxLat, zoom)) + 1;
+  return cols * rows;
+}
+
+/**
+ * The tile zoom for a map: the sharpest (up to 19) that covers it in SATELLITE_MAX_TILES tiles. It depends on the
+ * place, not the screen, so the scorecard, the replay and the preloads all ask for the same (cached) tiles.
+ */
+export function satelliteTileZoom(bounds) {
+  for (let z = SATELLITE_MAX_ZOOM; z > 12; z -= 1) {
+    if (tileSpan(bounds, z) <= SATELLITE_MAX_TILES) return z;
+  }
+  return 12;
+}
+
+/**
+ * Satellite tiles covering the map, placed in percent of the map frame. Tiles are pre-made on Esri's CDN: they load
+ * in parallel in well under a second and are shared between holes and zooms, where the export image is rendered
+ * on demand for each hole, zoom and size (several seconds). The export stays as the fallback.
+ */
 export function satelliteTileLayers(bounds, width, height) {
   if (!bounds) return [];
   const spanLng = bounds.maxLng - bounds.minLng;
@@ -437,12 +461,7 @@ export function satelliteTileLayers(bounds, width, height) {
   if (!(spanLng > 0) || !(spanLat > 0)) return [];
   const frameW = Math.max(1, Number(width) || 640);
   const frameH = Math.max(1, Number(height) || 360);
-  let zoom = 13;
-  for (let z = 19; z >= 12; z -= 1) {
-    const px = (worldX(bounds.maxLng, z) - worldX(bounds.minLng, z)) * TILE_PX;
-    zoom = z;
-    if (px >= frameW * 0.85) break;
-  }
+  const zoom = satelliteTileZoom(bounds);
   const x0 = worldX(bounds.minLng, zoom) * TILE_PX;
   const y0 = worldY(bounds.maxLat, zoom) * TILE_PX;
   const x1 = worldX(bounds.maxLng, zoom) * TILE_PX;
@@ -456,7 +475,7 @@ export function satelliteTileLayers(bounds, width, height) {
   const tiles = [];
   for (let row = row0; row <= row1; row += 1) {
     for (let col = col0; col <= col1; col += 1) {
-      if (tiles.length >= 16) return tiles;
+      if (tiles.length >= SATELLITE_MAX_TILES) return tiles;
       const left = ((col * TILE_PX - x0) * scaleX / frameW) * 100;
       const top = ((row * TILE_PX - y0) * scaleY / frameH) * 100;
       const tileW = (TILE_PX * scaleX / frameW) * 100;
