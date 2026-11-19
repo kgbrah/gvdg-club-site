@@ -15,8 +15,8 @@ import {
   lookupPdgaEvent, lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, pdgaEventUrl, PdgaApiError, PDGA_ATTRIBUTION, type PdgaApiEnv, type PdgaPlayer,
 } from "./pdga-api.js";
 import {
-  eligibilityProblem, nonMemberFeeFor, parseTournamentRules, paypalFeeRates, pdgaCheckMatters, tournamentQuote, tournamentRulesInput, zelleCode,
-  type PaymentMethod, type TournamentRules,
+  eligibilityProblem, nonMemberFeeFor, parseTournamentRules, paypalFeeRates, pdgaCheckMatters, pdgaResultsUpload, tournamentQuote, tournamentRulesInput, zelleCode,
+  type PaymentMethod, type TournamentRules, type UploadRegistration, type UploadResult, type UploadRound,
 } from "./tournament.js";
 
 type Row = Record<string, unknown>;
@@ -266,6 +266,23 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
   if (seg[1] !== "events") return null;
   const eventId = asInt(seg[2]);
   if (eventId == null) return null;
+  // Results for PDGA Tournament Manager: every club event linked to the PDGA event is a round, in date order.
+  if (seg[3] === "pdga-results" && method === "GET") {
+    const link = await env.DB.prepare("SELECT pdga_event_id FROM event_config WHERE event_id = ?").bind(eventId).first<{ pdga_event_id: number | null }>();
+    if (!link) return json({ error: "not_found" }, 404, origin);
+    if (link.pdga_event_id == null) return json({ error: "not_pdga_event" }, 400, origin);
+    const rounds = (await env.DB.prepare(`SELECT e.id AS eventId, e.name, e.date FROM events e JOIN event_config c ON c.event_id = e.id
+        WHERE c.pdga_event_id = ? ORDER BY COALESCE(e.date, ''), COALESCE(e.starts_at, ''), e.id LIMIT 8`).bind(link.pdga_event_id)
+      .all<UploadRound>()).results ?? [];
+    const ids = rounds.slice(0, 4).map((round) => round.eventId);
+    const marks = ids.map(() => "?").join(", ");
+    const [results, registrations] = ids.length ? await Promise.all([
+      env.DB.prepare(`SELECT event_id, member_id, name, total FROM results WHERE event_id IN (${marks})`).bind(...ids).all<UploadResult>(),
+      env.DB.prepare(`SELECT event_id, member_id, name, division, pdga_number FROM registrations WHERE event_id IN (${marks}) ORDER BY paid_entry DESC, id`).bind(...ids).all<UploadRegistration>(),
+    ]) : [{ results: [] }, { results: [] }];
+    const upload = pdgaResultsUpload(rounds, results.results ?? [], registrations.results ?? []);
+    return json({ pdgaEventId: link.pdga_event_id, rounds: rounds.slice(0, 4), ...upload }, 200, origin);
+  }
   // The event form's "PDGA-sanctioned event": link (or unlink) only the PDGA event; the rest of the settings stay.
   if (seg[3] === "pdga" && method === "PATCH") {
     const body = (await readJson(request)) ?? {};
