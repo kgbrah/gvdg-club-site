@@ -1,4 +1,5 @@
 import type { Env, RawEnv } from "./env.js";
+import { handleEmailStart, handleEmailVerify, handlePinResetStart, handlePinResetVerify } from "./account-recovery.js";
 import { historyGate, secretOk } from "./authz.js";
 import { allowedOrigin, corsHeaders, json, RequestBodyTooLargeError } from "./http.js";
 import {
@@ -108,6 +109,10 @@ export default {
       if (pathname === "/login" && method === "POST") return await handleLogin(request, env, origin);
       if (pathname === "/me" && method === "GET") return await handleMe(request, env, origin);
       if (pathname === "/me/welcome-seen" && method === "POST") return await handleWelcomeSeen(request, env, origin);
+      if (pathname === "/me/email/start" && method === "POST") return await handleEmailStart(request, env, origin);
+      if (pathname === "/me/email/verify" && method === "POST") return await handleEmailVerify(request, env, origin);
+      if (pathname === "/pin-reset/start" && method === "POST") return await handlePinResetStart(request, env, origin, ctx);
+      if (pathname === "/pin-reset/verify" && method === "POST") return await handlePinResetVerify(request, env, origin);
       if (pathname === "/me/push-subscription" && (method === "GET" || method === "PUT" || method === "DELETE")) {
         return await handleMemberPush(request, env, origin, method);
       }

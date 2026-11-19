@@ -66,7 +66,7 @@ Create `auth-worker/.dev.vars`:
 ```text
 JWT_SECRET=<any string at least 32 chars>
 ALLOWED_ORIGINS=http://127.0.0.1:8080,http://localhost:8080
-SESSION_TTL_SEC=43200
+SESSION_TTL_SEC=2592000
 ```
 
 Apply local D1 migrations:

@@ -77,14 +77,14 @@ async function writeApplication(kv: KVListLike, row: MembershipApplication) {
   await kv.put(applicationKey(row.id), JSON.stringify(row));
   if (row.pdgaNo) await kv.put(APPLY_PDGA(row.pdgaNo), row.id);
   if (row.udisc) await kv.put(APPLY_UDISC(row.udisc), row.id);
-  if (row.kind === "guest" && row.email) await kv.put(APPLY_EMAIL(row.email), row.id);
+  if (row.email) await kv.put(APPLY_EMAIL(row.email), row.id);
 }
 
 async function deleteApplication(kv: KVListLike, row: MembershipApplication) {
   await kv.delete(applicationKey(row.id));
   if (row.pdgaNo) await kv.delete(APPLY_PDGA(row.pdgaNo));
   if (row.udisc) await kv.delete(APPLY_UDISC(row.udisc));
-  if (row.kind === "guest" && row.email) await kv.delete(APPLY_EMAIL(row.email));
+  if (row.email && (await kv.get(APPLY_EMAIL(row.email))) === row.id) await kv.delete(APPLY_EMAIL(row.email));
 }
 
 export async function listApplications(kv: KVListLike, db?: Env["DB"]): Promise<PublicApplication[]> {
@@ -126,9 +126,11 @@ export async function handleMembershipApply(request: Request, env: Env, origin: 
   if (!name) return json({ error: "name_required" }, 400, origin);
   // A guest signs in with their email and must give a phone number; a member signs in with a PDGA # or UDisc name.
   const phone = guest ? parsePhone(body.phone) : null;
+  // Everyone gives an email: guests sign in with it, and it's how anyone resets a forgotten PIN themselves.
   if (guest && !email.value) return json({ error: "email_required" }, 400, origin);
   if (guest && !phone) return json({ error: "invalid_phone" }, 400, origin);
   if (!guest && !pdgaNo && !udisc) return json({ error: "pdga_or_udisc_required" }, 400, origin);
+  if (!email.value) return json({ error: "email_required" }, 400, origin);
   if (pdgaNo && !PDGA_RE.test(pdgaNo)) return json({ error: "invalid_pdga" }, 400, origin);
   if (udisc && !UDISC_RE.test(udisc)) return json({ error: "invalid_udisc" }, 400, origin);
   if (!pin || !PIN_RE.test(pin)) return json({ error: "invalid_pin" }, 400, origin);
@@ -138,8 +140,8 @@ export async function handleMembershipApply(request: Request, env: Env, origin: 
   if (udisc && await resolveMember(kv, udisc)) return json({ error: "member_exists" }, 409, origin);
   if (pdgaNo && await kv.get(APPLY_PDGA(pdgaNo))) return json({ error: "already_pending" }, 409, origin);
   if (udisc && await kv.get(APPLY_UDISC(udisc))) return json({ error: "already_pending" }, 409, origin);
-  if (guest && email.value && await resolveMember(kv, email.value)) return json({ error: "member_exists" }, 409, origin);
-  if (guest && email.value && await kv.get(APPLY_EMAIL(email.value))) return json({ error: "already_pending" }, 409, origin);
+  if (await resolveMember(kv, email.value)) return json({ error: "member_exists" }, 409, origin);
+  if (await kv.get(APPLY_EMAIL(email.value))) return json({ error: "already_pending" }, 409, origin);
 
   const row: MembershipApplication = {
     id: newApplicationId(),
@@ -215,7 +217,8 @@ export async function handleAdminMembershipApplications(
         pdgaNo: row.pdgaNo,
         udisc: row.udisc,
         isAdmin: false,
-        ...(guest ? { email: row.email ?? null, phone: row.phone ?? null, guest: true } : {}),
+        email: row.email ?? null,
+        ...(guest ? { phone: row.phone ?? null, guest: true } : {}),
         // The applicant chose (and confirmed) this PIN on the form: no second "choose a PIN" at first sign-in.
       }, row.pinHash, { pinChosenByMember: true });
       if (!result.ok) return json({ error: "member_" + result.reason }, result.reason === "invalid" ? 400 : 409, origin);

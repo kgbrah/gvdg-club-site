@@ -1,5 +1,5 @@
 import React from "react";
-import { X } from "lucide-react";
+import { Mail, X } from "lucide-react";
 
 import { TOKEN_KEY, request, storageGet } from "./api.js";
 import { useMemberContext } from "./member-context.js";
@@ -43,6 +43,25 @@ export function WelcomeCard() {
       h("button", { type: "button", className: "player-btn primary", key: "events", onClick: () => { dismiss(); selectDashboardTab("events"); } }, "See events"),
       h("button", { type: "button", className: "player-btn", key: "profile", onClick: () => { dismiss(); window.dispatchEvent(new CustomEvent("gvdg:member-edit-profile-requested")); } }, "Set up profile"),
       h("button", { type: "button", className: "member-first-dismiss", key: "dismiss", "aria-label": "Dismiss welcome", onClick: dismiss }, [h(X, { size: 14, "aria-hidden": true, key: "icon" }), "Dismiss"]),
+    ]),
+  ]);
+}
+
+// No email on the account yet (admins skip the sign-in step that asks for one): a reminder on Home until it's added,
+// styled like the other Home alerts.
+export function EmailReminderCard() {
+  const { needsEmail } = useMemberContext();
+  if (!needsEmail) return null;
+  return h("button", {
+    type: "button",
+    className: "member-inbox-alert",
+    "data-react-email-reminder": "ready",
+    onClick: () => window.dispatchEvent(new CustomEvent("gvdg:member-email-change-requested")),
+  }, [
+    h(Mail, { size: 20, "aria-hidden": true, key: "icon" }),
+    h("span", { className: "member-inbox-alert-copy", key: "copy" }, [
+      h("strong", { key: "title" }, "Add your email"),
+      h("small", { key: "detail" }, "So you can reset your PIN yourself if you forget it"),
     ]),
   ]);
 }

@@ -172,6 +172,31 @@ export function canonicalLoginKey(identifier: string): string {
   return digits ? `pdga:${digits}` : `udisc:${bareUdisc(identifier)}`;
 }
 
+/** The member an email signs in to (null if none). */
+export async function emailOwner(kv: KVLike, email: string): Promise<string | null> {
+  return isEmail(email) ? kv.get(IDX_EMAIL(email)) : null;
+}
+
+/** Every lockout key that reaches this member (PDGA #, UDisc, email): a PIN reset clears them all. */
+export function loginKeysOf(m: Pick<Member, "pdgaNo" | "udisc" | "email">): string[] {
+  return [m.pdgaNo, m.udisc, m.email].filter((v): v is string => typeof v === "string" && v.trim() !== "").map(canonicalLoginKey);
+}
+
+/** Set (or change) a member's email: their sign-in by email moves with it and the old address stops working.
+ *  "conflict" when another account already signs in with it. */
+export async function setMemberEmail(kv: KVLike, memberId: string, email: string): Promise<"ok" | "conflict" | "missing"> {
+  const m = await getMember(kv, memberId);
+  if (!m) return "missing";
+  const next = normEmail(email);
+  const owner = await kv.get(IDX_EMAIL(next));
+  if (owner && owner !== memberId) return "conflict";
+  if (m.email && normEmail(m.email) !== next && (await kv.get(IDX_EMAIL(m.email))) === memberId) await kv.delete(IDX_EMAIL(m.email));
+  m.email = next;
+  await kv.put(RECORD(memberId), JSON.stringify(m));
+  await kv.put(IDX_EMAIL(next), memberId);
+  return "ok";
+}
+
 /** Write a member record and its login indexes. Used by the admin seeding script. */
 export async function putMember(kv: KVLike, m: Member): Promise<void> {
   await kv.put(RECORD(m.memberId), JSON.stringify(m));

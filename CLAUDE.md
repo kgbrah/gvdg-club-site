@@ -413,8 +413,8 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v323`, members `?v=213`, public/events `?v=204`, score `?v=242`,
-home `?v=194` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v324`, members `?v=214`, public/events `?v=205`, score `?v=243`,
+home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
 `.karma-chip` in `tokens.css`): every rendered player name gets `KarmaChip` (by `memberId` / `pdga` / payload `karmaKey` /
@@ -454,7 +454,14 @@ first load on a throttled phone profile.
   form that reaches an account counts against that account's lockout. `test/auth-flows.test.ts` drives every
   way in (PIN by PDGA/UDisc/email, temp PIN, PIN change/reset, passkeys, applications, guests, open play, admin).
 - **WebAuthn challenges are single-use** (read-and-delete); advance the stored credential counter each auth.
-- **Every session mint stamps the member's `pinVer`** (PIN login, `/set-pin`, passkey `/webauthn/auth/verify`).
+- **Every account has an email (the self-service way back in)** — applications require one (members too); a
+  member or guest without one gets an "Add your email" step after signing in (admins get a Home reminder instead,
+  since another admin can reset them, and so the QA admin isn't stopped). `account-recovery.ts`: `POST
+  /me/email/start|verify` (6-digit code to the new address, 15 min, 5 guesses; the old address is told) and "Forgot
+  PIN?" `POST /pin-reset/start|verify` (code to the email on file; the same answer whether or not the account exists
+  or has an email; a reset bumps `pinVer`, clears every lockout key of the account and signs them in). A wrong PIN on
+  the email step answers 403 `wrong_pin`, never 401 (the apps read 401 as "signed out").
+- **Every session mint stamps the member's `pinVer`** (PIN login, `/set-pin`, passkey `/webauthn/auth/verify`, PIN reset).
   `requireAuth` and `/me` both reject a token whose `pinVer` differs from the record's (a PIN change/reset revokes
   older sessions). A passkey session without it read as revoked on every member route while `/me` said signed in
   (test/passkey-session.test.ts).
@@ -478,8 +485,12 @@ Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.**
 - **PBKDF2 is capped at 100k by workerd — it *throws* above it.** `crypto.ts` and
   `scripts/provision.mjs` both use `ITERATIONS=100_000`. Do not raise this in either place; bulk-seeded
   members would fail `verifyPin` on the deployed Worker.
-- **Session TTL is 12h, not 900s** — `SESSION_TTL_SEC=43200` in `wrangler.toml`; the 900 in `authz.ts` is
-  only the unset fallback.
+- **Sessions last 30 days and renew while the app is used** — `SESSION_TTL_SEC=2592000` in `wrangler.toml` (the
+  900 in `authz.ts` is only the unset fallback). `GET /me` hands back a fresh session (`token`) once the presented one
+  is a day old; the members app stores it from its `/me` check and the score/admin/public/home apps call
+  `renewMemberSession` (`src/shared/member-session.js`) on start. A member is signed out only after 30 days without
+  opening an app, or at once by a PIN change/reset (`pinVer`). Tokens carry `at` (the real sign-in time, kept across
+  renewals): changing your email needs the PIN unless you signed in within 15 minutes.
 - **`-staging` is production:** deploy the Worker with `--env gvdgclub`; a bare `wrangler deploy` ships to
   the deleted base Worker. `env.staging`/`env.gvdgclub` share one DB/KV/R2 — there is no isolated staging.
 - **`kvRateLimited` is a non-atomic GET-then-PUT** (backs login/board/setpin/webauthn) — a concurrent burst

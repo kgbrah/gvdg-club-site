@@ -604,6 +604,7 @@ async function verifyAuth() {
     const application = page.locator("#applyForm");
     await application.getByLabel("Name", { exact: true }).fill("New Member");
     await application.getByLabel("PDGA #", { exact: true }).fill("123456");
+    await application.getByLabel("Email", { exact: true }).fill("new.member@example.com");
     await application.getByLabel("Choose a PIN").fill("1234");
     await application.getByLabel("Confirm PIN").fill("1234");
     const submitted = page.waitForResponse((response) => response.url().endsWith("/membership/apply"));

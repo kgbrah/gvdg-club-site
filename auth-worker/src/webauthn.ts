@@ -206,6 +206,8 @@ export async function authenticationVerify(
     data: {
       token,
       mustChangePin: member.mustChangePin,
+      email: member.email ?? null,
+      needsEmail: !member.email,
       name: member.name,
       pdgaNo: member.pdgaNo ?? null,
       udisc: member.udisc ?? null,

@@ -16,6 +16,13 @@ export interface SessionClaims {
   play?: boolean;
   /** Display name baked into an open-play token so join/create cannot spoof a different name. */
   name?: string;
+  /** When the person actually signed in (PIN, passkey or a PIN reset), in epoch seconds. A renewed session keeps
+   *  it, so "signed in within the last few minutes" (no PIN needed to change your email) means a real sign-in.
+   *  Older tokens without it read as their issue time. */
+  at?: number;
+  /** Issue and expiry times (epoch seconds), read from a verified token; they drive the renewal. */
+  iat?: number;
+  exp?: number;
 }
 
 function keyOf(secret: string): Uint8Array {
@@ -25,7 +32,7 @@ function keyOf(secret: string): Uint8Array {
 /** Sign a session token that expires `ttlSeconds` from now. */
 export async function signSession(claims: SessionClaims, secret: string, ttlSeconds: number): Promise<string> {
   const nowSec = Math.floor(Date.now() / 1000);
-  return new SignJWT({ mustChangePin: claims.mustChangePin, pinVer: claims.pinVer ?? 0 })
+  return new SignJWT({ mustChangePin: claims.mustChangePin, pinVer: claims.pinVer ?? 0, at: claims.at ?? nowSec })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(claims.sub)
     .setIssuedAt(nowSec)
@@ -106,12 +113,16 @@ export async function verifySession(token: string, secret: string): Promise<Sess
     if (typeof payload.sub !== "string") return null;
     if (payload.mkt === true) return null;
     const name = typeof payload.name === "string" ? payload.name.trim() : "";
+    const iat = typeof payload.iat === "number" ? payload.iat : 0;
     return {
       sub: payload.sub,
       mustChangePin: payload.mustChangePin === true,
       pinVer: typeof payload.pinVer === "number" ? payload.pinVer : 0,
       play: payload.play === true,
       name: name ? name.slice(0, 60) : undefined,
+      at: typeof payload.at === "number" ? payload.at : iat,
+      iat,
+      exp: typeof payload.exp === "number" ? payload.exp : 0,
     };
   } catch {
     return null;

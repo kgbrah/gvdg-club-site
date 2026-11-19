@@ -1,13 +1,15 @@
 import React from "react";
-import { ApplyForm, AuthIcon, LoginForm, PinChangeForm, ProfileForm } from "./auth-forms.js";
+import { ApplyForm, AuthIcon, EmailForm, LoginForm, PinChangeForm, ProfileForm, ResetPinForm } from "./auth-forms.js";
 
 const h = React.createElement;
 const SHELL_EVENT = "gvdg:member-shell-view";
 const AUTH_FORM_STATE_EVENT = "gvdg:member-auth-form-state";
-const AUTH_FORMS = new Set(["login", "pin", "profile", "apply"]);
+const AUTH_FORMS = new Set(["login", "pin", "profile", "apply", "email", "reset"]);
+const AUTH_MODES = new Set(["login", "pin", "profile", "apply", "email", "reset"]);
 
 function initialAuthMode() {
-  return String(window.location.hash || "").toLowerCase() === "#apply" ? "apply" : "login";
+  const hash = String(window.location.hash || "").toLowerCase();
+  return hash === "#apply" ? "apply" : hash === "#forgot-pin" ? "reset" : "login";
 }
 
 const FORM_VALUES = {
@@ -15,6 +17,8 @@ const FORM_VALUES = {
   pin: { newPin: "", confirmPin: "" },
   profile: { pdga: "", udisc: "" },
   apply: { name: "", pdgaNo: "", udisc: "", email: "", pin: "", confirmPin: "", submitted: null },
+  email: { email: "", pin: "", code: "", step: "email", sentTo: "", required: true, pinNeeded: false },
+  reset: { identifier: "", code: "", newPin: "", confirmPin: "", step: "start" },
 };
 
 function createFormState(form) {
@@ -42,6 +46,8 @@ export function MemberAuthGate() {
     pin: createFormState("pin"),
     profile: createFormState("profile"),
     apply: createFormState("apply"),
+    email: createFormState("email"),
+    reset: createFormState("reset"),
   });
 
   function setFormValues(form, values) {
@@ -67,7 +73,7 @@ export function MemberAuthGate() {
 
     function update(event) {
       const nextMode = event.detail?.mode;
-      setMode(nextMode === "pin" || nextMode === "profile" || nextMode === "apply" ? nextMode : "login");
+      setMode(AUTH_MODES.has(nextMode) ? nextMode : "login");
       setShellView("auth");
       if (typeof event.detail?.passkeysSupported === "boolean") setSupportsPasskeys(event.detail.passkeysSupported);
     }
@@ -98,7 +104,10 @@ export function MemberAuthGate() {
     return () => window.removeEventListener(SHELL_EVENT, updateShell);
   }, []);
 
-  const titles = { login: "Members Only", apply: "Join the Club", pin: "Choose a PIN", profile: "Edit profile" };
+  const titles = {
+    login: "Members Only", apply: "Join the Club", pin: "Choose a PIN", profile: "Edit profile",
+    email: formStates.email.values.required ? "Add your email" : "Your email", reset: "Reset your PIN",
+  };
   return h("div", { className: "login-card", "data-react-auth-gate": mode }, [
     h(AuthIcon, { mode, key: "icon" }),
     h("h1", { className: "login-title", key: "title" }, titles[mode]),
@@ -107,6 +116,9 @@ export function MemberAuthGate() {
     h(ApplyForm, { active: mode === "apply", state: formStates.apply, onValuesChange: setFormValues, key: "apply" }),
     h(PinChangeForm, { active: mode === "pin", state: formStates.pin, onValuesChange: setFormValues, key: "pin" }),
     h(ProfileForm, { active: mode === "profile", state: formStates.profile, onValuesChange: setFormValues, key: "profile" }),
+    // Mounted only while showing, so their fields never duplicate the sign-in form's labels or autofill targets.
+    mode === "email" ? h(EmailForm, { active: true, state: formStates.email, onValuesChange: setFormValues, key: "email" }) : null,
+    mode === "reset" ? h(ResetPinForm, { active: true, state: formStates.reset, onValuesChange: setFormValues, key: "reset" }) : null,
     mode === "login" ? h("div", { className: "member-auth-alternate", key: "play" }, [
       h("p", { className: "login-subtitle", key: "hint" }, "Casual scoring is open to everyone."),
       h("a", { className: "dashboard-action", href: "score.html", key: "start" }, "Start a round"),
