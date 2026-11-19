@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#1A1A2E">
   <title>GVDG Scoring App | Greenville Disc Golf Club</title>
-  <meta name="description" content="Custom wallpapers, color palettes, and glass themes for the Greenville Disc Golf Club app. Score rounds, save clips, watch live, and see club stats in your browser. New: Lost &amp; Found from your card, My Bag photos, Sell this, and your PDGA events.">
+  <meta name="description" content="The Greenville Disc Golf Club app: score rounds, save clips, watch live, and see club stats in your browser. Lost &amp; Found from your card, your PDGA rating and membership, sign-up for the club's PDGA events, My Bag photos, the marketplace, and custom themes.">
   <link rel="icon" type="image/png" href="img/logo-small.png">
   <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="tokens.css">
@@ -24,7 +24,7 @@
         <div class="hero-copy">
           <p class="eyebrow">The Greenville Disc Golf Club app</p>
           <h1 id="app-title">Your game.<br><span>Your way.</span></h1>
-          <p class="hero-description">Make the app yours with a wallpaper, your colors, and glass. Save video clips with your round history. Let friends watch live. Then dig into the stats behind every score.</p>
+          <p class="hero-description">Make the app yours with a wallpaper, your colors, and glass. Save video clips with your round history. Let friends watch live. Then dig into the stats behind every score. Found a disc, or lost one? Post it from the hole. And your PDGA rating, events, and membership sit right next to your club rounds.</p>
           <div class="hero-actions"><a class="button primary" href="score.html">Open scoring app <span aria-hidden="true">↗</span></a><a class="compare-link" href="#watch-live">Watch a round <span aria-hidden="true">↓</span></a></div>
           <p class="hero-note">Start a casual round in your browser. No club login required.</p>
           <a class="hero-comparison" href="#themes">See wallpaper, color, and glass</a>
@@ -45,7 +45,7 @@
         </figure>
       </div>
       <nav class="hero-rail wrap" aria-label="Scoring app features">
-        <a href="#themes">Custom themes</a><a href="#round-clips">Saved video clips</a><a href="#watch-live">Watch live</a><a href="#depth-title">Deeper club stats</a>
+        <a href="#themes">Custom themes</a><a href="#round-clips">Saved video clips</a><a href="#watch-live">Watch live</a><a href="#lost-found">Lost &amp; Found</a><a href="#pdga">PDGA</a><a href="#depth-title">Deeper club stats</a>
       </nav>
     </section>
 
@@ -110,6 +110,19 @@
       </div>
     </section>
 
+    <section class="signature-section new-features" id="pdga" aria-labelledby="pdga-title">
+      <div class="wrap">
+        <div class="section-intro"><div><p class="eyebrow">PDGA, built in</p><h2 id="pdga-title">Your PDGA game.<br>In the club app.</h2></div><p>The club reads PDGA's official data, so your rating, your membership, and the PDGA events near you sit right next to your club rounds.</p></div>
+        <div class="signature-grid two-up">
+          <article id="pdga-ratings"><p class="feature-number">Ratings</p><h3>The official one.<br>And an estimate.</h3><p>Home and Stats show your <strong>PDGA official rating</strong> next to a <strong>Live rating estimate</strong>. Stats adds how far apart they are and your <strong>Best round rating</strong>.</p><ul class="signature-tags" aria-label="PDGA rating features"><li>PDGA official rating</li><li>Live rating estimate</li><li>Best round rating</li></ul><p class="watch-how">The estimate is the club's, not an official PDGA rating.</p><a href="gvdg-members.html#stats">Open Stats <span aria-hidden="true">↗</span></a></article>
+          <article id="pdga-register"><p class="feature-number">PDGA events the club runs</p><h3>Our events.<br>Register with us.</h3><p>When GVDG runs a PDGA-sanctioned event, you sign up on the club's event page instead of Disc Golf Scene, with no Disc Golf Scene fee. Your PDGA number is checked as you enter it, divisions follow the event's rating limits, and your spot is yours once your entry fee is in. When the field is full, join the waitlist.</p><ul class="signature-tags" aria-label="PDGA registration features"><li>GVDG-run events</li><li>PDGA number checked</li><li>Waitlist</li></ul><p class="watch-how">Pay with Zelle or store credit, or PayPal where it's offered. You can give the club what you saved on fees. Other PDGA events still register on their own page.</p><a href="events.html">See club events <span aria-hidden="true">↗</span></a></article>
+          <article id="pdga-nearby"><p class="feature-number">Nearby PDGA events</p><h3>What's on<br>within 100 miles.</h3><p>The Events tab lists upcoming PDGA events near you, soonest first. <strong>Register</strong> opens the event's own sign-up page. From the installed app it opens in your phone's browser, where you're already signed in.</p><ul class="signature-tags" aria-label="Nearby PDGA event features"><li>Upcoming only</li><li>Add to calendar</li><li>Opens in your browser</li></ul><a href="gvdg-members.html#events">Open Events <span aria-hidden="true">↗</span></a></article>
+          <article id="pdga-membership"><p class="feature-number">PDGA membership</p><h3>Join or renew<br>in one tap.</h3><p>See whether your PDGA membership is current and when it runs out. Home reminds you when it's close. <strong>Renew with PDGA</strong> opens PDGA's own page, and club members see the club's code for $5 off at checkout.</p><ul class="signature-tags" aria-label="PDGA membership features"><li>Status + expiry</li><li>Renewal reminder</li><li>Club code</li></ul><a href="gvdg-members.html#club-hub">Open your membership <span aria-hidden="true">↗</span></a></article>
+        </div>
+        <p class="signature-note">Player, event, and course data provided by <a href="https://www.pdga.com" target="_blank" rel="noopener noreferrer">PDGA</a>. Other PDGA events register on their own page.</p>
+      </div>
+    </section>
+
     <section class="depth-section wrap" aria-labelledby="depth-title">
       <div class="section-intro"><div><p class="eyebrow">The details behind the score</p><h2 id="depth-title">Give every round<br>something to tell you.</h2></div><p>Your total is the starting point. GVDG shows how you got there, which parts of your game hold up, and where you sit among the players you know.</p></div>
       <div class="depth-grid">
@@ -126,7 +139,7 @@
         <ul class="club-feature-list">
           <li><h3>Open a link and play.</h3><p>Start or join a casual card by code in your phone's browser. No club login is required to keep score. Sign in when you want the round on your club account.</p></li>
           <li><h3>The format you are playing.</h3><p>Score stroke play or match play. Filter club stats by singles or doubles, and keep casual rounds separate from competitive ones.</p></li>
-          <li><h3>Ratings you can tell apart.</h3><p>Playing estimates on supported layouts, plus your linked PDGA rating in the member dashboard. A club estimate is not an official PDGA round rating.</p></li>
+          <li><h3>Ratings you can tell apart.</h3><p>Your PDGA official rating and a live rating estimate on Home and Stats, plus a playing estimate during a round on supported layouts. A club estimate is not an official PDGA rating.</p></li>
           <li><h3>League night, in the app.</h3><p>Bag tags and challenges, event registration, the member wallet, club standings, and direct messages between members.</p></li>
           <li><h3>When the signal drops.</h3><p>Prepare a course pack, then score an offline round on a saved layout. Scores already on an open card can wait until you reconnect. Joining a live card still needs a connection.</p></li>
           <li><h3>A card you can read on your wrist.</h3><p>Scoring includes a large-target wrist layout, distance alerts while the screen stays awake, and local traffic from cards that are sharing. Native watch apps are in device testing and are not in the stores yet.</p></li>
@@ -162,6 +175,8 @@
         <details open><summary>Do I need to join the club to keep score?</summary><p>Anyone can start or join a casual card. A valid shared watch link opens the spectator view in a browser. The member dashboard uses your club account. <a href="index.html#membership">Explore membership.</a></p></details>
         <details><summary>How do I get the detailed shot stats?</summary><p>Use the shot record to log throws, putts, penalties and outcomes. Map positions add distance and location context. Final hole scores alone still build your scoring mix. <a href="#mark-lie">Follow the Mark lie walkthrough.</a></p></details>
         <details><summary>Can I keep using UDisc too?</summary><p>Yes. GVDG's Add to UDisc helper opens the course in UDisc and shows your scores to copy. It is manual re-entry, not automatic account syncing.</p></details>
+        <details><summary>Lost a disc, or found one?</summary><p>Post it in <a href="lost-found.html">Lost &amp; Found</a> on the site, or from <strong>Round tools</strong> in the scoring app. No club login needed: anyone can post after a quick email check. The club matches found and lost discs, reads any writing on a found disc privately, and lets the likely owner know. <a href="#lost-found">See how it works.</a></p></details>
+        <details><summary>Can I sign up for the club's PDGA events here?</summary><p>Yes. When GVDG runs a PDGA-sanctioned event, register on its event page here, with no Disc Golf Scene fee. Other PDGA events register on their own page (usually Disc Golf Scene), and <strong>Register</strong> in the app takes you there. <a href="#pdga">See PDGA in the app.</a></p></details>
         <details><summary>Can I add GVDG to my Home Screen?</summary><p>Yes. Add the club app from Safari on iPhone or Chrome on Android, then open it from the GVDG Club icon. <a href="#install">See the phone installation steps.</a></p></details>
       </div>
     </section>

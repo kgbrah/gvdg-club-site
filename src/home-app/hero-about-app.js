@@ -171,6 +171,12 @@ export function HomeHeroSection() {
           h("div", { className: "rhythm-title", key: "title" }, item.title),
           h("p", { className: "rhythm-detail", key: "detail" }, item.detail),
         ])),
+        // Lost discs go through Lost & Found (the site or the app; the owner's call). The club matches them with
+        // found discs and lets the owner know.
+        h("a", { className: "club-group-link", href: "lost-found.html", key: "lost-found" }, [
+          h("span", { key: "copy" }, "Lost a disc, or found one?"),
+          h("strong", { key: "go" }, "Lost & Found"),
+        ]),
         h("a", {
           className: "club-group-link",
           href: FACEBOOK_GROUP_URL,
@@ -178,7 +184,7 @@ export function HomeHeroSection() {
           rel: "noopener noreferrer",
           target: "_blank",
         }, [
-          h("span", { key: "copy" }, "Lost discs, rain calls, who's playing"),
+          h("span", { key: "copy" }, "Rain calls, who's playing"),
           h("strong", { key: "go" }, "Facebook group"),
         ]),
       ]),

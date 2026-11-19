@@ -1,28 +1,38 @@
 import React from "react";
-import { ArrowUpRight, Crosshair, Palette, Radio, Video } from "lucide-react";
+import { ArrowUpRight, Crosshair, Disc3, Palette, Radio, ShoppingBag, Trophy } from "lucide-react";
 
 const h = React.createElement;
 
 const FEATURES = [
+  {
+    title: "Score + watch live",
+    description: "Keep score on a hole map, film throw clips, and share a watch link. No spectator login.",
+    icon: Radio,
+  },
   {
     title: "Stats + club ranks",
     description: "Marked-lie stats, sample counts, and member ranks by category.",
     icon: Crosshair,
   },
   {
+    title: "Lost & Found",
+    description: "Found a disc, or lost one? Post it from the hole. The club matches it and gets it home.",
+    icon: Disc3,
+  },
+  {
+    title: "PDGA, built in",
+    description: "Your official rating, nearby PDGA events, sign-up for the club's PDGA events, and one-tap renewal.",
+    icon: Trophy,
+  },
+  {
+    title: "My Bag + marketplace",
+    description: "Private photos of every disc you carry. Buy, sell, and trade gear with club members.",
+    icon: ShoppingBag,
+  },
+  {
     title: "Customize your app",
     description: "Custom wallpapers, photo-inspired palettes, and your own disc color.",
     icon: Palette,
-  },
-  {
-    title: "Round video clips",
-    description: "Film short throw clips. Save them with your round history and replay them later.",
-    icon: Video,
-  },
-  {
-    title: "Watch live",
-    description: "Share scores, hole maps, marked shots, and saved clips. No spectator login.",
-    icon: Radio,
   },
 ];
 
@@ -33,9 +43,9 @@ export function HomeScoringTeaser() {
     "data-react-home-scoring-teaser": "ready",
   }, [
     h("div", { className: "scoring-teaser-copy", key: "copy" }, [
-      h("p", { className: "scoring-teaser-kicker", key: "kicker" }, "The GVDG scoring app"),
+      h("p", { className: "scoring-teaser-kicker", key: "kicker" }, "The GVDG club app"),
       h("h2", { id: "scoring-teaser-title", key: "title" }, "Your round. Your way."),
-      h("p", { className: "scoring-teaser-description", key: "description" }, "Keep score, make it your own, and bring your people along. All in your browser."),
+      h("p", { className: "scoring-teaser-description", key: "description" }, "Keep score, find lost discs, sign up for events, and keep up with your PDGA game. All in your browser."),
       h("div", { className: "scoring-teaser-actions", key: "actions" }, [
         h("a", { className: "scoring-teaser-explore", href: "scoring-app.html", key: "explore" }, [
           "Explore the app",

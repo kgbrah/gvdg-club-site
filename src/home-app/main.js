@@ -18,8 +18,9 @@ import { resolveApiBase } from "../shared/api-base.js";
 // Keep a signed-in member signed in while they use the app (a fresh 30-day session once a day).
 void renewMemberSession({ apiBase: resolveApiBase() });
 
-// PayPal links opened inside Facebook / Instagram / Messenger go to the PayPal app (or the real browser), not the
-// in-app browser where no one is signed in. Does nothing in a normal browser.
+// Sign-up links (PDGA join/renew, event registration, Disc Golf Scene, PayPal) leave the installed app and in-app
+// browsers (Facebook, Instagram…) for the phone's own browser, where people are already signed in.
+// Does nothing in a normal browser tab.
 installOutsideLinkHandoff();
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
