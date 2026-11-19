@@ -11,6 +11,7 @@ import { asInt, asStr } from "./input.js";
 import { deadlinePassed } from "./event-deadlines.js";
 import * as shopDb from "./shop-db.js";
 import { createWalletDebitOnce, findWalletTransactionByIdempotencyKey } from "./wallet-idempotency.js";
+import { handleTournamentPay, isTournament, registerForTournament, tournamentView, type TournamentConfig } from "./tournament-routes.js";
 
 const GUEST_REGISTER_IP_LIMIT = 15; // guest sign-ups per IP per minute
 
@@ -110,6 +111,18 @@ export async function handleClubRegistration(
     return json({ error: "session_expired" }, 401, origin);
   }
 
+  // Club-run PDGA events: guests pay too (with their registration token), and the payment options are the event's.
+  if (seg[2] === "pay" && (method === "POST" || method === "GET") && seg[3] !== "wallet") {
+    const cfg = (await db.getEventConfig(env.DB, eid)) as TournamentConfig | null;
+    if (isTournament(cfg)) {
+      const body = method === "POST" ? ((await readJson(request)) ?? {}) : {};
+      const memberId = claims ? claims.sub : guestMemberId(request, body);
+      if (!memberId) return json({ error: "unauthorized" }, 401, origin);
+      const reg = (await db.getMyRegistration(env.DB, eid, memberId)) as ({ id: number } & Record<string, unknown>) | null;
+      if (!reg) return json({ error: "not_registered" }, 400, origin);
+      return (await handleTournamentPay(request, env, origin, method, seg, eid, cfg, reg, body)) ?? json({ error: "not_found" }, 404, origin);
+    }
+  }
   if (seg[2] === "pay" && method === "POST") {
     if (!claims) return json({ error: "unauthorized" }, 401, origin);
     if (seg[3] === "wallet") return payEventWithWallet(env, origin, eid, claims.sub);
@@ -165,7 +178,11 @@ export async function handleClubRegistration(
   if (seg[2] === "registration" && method === "GET") {
     const memberId = claims ? claims.sub : guestMemberId(request);
     const registration = memberId ? await db.getMyRegistration(env.DB, eid, memberId) : null;
-    return json({ config: await db.getEventConfig(env.DB, eid), registration }, 200, origin);
+    const config = (await db.getEventConfig(env.DB, eid)) as TournamentConfig | null;
+    // A club-run PDGA event also shows its PDGA event, rules, cap, the paid field and the waitlist.
+    const tournament = isTournament(config)
+      ? await tournamentView(env, eid, config, registration ? Number((registration as { id?: unknown }).id) : null) : null;
+    return json(tournament ? { config, registration, tournament } : { config, registration }, 200, origin);
   }
   if (seg[2] === "register" && method === "POST") {
     const status = await db.getEventStatus(env.DB, eid);
@@ -173,6 +190,10 @@ export async function handleClubRegistration(
     const cfg = (await db.getEventConfig(env.DB, eid)) as { registration_open?: number; divisions?: string; teams?: string | null; play_format?: string | null } | null;
     if (!cfg || cfg.registration_open !== 1) return json({ error: "registration_closed" }, 403, origin);
     const b = (await readJson(request)) ?? {};
+    if (isTournament(cfg as TournamentConfig)) {
+      const token = claims ? "" : (asStr(b.guestToken, 64) || genGuestToken());
+      return registerForTournament(request, env, origin, eid, cfg as TournamentConfig, claims, b, claims ? null : { memberId: "g_" + token, token });
+    }
     const division = asStr(b.division, 60);
     let divs: string[] = [];
     try { divs = JSON.parse(cfg.divisions || "[]"); } catch { divs = []; }

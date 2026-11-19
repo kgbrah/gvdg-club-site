@@ -61,6 +61,7 @@ import { handleVoiceDisc } from "./voice-disc-route.js";
 import { handleBag } from "./bag-routes.js";
 import { runLostFoundTick } from "./lf-process.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
+import { handlePdgaPlayerLookup } from "./tournament-routes.js";
 
 /**
  * STOPGAP: when no Workers KV namespace is bound (deployed dev/staging while this account's KV data
@@ -177,6 +178,7 @@ export default {
       if (pathname === "/tee-signs" && method === "POST") return await handleTeeSignUpload(request, env, origin, ctx);
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
+      if (pathname === "/pdga/player" && method === "GET") return await handlePdgaPlayerLookup(request, env, origin);
       if (pathname === "/karma" && method === "GET") return await handleKarma(env, origin, request);
       if (pathname === "/admin/rounds/active" && method === "GET") return await handleActiveRounds(request, env, origin);
       if (pathname === "/club-feed" && method === "GET") return await handleClubFeed(env, origin);

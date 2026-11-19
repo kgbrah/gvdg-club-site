@@ -333,7 +333,7 @@ export async function listOpenRegistrationEvents(db: D1Like) {
         `SELECT e.id, e.name, e.status, e.date, e.type, e.format AS event_format, e.course_id, e.layout_id,
            e.starts_at, e.registration_deadline, e.checkin_deadline,
            co.name AS course_name, l.name AS layout_name, l.total_par,
-           c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.teams, c.play_format, c.live_scoring_config
+           c.entry_fee_cents, c.ctp_fee_cents, c.ace_fee_cents, c.divisions, c.teams, c.play_format, c.live_scoring_config, c.pdga_event_id
          FROM events e JOIN event_config c ON c.event_id = e.id
          LEFT JOIN courses co ON co.id = e.course_id
          LEFT JOIN course_layouts l ON l.id = e.layout_id

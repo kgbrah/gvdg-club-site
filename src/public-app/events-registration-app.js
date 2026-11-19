@@ -8,10 +8,11 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { clientOwed, isDoublesRegistration, isTeamRegistration, parseArray, parseObject } from "../members-app/registration-utils.js";
 import { publicApiBase } from "./public-api.js";
 import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
+import { guestRegs, setGuestReg } from "./guest-registrations.js";
+import { TournamentRegistration } from "./tournament-registration.js";
 
 const h = React.createElement;
 const REGISTRATION_REFRESH_EVENT = "gvdg:events-registration-refresh";
-const GUEST_REG_KEY = "gvdg_guest_regs";
 
 function icon(Icon, size = 16) {
   return h(Icon, {
@@ -30,24 +31,6 @@ function memberToken() {
   return readMemberToken() || null;
 }
 
-function guestRegs() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(GUEST_REG_KEY) || "{}");
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function setGuestReg(eventId, value) {
-  const all = guestRegs();
-  if (value) all[eventId] = value;
-  else delete all[eventId];
-  try {
-    localStorage.setItem(GUEST_REG_KEY, JSON.stringify(all));
-  } catch {
-  }
-}
 
 function isArchivedClubEvent(raw) {
   return isPastClubCalendarEvent(normalizeEvent(raw));
@@ -431,6 +414,8 @@ export function EventRegistrationPanel({ eventId }) {
   const state = useRegistrationState();
   const event = state.events.find((item) => String(item && item.id) === String(eventId));
   if (!event) return null;
+  // A club-run PDGA event registers with its PDGA rules, the paid field and waitlist, and payment on the page.
+  if (event.pdga_event_id) return h(TournamentRegistration, { event, onChanged: state.load });
   return h("section", { className: "event-register-panel", "data-react-events-registration": "inline" }, [
     h("h2", { className: "roster-title", key: "title" }, "Register"),
     h(RegistrationCard, { ...cardProps(state, event), inline: true, key: "card" }),
