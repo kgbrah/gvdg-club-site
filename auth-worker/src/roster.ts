@@ -40,6 +40,9 @@ export interface Member {
   phone?: string;
   /** One of the first 100 approved guest applications (guest_promo): round history and stats like a member. */
   guestPromo?: boolean;
+  /** Names the club's sheets use for this person that aren't their own ("Jordon Parkar"), remembered when an admin
+   *  links that row to them, so the same sheet matches them next time (normalized; the last few). */
+  sheetNames?: string[];
 }
 
 /** Round history and stats: members and admins, and guests who got a promo spot. */
@@ -348,7 +351,7 @@ export type CreateMemberInput = {
   email?: string | null; phone?: string | null; guest?: boolean;
 };
 export type CreateResult = { ok: true; member: Member } | { ok: false; reason: "exists" | "conflict" | "invalid" };
-export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear" | "guest" | "held" | "email" | "phone" | "guestPromo">;
+export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" | "isAdmin" | "mustChangePin" | "memberThroughYear" | "guest" | "held" | "email" | "phone" | "guestPromo" | "sheetNames">;
 
 /** Create a NEW member. An admin-issued temporary PIN must be changed at first sign-in (mustChangePin: true); a PIN
  *  the person chose themselves (an approved application) is theirs already (`pinChosenByMember`). Fails with `exists`
@@ -411,7 +414,7 @@ export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
     const page = await kv.list({ prefix: "member:", cursor });
     const records = await readInBatches(page.keys.map((k) => k.name.slice("member:".length)), (id) => getMember(kv, id));
     for (const m of records) {
-      out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true, email: m.email, phone: m.phone, guestPromo: m.guestPromo === true });
+      out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true, email: m.email, phone: m.phone, guestPromo: m.guestPromo === true, ...(m.sheetNames?.length ? { sheetNames: m.sheetNames } : {}) });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);

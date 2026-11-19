@@ -416,7 +416,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v329`, members `?v=218`, public/events `?v=205`, score `?v=243`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v330`, members `?v=218`, public/events `?v=205`, score `?v=243`,
 home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -471,6 +471,13 @@ first load on a throttled phone profile.
 - **Admin › Members rows**: the main action full width (Renew when due, or Link for a held account), then Tier ·
   Wallet · More; Reissue PIN, Clear lockouts and Remove member live in More. The list and applications load side by
   side, and the Worker reads member/application records in batches of 25 (`readInBatches`), not one after another.
+- **Google Sheets imports** (`sheet-import.ts`, `scripts/qa/sheet-import-e2e-qa.mjs` drives every kind through the
+  built admin app against the real Worker): a value the app can't use (over $10,000, a dues year past next year, tag
+  #0) skips that row with a note instead of refusing the sheet; an admin linking a misspelled row to a member saves the
+  sheet's spelling on them (`sheetNames`) so the next check matches; new-name suggestions only compare names with the
+  same last name or the same first letter and a length within 2 (a 200-new-name check was ~50ms of CPU, over the free
+  plan's ~10ms); a sheet link must answer with CSV (an unshared sheet answers with Google's sign-in page). A first
+  import costs one KV write per new person (held account) and per changed tier or dues year.
 - **Admin top bar** shows the member app's envelope and bell with the same counts (`/me/messages/summary`), opening
   Messages in the member app.
 - **Admin › Members › Clear lockouts** (`POST /admin/members/clear-locks`, `clearAccountLocks`) lifts every counter that
