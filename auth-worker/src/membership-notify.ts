@@ -70,14 +70,14 @@ export function buildWelcomeEmail(env: Env, opts: { name: string; identifier: st
     : "";
   const html = shell("Welcome to the club!",
     p(`Hi ${esc(first)}, you are approved - welcome to the Greenville Disc Golf Club.`) +
-    p(`<strong>How to sign in:</strong> use <strong>${esc(opts.identifier)}</strong> and the PIN you chose when you applied. The first time in, the app will ask you to set your PIN once more.`) +
+    p(`<strong>How to sign in:</strong> use <strong>${esc(opts.identifier)}</strong> and the PIN you chose when you applied.`) +
     button(url, "Open the member app") +
     p(`<strong>Install the app:</strong> open <a href="${esc(url)}" style="color:#C8410F;">${esc(url.replace(/^https:\/\//, ""))}</a> on your phone and choose "Add to Home Screen" (or "Install app") from your browser menu.`) +
     eventsHtml +
     p(`Say hi to everyone in the <a href="${esc(FACEBOOK_GROUP_URL)}" style="color:#C8410F;">club Facebook group</a>. See you on the course!`));
   const text = [
     `Hi ${first}, you are approved - welcome to the Greenville Disc Golf Club.`, "",
-    `How to sign in: use ${opts.identifier} and the PIN you chose when you applied. The first time in, the app will ask you to set your PIN once more.`,
+    `How to sign in: use ${opts.identifier} and the PIN you chose when you applied.`,
     "", `Member app: ${url}`,
     `Install the app: open that link on your phone and choose "Add to Home Screen" (or "Install app") from your browser menu.`,
     ...(events.length ? ["", "Coming up:", ...events.map((e) => `  ${e.name} - ${e.date}`)] : []),
