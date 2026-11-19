@@ -30,5 +30,7 @@ test("resolveApiBase maps known hosts to the correct Worker", () => {
   assert.equal(resolveApiBase({ dataset: {}, hostname: "127.0.0.1" }), "http://127.0.0.1:8788");
   assert.equal(resolveApiBase({ dataset: {}, hostname: "greenvillediscgolf.com" }), "https://auth.greenvillediscgolf.com");
   assert.equal(resolveApiBase({ dataset: {}, hostname: "www.greenvillediscgolf.com" }), "https://auth.greenvillediscgolf.com");
-  assert.equal(resolveApiBase({ dataset: {}, hostname: "gvdgclub.com" }), "https://auth.gvdgclub.com");
+  assert.equal(resolveApiBase({ dataset: {}, hostname: "gvdgclub.com" }), "https://gvdgclub.com/api");
+  assert.equal(resolveApiBase({ dataset: {}, hostname: "www.gvdgclub.com" }), "https://www.gvdgclub.com/api");
+  assert.equal(resolveApiBase({ dataset: {}, hostname: "preview.gvdg-club-site.pages.dev" }), "https://auth.gvdgclub.com");
 });

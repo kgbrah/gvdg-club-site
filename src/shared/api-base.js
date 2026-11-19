@@ -3,6 +3,9 @@ const DEV_API_BASE = "https://auth.gvdgclub.com";
 const PRODUCTION_API_BASE = "https://auth.greenvillediscgolf.com";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost"]);
 const PRODUCTION_HOSTS = new Set(["greenvillediscgolf.com", "www.greenvillediscgolf.com"]);
+// The club site serves its API at /api on its own address (a Cloudflare Worker route for gvdgclub.com/api/*): no CORS
+// preflight before each call and no second connection to another host.
+const SAME_ORIGIN_HOSTS = new Set(["gvdgclub.com", "www.gvdgclub.com"]);
 
 function normalizedBase(value) {
   return String(value || "").trim().replace(/\/+$/, "");
@@ -28,5 +31,6 @@ export function resolveApiBase({
   const host = String(hostname || "");
   if (LOCAL_HOSTS.has(host)) return LOCAL_API_BASE;
   if (PRODUCTION_HOSTS.has(host)) return PRODUCTION_API_BASE;
+  if (SAME_ORIGIN_HOSTS.has(host)) return `https://${host}/api`;
   return DEV_API_BASE;
 }

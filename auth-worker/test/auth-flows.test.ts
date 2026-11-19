@@ -642,3 +642,17 @@ describe("admin Today's low-stock card", () => {
     expect((await call("/admin/shop/low-stock", { token: member })).status).toBe(403);
   });
 });
+
+describe("the API under /api on the site's own address", () => {
+  it("answers the same at /api/... (same-origin, no preflight) as at the API host, posts and sign-in included", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    const direct = await login("80024");
+    const prefixed = await call("/api/login", { method: "POST", body: { identifier: "80024", pin: PIN } });
+    expect(prefixed.status).toBe(200);
+    expect(prefixed.data.name).toBe(direct.data.name);
+    expect((await call("/api/me", { token: prefixed.data.token })).data.name).toBe("Jordan Parker");
+    expect((await call("/api/market/config", { token: prefixed.data.token })).data.viewer.kind).toBe("member");
+    expect((await call("/api/nope")).status).toBe(404);
+    expect((await call("/apiary")).status).toBe(404); // only the /api/ prefix is stripped
+  });
+});
