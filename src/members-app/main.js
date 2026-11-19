@@ -10,11 +10,11 @@ import { MemberPageChrome } from "./page-chrome.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 import { lazyPanel } from "./lazy-panel.js";
 import { fieldTestOn, startFieldTest } from "../shared/field-test-gate.js";
-import { installPayPalHandoff } from "../shared/paypal-link.js";
+import { installOutsideLinkHandoff } from "../shared/outside-link.js";
 
 // PayPal links opened inside Facebook / Instagram / Messenger go to the PayPal app (or the real browser), not the
 // in-app browser where no one is signed in. Does nothing in a normal browser.
-installPayPalHandoff();
+installOutsideLinkHandoff();
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   void import("react-grab");

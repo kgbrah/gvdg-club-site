@@ -19,7 +19,7 @@ import { EventsStatusApp } from "./events-status-app.js";
 import { EventsViewController, installEventsRouteController } from "./events-view-controller.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 import { consumeGuestLink } from "./market-api.js";
-import { installPayPalHandoff } from "../shared/paypal-link.js";
+import { installOutsideLinkHandoff } from "../shared/outside-link.js";
 import { renewMemberSession } from "../shared/member-session.js";
 import { resolveApiBase } from "../shared/api-base.js";
 
@@ -28,7 +28,7 @@ void renewMemberSession({ apiBase: resolveApiBase() });
 
 // PayPal links opened inside Facebook / Instagram / Messenger go to the PayPal app (or the real browser), not the
 // in-app browser where no one is signed in. Does nothing in a normal browser.
-installPayPalHandoff();
+installOutsideLinkHandoff();
 
 if (import.meta.env.DEV && import.meta.env.VITE_DISABLE_REACT_DEVTOOLS !== "1") {
   import("react-scan").then(({ scan }) => scan({ enabled: true })).catch(() => {});

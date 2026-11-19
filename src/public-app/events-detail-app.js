@@ -24,6 +24,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { LiveStandings } from "./live-standings.js";
 import { EventCalendarButton, EventShareButton } from "./events-actions.js";
 import { countdownLabel, countdownParts, relativeEventWhen } from "../shared/events-display.js";
+import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
 
@@ -87,10 +88,10 @@ function DetailFact({ label, value }) {
   ]);
 }
 
-function ExternalLink({ href, text }) {
+function ExternalLink({ href, text, signup = false }) {
   const clean = safeHref(href);
   if (!clean) return null;
-  return h("a", { href: clean, rel: "noopener noreferrer", target: "_blank" }, text);
+  return h("a", { href: clean, ...(signup ? SIGNUP_LINK : { rel: "noopener noreferrer", target: "_blank" }) }, text);
 }
 
 function fee(cents) {
@@ -146,7 +147,7 @@ function DetailFacts({ course, courseSummary, event }) {
       ? h(DetailFact, {
         key: "external",
         label: "More info",
-        value: h(ExternalLink, { href: externalHref, text: "External link" }),
+        value: h(ExternalLink, { href: externalHref, text: "External link", signup: true }),
       })
       : null,
   ]);
@@ -383,7 +384,7 @@ function DetailWhen({ course, event }) {
     h("div", { className: "detail-actions", key: "actions" }, [
       scheduled ? h(EventCalendarButton, { event: calendarEvent, key: "ics" }) : null,
       h(EventShareButton, { event, key: "share" }),
-      externalHref ? h("a", { className: "event-action-btn", href: externalHref, key: "ext", rel: "noopener noreferrer", target: "_blank" }, "Event page") : null,
+      externalHref ? h("a", { className: "event-action-btn", href: externalHref, key: "ext", ...SIGNUP_LINK }, "Event page") : null,
     ]),
   ]);
 }

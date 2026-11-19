@@ -146,6 +146,14 @@ try {
         assert.equal(body.glass, glass === "frosted", route + " " + mode + " glass class");
         assert.equal(body.overflow, false, route + " horizontal overflow");
         if (glass === "frosted") assert.deepEqual([body.alpha, body.blur], ["45%", "20px"]);
+        if (route === "home") {
+          // The renewal card sits inside Home's PDGA card, which credits PDGA once (owner: "no need for 2 of these").
+          const story = page.locator("[data-react-home-story]");
+          await story.locator("[data-pdga-membership]").waitFor();
+          assert.equal(await story.locator(".pdga-credit").count(), 1, "Home's PDGA card shows one credit line");
+          assert.equal(await story.getByRole("link", { name: "Renew with PDGA" }).getAttribute("data-signup-link"), "true");
+          if (glass === "frosted" && mode === "dark") await story.locator("[data-pdga-membership]").screenshot({ path: join(images, "member-home-pdga-renewal-390.png") });
+        }
         await page.screenshot({ path: join(images, "member-" + route + "-" + glass + "-" + mode + "-390.png"), animations: "disabled" });
         assert.deepEqual(errors, []);
         await context.close();

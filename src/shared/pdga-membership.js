@@ -3,6 +3,7 @@
 // server only for signed-in current club members (PDGA asks clubs to keep it within the club).
 import React from "react";
 import { PdgaCredit } from "./pdga-credit.js";
+import { SIGNUP_LINK } from "./outside-link.js";
 
 const h = React.createElement;
 const SOON_DAYS = 45;
@@ -33,7 +34,8 @@ function PromoCode({ promo }) {
 }
 
 /** The card: status from PDGA, the join/renew button, and the code (or how to get it). */
-export function PdgaMembershipCard({ data, compact = false }) {
+/** credit: false inside a card that already credits PDGA (Home), so the line isn't shown twice. */
+export function PdgaMembershipCard({ data, compact = false, credit = true }) {
   if (!data || !data.joinUrl) return null; // no answer (signed out, or the check failed): nothing to show
   const player = data.player;
   const status = player ? player.membershipStatus : null;
@@ -51,10 +53,10 @@ export function PdgaMembershipCard({ data, compact = false }) {
     h("h3", { key: "title" }, "PDGA membership"),
     h("p", { className: "player-card-meta", key: "line" }, line),
     h("div", { className: "member-action-grid", key: "actions" }, [
-      h("a", { className: `player-btn${renew || data.lookup === "none" ? " primary" : ""}`, href, target: "_blank", rel: "noopener noreferrer", key: "go" }, label),
+      h("a", { className: `player-btn${renew || data.lookup === "none" ? " primary" : ""}`, href, ...SIGNUP_LINK, key: "go" }, label),
     ]),
     data.promo ? h(PromoCode, { promo: data.promo, key: "promo" })
       : data.clubDiscountAvailable ? h("p", { className: "dash-note", key: "promo-note" }, "Current GVDG members get $5 off with the club's code.") : null,
-    player ? h(PdgaCredit, { key: "credit" }) : null,
+    player && credit ? h(PdgaCredit, { key: "credit" }) : null,
   ]);
 }

@@ -304,13 +304,17 @@ try {
   // or the real browser; iPhone: Safari). A normal browser is left alone.
   const FB_ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/120.0 Mobile Safari/537.36 [FB_IAB/FB4A;FBAV/450.0.0.0;]";
   const FB_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/450.0;FBBV/1;FBDV/iPhone15,2]";
-  for (const [label, userAgent, expected] of [
+  // The installed club app on an iPhone: outside sign-up links open in Safari, where the person is signed in.
+  const IPHONE_APP = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148";
+  for (const [label, userAgent, expected, installed] of [
     ["facebook android", FB_ANDROID, /^intent:\/\/paypal\.me\/greenvillediscgolf\/15#Intent;scheme=https;/],
     ["facebook iphone", FB_IOS, /^x-safari-https:\/\/paypal\.me\/greenvillediscgolf\/15$/],
+    ["installed app iphone", IPHONE_APP, /^x-safari-https:\/\/paypal\.me\/greenvillediscgolf\/15$/, true],
     ["normal browser", undefined, null],
   ]) {
     try {
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ...(userAgent ? { userAgent } : {}) });
+      if (installed) await context.addInitScript(() => Object.defineProperty(Navigator.prototype, "standalone", { get: () => true }));
       await installRoutes(context);
       await context.route("https://paypal.me/**", (route) => route.fulfill({ status: 204, body: "" }));
       const page = await context.newPage();
@@ -321,7 +325,7 @@ try {
       const popup = context.waitForEvent("page", { timeout: 1500 }).catch(() => null);
       await dues.click({ noWaitAfter: true });
       await page.waitForTimeout(300);
-      const handoff = await page.evaluate(() => document.documentElement.dataset.paypalHandoff || "").catch(() => "");
+      const handoff = await page.evaluate(() => document.documentElement.dataset.outsideHandoff || "").catch(() => "");
       if (expected) {
         if (!expected.test(handoff)) throw new Error(label + ": expected a hand-off, got " + JSON.stringify(handoff));
       } else {
