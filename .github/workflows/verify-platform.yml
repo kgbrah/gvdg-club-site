@@ -41,6 +41,7 @@ jobs:
           node scripts/qa/spectator-browser-qa.mjs
           node scripts/qa/members-dashboard-browser-qa.mjs
           node scripts/qa/account-recovery-browser-qa.mjs
+          node scripts/qa/screen-load-recovery-browser-qa.mjs
           node scripts/qa/practice-browser-qa.mjs
           node scripts/qa/shot-ledger-browser-qa.mjs
           node scripts/qa/phone-activity-browser-qa.mjs
