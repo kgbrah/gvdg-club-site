@@ -3,6 +3,8 @@ import React from "react";
 import { clubToday, clubWallClockToIso, isoToClubWallClock } from "../shared/events-model.js";
 import { applyEventVoice, VoiceFill } from "./voice-fill.js";
 import { defaultPuttingStations } from "./scoring-model.js";
+import { adminRequest } from "./admin-api.js";
+import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 import {
   calendarDaysBetween,
   minusWallMinutes,
@@ -266,7 +268,43 @@ function layoutOption(layout) {
   return option(String(layout.id), `${layout.name}${layout.total_par != null ? ` (par ${layout.total_par})` : ""}`);
 }
 
+const NO_PDGA = { on: false, number: "", initial: null, info: null, message: "" };
+
+/** "PDGA-sanctioned event": the PDGA event this club event is (players register on this site, with its PDGA rules). */
+function PdgaEventFields({ pdga, setPdga }) {
+  async function lookUp() {
+    const number = String(pdga.number).trim();
+    if (!number) return;
+    try {
+      const response = await adminRequest(`/admin/pdga-events/${encodeURIComponent(number)}`);
+      const data = await response.json().catch(() => ({}));
+      setPdga((current) => ({ ...current, info: response.ok ? data.event : null,
+        message: response.ok ? "" : data.error === "pdga_event_not_found" ? "PDGA has no event with that number." : "PDGA couldn't be reached; the number is saved anyway." }));
+    } catch {
+      setPdga((current) => ({ ...current, message: "PDGA couldn't be reached; the number is saved anyway." }));
+    }
+  }
+  return h("div", { className: "al-section admin-event-pdga", "data-admin-event-pdga": pdga.on ? "on" : "off", style: { margin: 0 } }, [
+    h("label", { key: "on", style: { display: "flex", gap: "0.5rem", alignItems: "center" } }, [
+      h("input", { key: "box", type: "checkbox", checked: pdga.on, style: { width: "auto", flex: "0 0 auto" }, onChange: (event) => setPdga((current) => ({ ...current, on: event.target.checked })) }),
+      " PDGA-sanctioned event (players register on this site, not Disc Golf Scene)",
+    ]),
+    pdga.on ? h("label", { key: "number" }, ["PDGA event number", h("input", { key: "input", id: "aePdgaEvent", inputMode: "numeric", value: pdga.number, placeholder: "e.g. 104547",
+      onChange: (event) => setPdga((current) => ({ ...current, number: event.target.value.replace(/\D/g, ""), info: null, message: "" })), onBlur: lookUp })]) : null,
+    pdga.on && pdga.info ? h("p", { className: "al-note", key: "info" }, [
+      h(PdgaLink, { href: pdgaEventHref(pdga.info.id), key: "link" }, pdga.info.name),
+      ` · ${pdga.info.tier || "?"}-tier · ${pdga.info.startDate || ""}${pdga.info.endDate && pdga.info.endDate !== pdga.info.startDate ? ` to ${pdga.info.endDate}` : ""}`,
+    ]) : null,
+    pdga.on && pdga.message ? h("p", { className: "al-note", role: "status", key: "message" }, pdga.message) : null,
+    pdga.on ? h("p", { className: "al-note", key: "next" }, "Cap, rating limits, fees and payment options: the event's Registration screen.") : null,
+    pdga.on && pdga.info ? h(PdgaCredit, { key: "credit" }) : null,
+  ]);
+}
+
 export function AdminEventForm() {
+  const [pdga, setPdga] = React.useState(NO_PDGA);
+  const pdgaRef = React.useRef(pdga);
+  pdgaRef.current = pdga;
   const [courses, setCourses] = React.useState(() => coursesFromState(EMPTY_COURSES_STATE));
   const [leagues, setLeagues] = React.useState(() => leaguesFromState(EMPTY_LEAGUES_STATE));
   const [layoutsByCourse, setLayoutsByCourse] = React.useState({});
@@ -284,6 +322,7 @@ export function AdminEventForm() {
   const nameInput = React.useRef(null);
 
   function resetForm() {
+    setPdga(NO_PDGA);
     setEditingEvent(null);
     setForm(EMPTY_FORM);
     setCourseRows(blankCourseRows());
@@ -337,6 +376,14 @@ export function AdminEventForm() {
       if (!detail.requestId || detail.requestId !== currentRequest.current) return;
       setBusy(false);
       if (detail.ok === true) {
+        // Link (or unlink) the PDGA event once the event is saved, then let the Registration screen show it.
+        const chosen = pdgaRef.current;
+        const want = chosen.on && chosen.number ? Number(chosen.number) : null;
+        if (detail.eventId != null && want !== chosen.initial) {
+          adminRequest(`/admin/events/${encodeURIComponent(detail.eventId)}/pdga`, { method: "PATCH", body: { pdgaEventId: want } })
+            .then(() => window.dispatchEvent(new CustomEvent("gvdg:admin-tournament-changed", { detail: { eventId: detail.eventId } })))
+            .catch(() => {});
+        }
         currentRequest.current = "";
         resetForm();
       }
@@ -344,6 +391,8 @@ export function AdminEventForm() {
     function edit(event) {
       const source = event.detail && event.detail.event;
       if (!source) return;
+      const linked = source.pdga_event_id != null ? Number(source.pdga_event_id) : null;
+      setPdga({ ...NO_PDGA, on: linked != null, number: linked != null ? String(linked) : "", initial: linked });
       const rows = courseRowsFromEvent(source);
       const filled = formFromEvent(source);
       setEditingEvent(source);
@@ -575,6 +624,7 @@ export function AdminEventForm() {
           h("span", { key: "par" }, ["Par ", h("input", { id: "aeDefaultPar", key: "input", max: 15, min: 1, onChange: (event) => setQuickLayout((current) => ({ ...current, defaultPar: event.target.value })), style: { width: "4.5rem" }, type: "number", value: quickLayout.defaultPar })]),
         ]),
       ]) : null,
+      h(PdgaEventFields, { pdga, setPdga, key: "pdga" }),
       formField({ id: "aeLeague", label: "League (for league rounds)", children: h("select", { id: "aeLeague", key: "input", onChange: (event) => updateField("leagueId", event.target.value), value: form.leagueId }, [option("", "-"), ...leagues.map((league) => option(league.id, league.label))]) }),
       formField({ id: "aeNotes", label: "Notes", children: h("textarea", { id: "aeNotes", key: "input", maxLength: 5000, onChange: (event) => updateField("notes", event.target.value), rows: 3, value: form.notes }) }),
       h("div", { className: "admin-form-actions", key: "actions" }, [

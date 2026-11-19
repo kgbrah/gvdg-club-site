@@ -106,6 +106,7 @@ function AdminEventRow({ event }) {
       type: "button",
     }, [
       h("span", { className: "ev-name", key: "name" }, displayEventTitle(event.name)),
+      event.source?.pdga_event_id ? h("span", { className: "admin-event-meta pdga-badge", key: "pdga" }, "PDGA event") : null,
       h("span", { className: "admin-event-meta", key: "type" }, event.kind === "campaign" ? "Campaign" : event.kind === "minutes" ? "Meeting minutes" : typeLabel(event.type)),
       when ? h("span", { className: "admin-event-meta", key: "when" }, when) : null,
       place ? h("span", { className: "admin-event-meta", key: "place" }, place) : null,

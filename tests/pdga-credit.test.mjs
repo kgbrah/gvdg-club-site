@@ -40,3 +40,13 @@ test("PDGA event names link to their pdga.com pages", () => {
   assert.match(readFileSync("src/members-app/pdga-registrations.js", "utf8"), /h\(PdgaLink, \{ className: "register-name", href: event\.url/);
   assert.match(readFileSync("src/admin-app/pdga-baselines-panel.js", "utf8"), /href: pdgaEventHref\(round\.tournId\)/);
 });
+
+test("an event can be marked a PDGA event in the event form, and lists badge it", () => {
+  const form = readFileSync("src/admin-app/event-form.js", "utf8");
+  assert.match(form, /PDGA-sanctioned event \(players register on this site, not Disc Golf Scene\)/);
+  assert.match(form, /\/admin\/events\/\$\{encodeURIComponent\(detail\.eventId\)\}\/pdga`, \{ method: "PATCH"/);
+  assert.match(readFileSync("src/public-app/events-hub-app.js", "utf8"), /event\.pdga \? h\(Badge, \{ className: "type-badge pdga-badge", key: "pdga", text: "PDGA" \}\)/);
+  assert.match(readFileSync("src/public-app/events-detail-app.js", "utf8"), /event\.pdga_event_id \? h\(Badge/);
+  assert.match(readFileSync("src/members-app/registration-events.js", "utf8"), /tournament \? h\("span", \{ className: "player-chip pdga-badge"/);
+  assert.match(readFileSync("src/admin-app/events-list.js", "utf8"), /event\.source\?\.pdga_event_id \?/);
+});

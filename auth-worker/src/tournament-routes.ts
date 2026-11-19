@@ -266,6 +266,28 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
   if (seg[1] !== "events") return null;
   const eventId = asInt(seg[2]);
   if (eventId == null) return null;
+  // The event form's "PDGA-sanctioned event": link (or unlink) only the PDGA event; the rest of the settings stay.
+  if (seg[3] === "pdga" && method === "PATCH") {
+    const body = (await readJson(request)) ?? {};
+    const pdgaEventId = body.pdgaEventId == null || body.pdgaEventId === "" ? null : asInt(body.pdgaEventId);
+    if (body.pdgaEventId != null && body.pdgaEventId !== "" && (pdgaEventId == null || pdgaEventId <= 0)) return json({ error: "invalid_pdga_event" }, 400, origin);
+    if ((await db.getEventStatus(env.DB, eventId)) == null) return json({ error: "not_found" }, 404, origin);
+    let pdgaEvent: string | null = null;
+    if (pdgaEventId != null && pdgaApiConfigured(apiEnv(env))) {
+      try {
+        const info = await lookupPdgaEvent(apiEnv(env), pdgaEventId);
+        if (!info) return json({ error: "pdga_event_not_found" }, 404, origin);
+        pdgaEvent = JSON.stringify(info);
+      } catch { /* keep the number; the details are read when the settings are next saved */ }
+    }
+    const row = await env.DB.prepare(`INSERT INTO event_config (event_id, pdga_event_id, pdga_event) VALUES (?, ?, ?)
+        ON CONFLICT(event_id) DO UPDATE SET pdga_event_id = excluded.pdga_event_id,
+          pdga_event = CASE WHEN excluded.pdga_event_id IS NULL THEN NULL ELSE COALESCE(excluded.pdga_event, event_config.pdga_event) END
+        RETURNING pdga_event_id, pdga_event`).bind(eventId, pdgaEventId, pdgaEvent).first<{ pdga_event_id: number | null; pdga_event: string | null }>();
+    let info: unknown = null;
+    try { info = row?.pdga_event ? JSON.parse(row.pdga_event) : null; } catch { info = null; }
+    return json({ pdgaEventId: row?.pdga_event_id ?? null, pdgaEvent: info }, 200, origin);
+  }
   if (seg[3] === "tournament" && method === "GET") {
     const cfg = (await db.getEventConfig(env.DB, eventId)) as TournamentConfig | null;
     return json({ settings: cfg ? tournamentSettingsView(cfg) : null }, 200, origin);

@@ -88,6 +88,7 @@ function EventCard({ event }) {
         key: "type",
         text: String(event.typeLabel),
       }) : null,
+      event && event.pdga ? h(Badge, { className: "type-badge pdga-badge", key: "pdga", text: "PDGA" }) : null,
     ]),
     h("div", { className: "event-meta", key: "meta" }, [
       h(MetaRow, { iconNode: icon(CalendarDays), key: "date" }, event && event.dateText ? String(event.dateText) : "Date TBD"),

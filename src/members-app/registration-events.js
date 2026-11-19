@@ -176,6 +176,7 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
       h("div", { key: "heading" }, [
         event.date ? h("p", { className: "register-date", key: "date" }, formatEventDay(event.date)) : null,
         h("h3", { className: "register-name", key: "name" }, event.name || "Event"),
+        tournament ? h("span", { className: "player-chip pdga-badge", key: "pdga" }, "PDGA") : null,
       ]),
       h(EventBadge, { status: event.status, key: "badge" }),
     ]),

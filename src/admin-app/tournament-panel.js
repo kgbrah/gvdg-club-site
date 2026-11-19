@@ -153,6 +153,12 @@ export function AdminTournamentPanel({ eventId }) {
     setState({ status: settings.ok ? "ready" : "error", settings: settings.data.settings ?? null, registrations: registrations.data.registrations ?? [] });
   }, [eventId]);
   React.useEffect(() => { load(); }, [load]);
+  // The event form linked or unlinked the PDGA event.
+  React.useEffect(() => {
+    const changed = (event) => { if (String(event.detail?.eventId) === String(eventId)) load(); };
+    window.addEventListener("gvdg:admin-tournament-changed", changed);
+    return () => window.removeEventListener("gvdg:admin-tournament-changed", changed);
+  }, [eventId, load]);
   if (state.status === "loading") return null;
 
   const linked = Boolean(state.settings?.pdgaEventId);
