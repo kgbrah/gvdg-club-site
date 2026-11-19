@@ -570,12 +570,15 @@ export type PdgaBaseline = {
  * A round's calendar day at the club (US Eastern), so "before" means an earlier day of play. A
  * date-only event (stored as UTC midnight by ratingTimestamp) is that calendar day itself.
  */
+// Building a time-zone formatter is far slower than using one, and this runs for every rated round shown or repaired.
+let clubDayFormat: Intl.DateTimeFormat | null = null;
+
 export function clubCalendarDay(iso: string): string | null {
   const time = Date.parse(iso);
   if (!Number.isFinite(time)) return null;
   if (/^\d{4}-\d{2}-\d{2}(?:T00:00:00(?:\.000)?Z)?$/.test(iso)) return iso.slice(0, 10);
-  const parts = new Intl.DateTimeFormat("en-US", { timeZone: CLUB_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" })
-    .formatToParts(new Date(time));
+  clubDayFormat ??= new Intl.DateTimeFormat("en-US", { timeZone: CLUB_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+  const parts = clubDayFormat.formatToParts(new Date(time));
   const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? "";
   return part("year") + "-" + part("month") + "-" + part("day");
 }

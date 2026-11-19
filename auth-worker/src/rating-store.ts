@@ -2,7 +2,7 @@ import type { D1Like, D1StatementLike } from "./db-types.js";
 import { aggregatePlayerRating, type RatingMethod, type RatingStream } from "./rating-engine.js";
 import { calibrateRatingField } from "./ratings-recompute-core.js";
 import { readArchivedRatingHoles, ratingLayoutRevision, ratingNumber, ratingTimestamp } from "./rating-layout.js";
-import { CURRENT_RESULT_FIELDS, MAX_RATING_ROUND_RESULTS, RATING_SOURCE_ROWS, STORED_EVIDENCE_FIELDS,
+import { CURRENT_RESULT_FIELDS, MAX_RATING_ROUND_RESULTS, RATING_SOURCE_ROWS, STORED_EVIDENCE_FIELDS, competitionSourceRowsSql,
   matchesStoredRatingEvidence, ratingFieldFingerprint, ratingSourceGroups } from "./rating-source.js";
 
 export type LayoutRatingBaseline = {
@@ -59,30 +59,79 @@ type VersionedBaseline = {
 
 const BASELINE_FIELDS = "event_id, ssa, ppt, propagator_count, available_at, played_at, field_fingerprint";
 
-async function verifyBaselineField(db: D1Like, revision: string, row: VersionedBaseline, guards?: D1StatementLike[]): Promise<LayoutRatingBaseline | null> {
-  if (!row.field_fingerprint || !(row.ssa > 0) || !(row.ppt > 0)) return null;
-  const sourceSql = RATING_SOURCE_ROWS.competition;
-  const sourceArgs = [row.event_id, MAX_RATING_ROUND_RESULTS + 1];
-  const source = await db.prepare(sourceSql).bind(...sourceArgs).all();
-  if (!source.success) throw new Error("Calibration field unavailable");
-  if (guards) guards.push(...ratingReadGuards(db, sourceSql, sourceArgs, source.results));
-  if (source.results.length > MAX_RATING_ROUND_RESULTS) return null;
-  const evidence = (await ratingSourceGroups(source.results, "competition", null)).find((group) => group[0]?.layoutRevision === revision);
+type FieldEvidence = { row: VersionedBaseline; evidence: Awaited<ReturnType<typeof ratingSourceGroups>>[number]; earliest: string };
+
+/** A stored calibration's field as its event's results give it now (null when they no longer give that field). */
+async function baselineFieldEvidence(revision: string, row: VersionedBaseline, sourceRows: readonly Record<string, unknown>[]): Promise<FieldEvidence | null> {
+  if (sourceRows.length > MAX_RATING_ROUND_RESULTS) return null;
+  const evidence = (await ratingSourceGroups(sourceRows as Record<string, unknown>[], "competition", null)).find((group) => group[0]?.layoutRevision === revision);
   if (!evidence?.length) return null;
   const earliest = evidence.reduce((time, entry) => entry.roundDate < time ? entry.roundDate : time, evidence[0]!.roundDate);
   const available = evidence.reduce((time, entry) => entry.availableAt > time ? entry.availableAt : time, earliest);
   if (earliest !== row.played_at || available !== row.available_at) return null;
-  const anchors = await priorRatingAnchors(db, evidence.map((entry) => entry.memberId), earliest, guards);
+  return { row, evidence, earliest };
+}
+
+/** The calibration, if that field with those prior anchors still solves to exactly what was stored. */
+async function baselineFromField({ row, evidence }: FieldEvidence, anchors: Map<string, number>): Promise<LayoutRatingBaseline | null> {
   if (await ratingFieldFingerprint(evidence, anchors) !== row.field_fingerprint) return null;
   const { solved } = calibrateRatingField(evidence, anchors);
   if (!solved || solved.ssa !== row.ssa || solved.ppt !== row.ppt || solved.propagatorCount !== row.propagator_count) return null;
   return { ssa: row.ssa, ppt: row.ppt, propagatorCount: row.propagator_count, eventId: row.event_id, availableAt: row.available_at };
 }
 
-export async function getSourceRatingBaseline(db: D1Like, revision: string, eventId: number): Promise<LayoutRatingBaseline | null> {
-  const row = await db.prepare(`SELECT ${BASELINE_FIELDS} FROM layout_rating_baselines WHERE layout_revision = ? AND event_id = ?`)
-    .bind(revision, eventId).first<VersionedBaseline>();
-  return row ? verifyBaselineField(db, revision, row) : null;
+const storedBaselineUsable = (row: VersionedBaseline) => Boolean(row.field_fingerprint) && row.ssa > 0 && row.ppt > 0;
+
+async function verifyBaselineField(db: D1Like, revision: string, row: VersionedBaseline, guards?: D1StatementLike[]): Promise<LayoutRatingBaseline | null> {
+  if (!storedBaselineUsable(row)) return null;
+  const sourceSql = RATING_SOURCE_ROWS.competition;
+  const sourceArgs = [row.event_id, MAX_RATING_ROUND_RESULTS + 1];
+  const source = await db.prepare(sourceSql).bind(...sourceArgs).all();
+  if (!source.success) throw new Error("Calibration field unavailable");
+  if (guards) guards.push(...ratingReadGuards(db, sourceSql, sourceArgs, source.results));
+  const field = await baselineFieldEvidence(revision, row, source.results as Record<string, unknown>[]);
+  if (!field) return null;
+  return baselineFromField(field, await priorRatingAnchors(db, field.evidence.map((entry) => entry.memberId), field.earliest, guards));
+}
+
+export type SourceBaselineKey = { revision: string; eventId: number };
+
+/**
+ * The stored club calibrations casual estimates were made from, each only if its event's field still solves to it
+ * (as verifyBaselineField checks one). Showing a member's ratings checks every one: the calibrations, their fields and
+ * the fields' prior anchors are each read in one pass. One at a time this was about four queries per calibration
+ * event, past D1's per-request query cap for a busy league player.
+ */
+export async function getSourceRatingBaselines(db: D1Like, keys: readonly SourceBaselineKey[]): Promise<(LayoutRatingBaseline | null)[]> {
+  const events = [...new Set(keys.map((key) => key.eventId))];
+  const stored = new Map<string, VersionedBaseline>();
+  for (let offset = 0; offset < events.length; offset += 90) {
+    const group = events.slice(offset, offset + 90);
+    const result = await db.prepare(`SELECT layout_revision, ${BASELINE_FIELDS} FROM layout_rating_baselines WHERE event_id IN (${group.map(() => "?").join(", ")})`)
+      .bind(...group).all<VersionedBaseline & { layout_revision: string }>();
+    if (!result.success) throw new Error("Layout baselines unavailable");
+    for (const row of result.results) stored.set(row.layout_revision + ":" + row.event_id, row);
+  }
+  const rows = keys.map((key) => {
+    const row = stored.get(key.revision + ":" + key.eventId);
+    return row && storedBaselineUsable(row) ? row : null;
+  });
+  const fieldEvents = [...new Set(rows.flatMap((row) => row ? [row.event_id] : []))];
+  const sources = new Map<number, Record<string, unknown>[]>();
+  for (let offset = 0; offset < fieldEvents.length; offset += 90) {
+    const group = fieldEvents.slice(offset, offset + 90);
+    const result = await db.prepare(competitionSourceRowsSql(group.length)).bind(...group).all<Record<string, unknown>>();
+    if (!result.success) throw new Error("Calibration field unavailable");
+    for (const row of result.results) {
+      const list = sources.get(Number(row.event_id)) ?? [];
+      // The per-event query reads one past the cap, to tell an oversized field from a full one.
+      if (list.length <= MAX_RATING_ROUND_RESULTS) list.push(row);
+      sources.set(Number(row.event_id), list);
+    }
+  }
+  const fields = await Promise.all(rows.map((row, index) => row ? baselineFieldEvidence(keys[index]!.revision, row, sources.get(row.event_id) ?? []) : null));
+  const anchors = await priorRatingAnchorsMany(db, fields.map((field) => field ? { ids: field.evidence.map((entry) => entry.memberId), before: field.earliest } : null));
+  return Promise.all(fields.map((field, index) => field ? baselineFromField(field, anchors[index]!) : null));
 }
 
 export async function getRevisionRatingBaseline(db: D1Like, revision: string | null, before: string, guards?: D1StatementLike[]): Promise<LayoutRatingBaseline | null> {
@@ -141,8 +190,8 @@ function roundRatingStatement(db: D1Like, row: RoundRatingInput): D1StatementLik
        member_id, player_name, stream, event_id, casual_round_code, course_id, layout_id,
        round_date, total, to_par, round_rating, ssa, ppt, wind_gust_mph, weather_adjustment,
        propagator_count, rating_method, source_result_id, layout_revision, baseline_event_id,
-       anchor_count, unrated_reason, source_fingerprint, pdga_baseline_ssa, pdga_baseline_rounds
-     ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       anchor_count, unrated_reason, source_fingerprint, pdga_baseline_ssa, pdga_baseline_rounds, rated_at
+     ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE EXISTS (SELECT 1 FROM ${results} WHERE id = ? AND member_id = ? AND total = ? AND to_par = ? AND scorecard = ?)
        ON CONFLICT DO UPDATE SET
          player_name = excluded.player_name, stream = excluded.stream, course_id = excluded.course_id,
@@ -154,7 +203,7 @@ function roundRatingStatement(db: D1Like, row: RoundRatingInput): D1StatementLik
          layout_revision = excluded.layout_revision, baseline_event_id = excluded.baseline_event_id,
          anchor_count = excluded.anchor_count, unrated_reason = excluded.unrated_reason,
          source_fingerprint = excluded.source_fingerprint, pdga_baseline_ssa = excluded.pdga_baseline_ssa,
-         pdga_baseline_rounds = excluded.pdga_baseline_rounds
+         pdga_baseline_rounds = excluded.pdga_baseline_rounds, rated_at = excluded.rated_at
        WHERE excluded.round_rating IS NOT NULL OR round_ratings.round_rating IS NULL OR round_ratings.source_result_id IS NOT NULL`,
   ).bind(
     row.memberId, row.playerName, row.stream, row.eventId, row.casualRoundCode, row.courseId, row.layoutId,
@@ -208,9 +257,89 @@ export async function queueRatingRepair(db: D1Like, stream: RatingStream, source
 type AnchorRow = { member_id: string; rating: number };
 type PriorRow = Record<string, unknown> & { member_id: string; round_rating: number; round_date: string };
 
+const anchorWindowStart = (before: string) => new Date(Date.parse(before) - (365 * 24 * 60 * 60 * 1000)).toISOString();
+
+/** Members without an official anchor take their own prior stable club rating, when it is an established one. */
+function addLocalAnchors(anchors: Map<string, number>, eligible: readonly (PriorRow | null)[], before: string) {
+  const byMember = new Map<string, PriorRow[]>();
+  for (const row of eligible) {
+    if (!row) continue;
+    const list = byMember.get(row.member_id) ?? [];
+    list.push(row);
+    byMember.set(row.member_id, list);
+  }
+  for (const [memberId, rows] of byMember) {
+    if (anchors.has(memberId)) continue;
+    const summary = aggregatePlayerRating({
+      now: before, rounds: rows.map((row) => ({ roundDate: row.round_date, roundRating: ratingNumber(row.round_rating) })),
+    });
+    if (summary.rating != null && summary.rating >= 700) anchors.set(memberId, summary.rating);
+  }
+}
+
+const localAnchorSql = (slots: string, extra = "") => `SELECT ${CURRENT_RESULT_FIELDS.competition}, ${STORED_EVIDENCE_FIELDS}, rr.round_rating, rr.round_date${extra} FROM round_ratings rr
+         JOIN results res ON res.id = rr.source_result_id AND res.member_id = rr.member_id
+         JOIN events e ON e.id = res.event_id LEFT JOIN event_config ec ON ec.event_id = e.id
+         WHERE rr.member_id IN (${slots}) AND rr.stream = 'competition' AND rr.rating_method = 'stable'
+         AND rr.layout_revision IS NOT NULL AND rr.round_date < ? AND rr.round_date >= ?
+         AND strftime('%Y-%m-%dT%H:%M:%fZ', res.created_at) < ?`;
+
+/**
+ * priorRatingAnchors for many (field, date) pairs: each member's snapshots and stable ratings are read once over the
+ * span of every window, and each pair selects from them what its own queries would return.
+ */
+async function priorRatingAnchorsMany(db: D1Like, requests: readonly ({ ids: readonly string[]; before: string } | null)[]): Promise<(Map<string, number> | null)[]> {
+  const live = requests.filter((request): request is { ids: readonly string[]; before: string } => request != null);
+  if (!live.length) return requests.map(() => null);
+  const ids = [...new Set(live.flatMap((request) => request.ids))];
+  const latest = live.reduce((time, request) => request.before > time ? request.before : time, live[0]!.before);
+  const earliest = live.reduce((time, request) => anchorWindowStart(request.before) < time ? anchorWindowStart(request.before) : time, anchorWindowStart(live[0]!.before));
+  type Snapshot = AnchorRow & { effective_at: string; observed_at: string };
+  const snapshots = new Map<string, Snapshot[]>();
+  const priors = new Map<string, (PriorRow & { anchor_result_created_at: string | null })[]>();
+  for (let offset = 0; offset < ids.length; offset += 75) {
+    const group = ids.slice(offset, offset + 75);
+    const slots = group.map(() => "?").join(", ");
+    const [official, local] = await Promise.all([
+      db.prepare(`SELECT member_id, rating, effective_at, observed_at FROM rating_anchor_snapshots
+           WHERE member_id IN (${slots}) AND observed_at < ? AND effective_at < ? AND effective_at >= ?`)
+        .bind(...group, latest, latest, earliest).all<Snapshot>(),
+      db.prepare(localAnchorSql(slots, ", strftime('%Y-%m-%dT%H:%M:%fZ', res.created_at) AS anchor_result_created_at"))
+        .bind(...group, latest, earliest, latest).all<PriorRow & { anchor_result_created_at: string | null }>(),
+    ]);
+    if (!official.success || !local.success) throw new Error("Historical rating anchors unavailable");
+    for (const row of official.results) snapshots.set(row.member_id, [...snapshots.get(row.member_id) ?? [], row]);
+    for (const row of local.results) priors.set(row.member_id, [...priors.get(row.member_id) ?? [], row]);
+  }
+  const evidence = new Map<Record<string, unknown>, Promise<boolean>>();
+  const eligible = (row: PriorRow) => {
+    if (!evidence.has(row)) evidence.set(row, matchesStoredRatingEvidence(row, "competition"));
+    return evidence.get(row)!;
+  };
+  return Promise.all(requests.map(async (request) => {
+    if (!request) return null;
+    const { before } = request;
+    const since = anchorWindowStart(before);
+    const anchors = new Map<string, number>();
+    for (const id of request.ids) {
+      // The newest snapshot effective (then observed) before the field, as ROW_NUMBER() rank 1 in priorRatingAnchors.
+      let top: Snapshot | null = null;
+      for (const row of snapshots.get(id) ?? []) {
+        if (!(row.observed_at < before && row.effective_at < before && row.effective_at >= since)) continue;
+        if (!top || row.effective_at > top.effective_at || (row.effective_at === top.effective_at && row.observed_at > top.observed_at)) top = row;
+      }
+      if (top && top.rating >= 700) anchors.set(id, top.rating);
+    }
+    const local = request.ids.flatMap((id) => (priors.get(id) ?? []).filter((row) => row.round_date < before && row.round_date >= since
+      && row.anchor_result_created_at != null && row.anchor_result_created_at < before));
+    addLocalAnchors(anchors, await Promise.all(local.map(async (row) => await eligible(row) ? row : null)), before);
+    return anchors;
+  }));
+}
+
 export async function priorRatingAnchors(db: D1Like, ids: readonly string[], before: string, guards?: D1StatementLike[]): Promise<Map<string, number>> {
   const anchors = new Map<string, number>();
-  const since = new Date(Date.parse(before) - (365 * 24 * 60 * 60 * 1000)).toISOString();
+  const since = anchorWindowStart(before);
   for (let offset = 0; offset < ids.length; offset += 75) {
     const group = ids.slice(offset, offset + 75);
     const slots = group.map(() => "?").join(", ");
@@ -219,12 +348,7 @@ export async function priorRatingAnchors(db: D1Like, ids: readonly string[], bef
            FROM rating_anchor_snapshots
            WHERE member_id IN (${slots}) AND observed_at < ? AND effective_at < ? AND effective_at >= ?
          ) WHERE rank = 1`;
-    const localSql = `SELECT ${CURRENT_RESULT_FIELDS.competition}, ${STORED_EVIDENCE_FIELDS}, rr.round_rating, rr.round_date FROM round_ratings rr
-         JOIN results res ON res.id = rr.source_result_id AND res.member_id = rr.member_id
-         JOIN events e ON e.id = res.event_id LEFT JOIN event_config ec ON ec.event_id = e.id
-         WHERE rr.member_id IN (${slots}) AND rr.stream = 'competition' AND rr.rating_method = 'stable'
-         AND rr.layout_revision IS NOT NULL AND rr.round_date < ? AND rr.round_date >= ?
-         AND strftime('%Y-%m-%dT%H:%M:%fZ', res.created_at) < ?`;
+    const localSql = localAnchorSql(slots);
     const officialArgs = [...group, before, before, since];
     const localArgs = [...group, before, since, before];
     const [official, local] = await Promise.all([
@@ -234,21 +358,7 @@ export async function priorRatingAnchors(db: D1Like, ids: readonly string[], bef
     if (!official.success || !local.success) throw new Error("Historical rating anchors unavailable");
     if (guards) guards.push(...ratingReadGuards(db, officialSql, officialArgs, official.results), ...ratingReadGuards(db, localSql, localArgs, local.results));
     for (const row of official.results) if (row.rating >= 700) anchors.set(row.member_id, row.rating);
-    const byMember = new Map<string, PriorRow[]>();
-    const eligible = await Promise.all(local.results.map(async (row) => (await matchesStoredRatingEvidence(row, "competition")) ? row : null));
-    for (const row of eligible) {
-      if (!row) continue;
-      const list = byMember.get(row.member_id) ?? [];
-      list.push(row);
-      byMember.set(row.member_id, list);
-    }
-    for (const [memberId, rows] of byMember) {
-      if (anchors.has(memberId)) continue;
-      const summary = aggregatePlayerRating({
-        now: before, rounds: rows.map((row) => ({ roundDate: row.round_date, roundRating: ratingNumber(row.round_rating) })),
-      });
-      if (summary.rating != null && summary.rating >= 700) anchors.set(memberId, summary.rating);
-    }
+    addLocalAnchors(anchors, await Promise.all(local.results.map(async (row) => (await matchesStoredRatingEvidence(row, "competition")) ? row : null)), before);
   }
   return anchors;
 }
