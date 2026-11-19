@@ -78,7 +78,8 @@ function HomeHero({ context, pdgaState }) {
       key: "rating",
     }, [
       h("b", { className: "dash-tile-num", "data-rating-value": "true", key: "value" }, live != null ? String(live) : "—"),
-      h("span", { key: "label" }, "Live rating"),
+      // Our estimate from recent PDGA round ratings, not an official number.
+      h("span", { key: "label" }, "Live rating estimate"),
     ]),
   ]);
 }
@@ -266,7 +267,7 @@ function RatingMove({ stats, status }) {
     move = `${delta > 0 ? "Up" : "Down"} ${Math.abs(delta)} from ${previous}`;
   }
   return h("div", { className: "player-story-block", key: "rating" }, [
-    h("h3", { key: "title" }, "Rating"),
+    h("h3", { key: "title" }, "PDGA official rating"),
     h("div", { className: "player-story-rating", key: "row" }, [
       h("b", { key: "n" }, String(official)),
       h("span", { className: `player-story-move ${tone}`.trim(), key: "move" }, move),
@@ -287,7 +288,7 @@ function PdgaHistory({ stats }) {
         ]),
         h("div", { className: "player-score", key: "score" }, [
           h("b", { key: "r" }, event.rounds?.[0]?.rating != null ? String(event.rounds[0].rating) : "—"),
-          h("span", { key: "l" }, "Rating"),
+          h("span", { key: "l" }, "Round rating"),
         ]),
       ]),
     )),

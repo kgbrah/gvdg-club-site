@@ -165,7 +165,8 @@ async function populated(width, mode, large = false) {
   assert.ok(await body.getByText("Club results", { exact: true }).count(), "club results");
   assert.ok(await body.getByText("Coming up", { exact: true }).count(), "coming up");
   assert.ok(await body.locator(".dash-rating-row").count(), "pdga tiles");
-  assert.ok(await body.getByText("PDGA live", { exact: true }).count() && await body.getByText("PDGA rating", { exact: true }).count(), "PDGA labels");
+  // The live number is our estimate; the other is PDGA's official rating (owner: say which is which).
+  assert.ok(await body.getByText("Live rating estimate", { exact: true }).count() && await body.getByText("PDGA official rating", { exact: true }).count(), "PDGA labels");
   assert.ok(await body.locator("[data-react-club-ratings]").count(), "club ratings list");
   assert.ok(await body.getByText("Import UDisc history").count(), "import link");
   // rank notes survive next to the bars
@@ -188,7 +189,7 @@ async function populated(width, mode, large = false) {
   await trend.getByRole("button", { name: "Competitive", exact: true }).click();
   // one label, one number
   const keyText = await trend.locator(".stats-rating-key").innerText();
-  assert.ok(/Club rating\s*918/.test(keyText) && /PDGA rating\s*912/.test(keyText) && /PDGA live\s*918/.test(keyText), "rating key: " + keyText);
+  assert.ok(/Club rating\s*918/.test(keyText) && /PDGA official rating\s*912/.test(keyText) && /Live rating estimate\s*918/.test(keyText), "rating key: " + keyText);
   const dist = body.locator(".stats-dist").first();
   assert.ok(await dist.locator(".stats-dist-row").count() >= 4, "distribution rows: " + (await body.locator(".play-score-mix-wrap").first().innerHTML()).slice(0, 600));
   assert.ok(/\d+ holes?/.test(await dist.innerText()) && /%/.test(await dist.innerText()), "counts and percents");

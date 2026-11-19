@@ -8,8 +8,8 @@ const h = React.createElement;
 /* Rating labels used on this page only:
    "Round rating"  - one number per finished round (the plotted line)
    "Club rating"   - the GVDG engine's live value from /my-ratings
-   "PDGA rating"   - the official PDGA number
-   "PDGA live"     - PDGA's live estimate                                   */
+   "PDGA official rating" - the official PDGA number
+   "Live rating estimate" - our estimate from recent PDGA round ratings     */
 
 const RANGES = [
   { id: "90", label: "3 mo", days: 90 },
@@ -58,8 +58,8 @@ function RatingKey({ ratings, kind, pdgaStats }) {
   const group = kind === "casual" ? ratings?.casual : ratings?.competitive;
   const items = [
     group?.live_rating != null ? { label: kind === "casual" ? "Club rating (casual)" : "Club rating", value: group.live_rating, note: "GVDG live" } : null,
-    pdgaStats?.official_rating != null ? { label: "PDGA rating", value: pdgaStats.official_rating, note: "official" } : null,
-    pdgaStats?.live_rating != null ? { label: "PDGA live", value: pdgaStats.live_rating, note: "PDGA estimate" } : null,
+    pdgaStats?.official_rating != null ? { label: "PDGA official rating", value: pdgaStats.official_rating, note: "official" } : null,
+    pdgaStats?.live_rating != null ? { label: "Live rating estimate", value: pdgaStats.live_rating, note: "estimate" } : null,
   ].filter(Boolean);
   if (!items.length) return null;
   return h("dl", { className: "stats-rating-key" }, items.map((item) =>
