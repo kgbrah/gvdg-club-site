@@ -124,7 +124,9 @@ auto-deploy.**
 Browser (static page)
   │  resolves the API base through src/shared/api-base.js:
   │  explicit data-api-base/data-auth-base attr wins; else by host —
-  │  localhost→:8788,  greenvillediscgolf.com→auth.greenvillediscgolf.com,  ELSE→auth.gvdgclub.com
+  │  localhost→:8788,  greenvillediscgolf.com→auth.greenvillediscgolf.com,  gvdgclub.com→gvdgclub.com/api
+  │  (same-origin: a Cloudflare Worker route gvdgclub.com/api/* → this Worker, prefix stripped in index.ts
+  │  withoutApiPrefix),  ELSE→auth.gvdgclub.com
   │  (deployed HTML ships data-*-base="" so the host fallback is what actually selects the Worker)
   ▼
 Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled })
@@ -438,8 +440,8 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v334`, members `?v=220`, public/events `?v=207`, score `?v=246`,
-home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v335`, members `?v=221`, public/events `?v=208`, score `?v=247`,
+home `?v=196` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
 `.karma-chip` in `tokens.css`): every rendered player name gets `KarmaChip` (by `memberId` / `pdga` / payload `karmaKey` /

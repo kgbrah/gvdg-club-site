@@ -83,8 +83,19 @@ function withKvFallback(env: RawEnv): Env {
   };
 }
 
+/** The site can serve this API at /api on its own address (a Worker route for gvdgclub.com/api/*): same-origin calls
+ *  skip the CORS preflight and the second TLS connection a phone makes to auth.gvdgclub.com. The prefix is stripped,
+ *  so every handler sees the same paths either way. */
+export function withoutApiPrefix(request: Request): Request {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api" && !url.pathname.startsWith("/api/")) return request;
+  url.pathname = url.pathname.slice(4) || "/";
+  return new Request(url.toString(), request);
+}
+
 export default {
-  async fetch(request: Request, rawEnv: RawEnv, ctx?: ExecutionContext): Promise<Response> {
+  async fetch(rawRequest: Request, rawEnv: RawEnv, ctx?: ExecutionContext): Promise<Response> {
+    const request = withoutApiPrefix(rawRequest);
     const env = withKvFallback(rawEnv);
     const origin = allowedOrigin(env, request);
     const { pathname } = new URL(request.url);

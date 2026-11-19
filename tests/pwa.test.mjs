@@ -59,7 +59,7 @@ test('live scoring links back to the members dashboard', () => {
   const html = readFileSync('score.html', 'utf8');
   const shellSource = readFileSync('src/score-app/main.js', 'utf8');
   const authSource = readFileSync('src/score-app/auth-flow.js', 'utf8');
-  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=246"><\/script>/);
+  assert.match(html, /<script type="module" src="score-app\/score-app\.js\?v=247"><\/script>/);
   assert.match(shellSource, /href: "gvdg-members\.html"/);
   assert.match(shellSource, /"aria-label": "Return to members"/);
   assert.match(shellSource, /showApplyBar/);
@@ -145,4 +145,14 @@ test('the stats overview tiles sit on the page, not on a square glass slab', () 
   const tokens = readFileSync('tokens.css', 'utf8');
   // Each tile is its own rounded card; glass on the grid that holds them drew a sharp-cornered panel behind them.
   assert.doesNotMatch(tokens, /\.member-stats \.doubles-quick-stats\b/);
+});
+
+test('the service worker leaves the same-origin API (gvdgclub.com/api/*) to the network', () => {
+  const sw = readFileSync('sw.js', 'utf8');
+  const handler = sw.slice(sw.indexOf('self.addEventListener("fetch"'));
+  const passThrough = handler.indexOf('if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return;');
+  assert.ok(passThrough > 0, 'API requests pass through');
+  // Before anything that could cache a response or answer with the offline page.
+  assert.ok(passThrough < handler.indexOf('req.mode === "navigate"'));
+  assert.ok(passThrough < handler.indexOf('if (!staticAsset(req, url)) return;'));
 });
