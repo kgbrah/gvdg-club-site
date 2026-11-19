@@ -81,3 +81,12 @@ test("PDGA registrations: who's going and the tier, as the cards show them", asy
   assert.deepEqual(cards.readPdgaRegistrations(null), { mine: [], club: [] });
   assert.equal(cards.pdgaEventMeta({ start: "2026-11-21", end: "2026-11-22", tier: "B", location: "Raleigh, North Carolina" }), "Nov 21–22, 2026 · B-tier · Raleigh, North Carolina");
 });
+
+test("a PDGA event spanning months (a league) goes on the calendar for its whole span", () => {
+  const league = calendarEventFromPdga({ name: "Fall Sunday Singles", date: "Sep 13 – Dec 20, 2026", url: "https://www.pdga.com/tour/event/107952" });
+  assert.equal(league.start, "20260913");
+  assert.equal(league.end, "20261221");
+  const newYear = calendarEventFromPdga({ name: "Ice Bowl", date: "Dec 31, 2026 – Jan 1, 2027", url: "https://www.pdga.com/tour/event/1" });
+  assert.deepEqual([newYear.start, newYear.end], ["20261231", "20270102"]);
+  assert.equal(calendarEventFromPdga({ name: "Two days", date: "Nov 22-23, 2026", url: "x" }).end, "20261124");
+});
