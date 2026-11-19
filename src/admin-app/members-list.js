@@ -185,6 +185,14 @@ function AdminMemberRow({ adminCount, currentMemberId, member, members = [] }) {
       onClick: requestPinReset,
       type: "button",
     }, "Reissue PIN"),
+    member.held || !member.memberId ? null : h("button", {
+      className: "admin-btn secondary",
+      "data-admin-clear-locks": member.memberId,
+      key: "locks",
+      onClick: () => dispatchRequest("gvdg:admin-member-clear-locks-request", { member: member.source }),
+      title: "Lift wrong-PIN lockouts and \"too many tries\" limits so they can try again now",
+      type: "button",
+    }, "Clear lockouts"),
     h(TierPicker, { isLastAdmin, isSelf, key: "tier", member }),
     member.held ? h(LinkHeld, { key: "link", member, members }) : null,
     member.renewalYear && member.tier !== "guest" && !member.held ? h("button", {

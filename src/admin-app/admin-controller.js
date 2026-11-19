@@ -1507,6 +1507,18 @@ export function startAdminController() {
                     adminMsg('Reissue failed (' + r.status + ')', false);
                 }
             });
+            // Lift every lockout on a member (wrong-PIN, the email step's limits, Forgot PIN requests): they can try now.
+            window.addEventListener('gvdg:admin-member-clear-locks-request', async (event) => {
+                const member = (event.detail || {}).member;
+                if (!member || !member.memberId) return;
+                const r = await adminApi('/admin/members/clear-locks', { method: 'POST', body: { memberId: member.memberId } });
+                if (r.ok) {
+                    const j = await r.json().catch(() => ({}));
+                    adminMsg(j.cleared ? 'Lockouts cleared for ' + member.name + ' - they can try again now' : member.name + ' has no lockouts', true);
+                } else {
+                    adminMsg('Clear lockouts failed (' + r.status + ')', false);
+                }
+            });
             window.addEventListener('gvdg:admin-member-role-request', async (event) => {
                 const detail = event.detail || {};
                 const member = detail.member;

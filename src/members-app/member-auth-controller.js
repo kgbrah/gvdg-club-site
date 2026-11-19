@@ -106,7 +106,7 @@ export function installMemberAuthController() {
       } else if (response.status === 423) {
         showAuthError("email", `Too many tries. Try again in ~${Math.ceil((data.retryAfterSec || 900) / 60)} min.`);
       } else if (response.status === 429) {
-        showAuthError("email", "Too many tries. Wait a bit and try again.");
+        showAuthError("email", "Too many codes sent for now. Try again in up to an hour, or ask a club admin to clear it (Admin › Members › Clear lockouts).");
       } else if (response.status !== 401) {
         showAuthError("email", "Something went wrong. Please try again.");
       }
@@ -292,7 +292,7 @@ export function installMemberAuthController() {
       } else if (response.status === 423) {
         const data = await response.json().catch(() => ({}));
         const minutes = Math.ceil((data.retryAfterSec || 900) / 60);
-        showAuthError("login", `Too many attempts. Try again in ~${minutes} min.`);
+        showAuthError("login", `Too many attempts. Try again in ~${minutes} min, use Forgot PIN?, or ask a club admin to clear it.`);
       } else if (response.status === 401) {
         showAuthError("login", "Invalid PDGA #/UDisc or PIN.");
       } else {

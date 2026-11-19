@@ -1,4 +1,5 @@
 import type { Env } from "./env.js";
+import { clearAccountLocks } from "./account-recovery.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
@@ -85,6 +86,17 @@ export async function handleAdminMembers(
     const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin, env.PIN_PEPPER));
     if (!m) return json({ error: "not_found" }, 404, origin);
     return json({ tempPin, member: pub(m) }, 200, origin);
+  }
+
+  // POST /admin/members/clear-locks { memberId } — clear everything that can keep a member out (wrong-PIN lockouts,
+  // the email step's limits, Forgot PIN requests), so an admin can let them straight back in.
+  if (method === "POST" && seg.length === 3 && seg[2] === "clear-locks") {
+    const b = (await readJson(request)) ?? {};
+    const memberId = asStr(b.memberId, 80);
+    if (!memberId) return json({ error: "member_required" }, 400, origin);
+    const target = await getMember(env.ROSTER, memberId);
+    if (!target) return json({ error: "not_found" }, 404, origin);
+    return json({ cleared: await clearAccountLocks(env, target), member: pub(target) }, 200, origin);
   }
 
   // POST /admin/members/set-tier — Admin, Member or Guest (assigned by an admin; last-admin protected). Not for held

@@ -184,6 +184,7 @@ function fixture(path, method, query, authorization, body) {
     { memberId: "m_casey", name: "Casey Lapsed", pdgaNo: "456789", tier: "member", memberThroughYear: 2025, membershipCurrent: false, renewalYear: 2026 },
     { memberId: "m_drew", name: "Drew Visitor", udisc: "drewv", tier: "guest", memberThroughYear: 2026, membershipCurrent: false, renewalYear: null },
     { memberId: "m_h_nsamlee", name: "Sam Lee", tier: "member", held: true, memberThroughYear: 2026, membershipCurrent: true }] };
+  if (path === "/admin/members/clear-locks") return { cleared: 2, member: { memberId: body.memberId } };
   if (path === "/admin/members/set-tier" || path === "/admin/members/link-held") return { member: { memberId: body.memberId || body.heldId }, carriedOver: path.endsWith("link-held") ? "Matched Sam Lee from the club's sheets: $12.50 store credit came over." : undefined };
   if (path === "/admin/members/lapsed-to-guest") return { moved: 1 };
   // The club's Google Sheets: Jordan matches by name (a change), Sam is new, "Avery Brooke" is new with a suggestion.
@@ -468,6 +469,12 @@ async function verifyRoutes(variant) {
     const heldRow = members.locator("[data-member-held='true']");
     await heldRow.getByText("Sam Lee - held: no sign-in yet - through 2026").waitFor();
     assert.equal(await heldRow.getByRole("button", { name: "Reissue PIN" }).count(), 0, "a held account has no sign-in to reset");
+    assert.equal(await heldRow.getByRole("button", { name: "Clear lockouts" }).count(), 0, "a held account has no sign-in to unlock");
+    // Clear lockouts: one tap lifts wrong-PIN lockouts and "too many tries" limits.
+    await members.locator("[data-admin-clear-locks='m_jordan']").click();
+    await page.getByText("Lockouts cleared for Jordan Reyes - they can try again now").waitFor();
+    await shot(members.locator("[data-admin-member-id='m_jordan']"), "member-row-" + variant.name);
+    assert.ok(requested.some((call) => call.path === "/admin/members/clear-locks" && call.body?.memberId === "m_jordan"));
     await heldRow.scrollIntoViewIfNeeded();
     await shot(heldRow, "member-held-" + variant.name);
     await heldRow.getByRole("combobox", { name: "Link Sam Lee to a member already in the app" }).selectOption("m_jordan");
