@@ -171,7 +171,8 @@ export async function listEvents(
   db: D1Like,
   opts: { status?: string; type?: string; limit?: number | null; offset?: number | null } = {},
 ) {
-  let sql = "SELECT e.*, c.play_format, c.live_scoring_config FROM events e LEFT JOIN event_config c ON c.event_id = e.id";
+  // pdga_event_id marks a club-run PDGA event (badges, and registration on the club site).
+  let sql = "SELECT e.*, c.play_format, c.live_scoring_config, c.pdga_event_id FROM events e LEFT JOIN event_config c ON c.event_id = e.id";
   const where: string[] = [];
   const binds: unknown[] = [];
   if (opts.status) { where.push("e.status = ?"); binds.push(opts.status); }
@@ -191,6 +192,10 @@ export async function listEvents(
 export async function getEvent(db: D1Like, id: number) {
   const event = await db.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
   if (!event) return null;
+  // A club-run PDGA event says so (its badge, and registration on the club site).
+  const pdga = await db.prepare("SELECT pdga_event_id FROM event_config WHERE event_id = ?").bind(id)
+    .first<{ pdga_event_id: number | null }>().catch(() => null);
+  if (pdga && pdga.pdga_event_id != null) Object.assign(event, { pdga_event_id: pdga.pdga_event_id });
   const players = (await db.prepare("SELECT * FROM event_players WHERE event_id = ? ORDER BY name").bind(id).all()).results;
   return attachEventCoursesToRow(db, { ...event, players });
 }

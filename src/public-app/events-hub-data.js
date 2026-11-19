@@ -240,6 +240,7 @@ function eventHubItem(raw, courseIndex) {
     statusLabel: statusLabel(event.status),
     typeClass: event.type,
     typeLabel: typeLabel(event.type),
+    pdga: Boolean(raw?.pdga_event_id), // a club-run PDGA-sanctioned event
     field: Array.isArray(raw?.field) ? raw.field : [],
   };
 }

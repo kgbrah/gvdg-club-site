@@ -904,3 +904,5 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
 .pdga-membership .member-action-grid { display: grid; grid-template-columns: 1fr; gap: .5rem; }
 .pdga-membership a.player-btn, .pdga-membership button.player-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
   padding: .55rem 1rem; border-radius: 12px; font-weight: 700; text-decoration: none; }
+/* A club-run PDGA-sanctioned event (public, member and admin event lists). */
+.pdga-badge { font-weight: 700; letter-spacing: .02em; }

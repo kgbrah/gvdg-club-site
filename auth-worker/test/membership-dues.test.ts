@@ -32,7 +32,7 @@ async function sqliteDb() {
   const db = new DatabaseSync(":memory:");
   db.exec(readFileSync(new URL("../migrations/0058_membership_dues.sql", import.meta.url), "utf8"));
   db.exec("CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT, date TEXT, status TEXT, type TEXT)");
-  db.exec("CREATE TABLE event_config (event_id INTEGER, play_format TEXT, live_scoring_config TEXT)");
+  db.exec("CREATE TABLE event_config (event_id INTEGER, play_format TEXT, live_scoring_config TEXT, pdga_event_id INTEGER)");
   const future = new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10);
   db.prepare("INSERT INTO events (id, name, date, status, type) VALUES (1, 'Sunday Doubles', ?, 'scheduled', 'league')").run(future);
   return {

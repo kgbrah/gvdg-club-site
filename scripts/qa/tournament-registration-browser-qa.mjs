@@ -59,6 +59,7 @@ async function pageLook(file) {
   return { styles, bodyClass };
 }
 const looks = { public: await pageLook("events.html"), admin: await pageLook("admin.html") };
+looks.form = looks.admin;
 const harness = (component) => `<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${looks[component].styles}<title>QA</title></head><body class="${looks[component].bodyClass}" data-api-base="/fixture" data-auth-base="/fixture"><main style="padding:16px">
 <div id="root"></div></main><script type="module">
@@ -66,6 +67,9 @@ import React from "react"; import { createRoot } from "react-dom/client";
 ${component === "public"
     ? `import { TournamentRegistration } from "/src/public-app/tournament-registration.js";
 createRoot(document.getElementById("root")).render(React.createElement(TournamentRegistration, { event: { id: 7, name: "Greenville Fall Classic", pdga_event_id: 104547 } }));`
+    : component === "form" ? `import { AdminEventForm } from "/src/admin-app/event-form.js";
+localStorage.setItem("gvdg_member_token", "admin-token");
+createRoot(document.getElementById("root")).render(React.createElement(AdminEventForm));`
     : `import { AdminTournamentPanel } from "/src/admin-app/tournament-panel.js";
 localStorage.setItem("gvdg_member_token", "admin-token");
 createRoot(document.getElementById("root")).render(React.createElement(AdminTournamentPanel, { eventId: 7 }));`}
@@ -79,9 +83,9 @@ const vite = await createServer({
   plugins: [{ name: "tournament-fixture", configureServer(server) {
     server.middlewares.use(async (request, response, next) => {
       const url = new URL(request.url, "http://localhost");
-      if ((url.pathname === "/public.html" || url.pathname === "/admin.html") && !url.search.includes("html-proxy")) {
+      if (["/public.html", "/admin.html", "/form.html"].includes(url.pathname) && !url.search.includes("html-proxy")) {
         response.writeHead(200, { "Content-Type": "text/html" });
-        response.end(await server.transformIndexHtml(url.pathname, harness(url.pathname === "/public.html" ? "public" : "admin")));
+        response.end(await server.transformIndexHtml(url.pathname, harness(url.pathname.slice(1, -5))));
         return;
       }
       if (!url.pathname.startsWith("/fixture/")) return next();
@@ -218,6 +222,19 @@ try {
     assert.deepEqual(state.saved.at(-1).rules.divisionLimits, { MA3: "850" });
     assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
     await page.screenshot({ path: join(shots, "admin-tournament-1100.png"), fullPage: true });
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+  // Admin event form: mark the event a PDGA event; the PDGA lookup shows which event it is.
+  {
+    const { page, context, errors } = await open("/form.html", 1100);
+    await page.getByLabel(/PDGA-sanctioned event/).check();
+    await page.getByLabel("PDGA event number").fill("104547");
+    await page.getByLabel("PDGA event number").blur();
+    await page.getByRole("link", { name: "Greenville Fall Classic" }).waitFor();
+    assert.equal(await page.getByRole("link", { name: "Greenville Fall Classic" }).getAttribute("href"), "https://www.pdga.com/tour/event/104547");
+    assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
+    await page.locator("[data-admin-event-pdga=on]").screenshot({ path: join(shots, "admin-event-form-pdga-1100.png") });
     assert.deepEqual(errors, []);
     await context.close();
   }

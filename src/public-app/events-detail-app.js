@@ -406,6 +406,7 @@ export function EventsEventDetailApp() {
     h("article", { className: "detail-card", key: "card", "data-react-events-event-detail": "true" }, [
       h("div", { className: "detail-head", key: "head" }, [
         event.type ? h(Badge, { className: `type-badge ${typeClass}`, key: "type", text: typeLabel(event.type) }) : null,
+        event.pdga_event_id ? h(Badge, { className: "type-badge pdga-badge", key: "pdga", text: "PDGA" }) : null,
         event.status === "live"
           ? h("span", { className: "detail-live-pill", key: "status" }, [h("span", { className: "live-dot", key: "dot" }), "Live"])
           : event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
