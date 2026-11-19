@@ -1,0 +1,40 @@
+# One-off diagnostic: can the club's PDGA developer login reach the official API from a GitHub runner?
+# Prints HTTP status codes, field names and counts only (never the login or the session).
+name: PDGA API check
+on:
+  push:
+    branches: [ci/pdga-api-check]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in, read one player, search events
+        env:
+          U: ${{ secrets.PDGA_API_USERNAME }}
+          P: ${{ secrets.PDGA_API_PASSWORD }}
+        run: |
+          set -u
+          [ -n "$U" ] && [ -n "$P" ] || { echo "secrets missing"; exit 1; }
+          echo "username length: ${#U}, password length: ${#P}"
+          body=$(jq -n --arg u "$U" --arg p "$P" '{username:$u,password:$p}')
+          code=$(curl -s -o login.json -w '%{http_code}' --max-time 20 -X POST https://api.pdga.com/services/json/user/login \
+            -H 'Content-Type: application/json' -H 'Accept: application/json' -d "$body")
+          echo "login HTTP $code; content: $(head -c 1 login.json | od -An -c | tr -d ' ')..."
+          jq -r 'if type=="object" then "login keys: " + (keys|join(",")) else "login body type: " + type end' login.json 2>/dev/null || { echo "login body (not JSON, first 200 chars):"; head -c 200 login.json | tr -d '\r' | sed 's/[A-Za-z0-9]\{24,\}/<long>/g'; echo; }
+          name=$(jq -r '.session_name // empty' login.json 2>/dev/null); sid=$(jq -r '.sessid // empty' login.json 2>/dev/null)
+          tok=$(jq -r '.token // empty' login.json 2>/dev/null)
+          [ -n "$sid" ] && echo "::add-mask::$sid" && echo "::add-mask::$tok"
+          [ -n "$sid" ] || { echo "no session; stopping"; exit 0; }
+          code=$(curl -s -o players.json -w '%{http_code}' --max-time 20 "https://api.pdga.com/services/json/players?pdga_number=1" \
+            -H "Cookie: $name=$sid" -H "X-CSRF-Token: $tok" -H 'Accept: application/json')
+          echo "players HTTP $code; $(jq -r '"status=" + (.status|tostring) + " players=" + ((.players // [])|length|tostring)' players.json 2>/dev/null || head -c 120 players.json)"
+          code=$(curl -s -o events.json -w '%{http_code}' --max-time 20 \
+            "https://api.pdga.com/services/json/event?start_date=$(date -u +%F)&end_date=$(date -u -d '+120 days' +%F)&latitude=35.6127&longitude=-77.3664&proximity_radius=100&limit=200&offset=0" \
+            -H "Cookie: $name=$sid" -H "X-CSRF-Token: $tok" -H 'Accept: application/json')
+          echo "event search HTTP $code; $(jq -r '"status=" + (.status|tostring) + " events=" + ((.events // [])|length|tostring)' events.json 2>/dev/null || head -c 120 events.json)"
+          code=$(curl -s -o events2.json -w '%{http_code}' --max-time 20 \
+            "https://api.pdga.com/services/json/event?start_date=$(date -u +%F)&end_date=$(date -u -d '+60 days' +%F)&administrative_area=NC&limit=200&offset=0" \
+            -H "Cookie: $name=$sid" -H "X-CSRF-Token: $tok" -H 'Accept: application/json')
+          echo "state search HTTP $code; $(jq -r '"status=" + (.status|tostring) + " events=" + ((.events // [])|length|tostring)' events2.json 2>/dev/null || head -c 120 events2.json)"
+          curl -s -o /dev/null -w 'logout HTTP %{http_code}\n' --max-time 20 -X POST https://api.pdga.com/services/json/user/logout \
+            -H "Cookie: $name=$sid" -H "X-CSRF-Token: $tok"
