@@ -36,9 +36,15 @@ function imagePlacement(bounds, viewport) {
   };
 }
 
+/**
+ * The satellite picture under a hole map. Pre-made tiles first (fast, parallel, cached on the phone and shared between
+ * holes); if any tile fails, the export picture of the same area goes on top (retried twice); if that fails too, an
+ * export picture this phone saved earlier is used (offline).
+ */
 function SatelliteLayer({ url, bounds, width, height, cachedHole, focus }) {
   const href = safeExternalUrl(url);
   const [attempt, setAttempt] = React.useState(0);
+  const [tileFailed, setTileFailed] = React.useState(false);
   const [backup, setBackup] = React.useState(null);
   const failed = attempt > 0;
   const holeRef = React.useRef(cachedHole);
@@ -59,9 +65,11 @@ function SatelliteLayer({ url, bounds, width, height, cachedHole, focus }) {
   }, [failed, focus]);
   React.useEffect(() => {
     setAttempt(0);
+    setTileFailed(false);
   }, [href]);
-  const tiles = !href || attempt > 0 ? satelliteTileLayers(bounds, width, height) : [];
-  const showPhoto = Boolean(href) && attempt <= 2;
+  const tiles = satelliteTileLayers(bounds, width, height);
+  // The export only when a tile failed (or there are no tiles): normally no export request at all.
+  const showPhoto = Boolean(href) && (tileFailed || !tiles.length) && attempt <= 2;
   if (!showPhoto && !tiles.length && !backup) return null;
   return h(React.Fragment, null, [
     backup && h("img", {
@@ -75,8 +83,10 @@ function SatelliteLayer({ url, bounds, width, height, cachedHole, focus }) {
           className: "hole-map-satellite-tile",
           decoding: "async",
           draggable: false,
+          fetchPriority: "high",
           key: tile.url,
-          onError: (event) => { event.currentTarget.style.visibility = "hidden"; },
+          loading: "eager",
+          onError: (event) => { event.currentTarget.style.visibility = "hidden"; setTileFailed(true); },
           src: tile.url,
           style: {
             left: tile.left + "%",

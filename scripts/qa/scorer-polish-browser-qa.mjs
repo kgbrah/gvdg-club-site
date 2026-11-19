@@ -15,6 +15,9 @@ const serve = process.env.GVDG_SCORER_SERVE === "1";
 const bottomPreview = process.env.GVDG_SCORER_BOTTOM === "1";
 const headerPreview = process.env.GVDG_SCORER_HEADER_CONTRAST === "1";
 const sampleCourse = bottomPreview || process.env.GVDG_SCORER_PREVIEW_DATA === "1";
+// Satellite requests the scorer made (offline here): tiles get a stand-in image, so the slow export render should never be asked for.
+const imagery = { tiles: 0, exports: 0 };
+const TILE_STAND_IN = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 const compiled = await build({
   configFile: false, mode: "production", logLevel: "silent",
   build: { write: false, emptyOutDir: false,
@@ -243,6 +246,14 @@ async function makePage({ width, height, scheme = "light", scale = 1, group = "s
     if (url.origin === site) return route.continue();
     if (sampleCourse && url.hostname === "server.arcgisonline.com") {
       return url.searchParams.get("size") !== "320,180" ? route.continue() : route.abort();
+    }
+    if (url.hostname === "server.arcgisonline.com") {
+      if (url.pathname.includes("/MapServer/tile/")) {
+        imagery.tiles += 1;
+        return route.fulfill({ status: 200, contentType: "image/png", body: TILE_STAND_IN });
+      }
+      imagery.exports += 1;
+      return route.abort();
     }
     if (url.origin !== api) return route.abort();
     const allow = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization,Content-Type",
@@ -1059,6 +1070,12 @@ if (serve) {
   await final.screenshot("finished-scorecard-phone");
   await final.context.close();
 
+  if (!sampleCourse) {
+    // Maps load from tiles: the slow on-demand export is never needed while the tiles load.
+    assert.ok(imagery.tiles > 0, "the scorer's maps asked for satellite tiles");
+    assert.equal(imagery.exports, 0, "no export render while tiles load");
+    console.log(`satellite: ${imagery.tiles} tile requests, ${imagery.exports} export renders`);
+  }
   console.log("Scorer source passed layout, keyboard focus, rapid offline edits, lost acknowledgement, and final state QA.");
   console.log("Screenshots " + out);
 } finally {
