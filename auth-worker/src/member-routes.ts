@@ -87,6 +87,9 @@ export async function handleMe(request: Request, env: Env, origin: string | null
   if (!claims || claims.play) return json({ error: "unauthorized" }, 401, origin);
   const member = await getMember(env.ROSTER, claims.sub);
   if (!member) return json({ error: "unauthorized" }, 401, origin);
+  // The same revocation rule as requireAuth: a session from before a PIN change/reset signs out here too, instead of
+  // looking signed in while every member route turns it away. (A forced first-login change still gets through.)
+  if ((member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return json({ error: "unauthorized" }, 401, origin);
   return json(
     {
       sub: member.memberId,

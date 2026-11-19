@@ -44,7 +44,7 @@ export async function handleWebAuthnRoute(
   if (pathname === "/webauthn/auth/verify" && method === "POST") {
     const body = await readJson(request);
     if (!body) return json({ error: "invalid_request" }, 400, origin);
-    const signToken = (claims: { sub: string; mustChangePin: boolean }) =>
+    const signToken = (claims: { sub: string; mustChangePin: boolean; pinVer?: number }) =>
       signSession(claims, env.JWT_SECRET, ttl(env));
     const { status, data } = await authenticationVerify(
       env,
