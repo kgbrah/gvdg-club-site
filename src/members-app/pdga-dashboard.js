@@ -1,6 +1,7 @@
 import React from "react";
 
 import { requestJson } from "./api.js";
+import { PdgaLink, pdgaEventHref, pdgaPlayerHref } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 const PDGA_REFRESH_MS = 15 * 60 * 1000;
@@ -152,7 +153,7 @@ function RecentEvent({ event }) {
   return h("article", { className: "dash-event" }, [
     h("div", { className: "dash-event-main", key: "main" }, [
       h("div", { className: "dash-event-copy", key: "copy" }, [
-        h("div", { className: "dash-event-name", key: "name" }, title),
+        h(PdgaLink, { as: "div", className: "dash-event-name", href: pdgaEventHref(event.eventId), key: "name" }, title),
         h("div", { className: "dash-event-date", key: "date" }, eventMeta(event)),
       ]),
       h(EventRatingRow, { ratings, key: "rating-row" }),
@@ -234,7 +235,7 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   }
 
   return dashboardShell("ready", [
-    h("div", { className: "react-pdga-meta", key: "meta" }, `PDGA #${pdgaNo}`),
+    h("div", { className: "react-pdga-meta", key: "meta" }, h(PdgaLink, { href: pdgaPlayerHref(pdgaNo) }, `PDGA #${pdgaNo}`)),
     h("div", { className: "dash-rating-row", key: "ratings" }, [
       h(RatingTile, { label: "PDGA live", value: live, delta, live: true, key: "live" }),
       h(RatingTile, { label: "PDGA rating", value: official, key: "official" }),

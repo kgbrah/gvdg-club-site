@@ -5,6 +5,7 @@ import { getMember } from "./roster.js";
 import { ratingRecord, ratingTimestamp } from "./rating-layout.js";
 import { RATING_STREAMS, type RatingStream } from "./rating-engine.js";
 import { repairRatingSource } from "./rating-repair.js";
+import { lookupPdgaPlayers, pdgaApiConfigured, type PdgaApiEnv } from "./pdga-api.js";
 
 const SOURCES_PER_STREAM = 8;
 const RETRIES_PER_TICK = 4;
@@ -117,6 +118,36 @@ async function recordObservedAnchor(db: D1Like, memberId: string, observedAt: st
   return Number(response.meta?.changes ?? 0) > 0;
 }
 
+/** Rating anchors from the PDGA API for these roster keys; false when the API couldn't be read (use pdga.com). */
+async function anchorsFromPdgaApi(env: Env, keys: readonly string[], result: RefreshSummary): Promise<boolean> {
+  const members = (await Promise.all(keys.map((key) => getMember(env.ROSTER, key.slice("member:".length)).catch(() => null))))
+    .flatMap((member) => {
+      const pdga = member?.pdgaNo?.replace(/\D/g, "");
+      return member && member.held !== true && pdga && /^[0-9]{1,8}$/.test(pdga) ? [{ member, pdga }] : [];
+    });
+  if (!members.length) return true;
+  let players: Awaited<ReturnType<typeof lookupPdgaPlayers>>;
+  try {
+    players = await lookupPdgaPlayers(env as unknown as PdgaApiEnv, members.map((entry) => entry.pdga));
+  } catch (error) {
+    console.warn(JSON.stringify({ message: "pdga_api_anchor_read_failed", error: error instanceof Error ? error.message : String(error) }));
+    return false;
+  }
+  const observedAt = new Date().toISOString();
+  for (const { member, pdga } of members) {
+    try {
+      const player = players.get(pdga);
+      const rating = player?.rating ?? null;
+      const effectiveAt = player?.ratingDate ? ratingTimestamp(player.ratingDate) : null;
+      if (rating == null || rating < 700 || rating > 1300 || !effectiveAt || effectiveAt > observedAt) continue;
+      if (await recordObservedAnchor(env.DB, member.memberId, observedAt, effectiveAt, rating)) result.pdgaRefreshed += 1;
+    } catch {
+      result.pdgaRefreshErrors += 1;
+    }
+  }
+  return true;
+}
+
 async function refreshRatingAnchors(env: Env, doFetch: typeof fetch): Promise<RefreshSummary> {
   const state = await env.DB.prepare("SELECT cursor, last_key FROM rating_anchor_refresh_state WHERE id = 1")
     .first<{ cursor: string | null; last_key: string | null }>();
@@ -125,7 +156,9 @@ async function refreshRatingAnchors(env: Env, doFetch: typeof fetch): Promise<Re
   const keys = page.keys.filter(({ name }) => !state?.last_key || name > state.last_key);
   const batch = keys.slice(0, ROSTER_PAGE_SIZE);
   const result = { pdgaRefreshed: 0, pdgaRefreshErrors: 0 };
-  for (const key of batch) {
+  // With the club's PDGA developer account: the official API, one request for the whole batch.
+  const viaApi = pdgaApiConfigured(env as unknown as PdgaApiEnv) ? await anchorsFromPdgaApi(env, batch.map((key) => key.name), result) : false;
+  for (const key of viaApi ? [] : batch) {
     try {
       const member = await getMember(env.ROSTER, key.name.slice("member:".length));
       const pdga = member?.pdgaNo?.replace(/\D/g, "");

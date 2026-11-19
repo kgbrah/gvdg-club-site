@@ -3,6 +3,7 @@ import * as db from "./db.js";
 import { haversineMiles } from "./distance.js";
 import { safeFetch } from "./imports.js";
 import { D1KV } from "./d1kv.js";
+import { pdgaApiConfigured, searchPdgaEvents, type PdgaApiEnv } from "./pdga-api.js";
 
 export const PDGA_EVENT_MILES = 100;
 export const PDGA_EVENT_CRON = "7 * * * *";
@@ -33,6 +34,59 @@ export interface PdgaEvent {
   lat: number | null;
   lng: number | null;
   miles: number | null;
+  /** Set when the event came from the official PDGA API: its PDGA event page (names link there, with PDGA credit). */
+  pdgaUrl?: string;
+}
+
+// How far ahead the official PDGA event search looks.
+const API_EVENT_DAYS = 120;
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const TIER_NAMES: Record<string, string> = { M: "Major", ES: "Elite Series", NT: "National Tour", L: "League", XM: "XM-tier" };
+
+/** "Nov 22, 2026" or "Nov 22-23, 2026" (the dates eventDay() reads); other spans keep the start day. */
+export function pdgaApiEventDate(start: string, end: string): string {
+  const [year, month, day] = start.split("-").map(Number);
+  if (!year || !month || !day) return start;
+  const [endYear, endMonth, endDay] = (end || start).split("-").map(Number);
+  const range = endYear === year && endMonth === month && endDay && endDay !== day ? `${day}-${endDay}` : String(day);
+  return `${SHORT_MONTHS[month - 1]} ${range}, ${year}`;
+}
+
+export function pdgaApiTierLabel(code: string): string {
+  const tier = code.trim().toUpperCase();
+  if (!tier) return "";
+  return TIER_NAMES[tier] ?? (/^X?[ABC]$/.test(tier) ? `${tier}-tier` : tier);
+}
+
+function civilDay(now: number, plusDays = 0): string {
+  const today = civilToday(now);
+  const date = new Date(Date.UTC(Math.floor(today / 10000), Math.floor(today / 100) % 100 - 1, today % 100 + plusDays));
+  return date.toISOString().slice(0, 10);
+}
+
+/** Nearby PDGA events from the official API (the club's developer account); null when it isn't available. */
+async function apiPlacedPdgaEvents(env: Env, origin: { lat: number; lng: number }, now: number): Promise<PdgaEvent[] | null> {
+  const apiEnv = env as unknown as PdgaApiEnv;
+  if (!pdgaApiConfigured(apiEnv)) return null;
+  try {
+    const events = await searchPdgaEvents(apiEnv, {
+      startDate: civilDay(now), endDate: civilDay(now, API_EVENT_DAYS), near: { ...origin, miles: PDGA_EVENT_MILES },
+    });
+    return events
+      .map((event) => {
+        const point = event.lat != null && event.lng != null ? { lat: event.lat, lng: event.lng } : null;
+        return {
+          name: event.name, date: pdgaApiEventDate(event.startDate, event.endDate), tier: pdgaApiTierLabel(event.tier), course: "",
+          place: [event.city, event.state].filter(Boolean).join(", "), url: event.registrationUrl || event.url, pdgaUrl: event.url,
+          lat: point?.lat ?? null, lng: point?.lng ?? null, miles: point ? Math.round(haversineMiles(origin, point) * 10) / 10 : null,
+        };
+      })
+      .filter((event) => event.miles == null || event.miles <= PDGA_EVENT_MILES)
+      .sort((a, b) => (eventDay(a.date) ?? Number.MAX_SAFE_INTEGER) - (eventDay(b.date) ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
+  } catch (error) {
+    console.warn(JSON.stringify({ message: "pdga_api_nearby_events_failed", error: error instanceof Error ? error.message : String(error) }));
+    return null;
+  }
 }
 
 export function discGolfSceneSearchUrl(lat: number, lng: number, miles = PDGA_EVENT_MILES): string {
@@ -205,7 +259,7 @@ export function placePdgaEvents(
 }
 
 function cacheKey(lat: number, lng: number): string {
-  return `v3:${lat.toFixed(1)}:${lng.toFixed(1)}`;
+  return `v4:${lat.toFixed(1)}:${lng.toFixed(1)}`;
 }
 
 export function isPdgaEventCron(cron: string): boolean {
@@ -223,6 +277,8 @@ async function fetchPlacedPdgaEvents(
   origin: { lat: number; lng: number },
   now: number,
 ): Promise<PdgaEvent[]> {
+  const fromApi = await apiPlacedPdgaEvents(env, origin, now);
+  if (fromApi) return fromApi;
   const html = await safeFetch(discGolfSceneSearchUrl(origin.lat, origin.lng), ["discgolfscene.com"], {
     maxBytes: 2_000_000,
     timeoutMs: 12000,

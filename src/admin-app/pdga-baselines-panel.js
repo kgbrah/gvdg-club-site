@@ -2,6 +2,7 @@ import React from "react";
 
 import { adminRequest } from "./admin-api.js";
 import { useAdminResource } from "./admin-resource.js";
+import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 const BASE = "/admin/pdga-baselines";
@@ -56,7 +57,11 @@ function LayoutRounds({ layout }) {
     baseline ? h("p", { className: "al-note", key: "provenance" }, baseline.provenance + ". No-wind range " + ssaLabel(baseline.minSsa) +
       "–" + ssaLabel(baseline.maxSsa) + " · " + count(baseline.officialRounds, "official", "official") + ".") : null,
     h("ul", { key: "rounds" }, layout.rounds.map((round) => h("li", { key: round.tournId + ":" + round.round + ":" + round.pdgaLayoutId }, [
-      dateLabel(round.date), round.eventName + " round " + round.round, round.pdgaLayoutName, "SSA\u00a0" + ssaLabel(round.ssa),
+      dateLabel(round.date) + " · ",
+      h(PdgaLink, { href: pdgaEventHref(round.tournId), key: "event" }, round.eventName + " round " + round.round),
+      " · ",
+    ], [
+      round.pdgaLayoutName, "SSA\u00a0" + ssaLabel(round.ssa),
       count(round.ratedPlayers, "rated player", "rated players"),
       round.gustMph != null ? "gust " + round.gustMph + " mph" : round.weatherStatus === "pending" ? "wind pending" : "no wind data",
       round.ratingsStatus === "official" ? "official ratings" : "ratings unconfirmed",
@@ -80,6 +85,7 @@ export function CoursePdgaBaselines({ courseId, token, revision }) {
     ...withRounds.map((layout) => h(LayoutRounds, { layout, key: layout.id })),
     result.status === "ready" && !withRounds.length ? h("p", { className: "al-note", key: "empty" }, "No PDGA rated rounds match this course's layouts yet.") : null,
     without.length && withRounds.length ? h("p", { className: "al-note", key: "without" }, "No PDGA rounds: " + without.map((layout) => layout.name).join(", ")) : null,
+    h(PdgaCredit, { key: "pdga-credit" }),
   ]);
 }
 
@@ -221,11 +227,15 @@ export function PdgaBaselineTools({ token, revision, onChanged }) {
     data?.queue.items.length ? h("details", { className: "course-operator-detail", key: "queue" }, [
       h("summary", { key: "title" }, "Event queue"),
       h("ul", { key: "items" }, data.queue.items.map((item) => h("li", { key: item.tournId }, [
-        "#" + item.tournId, item.name, dateLabel(item.date), QUEUE_STATUS[item.status] || item.status,
+        h(PdgaLink, { href: pdgaEventHref(item.tournId), key: "event" }, "#" + item.tournId + (item.name ? " " + item.name : "")),
+        " · ",
+      ], [
+        dateLabel(item.date), QUEUE_STATUS[item.status] || item.status,
         item.remainingFetches ? count(item.remainingFetches, "request left", "requests left") : "",
         item.lastError && item.status !== "done" ? "last error " + item.lastError : "",
       ].filter(Boolean).join(" · ")))),
     ]) : null,
     h(Validation, { token, revision, key: "validation" }),
+    h(PdgaCredit, { key: "pdga-credit" }),
   ]);
 }

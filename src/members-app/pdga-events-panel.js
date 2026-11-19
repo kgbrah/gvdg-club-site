@@ -4,6 +4,7 @@ import { requestJson } from "./api.js";
 import { currentDashboardTab } from "./dashboard-router.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromPdga } from "../shared/event-calendar.js";
+import { PdgaCredit, PdgaLink } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
@@ -37,7 +38,7 @@ function EventCard({ event }) {
   const where = [event.course, event.place].filter(Boolean).join(" · ");
   return h("article", { className: "register-card pdga-event-card", "data-event-state": "register" }, [
     h("div", { className: "register-head", key: "head" }, [
-      h("span", { className: "register-name", key: "name" }, event.name),
+      h(PdgaLink, { className: "register-name", href: event.pdgaUrl, key: "name" }, event.name),
       miles ? h("span", { className: "pdga-event-miles", key: "miles" }, miles) : null,
     ]),
     h("p", { className: "register-date", key: "date" }, [event.date, event.tier].filter(Boolean).join(" · ")),
@@ -125,5 +126,6 @@ export function PdgaEventsSection() {
     state.status === "ready"
       ? h("div", { key: "list" }, state.events.map((event) => h(EventCard, { event, key: event.url })))
       : null,
+    state.status === "ready" ? h(PdgaCredit, { key: "credit" }) : null,
   ]);
 }

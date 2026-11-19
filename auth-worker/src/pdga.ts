@@ -12,6 +12,7 @@ import { clientIp, json } from "./http.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { emptyPlayTotals, sumPlayTotals, totalsFromPdgaScoreLine, type PlayTotals } from "./play-stats.js";
+import { lookupPdgaPlayer, pdgaApiConfigured, type PdgaApiEnv } from "./pdga-api.js";
 
 export interface PdgaRound { rating: number; score: number | null; round: string }
 export interface PdgaPlayRound {
@@ -430,6 +431,19 @@ export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch
   return assemblePdgaStats(pdga, player, mergeEvents(refreshed, detailEvents), doFetch, headers);
 }
 
+/** The current official rating and its date from the PDGA API (the club's developer account) when it has one. */
+async function withOfficialPdgaRating(env: Env, pdga: string, stats: PdgaStats): Promise<PdgaStats> {
+  const apiEnv = env as unknown as PdgaApiEnv;
+  if (!pdgaApiConfigured(apiEnv)) return stats;
+  try {
+    const player = await lookupPdgaPlayer(apiEnv, pdga);
+    if (player?.rating == null) return stats;
+    return { ...stats, official_rating: player.rating, rating_date: player.ratingDate ?? stats.rating_date };
+  } catch {
+    return stats;
+  }
+}
+
 /** GET /pdga-stats?pdga=<digits> — D1-cached (15m), IP-rate-limited, public read of pdga.com ratings. */
 export async function handlePdgaStats(request: Request, env: Env, origin: string | null): Promise<Response> {
   const pdga = (new URL(request.url).searchParams.get("pdga") ?? "").replace(/\D/g, "");
@@ -470,6 +484,7 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   } catch {
     stats = fallback ?? emptyPdgaStats(pdga);
   }
+  if (!fallback) stats = await withOfficialPdgaRating(env, pdga, stats);
   stats = withStatsVersion(stats);
   // Only cache a useful result, so a transient pdga.com outage isn't pinned for the full TTL.
   if (stats.official_rating != null || stats.events.length) {

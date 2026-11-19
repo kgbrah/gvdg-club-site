@@ -17,6 +17,7 @@ jobs:
       HAS_QA_LOGIN: ${{ secrets.GVDG_STAGING_QA_IDENTIFIER != '' && secrets.GVDG_STAGING_QA_PIN != '' }}
       HAS_VAPID: ${{ secrets.VAPID_PUBLIC_KEY != '' && secrets.VAPID_PRIVATE_KEY != '' }}
       HAS_GROQ: ${{ secrets.GROQ_API_KEY != '' }}
+      HAS_PDGA_API: ${{ secrets.PDGA_API_USERNAME != '' && secrets.PDGA_API_PASSWORD != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -118,6 +119,23 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      # PDGA REST API login (the club's PDGA developer account): ratings, membership and event search come from the
+      # official API once these are set; without them the Worker keeps its earlier sources.
+      - name: Upload PDGA API login
+        if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' && env.HAS_PDGA_API == 'true' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: auth-worker
+          environment: gvdgclub
+          secrets: |
+            PDGA_API_USERNAME
+            PDGA_API_PASSWORD
+          command: secret list --env gvdgclub
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PDGA_API_USERNAME: ${{ secrets.PDGA_API_USERNAME }}
+          PDGA_API_PASSWORD: ${{ secrets.PDGA_API_PASSWORD }}
       # Publish the frontend after its additive schema and API changes are live.
       - name: Deploy static site to Cloudflare Pages
         if: ${{ env.HAS_CF_TOKEN == 'true' && env.HAS_CF_ACCOUNT == 'true' }}

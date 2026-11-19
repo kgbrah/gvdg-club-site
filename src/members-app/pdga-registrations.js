@@ -5,6 +5,7 @@ import { KarmaChip } from "../shared/karma.js";
 
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromPdgaRegistration, dateRangeText } from "../shared/event-calendar.js";
+import { PdgaCredit, PdgaLink } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 const TIERS = { L: "League", NT: "National Tour", M: "Major", ES: "Elite Series", XM: "Major" };
@@ -60,7 +61,7 @@ export function PdgaRegistrationCard({ event, mine = false }) {
     className: "register-card pdga-registration-card", "data-pdga-mine": mine ? "true" : "false", "data-pdga-registration": event.eventId,
   }, [
     h("div", { className: "register-head", key: "head" }, [
-      h("span", { className: "register-name", key: "name" }, event.name),
+      h(PdgaLink, { className: "register-name", href: event.url, key: "name" }, event.name),
       h("span", { className: "player-chip", key: "chip" }, "PDGA"),
     ]),
     h("p", { className: "register-date", key: "date" }, dateRangeText(event.start, event.end)),
@@ -81,5 +82,6 @@ export function ClubmatesAtPdgaSection({ events }) {
     h("h3", { className: "my-dashboard-title", key: "title" }, "Clubmates at PDGA events"),
     h("p", { className: "dash-note", key: "note" }, "Club members registered for PDGA events in North Carolina, Virginia and South Carolina. Checked on PDGA every hour."),
     h("div", { key: "list" }, events.map((event) => h(PdgaRegistrationCard, { event, key: event.eventId }))),
+    h(PdgaCredit, { key: "credit" }),
   ]);
 }

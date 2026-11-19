@@ -904,6 +904,8 @@ export function buildScorecardViewState({ state, mode, roundCode, scorerIndex, t
     finish: buildFinishView(state, mode, blockers, locked, scorerIndex),
     formatLabel: roundFormatLabel(state),
     playingDelta,
+    // PDGA data in the rating (PDGA course data, or the comparison to the player's PDGA rating): credit PDGA.
+    ratingUsesPdga: playingRating != null && (playingDelta != null || Boolean(baseline && baseline.source === "pdga")),
     playingRating,
     holes: Array.isArray(state.holes) ? state.holes : [],
     solo: rowViews.length === 1,

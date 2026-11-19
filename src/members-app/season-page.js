@@ -16,6 +16,7 @@ import { buildSeasonPage } from "./season-page-model.js";
 import { liveWatchHref } from "../shared/live-watch.js";
 import { relClass, roundRatingOf } from "./play-page-model.js";
 import { historyLocked, MembershipNeeded } from "./membership-needed.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 
@@ -226,5 +227,7 @@ function SeasonPageBody({ resultsOnly = false } = {}) {
       h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
       h(ClubRatings, { token, key: "ratings" }),
     ]),
+    // PDGA ratings, rounds and event history, and casual ratings built from PDGA course data, are on this page.
+    h(PdgaCredit, { key: "pdga-credit" }),
   ]);
 }
