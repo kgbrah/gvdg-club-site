@@ -30,7 +30,10 @@ test("the app page has Lost & Found and PDGA in its rail, a PDGA section with PD
   for (const id of ["pdga-ratings", "pdga-register", "pdga-nearby", "pdga-membership"]) assert.ok(page.includes(`<article id="${id}">`), id);
   assert.match(page, /Player, event, and course data provided by <a href="https:\/\/www\.pdga\.com"/);
   assert.match(page, /<summary>Lost a disc, or found one\?<\/summary><p>Post it in <a href="lost-found\.html">Lost &amp; Found<\/a>/);
-  assert.match(page, /<summary>Can I sign up for PDGA events here\?<\/summary>/);
+  // Registering here is only for PDGA events the club runs (owner: "register here only applies for our events").
+  assert.match(page, /<summary>Can I sign up for the club's PDGA events here\?<\/summary><p>Yes\. When GVDG runs a PDGA-sanctioned event/);
+  assert.match(page, /<h3>Our events\.<br>Register with us\.<\/h3><p>When GVDG runs a PDGA-sanctioned event/);
+  assert.doesNotMatch(page, /Register here\.<br>Skip the extra fee/);
   assert.match(page, /The estimate is the club's, not an official PDGA rating\./);
 });
 
