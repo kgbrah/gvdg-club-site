@@ -140,3 +140,9 @@ test('admin order badge clears stale counts when refresh fails closed', () => {
   assert.match(controller, /async function refreshOrdersBadge\(\) \{[\s\S]*if \(!r\.ok\) \{ setOrdersBadge\(0\); return; \}[\s\S]*catch \(e\) \{[\s\S]*setOrdersBadge\(0\);/);
   assert.doesNotMatch(html, /id="ordersBadge" class="orders-badge" hidden/);
 });
+
+test('the stats overview tiles sit on the page, not on a square glass slab', () => {
+  const tokens = readFileSync('tokens.css', 'utf8');
+  // Each tile is its own rounded card; glass on the grid that holds them drew a sharp-cornered panel behind them.
+  assert.doesNotMatch(tokens, /\.member-stats \.doubles-quick-stats\b/);
+});

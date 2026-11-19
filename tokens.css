@@ -523,7 +523,7 @@ body.player-theme-glass[data-member-shell="members"] #members :is(
   .members-react-club-panel :is(.course-conditions-panel, .meeting-minutes-container, .members-chart-container),
   .members-stat-card, .board-compose, .board-post, .board-reply, .ts-controls, .ts-card,
   .member-appearance .dash-theme, .champion-card, .dash-standings-card, .doubles-league-container,
-  .doubles-table-wrap, .member-stats .doubles-quick-stats, .player-home .play-stats-panel,
+  .doubles-table-wrap, .player-home .play-stats-panel,
   .player-card, .club-rating-panel, .register-card, .wallet-panel, .app-tool-results,
   .member-first-use, .member-home-services, .player-home-hero
 ) {
