@@ -23,6 +23,8 @@
     <link rel="icon" type="image/png" href="img/logo-small.png">
     <link rel="manifest" href="site.webmanifest?v=179">
     <link rel="apple-touch-icon" href="img/icons/apple-touch-icon.png">
+    <!-- The hero's first slide (the carousel opens on slide 2): fetched before the CSS asks for it. -->
+    <link rel="preload" as="image" href="img/slide2.avif" type="image/avif" fetchpriority="high">
     <link rel="stylesheet" href="tokens.css">
     <style>
         /* Design tokens (color / surfaces / text) live in tokens.css, linked above — one source of truth. */
@@ -84,11 +86,14 @@ body::before{
         .carousel-slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.8s ease-in-out; background-size: cover; background-position: center; }
         .carousel-slide.active { opacity: 1; }
         .carousel-slide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 15, 30, 0.28) 0%, rgba(15, 15, 30, 0.52) 48%, rgba(15, 15, 30, 0.78) 100%); }
-        .carousel-slide:nth-child(1) { background-image: url('img/slide1.jpg'); }
-        .carousel-slide:nth-child(2) { background-image: url('img/slide2.jpg'); }
-        .carousel-slide:nth-child(3) { background-image: url('img/slide3.jpg'); }
-        .carousel-slide:nth-child(4) { background-image: url('img/slide4.jpg'); }
-        .carousel-slide:nth-child(5) { background-image: url('img/slide5.jpg'); }
+        /* AVIF (a tenth to two thirds of the JPEG), then WebP, then the JPEG for browsers without image-set types. */
+        .carousel-slide:nth-child(1) { background-image: url('img/slide1.jpg'); background-image: image-set(url('img/slide1.avif') type('image/avif'), url('img/slide1.webp') type('image/webp'), url('img/slide1.jpg') type('image/jpeg')); }
+        .carousel-slide:nth-child(2) { background-image: url('img/slide2.jpg'); background-image: image-set(url('img/slide2.avif') type('image/avif'), url('img/slide2.webp') type('image/webp'), url('img/slide2.jpg') type('image/jpeg')); }
+        .carousel-slide:nth-child(3) { background-image: url('img/slide3.jpg'); background-image: image-set(url('img/slide3.avif') type('image/avif'), url('img/slide3.webp') type('image/webp'), url('img/slide3.jpg') type('image/jpeg')); }
+        .carousel-slide:nth-child(4) { background-image: url('img/slide4.jpg'); background-image: image-set(url('img/slide4.avif') type('image/avif'), url('img/slide4.webp') type('image/webp'), url('img/slide4.jpg') type('image/jpeg')); }
+        .carousel-slide:nth-child(5) { background-image: url('img/slide5.jpg'); background-image: image-set(url('img/slide5.avif') type('image/avif'), url('img/slide5.webp') type('image/webp'), url('img/slide5.jpg') type('image/jpeg')); }
+        /* Slides not on screen wait until the page has loaded (only the one in view is in the first download). */
+        .carousel-slide.carousel-slide-later { background-image: none !important; }
         .carousel-controls { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: none; gap: 15px; z-index: 10; padding: 1rem; }
 .carousel-controls { position: absolute !important; bottom: 14px !important; left: 50% !important; transform: translateX(-50%) !important; display: none !important; justify-content: center !important; align-items: center !important; gap: 16px !important; z-index: 10 !important; padding: 10px !important; width: auto !important; }
 .carousel-dot { width: 12px !important; height: 12px !important; min-width: 12px !important; min-height: 12px !important; max-width: 12px !important; max-height: 12px !important; padding: 0 !important; box-sizing: border-box !important; background-clip: border-box !important; border-radius: 50% !important; background: rgba(255, 255, 255, 0.4) !important; border: 2px solid rgba(255, 255, 255, 0.8) !important; cursor: pointer !important; transition: all 0.3s ease !important; -webkit-tap-highlight-color: transparent !important; position: relative !important; flex-shrink: 0 !important; flex-grow: 0 !important; }
@@ -618,6 +623,6 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
 
     <link rel="stylesheet" href="homepage-polish.css">
     <link rel="stylesheet" href="public-polish.css">
-    <script type="module" src="home-app/home-app.js?v=193"></script>
+    <script type="module" src="home-app/home-app.js?v=194"></script>
 </body>
 </html>

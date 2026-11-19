@@ -49,8 +49,31 @@ function HeroArrow({ className, label, onClick, children }) {
   return h("button", { "aria-label": label, className, onClick, type: "button" }, children);
 }
 
-function heroSlideClass(index, current) {
-  return index === current ? "carousel-slide active" : "carousel-slide";
+function heroSlideClass(index, current, warm) {
+  if (index === current) return "carousel-slide active";
+  // Until the page has loaded, the slides not on screen have no picture: the first download is just the one in view.
+  return warm ? "carousel-slide" : "carousel-slide carousel-slide-later";
+}
+
+function pageHasLoaded() {
+  try {
+    const nav = globalThis.performance?.getEntriesByType?.("navigation")?.[0];
+    return Boolean(nav && nav.loadEventEnd > 0);
+  } catch {
+    return false;
+  }
+}
+
+/** False until the page has finished loading (then the other hero slides fetch their pictures). */
+function usePageLoaded() {
+  const [loaded, setLoaded] = React.useState(pageHasLoaded);
+  React.useEffect(() => {
+    if (loaded || typeof window === "undefined") return undefined;
+    const done = () => setLoaded(true);
+    window.addEventListener("load", done, { once: true });
+    return () => window.removeEventListener("load", done);
+  }, [loaded]);
+  return loaded;
 }
 
 function BoardMemberCard({ member }) {
@@ -78,6 +101,7 @@ function StatCard({ stat, index }) {
 
 export function HomeHeroSection() {
   const [current, setCurrent] = React.useState(1);
+  const warm = usePageLoaded();
   const [paused, setPaused] = React.useState(false);
   const swipeHandlers = useSwipe((step) => setCurrent((slide) => nextCircularIndex(slide, step, HERO_SLIDES)));
 
@@ -102,7 +126,7 @@ export function HomeHeroSection() {
     h("div", { className: "hero-bg-pattern", key: "pattern" }),
     h("div", { className: "carousel", key: "carousel", "aria-hidden": "true" },
       Array.from({ length: HERO_SLIDES }, (_, index) => h("div", {
-        className: heroSlideClass(index, current),
+        className: heroSlideClass(index, current, warm),
         key: "slide-" + index,
       }))),
     h(HeroArrow, {

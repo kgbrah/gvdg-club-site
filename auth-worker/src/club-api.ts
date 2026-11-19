@@ -26,7 +26,7 @@ export async function clubApi(request: Request, env: Env, origin: string | null,
   const bagTagRoute = await handleBagTags(request, env, origin, method, seg, ctx);
   if (bagTagRoute) return bagTagRoute;
 
-  const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg);
+  const publicRoute = await handleClubPublic(request, env, origin, pathname, method, seg, ctx);
   if (publicRoute) return publicRoute;
 
   const liveRoute = await handleClubLive(request, env, origin, method, seg);
