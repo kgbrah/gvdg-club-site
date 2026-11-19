@@ -133,6 +133,7 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
 .club-group-link span { font-size: .7rem; line-height: 1.5; max-width: 150px; }
 .club-group-link strong { font-size: .72rem; color: var(--accent); background: none; padding: 0; white-space: nowrap; }
 .club-group-link:hover { background: none; }
+.club-group-link + .club-group-link { border-top: 1px solid rgba(255,255,255,.15); }
 
 @media (min-width: 769px) and (max-width: 1100px) {
   header, header.scrolled { padding-inline: 24px; }

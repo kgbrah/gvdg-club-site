@@ -23,7 +23,7 @@ const CLUB_EMAIL_LINK = "mailto:greenvillediscgolf@gmail.com";
 const MEMBERSHIP_PERKS = [
   {
     title: "Tournament Access",
-    body: "Member-only events and discounts",
+    body: "Member-only events and discounts, plus $5 off PDGA membership with the club's code",
     icon: Trophy,
   },
   {

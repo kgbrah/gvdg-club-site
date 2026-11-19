@@ -69,6 +69,8 @@ h1 span { color: var(--primary); }
 /* "New this season": six cards keep the same color rhythm, a row at a time. */
 .new-features .signature-grid article:nth-child(5) { border-top-color: var(--primary); }
 .new-features .signature-grid article:nth-child(6) { border-top-color: var(--accent); }
+/* Four cards (PDGA): two rows of two instead of three and a lone one. */
+.signature-grid.two-up { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .hero-comparison.hero-new { display: block; width: fit-content; max-width: 100%; margin-top: 8px; }
 .signature-grid .feature-number { margin: 0 0 20px; }
 .signature-grid h3 { font-size: 2.2rem; }
@@ -169,7 +171,7 @@ footer > a:first-child { font-family: 'Bebas Neue', sans-serif; text-decoration:
   .hero-rail { grid-template-columns: repeat(2,1fr); gap: 14px; font-size: .65rem; }
   .depth-section, .theme-gallery, .club-features { padding-block: 44px; }
   .signature-section { padding-block: 44px; }
-  .signature-grid { grid-template-columns: 1fr; gap: 22px; }
+  .signature-grid, .signature-grid.two-up { grid-template-columns: 1fr; gap: 22px; }
   .walkthrough-section { padding-block: 44px; }
   .walkthrough-steps { grid-template-columns: 1fr; gap: 24px; }
   .step-number { margin-bottom: 14px; }
