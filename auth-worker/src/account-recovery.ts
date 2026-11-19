@@ -2,9 +2,11 @@
 // self recovery path").
 //
 //   POST /me/email/start  { email, pin? }  a signed-in member adds or changes their email: a 6-digit code goes to it.
-//                                          Within 15 minutes of a real sign-in no PIN is needed; later (a renewed
-//                                          30-day session) the current PIN proves it's them, so a borrowed phone
-//                                          can't point the account's recovery at someone else.
+//                                          Adding the first one needs nothing more (being signed in is enough; there's
+//                                          no recovery address to take over). Changing an existing one needs the PIN
+//                                          (or a passkey check, which is a fresh sign-in) unless they signed in within
+//                                          15 minutes, so a borrowed phone can't point the account's recovery at
+//                                          someone else; the old address is told either way.
 //   POST /me/email/verify { code }         the code confirms the address; sign-in by email moves to it.
 //   POST /pin-reset/start  { identifier }  "Forgot PIN?": a code goes to the email on file. The answer is the same
 //                                          whether or not the account exists or has an email (no enumeration).
@@ -95,7 +97,7 @@ export async function handleEmailStart(request: Request, env: Env, origin: strin
   if (member.email && member.email.toLowerCase() === email) return json({ error: "same_email" }, 400, origin);
 
   const nowSec = Math.floor(Date.now() / 1000);
-  if (nowSec - (claims.at ?? 0) > RECENT_SIGN_IN_SEC) {
+  if (member.email && nowSec - (claims.at ?? 0) > RECENT_SIGN_IN_SEC) {
     const pin = typeof body.pin === "string" ? body.pin : "";
     if (!pin) return json({ error: "pin_required" }, 403, origin);
     const lock = await checkLockout(env.RATELIMIT, PIN_CHECK(member.memberId), Date.now());

@@ -57,6 +57,8 @@ jobs:
         run: npm ci --prefix auth-worker
       - name: Verify Lost & Found (redaction, matching, returns, karma) against the real Worker
         run: node scripts/qa/lost-found-browser-qa.mjs
+      - name: Verify the email step and Forgot PIN end to end against the real Worker
+        run: node scripts/qa/account-recovery-e2e-qa.mjs
 
   worker:
     runs-on: ubuntu-24.04

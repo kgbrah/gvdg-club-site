@@ -149,27 +149,70 @@ for (const dark of [false, true]) {
   await context.close();
 }
 
-// 2. Later (a renewed session): the email step asks for the PIN, and a wrong PIN doesn't sign them out.
+// 2. Adding a first email weeks after signing in: no PIN. Changing an existing one: the PIN, or "Use my passkey
+//    instead" (a passkey check for this same account), and a wrong PIN doesn't sign them out.
 {
-  const { page, context } = await newPage({ width: 390, token: jwt(nowSec() - 3600) });
-  await authRoutes(page, {
+  const { page, context } = await newPage({ width: 390, token: jwt(nowSec() - 20 * 86400) });
+  const calls = await authRoutes(page, {
     "GET /me": () => [{ sub: "m_80024", ...member, email: null, needsEmail: true }],
-    "POST /me/email/start": (body) => !body.pin ? [{ error: "pin_required" }, 403] : body.pin !== "4821" ? [{ error: "wrong_pin" }, 403] : [{ ok: true, expiresInSec: 900 }],
+    "POST /me/email/start": () => [{ ok: true, expiresInSec: 900 }],
   });
   await page.goto(`${origin}/gvdg-members.html`);
   await page.locator('[data-react-auth-gate="email"]').waitFor();
   await page.locator("#memberEmailInput").fill("jordan@example.com");
   await page.locator('[data-react-auth-action="email-start"]').click();
-  await page.locator("#memberEmailPinInput").waitFor();
-  await page.locator('[data-react-auth-error="email"]').filter({ hasText: "Enter your PIN" }).waitFor();
-  await page.locator("#memberEmailPinInput").fill("0000");
-  await page.locator('[data-react-auth-action="email-start"]').click();
-  await page.locator('[data-react-auth-error="email"]').filter({ hasText: "didn't match" }).waitFor();
-  assert.ok(await page.evaluate(() => localStorage.getItem("gvdg_member_token")), "a wrong PIN keeps them signed in");
-  await page.locator("#memberEmailPinInput").fill("4821");
-  await page.locator('[data-react-auth-action="email-start"]').click();
   await page.locator('#emailForm[data-email-step="code"]').waitFor();
-  await shot(page, "email-pin-confirmed");
+  assert.equal(await page.locator("#memberEmailPinInput").count(), 0, "no PIN to add a first email");
+  assert.equal(calls.filter((c) => c.path === "/me/email/start").length, 1);
+  await context.close();
+}
+for (const passkeyAccount of ["m_80024", "m_someone_else"]) {
+  const { page, context } = await newPage({ width: 390, token: jwt(nowSec() - 3600) });
+  await page.addInitScript(() => {
+    const buf = (n) => new Uint8Array([n, n + 1, n + 2]).buffer;
+    navigator.credentials.get = async () => ({
+      id: "cred-1", rawId: buf(1), type: "public-key", getClientExtensionResults: () => ({}),
+      response: { authenticatorData: buf(2), clientDataJSON: buf(3), signature: buf(4), userHandle: buf(5) },
+    });
+  });
+  const fresh = jwt(nowSec(), passkeyAccount);
+  const calls = await authRoutes(page, {
+    "GET /me": () => [{ sub: "m_80024", ...member, email: "old@example.com", needsEmail: false }],
+    "POST /me/email/start": (body, request) => {
+      const signedInJustNow = (request.headers().authorization || "") === "Bearer " + fresh;
+      if (!body.pin && !signedInJustNow) return [{ error: "pin_required" }, 403];
+      if (body.pin && body.pin !== "4821") return [{ error: "wrong_pin" }, 403];
+      return [{ ok: true, expiresInSec: 900 }];
+    },
+    "POST /webauthn/auth/options": () => [{ options: { challenge: "Y2hhbGxlbmdl", rpId: "127.0.0.1" }, flowId: "flow-1" }],
+    "POST /webauthn/auth/verify": () => [{ token: fresh, ...member, email: "old@example.com", needsEmail: false }],
+  });
+  await page.goto(`${origin}/gvdg-members.html`);
+  await shellIs(page, "members");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("gvdg:member-email-change-requested")));
+  await page.locator('[data-react-auth-gate="email"]').waitFor();
+  await page.locator("#memberEmailInput").fill("new@example.com");
+  await page.locator('[data-react-auth-action="email-start"]').click();
+  await page.locator("#memberEmailPinInput").waitFor();
+  await page.locator('[data-react-auth-error="email"]').filter({ hasText: "use your passkey" }).waitFor();
+  const passkeyButton = page.locator('[data-react-auth-action="email-passkey"]');
+  await passkeyButton.waitFor();
+  if (passkeyAccount === "m_80024") {
+    await page.locator("#memberEmailPinInput").fill("0000");
+    await page.locator('[data-react-auth-action="email-start"]').click();
+    await page.locator('[data-react-auth-error="email"]').filter({ hasText: "didn't match" }).waitFor();
+    assert.ok(await page.evaluate(() => localStorage.getItem("gvdg_member_token")), "a wrong PIN keeps them signed in");
+    await noOverflow(page, "email change with passkey option");
+    await shot(page, "email-change-passkey-option");
+    await passkeyButton.click();
+    await page.locator('#emailForm[data-email-step="code"]').waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem("gvdg_member_token")), fresh, "the passkey check's fresh session is kept");
+    assert.deepEqual(calls.filter((c) => c.path === "/me/email/start").at(-1).body, { email: "new@example.com" });
+  } else {
+    await passkeyButton.click();
+    await page.locator('[data-react-auth-error="email"]').filter({ hasText: "different account" }).waitFor();
+    assert.notEqual(await page.evaluate(() => localStorage.getItem("gvdg_member_token")), fresh, "another account's passkey doesn't switch accounts");
+  }
   await context.close();
 }
 

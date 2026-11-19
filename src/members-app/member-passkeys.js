@@ -175,5 +175,39 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
     }
   }
 
-  return { enablePasskey, loginWithPasskey, startPasskeyPriming, stopPasskeyPriming };
+  /** Prove it's them with a passkey without leaving the current screen: resolves the sign-in reply (a fresh session),
+   *  or throws (NotAllowedError when they cancel). Used where the app would otherwise ask for the PIN. */
+  async function confirmWithPasskey() {
+    if (!passkeysSupported()) throw new Error("unsupported");
+    const optionsResponse = await api("/webauthn/auth/options", { method: "POST" });
+    if (!optionsResponse.ok) throw new Error("options");
+    const { options, flowId } = await optionsResponse.json();
+    options.challenge = b64urlToBuf(options.challenge);
+    if (options.allowCredentials) {
+      options.allowCredentials = options.allowCredentials.map((credential) => ({ ...credential, id: b64urlToBuf(credential.id) }));
+    }
+    const assertion = await navigator.credentials.get({ publicKey: options });
+    const verifyResponse = await api("/webauthn/auth/verify", {
+      method: "POST",
+      body: {
+        flowId,
+        response: {
+          id: assertion.id,
+          rawId: bufToB64url(assertion.rawId),
+          response: {
+            authenticatorData: bufToB64url(assertion.response.authenticatorData),
+            clientDataJSON: bufToB64url(assertion.response.clientDataJSON),
+            signature: bufToB64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufToB64url(assertion.response.userHandle) : undefined,
+          },
+          type: assertion.type,
+          clientExtensionResults: assertion.getClientExtensionResults ? assertion.getClientExtensionResults() : {},
+        },
+      },
+    });
+    if (verifyResponse.status !== 200) throw new Error("verify");
+    return verifyResponse.json();
+  }
+
+  return { confirmWithPasskey, enablePasskey, loginWithPasskey, startPasskeyPriming, stopPasskeyPriming };
 }

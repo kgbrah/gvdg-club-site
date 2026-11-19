@@ -88,6 +88,12 @@ function tokenClaims(token) {
   }
 }
 
+/** Whose session this is (the token's subject), read without verifying it; "" if unreadable. */
+export function memberTokenSubject(token) {
+  const sub = tokenClaims(token).sub;
+  return typeof sub === "string" ? sub : "";
+}
+
 /** The token's issue time (epoch seconds), read without verifying it (the server does that); 0 if unreadable. */
 export function memberTokenIssuedAt(token) {
   const iat = tokenClaims(token).iat;
