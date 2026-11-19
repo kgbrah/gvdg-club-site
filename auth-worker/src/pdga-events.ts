@@ -43,13 +43,20 @@ const API_EVENT_DAYS = 120;
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TIER_NAMES: Record<string, string> = { M: "Major", ES: "Elite Series", NT: "National Tour", L: "League", XM: "XM-tier" };
 
-/** "Nov 22, 2026" or "Nov 22-23, 2026" (the dates eventDay() reads); other spans keep the start day. */
+/**
+ * "Nov 22, 2026", "Nov 22-23, 2026", "Sep 13 – Dec 20, 2026" (a league still running shows its whole span, not a
+ * start day already past) or "Dec 31, 2026 – Jan 1, 2027". eventDay() sorts a span by the day it shows with a year.
+ */
 export function pdgaApiEventDate(start: string, end: string): string {
   const [year, month, day] = start.split("-").map(Number);
   if (!year || !month || !day) return start;
   const [endYear, endMonth, endDay] = (end || start).split("-").map(Number);
-  const range = endYear === year && endMonth === month && endDay && endDay !== day ? `${day}-${endDay}` : String(day);
-  return `${SHORT_MONTHS[month - 1]} ${range}, ${year}`;
+  if (!endYear || !endMonth || !endDay || (endYear === year && endMonth === month)) {
+    return `${SHORT_MONTHS[month - 1]} ${endDay && endDay !== day && endYear === year ? `${day}-${endDay}` : day}, ${year}`;
+  }
+  return endYear === year
+    ? `${SHORT_MONTHS[month - 1]} ${day} – ${SHORT_MONTHS[endMonth - 1]} ${endDay}, ${year}`
+    : `${SHORT_MONTHS[month - 1]} ${day}, ${year} – ${SHORT_MONTHS[endMonth - 1]} ${endDay}, ${endYear}`;
 }
 
 export function pdgaApiTierLabel(code: string): string {

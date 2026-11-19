@@ -42,6 +42,18 @@ function slug(value) {
 }
 
 function sceneRange(date) {
+  // "Sep 13 – Dec 20, 2026" or "Dec 31, 2026 – Jan 1, 2027": a span across months (a PDGA league).
+  const span = String(date || "").match(/\b([A-Za-z]{3})\s+(\d{1,2})(?:,\s+(\d{4}))?\s+[–-]\s+([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})\b/);
+  if (span) {
+    const startMonth = MONTHS[span[1].toLowerCase()];
+    const endMonth = MONTHS[span[4].toLowerCase()];
+    const endYear = Number(span[6]);
+    const startYear = span[3] ? Number(span[3]) : endYear;
+    if (!startMonth || !endMonth) return null;
+    const start = ymd(startYear, startMonth, Number(span[2]));
+    const last = ymd(endYear, endMonth, Number(span[5]));
+    return start <= last ? { start, end: addDays(last, 1) } : null;
+  }
   const match = String(date || "").match(/\b([A-Za-z]{3})\s+(\d{1,2})(?:-(\d{1,2}))?,\s+(\d{4})\b/);
   if (!match) return null;
   const month = MONTHS[match[1].toLowerCase()];

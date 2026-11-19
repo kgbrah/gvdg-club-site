@@ -213,8 +213,10 @@ describe("features using the official API when the club's login is set", () => {
     const search = new URL(pdga.calls.find((call) => call.url.includes("/event?"))!.url).searchParams;
     expect([search.get("latitude"), search.get("longitude"), search.get("proximity_radius")]).toEqual(["35.6127", "-77.3664", "100"]);
     expect(pdga.calls.some((call) => call.url.includes("discgolfscene"))).toBe(false);
-    expect([pdgaApiTierLabel("XC"), pdgaApiTierLabel("NT"), pdgaApiTierLabel("L"), pdgaApiEventDate("2026-12-31", "2027-01-01")])
-      .toEqual(["XC-tier", "National Tour", "League", "Dec 31, 2026"]);
+    expect([pdgaApiTierLabel("XC"), pdgaApiTierLabel("NT"), pdgaApiTierLabel("L")]).toEqual(["XC-tier", "National Tour", "League"]);
+    // A league still running shows its whole span, not a start day already past.
+    expect([pdgaApiEventDate("2026-12-05", "2026-12-05"), pdgaApiEventDate("2027-01-09", "2027-01-10"), pdgaApiEventDate("2026-09-13", "2026-12-20"),
+      pdgaApiEventDate("2026-12-31", "2027-01-01")]).toEqual(["Dec 5, 2026", "Jan 9-10, 2027", "Sep 13 – Dec 20, 2026", "Dec 31, 2026 – Jan 1, 2027"]);
   });
 
   it("records rating anchors from the API in one request per batch, without reading pdga.com", async () => {
