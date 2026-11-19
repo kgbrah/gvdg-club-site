@@ -5,6 +5,7 @@ import { currentDashboardTab } from "./dashboard-router.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromPdga } from "../shared/event-calendar.js";
 import { PdgaCredit, PdgaLink } from "../shared/pdga-credit.js";
+import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
 const CLUB_ORIGIN = { lat: 35.6127, lng: -77.3664 };
@@ -49,7 +50,7 @@ function EventCard({ event }) {
         href: event.url,
         key: "register",
         // The club's own PDGA events register on the club site (a path here): open it in place.
-        ...(String(event.url || "").startsWith("/") ? {} : { rel: "noopener noreferrer", target: "_blank" }),
+        ...(String(event.url || "").startsWith("/") ? {} : SIGNUP_LINK),
       }, "Register"),
       h(AddToCalendarButton, { item: calendarEventFromPdga(event), key: "cal" }),
     ]),

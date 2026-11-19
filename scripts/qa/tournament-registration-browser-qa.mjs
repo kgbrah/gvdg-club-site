@@ -66,6 +66,8 @@ ${looks[component].styles}<title>QA</title></head><body class="${looks[component
 import React from "react"; import { createRoot } from "react-dom/client";
 ${component === "public"
     ? `import { TournamentRegistration } from "/src/public-app/tournament-registration.js";
+import { installOutsideLinkHandoff } from "/src/shared/outside-link.js";
+installOutsideLinkHandoff(); // as public-app/main.js does
 createRoot(document.getElementById("root")).render(React.createElement(TournamentRegistration, { event: { id: 7, name: "Greenville Fall Classic", pdga_event_id: 104547 } }));`
     : component === "form" ? `import { AdminEventForm } from "/src/admin-app/event-form.js";
 localStorage.setItem("gvdg_member_token", "admin-token");
@@ -143,8 +145,10 @@ await vite.listen();
 const origin = vite.resolvedUrls.local[0].replace(/\/$/, "");
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 
-async function open(path, width = 390) {
-  const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 2, serviceWorkers: "block" });
+async function open(path, width = 390, { userAgent, installed = false } = {}) {
+  const context = await browser.newContext({ viewport: { width, height: 900 }, deviceScaleFactor: 2, serviceWorkers: "block", ...(userAgent ? { userAgent } : {}) });
+  // The club app opened from the home screen (iPhone reports navigator.standalone).
+  if (installed) await context.addInitScript(() => Object.defineProperty(Navigator.prototype, "standalone", { get: () => true }));
   await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage();
   const errors = [];
@@ -236,6 +240,23 @@ try {
     assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
     await page.locator("[data-admin-event-pdga=on]").screenshot({ path: join(shots, "admin-event-form-pdga-1100.png") });
     assert.deepEqual(errors, []);
+    await context.close();
+  }
+  // From the installed app on an iPhone, "Renew with PDGA" opens in Safari (where the player is signed in to pdga.com);
+  // in a normal browser tab it's left as a new-tab link.
+  for (const [label, installed, expected] of [["installed iphone", true, "x-safari-https://www.pdga.com/membership/renew"], ["iphone safari tab", false, ""]]) {
+    const { page, context } = await open("/public.html", 390, { installed, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1" });
+    await page.locator("[data-tournament-registration]").waitFor();
+    await page.getByLabel("PDGA number").fill("70007");
+    await page.getByRole("button", { name: "Check" }).click();
+    const renew = page.getByRole("link", { name: "Renew with PDGA" });
+    await renew.waitFor();
+    assert.equal(await renew.getAttribute("data-signup-link"), "true");
+    const popup = context.waitForEvent("page", { timeout: 1500 }).catch(() => null);
+    await renew.click({ noWaitAfter: true });
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.outsideHandoff || "").catch(() => ""), expected, label);
+    if (!expected) assert.ok(await popup, label + ": a normal tab opens PDGA in a new tab as before");
     await context.close();
   }
   console.log("tournament registration browser QA passed; screenshots in " + shots);

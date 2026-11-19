@@ -12,6 +12,7 @@ import {
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
 import { fetchMergedRyderData } from "../shared/ryder-cup-data.js";
 import { officialRyderPlayerStandings } from "./ryder-board-merge.js";
+import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
 
@@ -66,8 +67,7 @@ function LeagueAbout({ text }) {
     about.urls.length ? h("p", { className: "league-about-links", key: "links" }, about.urls.map((href) => h("a", {
       href,
       key: href,
-      rel: "noopener noreferrer",
-      target: "_blank",
+      ...SIGNUP_LINK,
     }, href.includes("udisc.com") ? "Open on UDisc" : "League link"))) : null,
   ]);
 }

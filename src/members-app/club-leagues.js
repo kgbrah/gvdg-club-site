@@ -6,6 +6,7 @@ import { requestJson } from "./api.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { formatEventDay } from "./format.js";
 import { displayEventTitle } from "../shared/events-model.js";
+import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
 const DAY = 24 * 60 * 60 * 1000;
@@ -136,8 +137,7 @@ function ScheduleEvent({ event }) {
       className: "member-list-action passkey-btn",
       href: external,
       key: "signup",
-      rel: "noopener noreferrer",
-      target: "_blank",
+      ...SIGNUP_LINK,
     }, "Sign up");
   } else if (event.status === "final") {
     action = h("a", {

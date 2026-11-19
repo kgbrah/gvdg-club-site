@@ -27,6 +27,7 @@ import { KarmaChip } from "../shared/karma.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 import { PdgaMembershipCard, pdgaMembershipNeedsAttention } from "../shared/pdga-membership.js";
 import { usePdgaMembership } from "./pdga-membership.js";
+import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
 
@@ -191,7 +192,7 @@ function NextPdgaCard({ token }) {
         href: event.url,
         key: "register",
         // The club's own PDGA events register on the club site (a path here): open it in place.
-        ...(String(event.url || "").startsWith("/") ? {} : { rel: "noopener noreferrer", target: "_blank" }),
+        ...(String(event.url || "").startsWith("/") ? {} : SIGNUP_LINK),
       }, "Register"),
       h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdga(event), key: "cal", label: "Calendar" }),
       h("button", {
@@ -353,7 +354,7 @@ export function MemberOverviewDashboard() {
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
       // Renewal nudge: only when the member's PDGA membership has lapsed or ends soon.
       pdgaMembershipNeedsAttention(pdgaMembership)
-        ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true })) : null,
+        ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true, credit: false })) : null,
       h(PdgaCredit, { key: "pdga-credit" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),

@@ -8,6 +8,7 @@ import { readMemberToken } from "../shared/member-session.js";
 import { guestRegs, setGuestReg } from "./guest-registrations.js";
 import { PdgaCredit, PdgaLink, pdgaPlayerHref } from "../shared/pdga-credit.js";
 import { parseArray } from "../members-app/registration-utils.js";
+import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
 const REFUND_POLICY_URL = "https://www.pdga.com/rules/competition-manual/103";
@@ -107,7 +108,7 @@ function RenewHint({ token }) {
     return () => { live = false; };
   }, [token]);
   return h("p", { className: "tournament-renew", "data-pdga-renew": "" }, [
-    h("a", { href: "https://www.pdga.com/membership/renew", target: "_blank", rel: "noopener noreferrer", key: "renew" }, "Renew with PDGA"),
+    h("a", { href: "https://www.pdga.com/membership/renew", ...SIGNUP_LINK, key: "renew" }, "Renew with PDGA"),
     promo ? [" with the club's code ", h("b", { key: "code" }, promo.code), " ($5 off)."]
       : " (GVDG members get $5 off with the club's code: sign in to see it).",
   ]);
