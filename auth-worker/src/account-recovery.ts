@@ -26,7 +26,7 @@ import { emailConfigured } from "./market-notify.js";
 import { memberSessionBody } from "./member-routes.js";
 import { sendMail } from "./membership-notify.js";
 import { checkLockout, clearAttempts, recordFailure } from "./ratelimit.js";
-import { canonicalLoginKey, emailOwner, getMember, loginKeysOf, resolveMember, setMemberEmail, setPin } from "./roster.js";
+import { canonicalLoginKey, emailOwner, getMember, loginKeysOf, resolveMember, setMemberEmail, setPin, type Member } from "./roster.js";
 
 export const CODE_TTL_SEC = 15 * 60;
 export const CODE_TRIES = 5;
@@ -36,6 +36,27 @@ export const RECENT_SIGN_IN_SEC = 15 * 60;
 const EMAIL_CODE = (memberId: string) => `acct:emailcode:${memberId}`;
 const RESET_CODE = (memberId: string) => `acct:pinreset:${memberId}`;
 const PIN_CHECK = (memberId: string) => `acct:pincheck:${memberId}`;
+const ACCOUNT_SENDS = (memberId: string) => `acct:email:m:${memberId}`;
+const RESET_REQUESTS = (loginKey: string) => `acct:reset:id:${loginKey}`;
+
+/** Admin › Members "Clear lockouts": every counter that can keep this member out - wrong-PIN lockouts on each sign-in
+ *  name, the email step's PIN check and code sends, Forgot PIN requests, PIN changes. Deletes only what's there. */
+export async function clearAccountLocks(env: Env, member: Pick<Member, "memberId" | "pdgaNo" | "udisc" | "email">): Promise<number> {
+  const keys = [
+    ...loginKeysOf(member).map((key) => "ratelimit:" + key),
+    "ratelimit:" + PIN_CHECK(member.memberId),
+    ACCOUNT_SENDS(member.memberId),
+    ...loginKeysOf(member).map(RESET_REQUESTS),
+    "setpin:" + member.memberId,
+  ];
+  let cleared = 0;
+  for (const key of new Set(keys)) {
+    if ((await env.RATELIMIT.get(key)) === null) continue;
+    await env.RATELIMIT.delete(key);
+    cleared += 1;
+  }
+  return cleared;
+}
 
 type StoredCode = { hash: string; tries: number; email?: string };
 
@@ -90,7 +111,6 @@ export async function handleEmailStart(request: Request, env: Env, origin: strin
   const member = claims?.member;
   if (!claims || !member) return json({ error: "unauthorized" }, 401, origin);
   if (await kvRateLimited(env, "acct:email:ip:" + clientIp(request), 20, 3600)) return json({ error: "rate_limited" }, 429, origin);
-  if (await kvRateLimited(env, "acct:email:m:" + member.memberId, 6, 3600)) return json({ error: "rate_limited" }, 429, origin);
   const body = (await readJson(request)) ?? {};
   const email = parseEmail(body.email, 120);
   if (!email) return json({ error: "invalid_email" }, 400, origin);
@@ -113,6 +133,8 @@ export async function handleEmailStart(request: Request, env: Env, origin: strin
   const owner = await emailOwner(env.ROSTER, email);
   if (owner && owner !== member.memberId) return json({ error: "email_in_use" }, 409, origin);
   if (!emailConfigured(env)) return json({ error: "email_unavailable" }, 503, origin);
+  // Only codes actually sent count (a PIN prompt or a wrong PIN has its own lockout), 6 an hour.
+  if (await kvRateLimited(env, ACCOUNT_SENDS(member.memberId), 6, 3600)) return json({ error: "rate_limited" }, 429, origin);
 
   const code = sixDigitCode();
   await saveCode(env, EMAIL_CODE(member.memberId), { hash: await codeHash(env.JWT_SECRET, `email:${member.memberId}:${email}`, code), tries: 0, email });
@@ -152,7 +174,7 @@ export async function handlePinResetStart(request: Request, env: Env, origin: st
   const body = (await readJson(request)) ?? {};
   const identifier = typeof body.identifier === "string" ? body.identifier.trim().slice(0, 120) : "";
   if (!identifier) return json({ error: "invalid_request" }, 400, origin);
-  if (await kvRateLimited(env, "acct:reset:id:" + canonicalLoginKey(identifier), 3, CODE_TTL_SEC)) return json({ error: "rate_limited" }, 429, origin);
+  if (await kvRateLimited(env, RESET_REQUESTS(canonicalLoginKey(identifier)), 3, CODE_TTL_SEC)) return json({ error: "rate_limited" }, 429, origin);
 
   const member = await resolveMember(env.ROSTER, identifier);
   if (member?.email && member.held !== true) {

@@ -502,3 +502,50 @@ describe("Forgot PIN", () => {
     }
   });
 });
+
+describe("lockouts", () => {
+  it("an admin's Clear lockouts lets a locked-out member straight back in (admins only)", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "jordan@example.com" });
+    roster.rows.set("idx:email:jordan@example.com", "m_80024");
+    for (let i = 0; i < 5; i++) await login("80024", "0000");
+    for (let i = 0; i < 5; i++) await login("jordan@example.com", "0000");
+    expect((await login("80024")).status).toBe(423);
+    expect((await login("jordan@example.com")).status).toBe(423);
+    const memberToken = await signSession({ sub: "m_80024", mustChangePin: false, pinVer: 0 }, SECRET, 900);
+    expect((await call("/admin/members/clear-locks", { method: "POST", token: memberToken, body: { memberId: "m_80024" } })).status).toBe(403);
+    const cleared = await call("/admin/members/clear-locks", { method: "POST", token: await admin(), body: { memberId: "m_80024" } });
+    expect(cleared.status).toBe(200);
+    expect(cleared.data.cleared).toBeGreaterThanOrEqual(2);
+    expect((await login("80024")).status).toBe(200);
+    expect((await login("jordan@example.com")).status).toBe(200);
+    expect((await call("/admin/members/clear-locks", { method: "POST", token: await admin(), body: { memberId: "m_nobody" } })).status).toBe(404);
+  });
+
+  it("PIN prompts don't use up the email step's sends; only codes actually sent count", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "old@example.com" });
+    const old = await signSession({ sub: "m_80024", mustChangePin: false, pinVer: 0, at: Math.floor(Date.now() / 1000) - 86400 }, SECRET, 2592000);
+    for (let i = 0; i < 10; i++) {
+      expect((await call("/me/email/start", { method: "POST", token: old, body: { email: "new@example.com" } })).data.error).toBe("pin_required");
+    }
+    for (let i = 0; i < 6; i++) expect((await call("/me/email/start", { method: "POST", token: old, body: { email: "new@example.com", pin: PIN } })).status).toBe(200);
+    expect((await call("/me/email/start", { method: "POST", token: old, body: { email: "new@example.com", pin: PIN } })).data.error).toBe("rate_limited");
+    // Clear lockouts lifts that too.
+    await call("/admin/members/clear-locks", { method: "POST", token: await admin(), body: { memberId: "m_80024" } });
+    expect((await call("/me/email/start", { method: "POST", token: old, body: { email: "new@example.com", pin: PIN } })).status).toBe(200);
+  });
+
+  it("a correct PIN signs in even if the failed-attempt counter can't be cleared", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    await login("80024", "0000");
+    const limits = env.RATELIMIT as unknown as { delete: (key: string) => Promise<void> };
+    const realDelete = limits.delete;
+    limits.delete = async () => { throw new Error("KV delete limit reached"); };
+    try {
+      const res = await login("80024");
+      expect(res.status).toBe(200);
+      await worksEverywhere(res.data.token, "signed in while deletes fail");
+    } finally {
+      limits.delete = realDelete;
+    }
+  });
+});

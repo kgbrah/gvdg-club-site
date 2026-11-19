@@ -62,8 +62,15 @@ export async function recordFailure(kv: KVLike, key: string, nowMs: number): Pro
 }
 
 /** Clear all recorded attempts (call on a successful login). */
+/** Forget the failed attempts after a success. Deletes only when there's something to forget (a KV delete is a
+ *  daily-capped write on the free plan; a read isn't), and never fails the caller: a correct PIN must sign in even if
+ *  the delete can't run, and a leftover count simply expires with its lockout window. */
 export async function clearAttempts(kv: KVLike, key: string): Promise<void> {
-  await kv.delete(rk(key));
+  try {
+    if ((await kv.get(rk(key))) !== null) await kv.delete(rk(key));
+  } catch {
+    /* best effort */
+  }
 }
 
 function rk(key: string): string {
