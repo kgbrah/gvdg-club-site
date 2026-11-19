@@ -12,7 +12,9 @@ import { ROUND_MESSAGE_MAX, mergeRoundMessages, messageSortId, normalizeRoundMes
 
 const h = React.createElement;
 const NAME_KEY = "gvdg_chat_name";
-const POLL_MS = 2000;
+// New messages every 4 s while the app is in front (every 2 s cost each phone 30 requests a minute, each a full card
+// read on the server); none in the background, and an immediate check on coming back.
+const POLL_MS = 4000;
 const TALK_TAG = "gvdg-card-talk";
 
 function seenKey(path) { return "gvdg.roundTalkSeen:" + path; }
@@ -201,7 +203,10 @@ export function RoundTalk({ inline, live, players, viewer, viewerName, karmaKeys
     if (!path || !live) return undefined;
     const ac = new AbortController();
     void reload(ac.signal);
-    const timer = window.setInterval(() => { void reload(ac.signal); }, POLL_MS);
+    const timer = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void reload(ac.signal);
+    }, POLL_MS);
     function onShow() {
       if (typeof document !== "undefined" && document.visibilityState === "visible") void reload(ac.signal);
     }

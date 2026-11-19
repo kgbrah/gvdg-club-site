@@ -135,6 +135,15 @@ export async function handleAdminShop(
       weight: label.weight,
     } }, 200, origin);
   }
+  // GET /admin/shop/low-stock — Today's "Low on the shelf" card: how many active products have 2 or fewer left and
+  // the first one's name. One small query instead of the whole product list (photos included) every minute.
+  if (seg[1] === "shop" && seg[2] === "low-stock" && seg.length === 3 && method === "GET") {
+    const row = await env.DB.prepare(
+      `SELECT COUNT(*) AS count, (SELECT name FROM store_products WHERE active = 1 AND stock_qty <= 2 ORDER BY id DESC LIMIT 1) AS name
+         FROM store_products WHERE active = 1 AND stock_qty <= 2`,
+    ).first<{ count: number; name: string | null }>();
+    return json({ count: Number(row?.count) || 0, name: row?.name ?? "" }, 200, origin);
+  }
   if (seg[1] === "shop" && seg[2] === "products") {
     const id = seg[3] != null ? asInt(seg[3]) : null;
     if (method === "GET" && seg.length === 3) return json({ products: await shopDb.listStoreProducts(env.DB, adminProductListOptions(request)) }, 200, origin);

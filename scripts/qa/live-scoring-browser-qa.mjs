@@ -254,6 +254,9 @@ async function startStaticServer() {
   };
 }
 
+// How long the card request takes (the saved-card check slows it down to see what shows meanwhile).
+let mineDelayMs = 0;
+
 async function installApiRoutes(page) {
   await page.route(`${apiBase}/**`, async (route) => {
     const request = route.request();
@@ -278,7 +281,10 @@ async function installApiRoutes(page) {
       createdRoundBody = parseBody(request);
       return route.fulfill(json({ code: "QA1234" }, 201));
     }
-    if (pathName === "/rounds/QA1234/live/mine" && method === "GET") return route.fulfill(json(roundLive));
+    if (pathName === "/rounds/QA1234/live/mine" && method === "GET") {
+      if (mineDelayMs) await new Promise((resolve) => setTimeout(resolve, mineDelayMs));
+      return route.fulfill(json(roundLive));
+    }
     if (pathName === "/rounds/QA1234/live/score" && method === "POST") {
       roundLive = scoreSnapshot(roundLive, parseBody(request));
       return route.fulfill(json(roundLive));
@@ -474,11 +480,44 @@ async function runAdminEventQa(browser, origin) {
   await context.close();
 }
 
+// Reopening a round on weak signal: the card saved on this phone shows at once, then the server's copy replaces it.
+async function runSavedCardPreviewQa(browser, origin) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  const errors = [];
+  collectPageErrors(page, errors);
+  await installApiRoutes(page);
+  await page.addInitScript(() => sessionStorage.setItem("gvdg_member_token", "qa-token"));
+  const subtitle = () => page.evaluate(() => document.body.innerText);
+  // First visit: the card loads and is saved on the phone.
+  await page.goto(`${origin}/score.html?round=QA1234`, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction((name) => document.body.innerText.includes(name), qaCourse.name);
+  const savedName = qaCourse.name;
+  // Meanwhile the round moved on (a new layout name), and the server is slow to answer.
+  const original = roundLive;
+  roundLive = { ...roundLive, layoutName: "Updated Layout", rev: (roundLive.rev || 1) + 1 };
+  mineDelayMs = 4000;
+  const started = Date.now();
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForFunction((name) => document.body.innerText.includes(name), savedName, { timeout: 3000 });
+  const shownAfter = Date.now() - started;
+  if (shownAfter > 3000) throw new Error(`The saved card took ${shownAfter} ms to show`);
+  if ((await subtitle()).includes("Updated Layout")) throw new Error("The server's card arrived before the slow request finished?");
+  // The server's copy then replaces it.
+  await page.waitForFunction(() => document.body.innerText.includes("Updated Layout"), null, { timeout: 8000 });
+  mineDelayMs = 0;
+  roundLive = original;
+  if (errors.length) throw new Error(errors.join("\n"));
+  await context.close();
+  console.log(`Saved card shown in ${shownAfter} ms while the server took 4 s; the server's copy replaced it`);
+}
+
 const staticServer = await startStaticServer();
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH });
 
 try {
   await runCasualRoundQa(browser, staticServer.origin);
+  await runSavedCardPreviewQa(browser, staticServer.origin);
   await runAdminEventQa(browser, staticServer.origin);
 } finally {
   await browser.close();

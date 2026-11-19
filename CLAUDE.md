@@ -417,7 +417,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v330`, members `?v=218`, public/events `?v=205`, score `?v=243`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v331`, members `?v=219`, public/events `?v=206`, score `?v=244`,
 home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -479,6 +479,26 @@ first load on a throttled phone profile.
   same last name or the same first letter and a length within 2 (a 200-new-name check was ~50ms of CPU, over the free
   plan's ~10ms); a sheet link must answer with CSV (an unshared sheet answers with Google's sign-in page). A first
   import costs one KV write per new person (held account) and per changed tier or dues year.
+- **Speed (owner's sweep, Nov 2026)** — measure with `scripts/qa/member-load-perf.mjs` (phone profile; `--scenario
+  stats|signed-in|signed-out --waterfall`). What's in place:
+  - The 2026 Ryder Cup is over: its official tally is saved in `src/shared/ryder-cup-2026-final.js` (the Google Sheet
+    had all 66 matches; the app's own results only the 22 imported, Blue 23-21 vs the sheet's 109-99), so nothing
+    downloads the sheet; `fetchMergedRyderData` is one shared load per visit (5 min).
+  - Stats shows when the club's own data is in (the Ryder tally is applied when ready); Stats and the ratings list use
+    the identical `/my-ratings` URL so `api.js` shares the request; Home is built when first shown (opening Stats or
+    Events directly no longer fetches Home's data); members-app `modulePreload` is on (a screen's chunk and its
+    shared pieces download together); background polls check `dashboardShowing(...)` (app in front and that tab open).
+  - Admin: the three 60-s polls wait while the tab is hidden (each needs check lists applications; KV allows 1,000
+    lists/day free) and catch up on return; Today's shelf uses `GET /admin/shop/low-stock` (a count, not every
+    product with its photo); the orders badge keeps its count while checking and clears only on a failed check.
+  - Scoring: a saved card (`readMineCache`) shows at once as a preview (`applyMinePayload(..., { cached: true })`
+    draws only; the server's card always replaces it and starts the socket/location/saving); round chat polls every
+    4 s and never while hidden; `overlayLiveSnapshot` reads pins/positions/consensus in parallel.
+  - `score.html` and `gvdg-members.html` preconnect to the API host from an inline head script (admin.html uses a
+    static link: its tests forbid DOM calls in the page).
+  - Not done yet (bigger changes, proposed separately): ratings validated on every read (`makeRatingValidator`;
+    hashing + baseline queries per row behind `/my-ratings` and `/my-results`), same-origin API (no CORS preflights),
+    photos in snapshots, splitting the scorer and admin bundles.
 - **Admin top bar** shows the member app's envelope and bell with the same counts (`/me/messages/summary`), opening
   Messages in the member app.
 - **Admin › Members › Clear lockouts** (`POST /admin/members/clear-locks`, `clearAccountLocks`) lifts every counter that

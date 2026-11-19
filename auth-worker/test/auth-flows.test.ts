@@ -626,3 +626,19 @@ describe("sign-in counters live in D1 (RATELIMIT_BACKEND = d1)", () => {
     expect(limitRows()).toEqual([]);
   });
 });
+
+describe("admin Today's low-stock card", () => {
+  it("counts active products with 2 or fewer left, without sending the product list", async () => {
+    const sql = (env.DB as unknown as { raw: { exec(sql: string): void } }).raw;
+    sql.exec(`INSERT INTO store_products (category, name, price_cents, stock_qty, active, image_url) VALUES
+      ('disc', 'Older Low', 1500, 1, 1, 'data:image/jpeg;base64,AAAA'),
+      ('disc', 'Newest Low', 1500, 2, 1, 'data:image/jpeg;base64,AAAA'),
+      ('disc', 'Plenty', 1500, 9, 1, NULL),
+      ('disc', 'Hidden Low', 1500, 0, 0, NULL)`);
+    const res = await call("/admin/shop/low-stock", { token: await admin() });
+    expect(res.data).toEqual({ count: 2, name: "Newest Low" });
+    const member = await signSession({ sub: "m_80024", mustChangePin: false, pinVer: 0 }, SECRET, 900);
+    await putMember(roster as never, { memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", pinHash: "h", mustChangePin: false });
+    expect((await call("/admin/shop/low-stock", { token: member })).status).toBe(403);
+  });
+});

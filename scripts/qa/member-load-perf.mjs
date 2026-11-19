@@ -9,6 +9,8 @@
 // Scenarios:
 //   signed-out  the login screen
 //   signed-in   Home with a stored member token
+//   stats       the Stats tab opened directly (gvdg-members.html#stats) with a stored member token; the Ryder Cup
+//               sheet is fetched from Google for real, as the app does
 //
 // Reported per scenario (median of N runs):
 //   usable    navigation start -> first usable screen
@@ -192,6 +194,7 @@ function probeScript() {
       const round = document.querySelector('[data-react-live-scoring="ready"]');
       return visible(nav) && visible(hero) && hero.textContent.includes("QA Admin") && visible(round);
     },
+    statsUsable: () => visible(document.querySelector('[data-react-season-page="ready"], [data-react-season-page="error"]')),
     homeComplete: () => {
       const hero = document.querySelector("[data-react-home-hero]");
       return Boolean(hero && /941/.test(hero.textContent)
@@ -216,7 +219,7 @@ function probeScript() {
 
 async function measure(browser, siteOrigin, scenario, profilePath = "") {
   const context = await browser.newContext({ viewport: VIEWPORT, serviceWorkers: "block" });
-  if (scenario === "signed-in") {
+  if (scenario === "signed-in" || scenario === "stats") {
     await context.addInitScript(() => {
       try { localStorage.setItem("gvdg_member_token", "qa-token"); localStorage.setItem("gvdg_member_name", "QA Admin"); } catch {}
     });
@@ -235,8 +238,8 @@ async function measure(browser, siteOrigin, scenario, profilePath = "") {
     await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
     await cdp.send("Profiler.start");
   }
-  const mark = scenario === "signed-in" ? "signedInUsable" : "signedOutUsable";
-  await page.goto(`${siteOrigin}/gvdg-members.html`, { waitUntil: "commit", timeout: 60_000 });
+  const mark = scenario === "signed-in" ? "signedInUsable" : scenario === "stats" ? "statsUsable" : "signedOutUsable";
+  await page.goto(`${siteOrigin}/gvdg-members.html${scenario === "stats" ? "#stats" : ""}`, { waitUntil: "commit", timeout: 60_000 });
   await page.waitForFunction((name) => window.__perf?.marks?.[name] != null, mark, { timeout: 60_000, polling: 250 });
   if (scenario === "signed-in") {
     await page.waitForFunction(() => window.__perf?.marks?.homeComplete != null, null, { timeout: 60_000, polling: 250 }).catch(() => {});
@@ -293,7 +296,7 @@ const browser = await chromium.launch({
 });
 const summary = {};
 try {
-  for (const scenario of ["signed-out", "signed-in"]) {
+  for (const scenario of ["signed-out", "signed-in", "stats"]) {
     if (onlyScenario && onlyScenario !== scenario) continue;
     const results = [];
     for (let index = 0; index < runs; index++) {

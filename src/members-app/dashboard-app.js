@@ -73,7 +73,9 @@ export function MemberDashboardApp() {
   return h(RegistrationProvider, null, [
     h("div", { id: "membersReactDashboardShell", key: "shell" }, h(MemberDashboardShell)),
     h("div", { className: "my-dashboard", id: "myDashboard", key: "overview" }, [
-      h("div", { id: "membersReactOverviewPanel", key: "mount" }, h(MemberOverviewDashboard)),
+      // Home is built when it's first shown, like every other screen: opening Stats or Events directly (a link, a
+      // notification) no longer fetches all of Home's data first. Once opened it stays, so going back is instant.
+      h("div", { id: "membersReactOverviewPanel", key: "mount" }, opened("overview") ? h(MemberOverviewDashboard) : null),
     ]),
     h("div", { className: "player-play", id: "playerPlay", key: "play" }, [
       h("div", { id: "membersReactPlayPanel", key: "mount" }, opened("play") ? h(MemberPlayPage) : null),
