@@ -40,7 +40,42 @@ export function installMemberAuthController() {
     return response;
   }
 
+  // Screens opened on top of the app (Edit profile, your email, Forgot PIN) get a step in the back history, so a back
+  // swipe closes them and returns to where you were instead of leaving the app. One step however many screens deep.
+  let overlay = null;
+  let skipNextPop = false;
+  function openOverlay(kind) {
+    try {
+      const state = { ...(window.history.state || {}), gvdgAuthOverlay: kind };
+      if (overlay) window.history.replaceState(state, "");
+      else window.history.pushState(state, "");
+    } catch {
+      /* history unavailable: the screen still works, back just leaves */
+    }
+    overlay = kind;
+  }
+  function closeOverlay() {
+    if (!overlay) return;
+    overlay = null;
+    if (window.history.state?.gvdgAuthOverlay) {
+      skipNextPop = true;
+      window.history.back();
+    }
+  }
+  window.addEventListener("popstate", () => {
+    if (skipNextPop) {
+      skipNextPop = false;
+      return;
+    }
+    if (!overlay) return;
+    const kind = overlay;
+    overlay = null;
+    if (kind === "reset") showLogin();
+    else showMembersContent(storageGet(NAME_KEY));
+  });
+
   function showLogin() {
+    closeOverlay();
     showLoginShell(passkeysSupported());
     if (passkeysSupported()) passkeys.startPasskeyPriming();
   }
@@ -50,6 +85,7 @@ export function installMemberAuthController() {
   }
 
   function showMembersContent(name) {
+    closeOverlay();
     passkeys.stopPasskeyPriming();
     const context = memberDashboardContext();
     // Every account needs an email (it's how a forgotten PIN gets reset). Members and guests add one before going on;
@@ -64,6 +100,8 @@ export function installMemberAuthController() {
   function showEmailSetup(required) {
     setAuthFormValues("email", { email: "", pin: "", code: "", step: "email", sentTo: "", required, pinNeeded: false });
     showEmailShell(passkeysSupported());
+    // Opened from inside the app: back returns to it. (The required step after sign-in has nowhere to go back to.)
+    if (!required) openOverlay("email");
   }
 
   async function handleEmailStart(event) {
@@ -188,6 +226,7 @@ export function installMemberAuthController() {
     const identifier = detailString(event || {}, "identifier");
     setAuthFormValues("reset", { identifier, code: "", newPin: "", confirmPin: "", step: "start" });
     showResetShell(passkeysSupported());
+    if (event) openOverlay("reset");
   }
 
   async function handleResetStart(event) {
@@ -488,7 +527,10 @@ export function installMemberAuthController() {
   window.addEventListener("gvdg:member-profile-photo-chosen", profile.onPhotoChosen);
   window.addEventListener("gvdg:member-passkey-login-requested", passkeys.loginWithPasskey);
   window.addEventListener("gvdg:member-add-passkey-requested", passkeys.enablePasskey);
-  window.addEventListener("gvdg:member-edit-profile-requested", profile.showProfileSetup);
+  window.addEventListener("gvdg:member-edit-profile-requested", () => {
+    profile.showProfileSetup();
+    openOverlay("profile");
+  });
   window.addEventListener("gvdg:member-logout-requested", logout);
   window.addEventListener("gvdg:member-email-start-requested", handleEmailStart);
   window.addEventListener("gvdg:member-email-verify-requested", handleEmailVerify);

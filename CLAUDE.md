@@ -416,7 +416,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v328`, members `?v=217`, public/events `?v=205`, score `?v=243`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v329`, members `?v=218`, public/events `?v=205`, score `?v=243`,
 home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -465,6 +465,14 @@ first load on a throttled phone profile.
   PIN?" `POST /pin-reset/start|verify` (code to the email on file; the same answer whether or not the account exists
   or has an email; a reset bumps `pinVer`, clears every lockout key of the account and signs them in). A wrong PIN on
   the email step answers 403 `wrong_pin`, never 401 (the apps read 401 as "signed out").
+- **Screens drawn over the signed-in app** (Edit profile, "Your email", Forgot PIN from sign-in) push one history
+  entry (`openOverlay` in `member-auth-controller.js`); a back swipe closes them and returns to the app instead of
+  leaving the page, and closing them normally pops that entry. The required email step after sign-in pushes none.
+- **Admin › Members rows**: the main action full width (Renew when due, or Link for a held account), then Tier ·
+  Wallet · More; Reissue PIN, Clear lockouts and Remove member live in More. The list and applications load side by
+  side, and the Worker reads member/application records in batches of 25 (`readInBatches`), not one after another.
+- **Admin top bar** shows the member app's envelope and bell with the same counts (`/me/messages/summary`), opening
+  Messages in the member app.
 - **Admin › Members › Clear lockouts** (`POST /admin/members/clear-locks`, `clearAccountLocks`) lifts every counter that
   can keep a member out: wrong-PIN lockouts on each sign-in name, the email step's PIN check and code sends (only real
   sends count, 6/hour), Forgot PIN requests, PIN changes. `clearAttempts` deletes only when a count exists and never

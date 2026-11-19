@@ -950,3 +950,104 @@ body.admin-page.player-theme-active {
 .admin-lf-post-fields { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
 .admin-lf-photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .admin-lf-photo { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--admin-hairline); }
+
+/* Member rows (owner: "looks messy"): the name and karma, then one even row of controls - tier, Renew when it's due,
+   Wallet - and the now-and-then actions (Reissue PIN, Clear lockouts, Remove member) behind "More". */
+.admin-page .admin-evrow.admin-member-row[data-admin-member-id] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .55rem;
+}
+.admin-page .admin-member-head { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .45rem; min-width: 0; }
+.admin-page .admin-member-head .ev-name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.admin-page .admin-member-head .karma-chip { margin-inline-start: 0; }
+.admin-page .admin-member-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .4rem;
+  align-items: stretch;
+}
+.admin-page .admin-member-actions > .admin-member-wide { grid-column: 1 / -1; }
+.admin-page .admin-member-actions > :is(.admin-btn, .admin-member-tier, .admin-member-more) { width: 100%; min-width: 0; margin: 0; }
+.admin-page .admin-member-actions > .admin-btn,
+.admin-page .admin-member-more > summary { min-height: 2.5rem; display: flex; align-items: center; justify-content: center; text-align: center; }
+.admin-page .admin-member-actions .admin-member-tier select { width: 100%; height: 100%; min-height: 2.5rem; }
+.admin-page .admin-member-more { position: relative; }
+.admin-page .admin-member-more > summary { list-style: none; cursor: pointer; gap: .35em; }
+.admin-page .admin-member-more > summary::-webkit-details-marker { display: none; }
+.admin-page .admin-member-more > summary::after { content: "▾"; font-size: .8em; }
+.admin-page .admin-member-more[open] > summary { background: var(--bg-tertiary); }
+.admin-page .admin-member-more-menu {
+  position: absolute;
+  z-index: 30;
+  right: 0;
+  top: calc(100% + .3rem);
+  min-width: 11.5rem;
+  display: grid;
+  gap: .1rem;
+  padding: .3rem;
+  border: 1px solid var(--admin-hairline, var(--border-color));
+  border-radius: .65rem;
+  background: var(--bg-secondary);
+  box-shadow: 0 12px 30px rgb(0 0 0 / .3);
+}
+.admin-page .admin-member-more-item {
+  appearance: none;
+  border: 0;
+  border-radius: .45rem;
+  padding: .62rem .75rem;
+  background: transparent;
+  color: var(--text-primary);
+  font: 700 .86rem/1.25 Archivo, system-ui, sans-serif;
+  text-align: start;
+  cursor: pointer;
+}
+.admin-page .admin-member-more-item:hover { background: var(--bg-tertiary); }
+.admin-page .admin-member-more-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.admin-page .admin-member-more-item.is-danger { color: var(--over); }
+.admin-page .admin-member-more-item:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Messages and notifications in the admin top bar (the member app's envelope and bell, with the same counts). */
+.admin-page .admin-header-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  border-radius: .45rem;
+  color: var(--admin-chrome-ink);
+}
+.admin-page .admin-header-icon:hover { background: var(--admin-chrome-hover); }
+.admin-page .admin-header-badge {
+  position: absolute;
+  top: .12rem;
+  right: .02rem;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.02rem;
+  height: 1.02rem;
+  padding: 0 .2rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #1a120c;
+  font: 750 .58rem/1 Archivo, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 360px) {
+  .admin-page .admin-header-actions { gap: .1rem .25rem; }
+  .admin-page .admin-header-icon { width: 2.25rem; min-width: 2.25rem; }
+}
+.admin-page .admin-header-brand > a { flex: 0 0 auto; }
+@media (max-width: 360px) {
+  /* Room for the envelope and bell on the narrowest phones: the logo keeps its size and the word "Admin" steps aside. */
+  .admin-page .admin-header-brand strong { display: none; }
+  .admin-page .admin-header-link { padding-inline: .35rem; }
+}
+@media (max-width: 380px) {
+  /* Narrow phones: the tier picker gets its own line so "Member"/"Admin" isn't cut short; Wallet and More share the next. */
+  .admin-page .admin-member-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-page .admin-member-actions > .admin-member-tier { grid-column: 1 / -1; }
+}

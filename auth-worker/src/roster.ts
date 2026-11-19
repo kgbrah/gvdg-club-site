@@ -394,14 +394,24 @@ export async function resetMemberPin(kv: KVLike, identifier: string, pinHash: st
 }
 
 /** List all members for the admin view — public-safe fields only, NEVER the pinHash. */
+/** Read many records at once, a batch at a time: one-by-one reads made Admin › Members take seconds with a few hundred
+ *  members (each KV read waits on the network). Batches keep it inside the Worker's limits. */
+export async function readInBatches<T>(ids: string[], read: (id: string) => Promise<T | null>, size = 25): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += size) {
+    for (const row of await Promise.all(ids.slice(i, i + size).map(read))) if (row) out.push(row);
+  }
+  return out;
+}
+
 export async function listMembers(kv: KVListLike): Promise<AdminMember[]> {
   const out: AdminMember[] = [];
   let cursor: string | undefined;
   do {
     const page = await kv.list({ prefix: "member:", cursor });
-    for (const k of page.keys) {
-      const m = await getMember(kv, k.name.slice("member:".length));
-      if (m) out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true, email: m.email, phone: m.phone, guestPromo: m.guestPromo === true });
+    const records = await readInBatches(page.keys.map((k) => k.name.slice("member:".length)), (id) => getMember(kv, id));
+    for (const m of records) {
+      out.push({ memberId: m.memberId, name: m.name, pdgaNo: m.pdgaNo, udisc: m.udisc, isAdmin: m.isAdmin === true, mustChangePin: m.mustChangePin, memberThroughYear: m.memberThroughYear, guest: m.guest === true, held: m.held === true, email: m.email, phone: m.phone, guestPromo: m.guestPromo === true });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);

@@ -3,7 +3,7 @@ import { json, readJson, clientIp } from "./http.js";
 import { asStr, parseOptionalEmail } from "./input.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { hashPin } from "./crypto.js";
-import { createMember, resolveMember, getMember, putMember, type KVListLike } from "./roster.js";
+import { createMember, resolveMember, getMember, putMember, type KVListLike, readInBatches } from "./roster.js";
 import { duesCents, duesFor, duesOnline, linkDuesMember, membershipConfig, markManualDues, publicPayment, type PublicPayment } from "./membership-dues-db.js";
 import { sendApplicationReceived, sendApprovalPush, sendWelcome } from "./membership-notify.js";
 import { notifyAdmins } from "./admin-push.js";
@@ -93,12 +93,10 @@ export async function listApplications(kv: KVListLike, db?: Env["DB"]): Promise<
   let cursor: string | undefined;
   do {
     const page = await kv.list({ prefix: APPLY_PREFIX, cursor });
-    for (const key of page.keys) {
-      const row = await readApplication(kv, key.name.slice(APPLY_PREFIX.length));
-      if (row) {
-        out.push(row.kind === "guest" ? { ...pub(row), contact: { email: row.email ?? "", phone: row.phone ?? "" } } : pub(row));
-        if (row.email) emails.add(row.id);
-      }
+    const rows = await readInBatches(page.keys.map((key) => key.name.slice(APPLY_PREFIX.length)), (id) => readApplication(kv, id));
+    for (const row of rows) {
+      out.push(row.kind === "guest" ? { ...pub(row), contact: { email: row.email ?? "", phone: row.phone ?? "" } } : pub(row));
+      if (row.email) emails.add(row.id);
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
