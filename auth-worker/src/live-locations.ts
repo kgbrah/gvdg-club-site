@@ -141,7 +141,7 @@ export function locationsFromRecord(raw: unknown): Map<number, LivePlayerLocatio
 }
 
 export function publicPlayerLocations(
-  players: readonly { name: string; memberId?: string | null; removed?: boolean; throws?: Record<number, { lat?: number; lng?: number }[] | null> | null; photo?: string | null }[],
+  players: readonly { name: string; memberId?: string | null; removed?: boolean; throws?: Record<number, { lat?: number; lng?: number }[] | null> | null; photo?: string | null; photoRef?: string | null }[],
   locations: ReadonlyMap<number, LivePlayerLocation>,
   now = Date.now(),
   holes: readonly HoleCoords[] | null | undefined = null,
@@ -166,7 +166,7 @@ export function publicPlayerLocations(
     if (!locationOnCourse(point.lat, point.lng, holes)) continue;
     const initials = playerInitials(player.name);
     if (!initials) continue;
-    const photo = sanitizeProfilePhoto(player.photo);
+    const photo = player.photoRef || sanitizeProfilePhoto(player.photo);
     out.push({
       index,
       initials,

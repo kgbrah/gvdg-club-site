@@ -1,3 +1,4 @@
+import { resolveApiBase } from "./api-base.js";
 function finite(value) {
   if (value == null || value === "") return null;
   const num = typeof value === "number" ? value : Number(value);
@@ -669,6 +670,9 @@ export function playerPhotoSrc(value) {
   if (typeof value !== "string") return "";
   const photo = value.trim();
   if (!photo || photo.length > 200000) return "";
+  // A member's photo as a signed link from the Worker (live rounds send this instead of the image): served from the
+  // API host and cached for good.
+  if (/^\/member-photos\/[A-Za-z0-9_.-]{1,80}\/[a-f0-9]{16}\?v=[a-f0-9]{12}$/.test(photo)) return resolveApiBase() + photo;
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) return photo;
   if (/^https:\/\/([a-z0-9-]+\.)*pdga\.com\//i.test(photo) && photo.length <= 500 && !/[\s<>]/.test(photo)) return photo;
   return "";

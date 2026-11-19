@@ -15,7 +15,7 @@ import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, locationsFromRecord, locationsToRecord, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
 import { normalizeMapMarkKind } from "./course-map-marks.js";
 import { sanitizeDiscColor } from "./disc-color-routes.js";
-import { sanitizeProfilePhoto } from "./profile-photo.js";
+import { memberPhotoLink, sanitizeProfilePhoto } from "./profile-photo.js";
 import { parseThrowsBody } from "./play-stats.js";
 import { replacePlayerHoleMarks } from "./db-hole-shot-marks.js";
 import { shotRoundKey } from "./hole-shot-marks.js";
@@ -60,10 +60,23 @@ export class LiveEventDO {
     this.liveCtps = (await this.state.storage.get<LiveCtpStore>("liveCtps")) ?? {};
     this.locations = locationsFromRecord(await this.state.storage.get("locations"));
     normalizeScorecards(this.players, this.meta?.holes ?? []);
+    await this.refreshPhotoLinks();
     this.loaded = true;
     if (this.warmedLayoutId === undefined) this.warmRatingBaseline();
   }
+  /** Keep each member's photo link in step with their photo (computed only when a photo is new or changed). */
+  private async refreshPhotoLinks(): Promise<void> {
+    await Promise.all(this.players.map(async (player) => {
+      const photo = player.photo ?? null;
+      const of = photo ? photo.length + ":" + photo.slice(-24) : null;
+      if (player.photoRefOf === of && (player.photoRef || !of)) return;
+      player.photoRef = await memberPhotoLink(this.env.JWT_SECRET, player.memberId, photo).catch(() => null);
+      player.photoRefOf = of;
+    }));
+  }
+
   private async persist(extra?: Record<string, unknown>): Promise<void> {
+    await this.refreshPhotoLinks();
     if (this.meta) {
       this.meta.rev = (this.meta.rev ?? 0) + 1;
       this.meta.updatedAt = new Date().toISOString();

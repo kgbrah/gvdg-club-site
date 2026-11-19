@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { handleMemberPhoto } from "../src/profile-photo.js";
 import {
   purgeScoreTargetScorerVotes,
   recordScoreTargetVote,
@@ -2554,6 +2555,38 @@ describe("LiveEventDO player GPS overlay", () => {
     const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { photo?: string }[]; playerLocations: { photo?: string }[] };
     expect(snap.players[0]?.photo).toBe(photo);
     expect(snap.playerLocations[0]?.photo).toBe(photo);
+  });
+
+  it("sends a member's photo as a short signed link (served once, cached for good), not the image on every update", async () => {
+    const secret = "s".repeat(40);
+    const live = new LiveEventDO(new FakeState({}), { DB: db, JWT_SECRET: secret });
+    const photo = "data:image/png;base64,iVBORw0KGgo=";
+    await live.fetch(new Request("https://do/start", { method: "POST", body: JSON.stringify({
+      casual: true,
+      holes: [{ hole: 1, par: 3, tee: { lat: 35.6, lng: -77.37 }, target: { lat: 35.601, lng: -77.37 } }],
+      players: [{ memberId: "m_a", name: "Alex Schwarga", photo }, { memberId: "g_walkon", name: "Walk On" }],
+    }) }));
+    await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 35.6005, lng: -77.37 }) }));
+    const snap = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { photo?: string | null }[]; playerLocations: { photo?: string }[] };
+    const link = snap.players[0]?.photo ?? "";
+    expect(link).toMatch(/^\/member-photos\/m_a\/[a-f0-9]{16}\?v=[a-f0-9]{12}$/);
+    expect(snap.playerLocations[0]?.photo).toBe(link);
+    expect(JSON.stringify(snap)).not.toContain("base64");
+    // The link serves the member's photo, cached for good; a made-up signature doesn't.
+    const roster = new Map<string, string>([["member:m_a", JSON.stringify({ memberId: "m_a", name: "Alex Schwarga", photo, pinHash: "h", mustChangePin: false })]]);
+    const kv = { get: async (key: string) => roster.get(key) ?? null, put: async () => {}, delete: async () => {} };
+    const served = await handleMemberPhoto(link.split("?")[0]!, { ROSTER: kv, JWT_SECRET: secret });
+    expect(served?.status).toBe(200);
+    expect(served?.headers.get("Content-Type")).toBe("image/png");
+    expect(served?.headers.get("Cache-Control")).toContain("immutable");
+    expect(new Uint8Array(await served!.arrayBuffer()).slice(0, 4)).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    expect((await handleMemberPhoto("/member-photos/m_a/0123456789abcdef", { ROSTER: kv, JWT_SECRET: secret }))?.status).toBe(404);
+    expect((await handleMemberPhoto("/member-photos/m_a/../x", { ROSTER: kv, JWT_SECRET: secret }))).toBeNull();
+    // A new photo is a new link (so phones fetch it once more).
+    await live.fetch(new Request("https://do/location", { method: "POST", headers: { "X-Auth-Member": "m_a" }, body: JSON.stringify({ lat: 35.6006, lng: -77.37, photo: "data:image/png;base64,iVBORw0KGgoAAAA=" }) }));
+    const after = (await (await live.fetch(new Request("https://do/"))).json()) as { players: { photo?: string | null }[] };
+    expect(after.players[0]?.photo).toMatch(/^\/member-photos\/m_a\//);
+    expect(after.players[0]?.photo).not.toBe(link);
   });
 
   it("rejects guests, strangers, bad coordinates, and off-course GPS", async () => {
