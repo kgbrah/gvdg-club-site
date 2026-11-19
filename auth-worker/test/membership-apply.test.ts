@@ -79,12 +79,12 @@ describe("self-serve membership applications", () => {
       memberId: "m_273070",
       name: "New Player",
       isAdmin: false,
-      mustChangePin: true,
+      mustChangePin: false, // they chose this PIN on the form; no second "choose a PIN"
     });
 
     const loginAfter = await worker.fetch(req("/login", "POST", undefined, { identifier: "273070", pin: "2468" }), env);
     expect(loginAfter.status).toBe(200);
-    expect((await json(loginAfter)).mustChangePin).toBe(true);
+    expect((await json(loginAfter)).mustChangePin).toBe(false);
   });
 
   it("rejects a pending application without creating a member", async () => {

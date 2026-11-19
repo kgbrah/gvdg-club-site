@@ -413,7 +413,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v322`, members `?v=212`, public/events `?v=204`, score `?v=242`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v323`, members `?v=213`, public/events `?v=204`, score `?v=242`,
 home `?v=194` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -446,7 +446,13 @@ first load on a throttled phone profile.
   keyed by `canonicalLoginKey()` (normalizes PDGA/UDisc) so mutating the raw identifier can't reset it.
 - **Closed roster writes:** public `POST /membership/apply` only stores a pending application (rate-limited,
   never `isAdmin`). Roster records still come from `provision.mjs`, admin-gated `POST /admin/members`,
-  or admin approve of an application; all set `mustChangePin:true`.
+  or admin approve of an application. Admin-issued temporary PINs set `mustChangePin:true`; an approved
+  application keeps the PIN the applicant chose and confirmed (`mustChangePin:false`, no second "choose a PIN").
+- **Sign-in names:** `isEmail` needs text on both sides of the "@" ("@name" is a UDisc name, as UDisc shows it);
+  `pdgaOf` reads only digit-shaped input ("80024", "#80024", "PDGA 80024") as a PDGA # — a UDisc name with digits
+  ("discgolfer2019") is never PDGA #2019. `canonicalLoginKey` and `resolveMember` share both rules, so every
+  form that reaches an account counts against that account's lockout. `test/auth-flows.test.ts` drives every
+  way in (PIN by PDGA/UDisc/email, temp PIN, PIN change/reset, passkeys, applications, guests, open play, admin).
 - **WebAuthn challenges are single-use** (read-and-delete); advance the stored credential counter each auth.
 - **Every session mint stamps the member's `pinVer`** (PIN login, `/set-pin`, passkey `/webauthn/auth/verify`).
   `requireAuth` and `/me` both reject a token whose `pinVer` differs from the record's (a PIN change/reset revokes
