@@ -117,7 +117,7 @@ export function MemberAuthGate() {
     h(PinChangeForm, { active: mode === "pin", state: formStates.pin, onValuesChange: setFormValues, key: "pin" }),
     h(ProfileForm, { active: mode === "profile", state: formStates.profile, onValuesChange: setFormValues, key: "profile" }),
     // Mounted only while showing, so their fields never duplicate the sign-in form's labels or autofill targets.
-    mode === "email" ? h(EmailForm, { active: true, state: formStates.email, onValuesChange: setFormValues, key: "email" }) : null,
+    mode === "email" ? h(EmailForm, { active: true, supportsPasskeys, state: formStates.email, onValuesChange: setFormValues, key: "email" }) : null,
     mode === "reset" ? h(ResetPinForm, { active: true, state: formStates.reset, onValuesChange: setFormValues, key: "reset" }) : null,
     mode === "login" ? h("div", { className: "member-auth-alternate", key: "play" }, [
       h("p", { className: "login-subtitle", key: "hint" }, "Casual scoring is open to everyone."),

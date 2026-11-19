@@ -308,7 +308,7 @@ export function PinChangeForm({ active, state, onValuesChange }) {
   ]);
 }
 
-export function EmailForm({ active, state, onValuesChange }) {
+export function EmailForm({ active, supportsPasskeys, state, onValuesChange }) {
   const values = state.values;
   const step = values.step === "code" ? "code" : "email";
   const busy = Boolean(state.busyAction);
@@ -366,7 +366,15 @@ export function EmailForm({ active, state, onValuesChange }) {
       onChange: (event) => set({ code: event.target.value }),
     })) : null,
     h("button", { type: "submit", className: "login-btn", disabled: busy, "data-react-auth-action": step === "code" ? "email-verify" : "email-start", key: "submit" },
-      busy ? "Please wait…" : step === "code" ? "Confirm email" : "Send code"),
+      busy && state.busyAction !== "email-passkey" ? "Please wait…" : step === "code" ? "Confirm email" : "Send code"),
+    step === "email" && values.pinNeeded && supportsPasskeys ? h("button", {
+      type: "button",
+      className: "login-btn login-btn-secondary",
+      disabled: busy,
+      "data-react-auth-action": "email-passkey",
+      onClick: () => request("gvdg:member-email-passkey-requested", { email: values.email || "" }),
+      key: "passkey",
+    }, state.busyAction === "email-passkey" ? "Checking passkey…" : h(IconLabel, { icon: h(KeyRound, { size: 17, strokeWidth: 2.2, key: "icon" }), text: "Use my passkey instead" })) : null,
     h(ErrorMessage, { form: "email", state, key: "error" }),
     step === "code" ? h("button", {
       type: "button", className: "login-btn login-btn-secondary", disabled: busy, "data-react-auth-action": "email-resend", key: "resend",

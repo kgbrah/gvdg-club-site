@@ -408,7 +408,16 @@ describe("email on every account (the self-service way back in)", () => {
     expect((await call("/me/email/verify", { method: "POST", token, body: { code } })).data.error).toBe("code_expired");
   });
 
-  it("changing it later needs the PIN; the old address is told and stops signing in", async () => {
+  it("adding the first email never asks for the PIN, even weeks after signing in", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    const token = (await login("80024")).data.token as string;
+    clockAt(Date.now() + 20 * 86400_000);
+    const renewed = (await call("/me", { token })).data.token as string;
+    expect((await call("/me/email/start", { method: "POST", token: renewed, body: { email: "jordan@example.com" } })).status).toBe(200);
+    expect((await call("/me/email/verify", { method: "POST", token: renewed, body: { code: await codeFrom("jordan@example.com") } })).status).toBe(200);
+  });
+
+  it("changing it later needs the PIN or a fresh sign-in (a passkey); the old address is told and stops signing in", async () => {
     await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024", email: "old@example.com" });
     await putMember(roster as never, { ...(JSON.parse(roster.rows.get("member:m_80024")!) as Member) });
     roster.rows.set("idx:email:old@example.com", "m_80024");
@@ -422,6 +431,9 @@ describe("email on every account (the self-service way back in)", () => {
     expect(mail.some((m) => m.to === "old@example.com" && /changed/.test(m.subject))).toBe(true);
     expect((await login("old@example.com")).status).toBe(401);
     expect((await login("new@example.com")).status).toBe(200);
+    // A fresh sign-in (PIN or the passkey check the app offers) changes it without the PIN.
+    const fresh = (await login("new@example.com")).data.token as string;
+    expect((await call("/me/email/start", { method: "POST", token: fresh, body: { email: "newer@example.com" } })).status).toBe(200);
   });
 
   it("refuses an email another account uses, and five wrong codes use the code up", async () => {

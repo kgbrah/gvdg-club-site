@@ -3,7 +3,7 @@ import { clearAuthError, setAuthBusy, setAuthFormState, setAuthFormValues, showA
 import { applyProfile, markEmailSaved, memberAuthProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
-import { clearMemberSession, writeMemberSessionValue } from "../shared/member-session.js";
+import { clearMemberSession, memberTokenSubject, writeMemberSessionValue } from "../shared/member-session.js";
 
 let installed = false;
 let sessionExpiredShown = false;
@@ -87,7 +87,7 @@ export function installMemberAuthController() {
         setAuthFormValues("email", { step: "code", sentTo: email, email, code: "" });
       } else if (data.error === "pin_required") {
         setAuthFormValues("email", { pinNeeded: true, step: "email" });
-        showAuthError("email", "Enter your PIN to confirm it's you.");
+        showAuthError("email", passkeysSupported() ? "Enter your PIN, or use your passkey, to confirm it's you." : "Enter your PIN to confirm it's you.");
       } else if (data.error === "wrong_pin") {
         setAuthFormValues("email", { pinNeeded: true, step: "email", pin: "" });
         showAuthError("email", "That PIN didn't match.");
@@ -152,6 +152,36 @@ export function installMemberAuthController() {
     } finally {
       setAuthBusy("email", "email", false);
     }
+  }
+
+  // "Use my passkey instead" on the email step: a passkey check gives a fresh session (a recent sign-in needs no PIN),
+  // as long as the passkey is for the account that's signed in.
+  async function handleEmailPasskey(event) {
+    const email = detailString(event, "email");
+    clearAuthError("email");
+    const current = storageGet(TOKEN_KEY);
+    if (!current) {
+      showLogin();
+      return;
+    }
+    setAuthBusy("email", "email-passkey", true);
+    let data;
+    try {
+      data = await passkeys.confirmWithPasskey();
+    } catch (error) {
+      setAuthBusy("email", "email-passkey", false);
+      showAuthError("email", error?.name === "NotAllowedError" ? "Passkey check cancelled." : "Passkey check didn't work. Use your PIN instead.");
+      return;
+    }
+    if (!data?.token || memberTokenSubject(data.token) !== memberTokenSubject(current)) {
+      setAuthBusy("email", "email-passkey", false);
+      showAuthError("email", "That passkey is for a different account.");
+      return;
+    }
+    writeMemberSessionValue(TOKEN_KEY, data.token);
+    setAuthFormValues("email", { pinNeeded: false, pin: "" });
+    setAuthBusy("email", "email-passkey", false);
+    await handleEmailStart({ detail: { email } });
   }
 
   function openReset(event) {
@@ -462,6 +492,7 @@ export function installMemberAuthController() {
   window.addEventListener("gvdg:member-logout-requested", logout);
   window.addEventListener("gvdg:member-email-start-requested", handleEmailStart);
   window.addEventListener("gvdg:member-email-verify-requested", handleEmailVerify);
+  window.addEventListener("gvdg:member-email-passkey-requested", handleEmailPasskey);
   window.addEventListener("gvdg:member-email-change-requested", () => showEmailSetup(false));
   window.addEventListener("gvdg:member-email-cancel", () => showMembersContent(storageGet(NAME_KEY)));
   window.addEventListener("gvdg:member-reset-open", openReset);

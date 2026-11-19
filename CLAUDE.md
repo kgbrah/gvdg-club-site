@@ -413,7 +413,7 @@ overridable via `data-grid-csv`/`data-scoreboard-csv`). `score.html` is a thin s
 `src/score-app/main.js`; run `npm run build` before serving or deploying it. The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v324`, members `?v=214`, public/events `?v=205`, score `?v=243`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v325`, members `?v=215`, public/events `?v=205`, score `?v=243`,
 home `?v=195` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -457,7 +457,8 @@ first load on a throttled phone profile.
 - **Every account has an email (the self-service way back in)** — applications require one (members too); a
   member or guest without one gets an "Add your email" step after signing in (admins get a Home reminder instead,
   since another admin can reset them, and so the QA admin isn't stopped). `account-recovery.ts`: `POST
-  /me/email/start|verify` (6-digit code to the new address, 15 min, 5 guesses; the old address is told) and "Forgot
+  /me/email/start|verify` (6-digit code to the new address, 15 min, 5 guesses; the old address is told; a first
+  email never asks for the PIN) and "Forgot
   PIN?" `POST /pin-reset/start|verify` (code to the email on file; the same answer whether or not the account exists
   or has an email; a reset bumps `pinVer`, clears every lockout key of the account and signs them in). A wrong PIN on
   the email step answers 403 `wrong_pin`, never 401 (the apps read 401 as "signed out").
@@ -490,7 +491,8 @@ Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.**
   is a day old; the members app stores it from its `/me` check and the score/admin/public/home apps call
   `renewMemberSession` (`src/shared/member-session.js`) on start. A member is signed out only after 30 days without
   opening an app, or at once by a PIN change/reset (`pinVer`). Tokens carry `at` (the real sign-in time, kept across
-  renewals): changing your email needs the PIN unless you signed in within 15 minutes.
+  renewals): adding a first email needs nothing more than being signed in; changing an existing one needs the PIN,
+  or "Use my passkey instead" (a passkey check is a fresh sign-in), unless they signed in within 15 minutes.
 - **`-staging` is production:** deploy the Worker with `--env gvdgclub`; a bare `wrangler deploy` ships to
   the deleted base Worker. `env.staging`/`env.gvdgclub` share one DB/KV/R2 — there is no isolated staging.
 - **`kvRateLimited` is a non-atomic GET-then-PUT** (backs login/board/setpin/webauthn) — a concurrent burst
