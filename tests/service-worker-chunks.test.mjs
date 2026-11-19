@@ -7,10 +7,11 @@ import vm from "node:vm";
 const source = await readFile(new URL("../sw.js", import.meta.url), "utf8");
 const origin = "https://gvdgclub.com";
 
-function fakeResponse(body) {
+function fakeResponse(body, contentType = "text/javascript") {
   return {
     ok: true, status: 200, type: "basic", body,
-    clone() { return fakeResponse(body); },
+    headers: new Map([["content-type", contentType]]),
+    clone() { return fakeResponse(body, contentType); },
     async text() { return body; },
   };
 }
@@ -64,8 +65,10 @@ function worker(caches, chunks, { network, now }) {
       const url = new URL(typeof request === "string" ? request : request.url, origin + "/").href;
       fetched.push(url);
       if (!network.online) throw new TypeError("Offline");
-      if (!network.files.has(url)) return { ok: false, status: 404, type: "basic", clone() { return this; } };
-      return fakeResponse(network.files.get(url));
+      if (!network.files.has(url)) return { ok: false, status: 404, type: "basic", headers: new Map(), clone() { return this; } };
+      const file = network.files.get(url);
+      // Cloudflare Pages answers a file it doesn't have with the site's HTML and a 200.
+      return typeof file === "object" ? fakeResponse(file.body, file.type) : fakeResponse(file);
     },
   });
   async function lifecycle(name) {
@@ -142,6 +145,37 @@ test("a chunk missing from the cache is fetched once and kept", async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   network.online = false;
   assert.equal(await (await sw.get(chunk("late-L1"))).text(), "chunk late-L1");
+});
+
+test("the site's HTML answered for a missing script is never saved as that script", async () => {
+  const caches = fakeCaches();
+  const html = { body: "<!DOCTYPE html><title>GVDG</title>", type: "text/html; charset=utf-8" };
+  const network = { online: true, files: new Map([[url(chunk("account-X1")), html]]) };
+  // Mid-deploy: the worker precaches a chunk the server answers with the HTML page.
+  const sw = worker(caches, [chunk("account-X1")], { network, now: 1000 });
+  await sw.install();
+  await sw.activate();
+  const saved = () => [...caches.stores.get("gvdg-member-chunks").keys()].filter((key) => key.includes("/chunks/"));
+  assert.deepEqual(saved(), [], "the HTML answer isn't kept");
+  // The real file arrives: the screen gets it, and it's kept.
+  network.files.set(url(chunk("account-X1")), "chunk account-X1");
+  assert.equal(await (await sw.get(chunk("account-X1"))).text(), "chunk account-X1");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(saved(), [url(chunk("account-X1"))]);
+});
+
+test("a bad copy already saved (from an older worker) is thrown out and fetched again", async () => {
+  const caches = fakeCaches();
+  const network = { online: true, files: new Map([[url(chunk("account-X1")), "chunk account-X1"]]) };
+  // The phone holds the HTML page under the chunk's name (what the older worker saved mid-deploy).
+  const chunkCache = await caches.open("gvdg-member-chunks");
+  await chunkCache.put(url(chunk("account-X1")), fakeResponse("<!DOCTYPE html>", "text/html"));
+  const sw = worker(caches, [chunk("account-X1")], { network, now: 1000 });
+  await sw.install();
+  await sw.activate();
+  assert.equal(await (await sw.get(chunk("account-X1"))).text(), "chunk account-X1");
+  network.online = false;
+  assert.equal(await (await sw.get(chunk("account-X1"))).text(), "chunk account-X1", "the real file was saved in its place");
 });
 
 test("the members build lists every chunk for the worker and chunks import the page's entry URL", () => {

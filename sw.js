@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v326";
+const CACHE = "gvdg-club-v328";
 // Member app screens past Home are content-hashed chunks. They live in their own cache, which keeps the
 // chunks of this version and the one before it, so a page that was open across an update can still open
 // its screens (online or offline) after their files are gone from the server.
@@ -52,6 +52,35 @@ function cacheable(res) {
   return res && res.ok && res.status === 200 && res.type === "basic";
 }
 
+// Cloudflare Pages answers a file it doesn't have with the site's HTML and a 200, so "ok" isn't enough: a script must
+// come back as a script, a stylesheet as a stylesheet, and nothing else as the HTML page. Otherwise a miss during a
+// deploy is saved in place of the real file and served from then on (the owner's Account screen never loaded again).
+function rightType(res, url) {
+  const type = String(res.headers.get("content-type") || "").toLowerCase();
+  const path = url.pathname;
+  if (/\.m?js$/i.test(path)) return type.includes("javascript");
+  if (/\.css$/i.test(path)) return type.includes("css");
+  if (/\.html?$/i.test(path) || path.endsWith("/")) return true;
+  return !type.startsWith("text/html");
+}
+
+function cacheableAt(res, url) {
+  return cacheable(res) && rightType(res, url);
+}
+
+// Throw out any saved copy that isn't what its name says (an HTML page saved as a script during a deploy).
+async function dropWrongTypes() {
+  for (const name of [CACHE, CHUNK_CACHE]) {
+    const cache = await caches.open(name);
+    for (const request of await cache.keys()) {
+      const url = new URL(request.url);
+      if (url.pathname.includes("/" + CHUNK_MANIFEST)) continue;
+      const saved = await cache.match(request);
+      if (saved && !rightType(saved, url)) await cache.delete(request);
+    }
+  }
+}
+
 function staticAsset(req, url) {
   return STATIC_DESTINATIONS.has(req.destination) || /\.(?:css|gif|ico|jpe?g|js|png|svg|webmanifest|webp)$/i.test(url.pathname);
 }
@@ -63,11 +92,12 @@ function isCodeAsset(req, url) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
+    await dropWrongTypes().catch(() => {});
     const cache = await caches.open(CACHE);
     await Promise.all(ASSETS.map(async (asset) => {
       try {
         const res = await fetch(asset, { cache: "reload" });
-        if (res && res.ok) await cache.put(asset, res);
+        if (res && res.ok && rightType(res, new URL(asset, self.location.href))) await cache.put(asset, res);
       } catch {
       }
     }));
@@ -80,10 +110,12 @@ async function precacheMemberChunks() {
   const cache = await caches.open(CHUNK_CACHE);
   await Promise.all(MEMBER_CHUNKS.map(async (chunk) => {
     try {
-      // A hashed file never changes, so a copy kept from an earlier version is still right.
-      if (await cache.match(chunk)) return;
+      // A hashed file never changes, so a copy kept from an earlier version is still right (if it really is the script).
+      const url = new URL(chunk, self.location.href);
+      const kept = await cache.match(chunk);
+      if (kept && rightType(kept, url)) return;
       const res = await fetch(chunk, { cache: "reload" });
-      if (cacheable(res)) await cache.put(chunk, res);
+      if (cacheableAt(res, url)) await cache.put(chunk, res);
     } catch {
     }
   }));
@@ -115,10 +147,12 @@ async function pruneMemberChunks() {
 
 async function memberChunk(req) {
   const cache = await caches.open(CHUNK_CACHE);
+  const url = new URL(req.url);
   const cached = await cache.match(req, { ignoreSearch: true });
-  if (cached) return cached;
+  if (cached && rightType(cached, url)) return cached;
+  if (cached) await cache.delete(req, { ignoreSearch: true }).catch(() => {});
   const res = await fetch(req);
-  if (cacheable(res)) cache.put(req, res.clone()).catch(() => {});
+  if (cacheableAt(res, url)) cache.put(req, res.clone()).catch(() => {});
   return res;
 }
 
@@ -126,6 +160,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== CHUNK_CACHE && key !== "gvdg-maps-v2").map((key) => caches.delete(key))))
+      .then(() => dropWrongTypes().catch(() => {}))
       .then(() => pruneMemberChunks().catch(() => {}))
       .then(() => self.clients.claim())
   );
@@ -226,7 +261,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          if (cacheable(res)) {
+          if (cacheableAt(res, url)) {
             const copy = res.clone();
             caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
           }
@@ -250,10 +285,10 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.match(req).then((cached) => {
-      if (cached) return cached;
+      if (cached && rightType(cached, url)) return cached;
       return fetch(req)
         .then((res) => {
-          if (cacheable(res)) {
+          if (cacheableAt(res, url)) {
             const copy = res.clone();
             caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
           }

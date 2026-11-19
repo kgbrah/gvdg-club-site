@@ -1,6 +1,24 @@
 import React from "react";
 
 const h = React.createElement;
+const RELOAD_KEY = "gvdg:screen-reload-at";
+
+// A screen's code that won't load while the device is online almost always means the app was updated while this page
+// was open, or the network blinked mid-deploy. The browser keeps a failed module for the rest of the page, so only a
+// reload fetches it fresh; it returns to the same screen (the route is in the URL). At most once a minute, so a real
+// outage shows the message instead of reloading over and over.
+function reloadForFreshCode() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  try {
+    const last = Number(sessionStorage.getItem(RELOAD_KEY)) || 0;
+    if (Date.now() - last < 60_000) return false;
+    sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  } catch {
+    return false;
+  }
+  window.location.reload();
+  return true;
+}
 
 // Screens that are not on the first view load their code on demand. Each one keeps its loaded component
 // in module scope, so a screen that has loaded once renders straight away from then on.
@@ -50,7 +68,11 @@ function useLoaded(panels) {
     let live = true;
     Promise.all(panels.map((panel) => panel.preload())).then(
       () => { if (live) setState((current) => ({ ...current })); },
-      () => { if (live) setState((current) => ({ ...current, failed: true })); },
+      () => {
+        if (!live) return;
+        if (reloadForFreshCode()) return;
+        setState((current) => ({ ...current, failed: true }));
+      },
     );
     return () => { live = false; };
     // The panel list is fixed per call site, so it is not a dependency; a retry bumps the attempt.
@@ -60,8 +82,9 @@ function useLoaded(panels) {
   return {
     status: "error",
     attempt: state.attempt,
-    // A second failure in the same page usually means the browser kept the failed module; a reload fetches it fresh.
-    onRetry: () => (state.attempt > 0 ? window.location.reload() : setState({ attempt: state.attempt + 1, failed: false })),
+    // Online, only a reload can fetch the screen again (the browser keeps the failed module). Offline, retry in place
+    // so it works the moment the connection is back; a second failure reloads.
+    onRetry: () => (navigator.onLine !== false || state.attempt > 0 ? window.location.reload() : setState({ attempt: state.attempt + 1, failed: false })),
   };
 }
 
