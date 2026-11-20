@@ -855,7 +855,7 @@ describe("donating part of a sale to the club", () => {
     expect((await call("/market/listings/" + set.id, "PATCH", ada, { donatePercent: null })).data.listing.clubShare).toBeNull();
   });
 
-  it("the seller sends it; only an admin's 'received' gives karma (+1 a whole dollar)", async () => {
+  it("the seller sends it; only an admin's 'received' gives karma (+10 a whole dollar)", async () => {
     const { dealId } = await soldDeal({ priceCents: 1800, donatePercent: 25 });
     expect(await myDonation(dealId)).toEqual({
       dealId, status: "none", amountCents: null, suggestedCents: 450, pledged: true, karma: 0, maxCents: 1800,
@@ -876,7 +876,7 @@ describe("donating part of a sale to the club", () => {
     const admin = await token("m_admin");
     expect((await call("/admin/market/summary", "GET", admin)).data.openReports).toBe(1);
     const [waiting] = (await call("/admin/market/overview", "GET", admin)).data.donations;
-    expect(waiting).toMatchObject({ dealId, amountCents: 550, karma: 5, listingTitle: "Innova Star Destroyer", seller: { name: "Ada Lovelace" } });
+    expect(waiting).toMatchObject({ dealId, amountCents: 550, karma: 50, listingTitle: "Innova Star Destroyer", seller: { name: "Ada Lovelace" } });
     const review = (body: Record<string, unknown>) => call(`/admin/market/donations/${waiting.id}/review`, "POST", admin, body);
     expect((await call(`/admin/market/donations/${waiting.id}/review`, "POST", await token("m_bo"), { decision: "received" })).status).toBe(403);
     expect((await review({ decision: "not_received" })).data.error).toBe("reason_required");
@@ -887,14 +887,14 @@ describe("donating part of a sale to the club", () => {
     // Sent again; this time it arrived.
     expect((await send(ada, 550)).data.donation.status).toBe("sent");
     expect((await review({ decision: "received" })).status).toBe(200);
-    expect(await myDonation(dealId)).toMatchObject({ status: "confirmed", karma: 5, payUrl: null });
+    expect(await myDonation(dealId)).toMatchObject({ status: "confirmed", karma: 50, payUrl: null });
     expect((await review({ decision: "received" })).data.error).toBe("not_open");
     expect((await send(ada, 1800)).data.error).toBe("already_confirmed");
-    expect(db.raw.prepare("SELECT title FROM member_notices WHERE member_id = 'm_ada' ORDER BY id DESC LIMIT 1").get()).toEqual({ title: "Thank you: +5 karma" });
+    expect(db.raw.prepare("SELECT title FROM member_notices WHERE member_id = 'm_ada' ORDER BY id DESC LIMIT 1").get()).toEqual({ title: "Thank you: +50 karma" });
     expect((await call("/admin/market/summary", "GET", admin)).data.openReports).toBe(0);
     // The karma joins the seller's Lost & Found karma; how much they gave isn't published.
     const mine = (await call("/lost-found/me", "GET", ada)).data;
-    expect(mine.karma).toEqual({ karma: 5, returned: 0 });
+    expect(mine.karma).toEqual({ karma: 50, returned: 0 });
     const log = (await call("/admin/market/overview", "GET", admin)).data.log.map((row: any) => row.action);
     expect(log).toEqual(expect.arrayContaining(["donation_not_received", "donation_confirmed"]));
   });

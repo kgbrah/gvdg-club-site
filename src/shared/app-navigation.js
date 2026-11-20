@@ -47,6 +47,8 @@ export const ADMIN_DESTINATIONS = [
   entry("orders", "Orders", "money", { terms: "fulfill handoff pickup shelf checkout order" }),
   entry("wallets", "Wallets", "money", { terms: "store credit member balances adjustment transaction" }),
   entry("fundraisers", "Campaigns", "money", { terms: "fundraiser donation" }),
+  // Donations members reported by PayPal: confirm them for +10 karma a dollar.
+  entry("donations", "Donations", "money", { terms: "donations donate paypal karma confirm received gifts" }),
   entry("marketplace", "Marketplace", "money", { terms: "used discs listings wanted reports feedback suspend moderation" }),
   entry("lost-found", "Lost & Found", "more", { terms: "lost found discs reports karma reversal redaction blurred photos AI matches moderation" }),
   entry("more", "Tools", "more", { hash: "tools", terms: "admin help account settings" }),

@@ -72,9 +72,12 @@ export async function karmaOf(env: Env, personIds: readonly string[]): Promise<M
     ).bind(...chunk).all<{ person_id: string; karma: number; returned: number }>()).results ?? [];
     for (const row of rows) out.set(row.person_id, { karma: Number(row.karma) || 0, returned: Math.max(0, Number(row.returned) || 0) });
     const given = (await env.DB.prepare(
-      `SELECT seller_id AS person_id, SUM(karma) AS karma FROM market_donations
-       WHERE status = 'confirmed' AND seller_id IN (${placeholders(chunk)}) GROUP BY seller_id`,
-    ).bind(...chunk).all<{ person_id: string; karma: number }>()).results ?? [];
+      `SELECT person_id, SUM(karma) AS karma FROM (
+         SELECT seller_id AS person_id, karma FROM market_donations WHERE status = 'confirmed' AND seller_id IN (${placeholders(chunk)})
+         UNION ALL
+         SELECT member_id AS person_id, karma FROM club_donations WHERE status = 'confirmed' AND member_id IN (${placeholders(chunk)})
+       ) GROUP BY person_id`,
+    ).bind(...chunk, ...chunk).all<{ person_id: string; karma: number }>()).results ?? [];
     const played = (await env.DB.prepare(roundKarmaSql(chunk.length)).bind(...chunk, ...chunk, ...chunk)
       .all<{ person_id: string; karma: number }>()).results ?? [];
     const adjusted = (await env.DB.prepare(adjustmentKarmaSql(chunk.length)).bind(...chunk)

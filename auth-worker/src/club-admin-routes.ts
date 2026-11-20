@@ -18,6 +18,7 @@ import { handleAdminVoiceFill } from "./voice-fill-route.js";
 import { handleSheetImport } from "./sheet-import.js";
 import { handleTournamentAdmin } from "./tournament-routes.js";
 import { handleAdminPdgaPromo } from "./pdga-membership-routes.js";
+import { handleAdminDonations } from "./club-donations.js";
 
 export async function handleClubAdmin(
   request: Request,
@@ -55,6 +56,7 @@ export async function handleClubAdmin(
   else if (sub === "voice-fill" && method === "POST") response = await handleAdminVoiceFill(request, env, origin, adminId);
   else if (sub === "export") response = await handleAdminExport(request, env, origin, method, seg, adminId);
   else if (sub === "push") response = await handleAdminPush(request, env, origin, method, seg, adminId);
+  else if (sub === "donations") response = await handleAdminDonations(request, env, origin, method, seg, adminId, ctx);
 
   return response ?? json({ error: "not_found" }, 404, origin);
 }

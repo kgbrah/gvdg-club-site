@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v352";
+const CACHE = "gvdg-club-v353";
 // Member app screens past Home are content-hashed chunks. They live in their own cache, which keeps the
 // chunks of this version and the one before it, so a page that was open across an update can still open
 // its screens (online or offline) after their files are gone from the server.

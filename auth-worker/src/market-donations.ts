@@ -1,7 +1,8 @@
 // Giving part of a sale to the club. A listing can carry a pledge (a percentage of the sale or a set amount; buyers see
 // it). Once a sale is complete, the seller sends the donation to the club's PayPal (a paypal.me link with the amount
 // filled in) and says so; buyers pay sellers directly, so the app can't see the money move, and an admin confirms it
-// arrived before anything is awarded: +1 karma for every whole dollar, added to the seller's Lost & Found karma.
+// arrived before anything is awarded: +10 karma for every whole dollar (every donation earns the same: owner, "Let's
+// make ALL donations reward +10 karma per dollar"; club-donations.ts has the direct ones), added to the seller's karma.
 //
 //   POST /market/deals/:id/donation            (the seller) { amountCents } -> { donation }
 //   POST /admin/market/donations/:id/review    (admin) { decision: "received" | "not_received", reason? } -> { ok }
@@ -22,9 +23,12 @@ export function clubDonationUrl(cents: number): string {
   return `https://paypal.me/${CLUB_PAYPAL_ME}/${dollars(cents)}`;
 }
 
-/** Whole dollars of karma for a confirmed donation. */
+/** Karma for every whole dollar of a confirmed donation (marketplace gifts and direct donations alike). */
+export const KARMA_PER_DOLLAR = 10;
+
+/** Karma for a confirmed donation: KARMA_PER_DOLLAR for every whole dollar. */
 export function donationKarma(cents: number): number {
-  return Math.max(0, Math.floor(cents / 100));
+  return Math.max(0, Math.floor(cents / 100)) * KARMA_PER_DOLLAR;
 }
 
 /** What a pledge comes to on a sale: its percentage of the price, or its set amount (never more than the price). */

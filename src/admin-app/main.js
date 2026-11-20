@@ -12,6 +12,7 @@ import { AdminCommunityPanel } from "./community-panel.js";
 import { AdminMarketplacePanel } from "./marketplace-panel.js";
 import { AdminLostFoundPanel } from "./lost-found-panel.js";
 import { AdminSheetImport } from "./sheet-import-panel.js";
+import { AdminDonationsPanel } from "./donations-panel.js";
 import { AdminCourseForm } from "./course-form.js";
 import { AdminCourseHealth } from "./course-health.js";
 import { AdminCoursesList } from "./courses-list.js";
@@ -103,6 +104,11 @@ if (moreMount) {
 const eventFormMount = document.getElementById("adminEventFormReactApp");
 if (eventFormMount) {
   flushSync(() => createRoot(eventFormMount).render(h(AdminEventForm)));
+}
+
+const donationsMount = document.getElementById("adminDonationsReactApp");
+if (donationsMount) {
+  flushSync(() => createRoot(donationsMount).render(h(AdminDonationsPanel)));
 }
 
 const sheetImportMount = document.getElementById("adminSheetImportReactApp");

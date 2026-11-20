@@ -58,7 +58,12 @@ export function adjustmentKarmaSql(members: number | null = null): string {
 export async function karmaDirectory(env: Env): Promise<KarmaDirectory> {
   const [ledger, donations, rounds, adjustments] = await Promise.all([
     env.DB.prepare("SELECT person_id, SUM(delta) AS karma FROM lf_karma GROUP BY person_id").all<{ person_id: string; karma: number }>(),
-    env.DB.prepare("SELECT seller_id AS person_id, SUM(karma) AS karma FROM market_donations WHERE status = 'confirmed' GROUP BY seller_id")
+    // Confirmed donations: the marketplace's gifts and direct ones (club_donations), +10 karma a dollar.
+    env.DB.prepare(`SELECT person_id, SUM(karma) AS karma FROM (
+        SELECT seller_id AS person_id, karma FROM market_donations WHERE status = 'confirmed'
+        UNION ALL
+        SELECT member_id AS person_id, karma FROM club_donations WHERE status = 'confirmed'
+      ) GROUP BY person_id`)
       .all<{ person_id: string; karma: number }>(),
     env.DB.prepare(roundKarmaSql()).all<{ person_id: string; karma: number }>(),
     env.DB.prepare(adjustmentKarmaSql()).all<{ person_id: string; karma: number }>(),

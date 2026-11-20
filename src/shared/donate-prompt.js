@@ -5,6 +5,7 @@
 //   - "No thanks" (or donating) hides it for that round or that event; the next 5th round asks again.
 // The PayPal link is a paypal.me link, which the sign-up hand-off sends to the PayPal app (outside-link.js).
 import React from "react";
+import { resolveApiBase } from "./api-base.js";
 import { SIGNUP_LINK } from "./outside-link.js";
 
 const h = React.createElement;
@@ -57,12 +58,83 @@ export function dismissPrompt(promptKey, storage = local()) {
   try { storage?.setItem(DISMISS_PREFIX + promptKey, String(Date.now())); } catch { /* harmless */ }
 }
 
-/** The prompt: a line, "Donate $1 with PayPal" (to the PayPal app), and "No thanks". */
+// ---- Telling the club about a donation (+10 karma for every dollar once an admin confirms it) ----
+// PayPal.me can't tell the app who gave (owner: "Let's make ALL donations reward +10 karma per dollar"; an admin
+// confirms each one): after giving, a signed-in member taps "I donated $X" (POST /me/donations).
+export const KARMA_PER_DOLLAR = 10;
+const TOKEN_KEY = "gvdg_member_token";
+
+function memberToken() {
+  try { return (typeof localStorage !== "undefined" && localStorage.getItem(TOKEN_KEY)) || ""; } catch { return ""; }
+}
+
+/** Report a donation: { ok, donation } or { ok: false, error }. */
+export async function reportDonation(cents, source, { token = memberToken(), base = resolveApiBase(), fetchImpl = globalThis.fetch } = {}) {
+  if (!token) return { ok: false, error: "signed_out" };
+  try {
+    const response = await fetchImpl(`${base}/me/donations`, {
+      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ amountCents: cents, source }),
+    });
+    const data = await response.json().catch(() => ({}));
+    return response.ok ? { ok: true, donation: data.donation } : { ok: false, error: data.error || "failed" };
+  } catch {
+    return { ok: false, error: "offline" };
+  }
+}
+
+const REPORT_ERRORS = {
+  signed_out: "Sign in to the club app to earn karma for donations.",
+  too_many_pending: "You have 3 donations waiting for the club to confirm. You can add more once they're confirmed.",
+  rate_limited: "That's a lot of donations today! Try again tomorrow.",
+  invalid_amount: "Enter an amount from $1 to $1,000.",
+  default: "Couldn't record it. Try again in a moment.",
+};
+
+/** "Sent it? Tell the club": a set amount (the $1 prompts) or one the donor types. */
+export function DonationReport({ source, cents = null, onDone }) {
+  const [amount, setAmount] = React.useState("");
+  const [state, setState] = React.useState(() => ({ status: memberToken() ? "idle" : "signed_out", message: "" }));
+  async function send() {
+    const value = cents ?? Math.round(Number(String(amount).replace(/[^0-9.]/g, "")) * 100);
+    if (!Number.isFinite(value) || value < 100 || value > 100_000) {
+      setState({ status: "idle", message: REPORT_ERRORS.invalid_amount });
+      return;
+    }
+    setState({ status: "sending", message: "" });
+    const result = await reportDonation(value, source);
+    if (result.ok) {
+      setState({ status: "done", message: `Thanks! +${Math.floor(value / 100) * KARMA_PER_DOLLAR} karma once the club confirms it.` });
+      if (onDone) onDone(result.donation);
+    } else {
+      setState({ status: result.error === "signed_out" ? "signed_out" : "idle", message: REPORT_ERRORS[result.error] || REPORT_ERRORS.default });
+    }
+  }
+  if (state.status === "signed_out") return h("p", { className: "donation-report-note", "data-donation-report": "signed-out" }, REPORT_ERRORS.signed_out);
+  if (state.status === "done") return h("p", { className: "donation-report-note done", role: "status", "data-donation-report": "done" }, state.message);
+  return h("div", { className: "donation-report", "data-donation-report": source }, [
+    h("p", { className: "donation-report-note", key: "how" }, `Sent it? Tell the club for +${KARMA_PER_DOLLAR} karma a dollar once an admin confirms it.`),
+    h("div", { className: "donation-report-row", key: "row" }, [
+      cents == null ? h("label", { className: "donation-report-amount", key: "amount" }, [
+        "Amount ($)",
+        h("input", { type: "text", inputMode: "decimal", value: amount, placeholder: "10", key: "input", onChange: (event) => setAmount(event.target.value) }),
+      ]) : null,
+      h("button", { type: "button", className: "donation-report-send", disabled: state.status === "sending", onClick: send, key: "send" },
+        state.status === "sending" ? "Sending…" : cents ? `I donated $${cents / 100}` : "I donated"),
+    ]),
+    state.message ? h("p", { className: "donation-report-note", role: "status", key: "message" }, state.message) : null,
+  ]);
+}
+
+/** The prompt: a line, "Donate $1 with PayPal" (to the PayPal app), and "No thanks"; after giving, "I donated $1". */
 export function DonateDollar({ promptKey, text, className = "" }) {
   const [state, setState] = React.useState(() => (promptDismissed(promptKey) ? "hidden" : "open"));
   if (state === "hidden") return null;
   if (state === "thanks") {
-    return h("p", { className: `donate-prompt thanks ${className}`.trim(), role: "status", "data-donate-prompt": "thanks" }, "Thank you for supporting the club!");
+    return h("div", { className: `donate-prompt thanks ${className}`.trim(), "data-donate-prompt": "thanks" }, [
+      h("p", { className: "donate-prompt-text", role: "status", key: "thanks" }, "Thank you for supporting the club!"),
+      h(DonationReport, { source: String(promptKey).split(":")[0] === "event" ? "event" : "round", cents: 100, key: "report" }),
+    ]);
   }
   return h("div", { className: `donate-prompt ${className}`.trim(), "data-donate-prompt": promptKey }, [
     h("p", { className: "donate-prompt-text", key: "text" }, text),

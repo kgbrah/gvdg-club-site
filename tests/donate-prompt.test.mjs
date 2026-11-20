@@ -57,3 +57,35 @@ test("the GVDG membership card: status, the dues year to pay, and when it's due"
   assert.equal(clubMembershipCard(base, 2000).dues, 20);
   assert.equal(clubMembershipCard(null), null);
 });
+
+// Owner: "Let's make ALL donations reward +10 karma per dollar" (an admin confirms each one).
+test("telling the club about a donation: signed in it's reported for the admin to confirm; signed out it asks to sign in", async () => {
+  const { reportDonation, KARMA_PER_DOLLAR } = await import("../src/shared/donate-prompt.js");
+  assert.equal(KARMA_PER_DOLLAR, 10);
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(JSON.stringify({ donation: { id: 7, amountCents: 100, status: "pending" } }), { status: 201 });
+  };
+  const ok = await reportDonation(100, "round", { token: "t0k", base: "https://gvdgclub.com/api", fetchImpl });
+  assert.deepEqual(ok, { ok: true, donation: { id: 7, amountCents: 100, status: "pending" } });
+  assert.equal(calls[0].url, "https://gvdgclub.com/api/me/donations");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer t0k");
+  assert.deepEqual(JSON.parse(calls[0].init.body), { amountCents: 100, source: "round" });
+  assert.deepEqual(await reportDonation(100, "round", { token: "", fetchImpl }), { ok: false, error: "signed_out" });
+  const full = async () => new Response(JSON.stringify({ error: "too_many_pending" }), { status: 409 });
+  assert.deepEqual(await reportDonation(500, "club-card", { token: "t", base: "x", fetchImpl: full }), { ok: false, error: "too_many_pending" });
+});
+
+test("donations reach the admin: a Donations screen under Money and a Needs you item", async () => {
+  const { adminNeedsItems } = await import("../src/admin-app/admin-needs.js");
+  const items = adminNeedsItems({ donations: 2 });
+  assert.deepEqual(items.find((item) => item.id === "donations"), { id: "donations", tab: "donations", count: 2, label: "Donations to confirm", detail: "Check the club's PayPal" });
+  const { ADMIN_DESTINATIONS } = await import("../src/shared/app-navigation.js");
+  assert.equal(ADMIN_DESTINATIONS.find((item) => item.key === "donations")?.group, "money");
+  assert.match(readFileSync("admin.html", "utf8"), /<div class="admin-pane" id="apane-donations">\s*<div id="adminDonationsReactApp"><\/div>/);
+  // The report step follows every way to give: the $1 prompts, the Club page card, fundraisers.
+  assert.match(readFileSync("src/shared/donate-prompt.js", "utf8"), /h\(DonationReport, \{ source: String\(promptKey\)\.split\(":"\)\[0\] === "event" \? "event" : "round", cents: 100/);
+  assert.match(readFileSync("src/members-app/club-membership-card.js", "utf8"), /h\(DonationReport, \{ source: "club-card"/);
+  assert.match(readFileSync("src/public-app/events-club-content-app.js", "utf8"), /reporting \? h\(DonationReport, \{ source: "fundraiser"/);
+});

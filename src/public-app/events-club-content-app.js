@@ -3,6 +3,7 @@ import { Check, Copy, ExternalLink, Heart, Mail } from "lucide-react";
 
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
 import { safeExternalUrl } from "../shared/safe-url.js";
+import { DonationReport } from "../shared/donate-prompt.js";
 
 const h = React.createElement;
 const DONATION_FALLBACK = "https://paypal.me/greenvillediscgolf";
@@ -150,6 +151,8 @@ function FundraiserCard({ fundraiser }) {
   const raised = Number(fundraiser && fundraiser.raised_cents) || 0;
   const pct = goal > 0 ? Math.max(0, Math.min(100, Math.round((raised / goal) * 100))) : 0;
   const donationUrl = safeExternalUrl(fundraiser && fundraiser.paypal_url) || DONATION_FALLBACK;
+  // After giving, a signed-in member tells the club for +10 karma a dollar (an admin confirms it).
+  const [reporting, setReporting] = React.useState(false);
 
   return h("article", { className: "fundraiser-card", "data-react-events-fundraiser": "true" }, [
     h("h3", { className: "fundraiser-title", key: "title" }, title),
@@ -166,7 +169,9 @@ function FundraiserCard({ fundraiser }) {
       key: "donate",
       rel: "noopener noreferrer",
       target: "_blank",
+      onClick: () => setReporting(true),
     }, [icon(Heart), "Donate", icon(ExternalLink, 14)]),
+    reporting ? h(DonationReport, { source: "fundraiser", key: "report" }) : null,
     h(ShareRow, { key: "share", title, url: donationUrl }),
   ]);
 }

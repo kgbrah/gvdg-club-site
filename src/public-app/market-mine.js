@@ -110,7 +110,7 @@ function DonationPanel({ deal, onChange }) {
         : h("button", { className: "shop-btn", disabled: true, key: "pay", type: "button" }, "Send with PayPal"),
       h("button", { className: "shop-btn secondary", disabled: !valid || action.busy, key: "sent", onClick: () => { void markSent(); }, type: "button" }, action.busy ? "Saving…" : "I sent it"),
     ]),
-    h("small", { className: "market-hint", key: "hint" }, "It goes to the club's PayPal. Once the club confirms it arrived you get +1 karma for every dollar."),
+    h("small", { className: "market-hint", key: "hint" }, "It goes to the club's PayPal. Once the club confirms it arrived you get +10 karma for every dollar."),
     h(StatusLine, { key: "status", message: action.message }),
   ];
   const needsAction = donation.pledged || donation.status === "not_received";
