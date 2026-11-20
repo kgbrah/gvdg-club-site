@@ -474,10 +474,22 @@ body.admin-page.player-theme-active {
 .admin-page .admin-voice-note { color: var(--text-secondary); line-height: 1.35; }
 
 .admin-page .admin-header-short { display: none; }
+.admin-page .admin-header-glyph { display: none; }
+.admin-page .admin-header-link { white-space: nowrap; }
 .admin-page [data-react-admin-today] .admin-queue-links { align-self: start; }
-@media (max-width: 360px) {
+/* Phones: "Members" instead of "Member app"; the narrowest: Members and Help as icons (their names stay as labels). */
+@media (max-width: 430px) {
   .admin-page .admin-header-short { display: inline; }
   .admin-page .admin-header-full { display: none; }
+  .admin-page .admin-header-actions { gap: .3rem; }
+  .admin-page .admin-header-link { padding-inline: .45rem; }
+}
+@media (max-width: 360px) {
+  .admin-page .admin-header-short { display: none; }
+  /* Still the link's name for screen readers, just not drawn. */
+  .admin-page .admin-header-help-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .admin-page .admin-header-glyph { display: block; }
+  .admin-page .admin-header-help { position: relative; }
 }
 
 .admin-page .admin-workspace-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .35rem .65rem; }
@@ -1066,3 +1078,15 @@ body.admin-page.player-theme-active {
 .admin-wallet-tx-amount.credit { color: var(--green-text, #1b7f3b); }
 .admin-wallet-tx-amount.debit { color: var(--over, #c62828); }
 .admin-wallet-tx-note { color: var(--text-secondary); font-size: .9rem; margin-top: .15rem; }
+/* Light/dark in the admin top bar: drawn like the envelope and bell beside it (as the member app's top bar does). */
+.admin-page .admin-header-actions .theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.5rem; height: 2.5rem; min-width: 2.5rem; padding: 0;
+  border: 0; border-radius: .45rem; background: transparent; color: var(--admin-chrome-ink);
+}
+.admin-page .admin-header-actions .theme-toggle:hover,
+.admin-page .admin-header-actions .theme-toggle:active { background: var(--admin-chrome-hover); transform: none; }
+.admin-page .admin-header-actions .theme-toggle svg { width: 20px; height: 20px; }
+@media (max-width: 360px) {
+  .admin-page .admin-header-actions .theme-toggle { width: 2.25rem; min-width: 2.25rem; }
+}
