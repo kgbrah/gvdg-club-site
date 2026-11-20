@@ -34,8 +34,14 @@ function validPhoto(p: string): boolean {
  *  time left, so a shorter session from before the 30-day change is upgraded the first time the app opens. */
 export const RENEW_AFTER_SEC = 24 * 60 * 60;
 
-/** What every sign-in (PIN, passkey, PIN reset) answers with, besides the token. `needsEmail`: no email on file, so
- *  the app asks for one (it's how a forgotten PIN gets reset without an admin). */
+/** What every sign-in (PIN, passkey, PIN reset) answers with, besides the token. `needsEmail`: no email on file (it's
+ *  how a forgotten PIN gets reset without an admin), so Home reminds them; `emailRequired`: an account created since
+ *  the email became a requirement, so the app asks for it before Home. */
+/** New accounts (marked at creation) with no email yet; admins never (another admin can reset an admin's PIN). */
+export function emailRequired(member: Member): boolean {
+  return !member.email && member.emailRequired === true && member.isAdmin !== true;
+}
+
 export function memberSessionBody(member: Member): Record<string, unknown> {
   return {
     mustChangePin: member.mustChangePin,
@@ -48,6 +54,7 @@ export function memberSessionBody(member: Member): Record<string, unknown> {
     membership: publicMembership(member),
     email: member.email ?? null,
     needsEmail: !member.email,
+    emailRequired: emailRequired(member),
   };
 }
 

@@ -409,7 +409,7 @@ describe("email on every account (the self-service way back in)", () => {
     expect((await call("/me/email/start", { method: "POST", token, body: { email: "Jordan@Example.com" } })).status).toBe(200);
     const code = await codeFrom("jordan@example.com");
     expect((await call("/me/email/verify", { method: "POST", token, body: { code: code === "000000" ? "111111" : "000000" } })).data.error).toBe("invalid_code");
-    expect((await call("/me/email/verify", { method: "POST", token, body: { code } })).data).toEqual({ email: "jordan@example.com", needsEmail: false });
+    expect((await call("/me/email/verify", { method: "POST", token, body: { code } })).data).toEqual({ email: "jordan@example.com", needsEmail: false, emailRequired: false });
     expect((await call("/me", { token })).data).toMatchObject({ email: "jordan@example.com", needsEmail: false });
     expect((await login("jordan@example.com")).status).toBe(200);
     // A code works once.
@@ -654,5 +654,29 @@ describe("the API under /api on the site's own address", () => {
     expect((await call("/api/market/config", { token: prefixed.data.token })).data.viewer.kind).toBe("member");
     expect((await call("/api/nope")).status).toBe(404);
     expect((await call("/apiary")).status).toBe(404); // only the /api/ prefix is stripped
+  });
+});
+
+describe("the email step is required only for accounts created from now on (owner: \"Let's not block people who are already logged in and have memberships. Just require new users from here on out\")", () => {
+  it("an existing account with no email is reminded, not stopped; a new one is stopped until it adds one; admins never", async () => {
+    await member({ memberId: "m_80024", name: "Jordan Parker", pdgaNo: "80024" });
+    const existing = await login("80024");
+    expect(existing.data).toMatchObject({ needsEmail: true, emailRequired: false });
+    expect((await call("/me", { token: existing.data.token as string })).data).toMatchObject({ needsEmail: true, emailRequired: false });
+
+    await member({ memberId: "m_55555", name: "Nina Newbie", pdgaNo: "55555", emailRequired: true });
+    const created = await login("55555");
+    expect(created.data).toMatchObject({ needsEmail: true, emailRequired: true });
+
+    await member({ memberId: "m_44444", name: "Avery Admin", pdgaNo: "44444", emailRequired: true, isAdmin: true });
+    expect((await login("44444")).data).toMatchObject({ needsEmail: true, emailRequired: false });
+  });
+
+  it("createMember marks the account (admin-created logins and approved applications both go through it)", async () => {
+    const { createMember } = await import("../src/roster.js");
+    const result = await createMember(roster as never, { name: "Nina Newbie", pdgaNo: "66666" }, "hash");
+    expect(result.ok && result.member.emailRequired).toBe(true);
+    const withEmail = await createMember(roster as never, { name: "Gail Guest", email: "gail@example.com", guest: true }, "hash");
+    expect(withEmail.ok && withEmail.member).toMatchObject({ email: "gail@example.com", emailRequired: true });
   });
 });

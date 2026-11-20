@@ -13,6 +13,7 @@ let memberProfile = {
   welcome: false,
   email: null,
   needsEmail: false,
+  emailRequired: false,
 };
 
 export function memberDashboardContext() {
@@ -26,6 +27,7 @@ export function memberDashboardContext() {
     welcome: memberProfile.welcome === true,
     email: memberProfile.email || null,
     needsEmail: memberProfile.needsEmail === true,
+    emailRequired: memberProfile.emailRequired === true,
   };
 }
 
@@ -51,6 +53,7 @@ export function applyProfile(data = {}) {
     // Older payloads have no email fields: keep what we knew.
     email: data.email === undefined ? memberProfile.email || null : data.email || null,
     needsEmail: data.needsEmail === undefined ? memberProfile.needsEmail === true : data.needsEmail === true,
+    emailRequired: data.emailRequired === undefined ? memberProfile.emailRequired === true : data.emailRequired === true,
   };
 
   if (data.name) writeMemberSessionValue(NAME_KEY, data.name);
@@ -72,12 +75,13 @@ export function resetMemberProfile() {
     welcome: false,
     email: null,
     needsEmail: false,
+    emailRequired: false,
   };
   publishMemberProfile(memberDashboardContext());
 }
 
 /** The member just confirmed an email (POST /me/email/verify). */
 export function markEmailSaved(email) {
-  memberProfile = { ...memberProfile, email: email || memberProfile.email || null, needsEmail: false };
+  memberProfile = { ...memberProfile, email: email || memberProfile.email || null, needsEmail: false, emailRequired: false };
   publishMemberProfile(memberDashboardContext());
 }

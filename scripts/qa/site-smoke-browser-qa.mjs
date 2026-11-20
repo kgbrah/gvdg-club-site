@@ -316,7 +316,8 @@ try {
       const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ...(userAgent ? { userAgent } : {}) });
       if (installed) await context.addInitScript(() => Object.defineProperty(Navigator.prototype, "standalone", { get: () => true }));
       await installRoutes(context);
-      await context.route("https://paypal.me/**", (route) => route.fulfill({ status: 204, body: "" }));
+      // A small real page (not an empty 204), so the new tab finishes loading and Chromium reports it right away.
+      await context.route("https://paypal.me/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>PayPal</title>" }));
       const page = await context.newPage();
       await page.goto(`${server.origin}/index.html`, { waitUntil: "domcontentloaded" });
       const dues = page.getByRole("link", { name: "Pay with PayPal" }).first();

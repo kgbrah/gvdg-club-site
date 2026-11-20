@@ -65,6 +65,33 @@ jobs:
       - name: Verify the Google Sheets imports end to end against the real Worker
         run: node scripts/qa/sheet-import-e2e-qa.mjs
 
+  # Safari's engine as the installed iPhone app (owner: "Need you to do an apple iPhone focused QA. Android is
+  # working well but an apple user had a blank white screen when opening the app after refusing the add email prompt").
+  iphone:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install WebKit (Safari's engine)
+        run: npx playwright install --with-deps webkit
+      - name: Verify the app on iPhone (WebKit)
+        env:
+          GVDG_IPHONE_SHOTS: ${{ runner.temp }}/iphone-shots
+          GVDG_QA_STACKS: "1"
+        run: node scripts/qa/iphone-webkit-qa.mjs
+      - name: Keep the iPhone screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-webkit-screens
+          path: ${{ runner.temp }}/iphone-shots
+          if-no-files-found: ignore
+
   worker:
     runs-on: ubuntu-24.04
     defaults:
