@@ -143,44 +143,75 @@ function Row({ eventId, row, kind, onChanged }) {
   ]);
 }
 
+const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+
 /**
- * After the event: results for PDGA Tournament Manager's Upload page, which takes rows pasted from the TD Report's
- * Scores tab (PDGA help, "Tournament Manager: Scoring Management"). Every club event linked to the PDGA event is a
- * round, in date order.
+ * Rows for PDGA Tournament Manager's Upload page, which takes rows pasted from the TD Report (PDGA's help). Two kinds:
+ *   - players: the event's player list (paid in field order, then the waitlist), so players registered here show on
+ *     pdga.com (owner: "Yes please" to a copy-ready list; PDGA asks for it at least weekly);
+ *   - results: after the event, every club event linked to the PDGA event is a round, in date order.
  */
-export function PdgaResults({ eventId }) {
+const PASTE_KINDS = {
+  players: {
+    path: "pdga-players", title: "Players for PDGA", get: "Get players for PDGA", copy: "Copy players for PDGA", label: "Players for PDGA",
+    how: "Players who register here show on pdga.com once you add them in PDGA Tournament Manager (PDGA asks for the list at least weekly): open the event's Upload page, paste these rows, keep \u201cFirst row in results contain field names\u201d ticked, leave \u201cOverwrite results\u201d unticked, check the Field Mappings, then match each player or mark them New.",
+    empty: "No paid players yet: players are on PDGA's list once their entry fee is in.",
+    has: (data) => data.rows.length > 0,
+    summary: (data) => [plural(data.registered, "registered player", "registered players"), data.waitlisted ? plural(data.waitlisted, "on the waitlist", "on the waitlist") : "", data.unpaid ? `${data.unpaid} signed up, not paid (not listed)` : ""].filter(Boolean).join(" · "),
+    warnings: (data) => [
+      data.noDivision ? `${plural(data.noDivision, "player has", "players have")} no division: set it in Tournament Manager.` : "",
+      data.noPdga ? `${plural(data.noPdga, "player has", "players have")} no PDGA number: Tournament Manager marks them New, to match or add.` : "",
+      data.waitlisted ? "Waitlisted players carry \u201cWaitlist #N\u201d in the Start field, which PDGA shows on the event page." : "",
+    ],
+  },
+  results: {
+    path: "pdga-results", title: "Results for PDGA", get: "Get results for PDGA", copy: "Copy for PDGA", label: "Results for PDGA",
+    how: "After the event, report the results in PDGA Tournament Manager: open the event's Upload page, paste these rows, tick \u201cFirst row in results contain field names\u201d, leave \u201cOverwrite results\u201d unticked, and set T.O. and Place to blank in Field Mappings.",
+    empty: "No scores yet: results show up once a round is finished.",
+    has: (data) => data.players > 0,
+    summary: (data) => `${plural(data.players, "player", "players")} · ${data.rounds.map((round, index) => `Rd${index + 1}: ${round.name}${round.date ? ` (${round.date})` : ""}`).join(" · ")}`,
+    warnings: (data) => [
+      data.missingScores ? `${plural(data.missingScores, "player is", "players are")} missing a round score: enter PDGA's code for them (888 or 999) in Tournament Manager.` : "",
+      data.noDivision ? `${plural(data.noDivision, "player has", "players have")} no division: set it in Tournament Manager.` : "",
+      data.noPdga ? `${plural(data.noPdga, "player has", "players have")} no PDGA number: Tournament Manager marks them New, to match or add.` : "",
+      data.extraRounds ? `Only the first 4 rounds are included (${data.extraRounds} more linked).` : "",
+    ],
+  },
+};
+
+function PdgaPaste({ eventId, kind }) {
+  const copy = PASTE_KINDS[kind];
   const [state, setState] = React.useState({ status: "idle", data: null });
   const [copied, setCopied] = React.useState(false);
   async function load() {
     setCopied(false);
     setState({ status: "loading", data: null });
-    const result = await call(`/admin/events/${eventId}/pdga-results`);
+    const result = await call(`/admin/events/${eventId}/${copy.path}`);
     setState({ status: result.ok ? "ready" : "error", data: result.data });
   }
   const data = state.data;
-  const ready = state.status === "ready" && data && data.players > 0;
-  const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
-  const warnings = ready ? [
-    data.missingScores ? `${plural(data.missingScores, "player is", "players are")} missing a round score: enter PDGA's code for them (888 or 999) in Tournament Manager.` : "",
-    data.noDivision ? `${plural(data.noDivision, "player has", "players have")} no division: set it in Tournament Manager.` : "",
-    data.noPdga ? `${plural(data.noPdga, "player has", "players have")} no PDGA number: Tournament Manager marks them New, to match or add.` : "",
-    data.extraRounds ? `Only the first 4 rounds are included (${data.extraRounds} more linked).` : "",
-  ].filter(Boolean) : [];
-  return h("div", { className: "pdga-results", "data-admin-pdga-results": state.status, key: "pdga-results" }, [
-    h("h4", { className: "al-h", key: "title" }, "Results for PDGA"),
-    h("p", { className: "al-note", key: "how" }, "After the event, report the results in PDGA Tournament Manager: open the event's Upload page, paste these rows, tick \u201cFirst row in results contain field names\u201d, leave \u201cOverwrite results\u201d unticked, and set T.O. and Place to blank in Field Mappings."),
+  const ready = state.status === "ready" && data && copy.has(data);
+  const warnings = ready ? copy.warnings(data).filter(Boolean) : [];
+  return h("div", { className: "pdga-results", [`data-admin-${copy.path}`]: state.status, key: copy.path }, [
+    h("h4", { className: "al-h", key: "title" }, copy.title),
+    h("p", { className: "al-note", key: "how" }, copy.how),
     h("button", { className: "admin-btn secondary", type: "button", key: "get", disabled: state.status === "loading", onClick: load },
-      state.status === "idle" ? "Get results for PDGA" : state.status === "loading" ? "Getting results…" : "Refresh"),
-    state.status === "error" ? h("p", { className: "al-note", role: "status", key: "error" }, "The results couldn't be put together. Try again.") : null,
-    state.status === "ready" && !ready ? h("p", { className: "al-note", role: "status", key: "empty" }, "No scores yet: results show up once a round is finished.") : null,
-    ready ? h("p", { className: "al-note", key: "summary" }, `${plural(data.players, "player", "players")} · ${data.rounds.map((round, index) => `Rd${index + 1}: ${round.name}${round.date ? ` (${round.date})` : ""}`).join(" · ")}`) : null,
+      state.status === "idle" ? copy.get : state.status === "loading" ? "Getting the rows…" : "Refresh"),
+    state.status === "error" ? h("p", { className: "al-note", role: "status", key: "error" }, "The rows couldn't be put together. Try again.") : null,
+    state.status === "ready" && !ready ? h("p", { className: "al-note", role: "status", key: "empty" }, copy.empty) : null,
+    ready ? h("p", { className: "al-note", key: "summary" }, copy.summary(data)) : null,
     warnings.length ? h("ul", { className: "al-note", key: "warnings" }, warnings.map((text) => h("li", { key: text }, text))) : null,
-    ready ? h("textarea", { key: "rows", readOnly: true, value: data.text, rows: Math.min(14, data.rows.length + 1), "aria-label": "Results for PDGA",
+    ready ? h("textarea", { key: "rows", readOnly: true, value: data.text, rows: Math.min(14, data.rows.length + 1), "aria-label": copy.label,
       style: { width: "100%", fontFamily: "ui-monospace, monospace", fontSize: ".8rem", whiteSpace: "pre", overflowX: "auto" } }) : null,
     ready ? h("button", { className: "admin-btn", type: "button", key: "copy", onClick: async () => {
       try { await navigator.clipboard.writeText(data.text); setCopied(true); } catch { setCopied(false); }
-    } }, copied ? "Copied" : "Copy for PDGA") : null,
+    } }, copied ? "Copied" : copy.copy) : null,
   ]);
+}
+
+/** After the event: results for PDGA (also on the event's Results screen). */
+export function PdgaResults({ eventId }) {
+  return h(PdgaPaste, { eventId, kind: "results" });
 }
 
 export function AdminTournamentPanel({ eventId }) {
@@ -224,6 +255,7 @@ export function AdminTournamentPanel({ eventId }) {
       "PDGA asks for the pre-registration list on the PDGA event page, updated at least weekly (only paid players): ",
       h("a", { href: "data:text/csv;charset=utf-8," + encodeURIComponent(csv), download: `pdga-${state.settings.pdgaEventId}-registrations.csv`, key: "a" }, "Download the list (CSV)"),
     ]) : null,
+    linked ? h(PdgaPaste, { eventId, kind: "players", key: "players" }) : null,
     linked ? h(PdgaResults, { eventId, key: "results" }) : null,
     linked ? h(PdgaCredit, { key: "credit" }) : null,
   ]);

@@ -281,3 +281,23 @@ describe("results for PDGA Tournament Manager", () => {
     expect((await call("/admin/events/9/pdga-results", { token: adminToken })).data.error).toBe("not_pdga_event");
   });
 });
+
+describe("the player list for PDGA Tournament Manager", () => {
+  it("paid players in field order, then the waitlist; admin only; only for PDGA events", async () => {
+    await setup();
+    db.raw.exec(`INSERT INTO registrations (event_id, member_id, name, division, pdga_number, paid_entry, paid_at, waitlisted, waitlisted_at) VALUES
+      (7, 'g_b', 'Bo Second', 'MPO', '300', 1, '2026-11-12T10:00:00Z', 0, NULL),
+      (7, 'g_a', 'Ada Lovelace', 'MA3', '80024', 1, '2026-11-11T10:00:00Z', 0, NULL),
+      (7, 'g_w', 'Wes Wait', 'MPO', NULL, 0, NULL, 1, '2026-11-13T10:00:00Z'),
+      (7, 'g_u', 'Una Unpaid', 'MPO', '400', 0, NULL, 0, NULL)`);
+    const list = await call("/admin/events/7/pdga-players", { token: adminToken });
+    expect(list.status).toBe(200);
+    expect(list.data.header).toEqual(["DivCode", "First Name", "Last Name", "PDGA", "Start"]);
+    expect(list.data.rows).toEqual([["MA3", "Ada", "Lovelace", "80024", ""], ["MPO", "Bo", "Second", "300", ""], ["MPO", "Wes", "Wait", "", "Waitlist #1"]]);
+    expect(list.data).toMatchObject({ registered: 2, waitlisted: 1, unpaid: 1 });
+    expect((await call("/admin/events/7/pdga-players")).status).toBe(401);
+    db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (9, 'League night', 'league', 'scheduled', '2099-12-14')`);
+    db.raw.exec(`INSERT INTO event_config (event_id) VALUES (9)`);
+    expect((await call("/admin/events/9/pdga-players", { token: adminToken })).data.error).toBe("not_pdga_event");
+  });
+});

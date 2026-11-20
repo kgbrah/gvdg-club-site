@@ -103,3 +103,34 @@ describe("pdgaResultsUpload", () => {
     expect(named.rows[0]).toEqual(["MPO", "", "1", "Steady Ed", "Headrick", "1", "61"]);
   });
 });
+
+describe("pdgaPlayersUpload", () => {
+  const row = (over: Record<string, unknown>) => ({ id: 1, name: "X", division: "MPO", team: null, pdga_number: null, paid_entry: 0, paid_at: null, waitlisted: 0, waitlisted_at: null, ...over });
+  it("lists paid players in field order, then the waitlist as Waitlist #N; unpaid sign-ups aren't registered yet", async () => {
+    const { pdgaPlayersUpload } = await import("../src/tournament.js");
+    const upload = pdgaPlayersUpload([
+      row({ id: 1, name: "Late Payer", pdga_number: "200", paid_entry: 1, paid_at: "2026-11-10T12:00:00Z" }),
+      row({ id: 2, name: "Steady Ed Headrick", pdga_number: "1", paid_entry: 1, paid_at: "2026-11-02T12:00:00Z", division: "mpo" }),
+      row({ id: 3, name: "Tie Low", pdga_number: "50", paid_entry: 1, paid_at: "2026-11-10T12:00:00Z" }),
+      row({ id: 4, name: "Wait Two", waitlisted: 1, waitlisted_at: "2026-11-12T00:00:00Z", division: "MA3" }),
+      row({ id: 5, name: "Wait One", pdga_number: "77", waitlisted: 1, waitlisted_at: "2026-11-11T00:00:00Z", division: "MA3" }),
+      row({ id: 6, name: "Not Paid", pdga_number: "88" }),
+    ], new Map([["1", { first: "Steady Ed", last: "Headrick" }]]));
+    expect(upload.header).toEqual(["DivCode", "First Name", "Last Name", "PDGA", "Start"]);
+    expect(upload.rows).toEqual([
+      ["MPO", "Steady Ed", "Headrick", "1", ""],
+      ["MPO", "Tie", "Low", "50", ""],
+      ["MPO", "Late", "Payer", "200", ""],
+      ["MA3", "Wait", "One", "77", "Waitlist #1"],
+      ["MA3", "Wait", "Two", "", "Waitlist #2"],
+    ]);
+    expect(upload).toMatchObject({ registered: 3, waitlisted: 2, unpaid: 1, noDivision: 0, noPdga: 1 });
+    expect(upload.text.split("\n")[0]).toBe("DivCode\tFirst Name\tLast Name\tPDGA\tStart");
+  });
+  it("team events put Team Name first; no Start column without a waitlist", async () => {
+    const { pdgaPlayersUpload } = await import("../src/tournament.js");
+    const upload = pdgaPlayersUpload([row({ id: 1, name: "Ann Lee", team: "Birdie Bros", pdga_number: "9", paid_entry: 1, paid_at: "2026-11-01" })]);
+    expect(upload.header).toEqual(["Team Name", "DivCode", "First Name", "Last Name", "PDGA"]);
+    expect(upload.rows).toEqual([["Birdie Bros", "MPO", "Ann", "Lee", "9"]]);
+  });
+});
