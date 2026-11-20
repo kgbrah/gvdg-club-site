@@ -31,6 +31,7 @@ There is **no traditional backend or database server to boot** for the site itse
 - [Configuration & secrets](#configuration--secrets)
 - [API reference](#api-reference)
 - [Security model](#security-model)
+- [License](#license)
 - [Further documentation](#further-documentation)
 
 ---
@@ -425,6 +426,14 @@ All authorization is re-checked server-side. Base URL is the Worker (`auth.gvdgc
 - **Private stays private.** What's written on a lost disc, an AI read of a photo, a bag's photos and writing, and why a match was made are never in a public payload (tests assert it). Bag photos are served only to their owner. Marketplace "possible lost disc" alerts go only to the seller and the admins; the finder of a found disc is never told whose bag or lost post matched.
 
 ---
+
+## License
+
+The code is open source under the [MIT License](LICENSE): anyone may use, copy, change and share it, keeping the
+copyright notice. The MIT License covers the software. It doesn't grant rights to the Greenville Disc Golf Club's
+name, logo, photos or other club content in this repository (`img/`, wallpapers, and the club's own text and data),
+which stay the club's. Club data, the PDGA login, API keys and other secrets live in GitHub secrets and Cloudflare,
+never in the code.
 
 ## Further documentation
 

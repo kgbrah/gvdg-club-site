@@ -2,6 +2,7 @@
   "name": "gvdg-member-auth",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "GVDG member portal auth API (Cloudflare Worker): PDGA#/UDisc + PIN login, forced first-login PIN change, passkeys.",
   "scripts": {
