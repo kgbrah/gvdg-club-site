@@ -92,4 +92,26 @@ describe("GET /admin/wallets/balances", () => {
     // One member's own ledger still answers at /admin/wallets/:id.
     expect((await call("/admin/wallets/m_ada", "m_admin")).data.balance_cents).toBe(1250);
   });
+
+  it("pages through one member's ledger for the drill-down, newest first, with event names", async () => {
+    db.raw.exec("INSERT INTO events (id, type, name, status) VALUES (4, 'tournament', 'Fall Classic', 'final')");
+    const tx = db.raw.prepare("INSERT INTO wallet_transactions (member_id, member_name, amount_cents, transaction_type, source, event_id, created_at) VALUES ('m_bo', 'Bo', ?, ?, ?, ?, ?)");
+    for (let i = 1; i <= 30; i++) tx.run(100, "credit", "manual_adjustment", null, "2026-10-" + String(i).padStart(2, "0") + " 10:00:00");
+    tx.run(-500, "debit", "event_entry", 4, "2026-11-01 10:00:00");
+    const first = await call("/admin/wallets/m_bo?page=1", "m_admin");
+    expect(first.status).toBe(200);
+    expect(first.data.balance_cents).toBe(2500);
+    expect(first.data.transactions).toHaveLength(25);
+    expect(first.data.more).toBe(true);
+    expect(first.data.transactions[0]).toMatchObject({ amount_cents: -500, source: "event_entry", event_name: "Fall Classic" });
+    const last = first.data.transactions.at(-1).id;
+    const second = await call("/admin/wallets/m_bo?page=1&before=" + last, "m_admin");
+    expect(second.data.transactions).toHaveLength(6);
+    expect(second.data.more).toBe(false);
+    expect(second.data.transactions.every((row: { id: number }) => row.id < last)).toBe(true);
+    expect((await call("/admin/wallets/m_bo?page=1&before=x", "m_admin")).status).toBe(400);
+    expect((await call("/admin/wallets/m_bo?page=1", "m_ada")).status).toBe(403);
+    // Without ?page it answers as before.
+    expect((await call("/admin/wallets/m_bo", "m_admin")).data.transactions).toHaveLength(31);
+  });
 });

@@ -210,6 +210,22 @@ export async function createWalletTransaction(db: D1Like, t: WalletTransactionIn
     .first();
 }
 
+/**
+ * Admin drill-down: one member's ledger, newest first, a page at a time (`before` = the last id shown), with the event's
+ * name for event entries and payouts. `more` says whether older entries exist.
+ */
+export async function listWalletTransactionsPage(db: D1Like, memberId: string, { before = null, limit = 25 }: { before?: number | null; limit?: number } = {}) {
+  const size = Math.max(1, Math.min(100, Math.floor(limit)));
+  const rows = (await db.prepare(
+    `SELECT w.id, w.amount_cents, w.transaction_type, w.source, w.event_id, w.order_id, w.note, w.created_by, w.created_at,
+       e.name AS event_name
+     FROM wallet_transactions w LEFT JOIN events e ON e.id = w.event_id
+     WHERE w.member_id = ? AND (? IS NULL OR w.id < ?)
+     ORDER BY w.id DESC LIMIT ?`,
+  ).bind(memberId, before, before, size + 1).all()).results ?? [];
+  return { transactions: rows.slice(0, size), more: rows.length > size };
+}
+
 export async function listWalletTransactions(db: D1Like, memberId: string, limit = 50) {
   return (
     await db

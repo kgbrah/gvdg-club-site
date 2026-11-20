@@ -1053,3 +1053,16 @@ body.admin-page.player-theme-active {
 .admin-wallet-balance { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-primary); }
 .admin-wallet-balance.negative { color: var(--over, #c62828); }
 .admin-wallet-search-label { flex-basis: 100%; font-weight: 700; color: var(--text-primary); }
+/* Wallet drill-down: a member's transactions under their balance. */
+.admin-wallet-actions { display: flex; flex-wrap: wrap; gap: .5rem; width: 100%; }
+.admin-wallet-actions .admin-btn { flex: 1 1 8rem; }
+.admin-wallet-ledger { width: 100%; border-top: 1px solid var(--border-color); padding-top: .5rem; }
+.admin-wallet-ledger-list { list-style: none; margin: 0 0 .5rem; padding: 0; display: grid; gap: .4rem; }
+.admin-wallet-tx { padding: .5rem .25rem; border-bottom: 1px solid var(--border-color); }
+.admin-wallet-tx:last-child { border-bottom: 0; }
+.admin-wallet-tx-top { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; }
+.admin-wallet-tx-what { font-weight: 700; color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+.admin-wallet-tx-amount { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.admin-wallet-tx-amount.credit { color: var(--green-text, #1b7f3b); }
+.admin-wallet-tx-amount.debit { color: var(--over, #c62828); }
+.admin-wallet-tx-note { color: var(--text-secondary); font-size: .9rem; margin-top: .15rem; }
