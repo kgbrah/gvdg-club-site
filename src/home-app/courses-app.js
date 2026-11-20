@@ -408,7 +408,7 @@ function ConditionBadge({ condition }) {
     },
     [
       condition.label,
-      condition.when ? h("span", { className: "course-condition-when", key: "when" }, condition.when) : null,
+      condition.stamp ? h("span", { className: "course-condition-when", key: "when" }, condition.stamp) : null,
     ],
   );
 }
@@ -438,7 +438,7 @@ function InfoItem({ label, value }) {
 
 function CourseCard({ course, condition }) {
   const visibleLocation = course.distance ? `${course.location} – ${course.distance}` : course.location;
-  const conditionLabel = condition ? `, ${condition.label}${condition.when ? " " + condition.when : ""}` : "";
+  const conditionLabel = condition ? `, ${condition.label}${condition.stamp ? " " + condition.stamp : ""}` : "";
   return h(
     "div",
     {
@@ -573,7 +573,8 @@ export function HomeCoursesApp() {
     })
       .then((response) => (response.ok ? response.json() : { reports: [] }))
       .then((data) => {
-        setReports((Array.isArray(data?.reports) ? data.reports : []).map(normalizeCondition).filter(Boolean));
+        const now = Date.now();
+        setReports((Array.isArray(data?.reports) ? data.reports : []).map((report) => normalizeCondition(report, now)).filter(Boolean));
       })
       .catch((error) => {
         if (error?.name === "AbortError") return;

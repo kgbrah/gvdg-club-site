@@ -51,6 +51,36 @@ export function formatConditionWhen(createdAt, now = Date.now()) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 }
 
+const CLUB_TIME_ZONE = "America/New_York";
+let dayKeyFormat = null;
+let timeFormat = null;
+let dateFormat = null;
+let datedYearFormat = null;
+/** The Eastern calendar day of a time, as "YYYY-MM-DD". */
+function easternDay(time) {
+  dayKeyFormat ??= new Intl.DateTimeFormat("en-CA", { timeZone: CLUB_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" });
+  return dayKeyFormat.format(new Date(time));
+}
+
+/**
+ * When a report was posted, as a date and time (Eastern): "Today, 3:41 PM", "Yesterday, 9:05 AM", "Sep 18, 7:13 PM",
+ * or "Sep 18, 2025, 7:13 PM" from another year (owner: "Course conditions need a date and time stamp. This report is
+ * from weeks ago").
+ */
+export function formatConditionStamp(createdAt, now = Date.now()) {
+  const time = parseCreatedAt(createdAt);
+  if (!Number.isFinite(time)) return "";
+  timeFormat ??= new Intl.DateTimeFormat("en-US", { timeZone: CLUB_TIME_ZONE, hour: "numeric", minute: "2-digit" });
+  const clock = timeFormat.format(new Date(time));
+  const day = easternDay(time);
+  if (day === easternDay(now)) return "Today, " + clock;
+  if (day === easternDay(now - 24 * 60 * 60 * 1000)) return "Yesterday, " + clock;
+  const sameYear = day.slice(0, 4) === easternDay(now).slice(0, 4);
+  dateFormat ??= new Intl.DateTimeFormat("en-US", { timeZone: CLUB_TIME_ZONE, month: "short", day: "numeric" });
+  datedYearFormat ??= new Intl.DateTimeFormat("en-US", { timeZone: CLUB_TIME_ZONE, month: "short", day: "numeric", year: "numeric" });
+  return (sameYear ? dateFormat : datedYearFormat).format(new Date(time)) + ", " + clock;
+}
+
 export function normalizeCondition(raw, now = Date.now()) {
   if (!raw || typeof raw !== "object") return null;
   const status = String(raw.status || "").trim().toLowerCase();
@@ -67,6 +97,8 @@ export function normalizeCondition(raw, now = Date.now()) {
     note: typeof raw.note === "string" ? raw.note : "",
     status,
     when: formatConditionWhen(raw.created_at ?? raw.createdAt, now),
+    stamp: formatConditionStamp(raw.created_at ?? raw.createdAt, now),
+    stale: isStaleCondition(raw.created_at ?? raw.createdAt, now),
   };
 }
 
@@ -92,8 +124,9 @@ export function matchCourseCondition(course, reports) {
   return best;
 }
 
-export function latestConditionsByCourse(reports) {
-  const list = (Array.isArray(reports) ? reports : []).map(normalizeCondition).filter(Boolean);
+export function latestConditionsByCourse(reports, now = Date.now()) {
+  // Not .map(normalizeCondition): map passes each report's index as `now`, which made every report "just now".
+  const list = (Array.isArray(reports) ? reports : []).map((report) => normalizeCondition(report, now)).filter(Boolean);
   const byKey = new Map();
   for (const report of list) {
     const key = report.courseId != null ? "id:" + report.courseId : "name:" + normalizeCourseName(report.courseName);
@@ -106,7 +139,7 @@ export function latestConditionsByCourse(reports) {
 const HOME_CONDITION_RANK = { closed: 0, flooded: 1, wet: 2, playable: 3, dry: 4 };
 
 export function homeConditionRows(reports, now = Date.now(), limit = 4) {
-  return latestConditionsByCourse(reports)
+  return latestConditionsByCourse(reports, now)
     .filter((row) => !isStaleCondition(row.createdAt, now))
     .sort((a, b) => (HOME_CONDITION_RANK[a.status] ?? 9) - (HOME_CONDITION_RANK[b.status] ?? 9) || String(a.courseName).localeCompare(String(b.courseName)))
     .slice(0, Math.max(0, Number(limit) || 0));

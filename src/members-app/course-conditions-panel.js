@@ -41,7 +41,7 @@ function ReportRow({ report }) {
       h("div", { className: "course-conditions-meta", key: "meta" }, [
         report.memberName || "Member",
         h(KarmaChip, { key: "karma", karmaKey: report.karmaKey }),
-        [report.when ? " · " + report.when : "", note].join(""),
+        [report.stamp ? " · " + report.stamp : "", report.stale ? " · may be out of date" : "", note].join(""),
       ]),
     ]),
     h(ConditionPill, { condition: report, key: "pill" }),
