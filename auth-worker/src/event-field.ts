@@ -47,22 +47,6 @@ function isGuest(id: string | null): boolean {
   return Boolean(id && id.startsWith("g_"));
 }
 
-function integerRating(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
-}
-
-export function ratingFromPdgaCache(data: string | null | undefined): number | null {
-  if (!data) return null;
-  try {
-    const parsed: unknown = JSON.parse(data);
-    if (!parsed || typeof parsed !== "object") return null;
-    const record = parsed as Record<string, unknown>;
-    return integerRating(record.official_rating) ?? integerRating(record.live_rating);
-  } catch {
-    return null;
-  }
-}
-
 export function unionFieldSeeds(regs: readonly RegistrationSeed[], walkons: readonly WalkOnSeed[]): FieldSeed[] {
   const out: FieldSeed[] = [];
   const seenMember = new Set<string>();
@@ -153,17 +137,6 @@ export async function publicFieldsByEvent(env: Env, eventIds: readonly number[])
     if (pdga) pdgaByMember.set(memberIds[i]!, pdga);
   }
 
-  const pdgaNos = [...new Set(seeds.map((seed) => seed.pdgaNo || (seed.memberId ? pdgaByMember.get(seed.memberId) : null) || null).filter((n): n is string => Boolean(n)))];
-  const ratingByPdga = new Map<string, number>();
-  if (pdgaNos.length) {
-    const cacheRows = ((await env.DB.prepare(`SELECT pdga, data FROM pdga_cache WHERE pdga IN (${placeholders(pdgaNos.length)})`).bind(...pdgaNos).all()).results || []) as { pdga?: string; data?: string }[];
-    for (const row of cacheRows) {
-      const pdga = digits(row.pdga);
-      const rating = ratingFromPdgaCache(row.data);
-      if (pdga && rating != null) ratingByPdga.set(pdga, rating);
-    }
-  }
-
   for (const seed of seeds) {
     const pdga = seed.pdgaNo || (seed.memberId ? pdgaByMember.get(seed.memberId) : null) || null;
     const list = out.get(seed.eventId) || [];
@@ -173,7 +146,10 @@ export async function publicFieldsByEvent(env: Env, eventIds: readonly number[])
       division: seed.division,
       team: seed.team,
       pdga_no: pdga,
-      rating: pdga ? ratingByPdga.get(pdga) ?? null : null,
+      // No PDGA ratings on the public field: they came from pdga.com pages (PDGA's Developer Program reads only
+      // through the API, and every PDGA rating shown must link to the player's pdga.com page, which would make
+      // clubmates' PDGA numbers public).
+      rating: null,
     });
     out.set(seed.eventId, list);
   }

@@ -148,7 +148,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
-  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=234"><\/script>/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=235"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(profileKey.*h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
@@ -364,9 +364,8 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-filters/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /competitive/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /kind === "casual"/);
-  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats/);
-  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /context.pdgaNo/);
-  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /showRank: !pdga/);
+  // PDGA hole scores are not used (PDGA's terms): the panel is the club's own scoring.
+  assert.doesNotMatch(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats|pdgaRowsFromStats/);
   assert.match(html, /\.play-score-mix/);
   assert.match(html, /\.play-stats-split/);
   assert.match(html, /\.play-stats-filters/);
@@ -390,83 +389,14 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /DashboardThemeBuilder/);
   assert.match(pdga, /id: "membersReactRatingPanel"/);
   assert.match(pdga, /data-react-pdga-dashboard/);
-  assert.match(pdga, /data-react-live-rating/);
+  assert.doesNotMatch(pdga, /data-react-live-rating|Live rating estimate/);
   assert.match(pdga, /\/pdga-stats\?pdga=/);
   assert.match(pdga, /PDGA_REFRESH_MS = 15 \* 60 \* 1000/);
   assert.match(pdga, /setInterval\(refreshIfStale, PDGA_REFRESH_MS\)/);
   assert.match(pdga, /addEventListener\("focus", refreshIfStale\)/);
   assert.match(pdga, /addEventListener\("visibilitychange", refreshWhenVisible\)/);
-  assert.match(pdga, /Tournaments \(\$\{events\.length\}\)/);
-  assert.doesNotMatch(pdga, /events\.slice\(0, 6\)/);
-  assert.doesNotMatch(pdga, /Math\.min\(events\.length, 6\)/);
-  assert.match(pdga, /export function groupPdgaEventsByYear/);
-  assert.match(pdga, /export function pdgaEventYear/);
-  assert.match(pdga, /className: "dash-event-year"/);
-  assert.match(pdga, /className: "dash-event-year-summary"/);
-  assert.match(html, /\.dash-event-year \{/);
-  assert.match(html, /\.dash-event-year-summary \{/);
-  assert.match(html, /\.dash-event-year-list \{/);
-  assert.match(pdga, /className: "dash-event-main"/);
-  assert.match(pdga, /export function pdgaEventTitle\(value\)/);
-  assert.match(pdga, /pdgaEventTitle\(event\.tournament\) \|\| "Event"/);
-  assert.doesNotMatch(pdga, /dangerouslySetInnerHTML|innerHTML/);
-  assert.match(pdga, /className: "dash-event-main"[\s\S]*className: "dash-event-copy"[\s\S]*h\(EventRatingRow, \{ ratings/);
-  assert.match(pdga, /function EventRatingRow\(\{ ratings \}\)[\s\S]*className: "dash-event-rating-row"[\s\S]*className: "dash-event-rating-label"[\s\S]*className: "dash-event-ratings"/);
-  assert.match(html, /\.dash-event \{ display: grid; grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(html, /\.dash-event \{[^}]*grid-auto-flow: row/);
-  assert.doesNotMatch(html, /\.dash-event \{[^}]*justify-content: space-between/);
-  assert.match(html, /\.dash-event-main \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(html, /\.dash-event-copy \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(html, /\.dash-event-rating-row \{[^}]*grid-column: 1 \/ -1/);
-  assert.match(html, /\.dash-event-rating-row \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(html, /\.dash-event-rating-row \{[^}]*width: 100%/);
-  assert.match(html, /\.dash-event-rating-row \{[^}]*border-top: 1px solid var\(--border-color\)/);
-  assert.match(html, /\.dash-event-rating-label \{[^}]*text-transform: uppercase/);
-  assert.match(html, /\.dash-event-ratings \{[^}]*display: inline-flex/);
-  assert.match(html, /\.dash-event-ratings \{[^}]*justify-self: start/);
-  assert.match(html, /\.dash-event-ratings \{[^}]*background: var\(--bg-tertiary\)/);
-  assert.match(pdga, /Round ratings:/);
-  assert.match(ratings, /\/my-ratings\?/);
-  assert.match(ratings, /data-react-club-ratings/);
-  assert.match(ratings, /UDiscExportDetails/);
-  assert.match(udiscExport, /export function UDiscExportDetails\(props\)/);
-  assert.match(udiscExport, /export function udiscDeepLink\(courseId\)/);
-  assert.match(udiscExport, /export function parseUdiscScorecard\(scorecard\)/);
-  assert.match(udiscExport, /ExternalLink/);
-  assert.equal(existsSync('udisc-export.js'), false);
-  assert.doesNotMatch(html, /udisc-export\.js/);
-  assert.doesNotMatch(ratings, /window\.UDiscExport/);
-  assert.doesNotMatch(ratings, /replaceChildren/);
-  assert.doesNotMatch(ratings, /appendChild\(node\)/);
-  assert.match(activity, /\/my-live-rounds/);
-  assert.match(activity, /\/shop\/wallet/);
-  assert.match(standings, /\/leagues\/active/);
-  assert.match(standings, /fetchMergedRyderData/);
-  assert.match(standings, /applyOfficialRyderTally/);
-  assert.match(standings, /Official tally/);
-  assert.match(standings, /Loading official tally/);
-  assert.match(standings, /Official points come from the club scoreboard sheet/);
-  assert.match(standings, /href: "ryder-cup.html"/);
-  assert.doesNotMatch(`${activity}\n${standings}`, /from "\.\.\/public-app\/ryder-cup-app\.js"/);
-  // Home's live-round and wallet cards do not pull the standings screen (and its Ryder Cup sheet code) into the entry.
-  assert.doesNotMatch(activity, /fetchMergedRyderData|applyOfficialRyderTally/);
-  assert.match(activity, /data-react-live-scoring/);
-  assert.match(activity, /data-react-wallet/);
-  assert.match(registration, /data-react-registration-panel/);
-  assert.match(registration, /EventRegistrationSections/);
-  assert.match(registration, /CasualRoundsSection/);
-  assert.doesNotMatch(registration, /visibleParent|style\.display|getElementById\("clubRegister"\)/);
-  assert.doesNotMatch(registrationEvents, /window\.alert|window\.confirm/);
-  assert.match(registrationEvents, /memberAlert/);
-  assert.match(registrationEvents, /memberConfirm/);
-  assert.doesNotMatch(registrationCasual, /window\.alert|window\.confirm/);
-  assert.match(registrationCasual, /memberAlert/);
-  assert.match(registrationCasual, /memberConfirm/);
-  assert.doesNotMatch(registrationPayments, /window\.alert|window\.confirm/);
-  assert.match(registrationPayments, /memberAlert/);
-  assert.match(registrationPayments, /data-paypal-button-host/);
-  assert.match(registrationPayments, /useLatest/);
-  assert.doesNotMatch(registrationPayments, /replaceChildren/);
+  // PDGA's terms: no PDGA event history or round ratings on Stats (they came from pdga.com pages).
+  assert.doesNotMatch(pdga, /Tournaments \(|groupPdgaEventsByYear|EventRatingRow|pdgaEventTitle/);
   assert.match(board, /data-react-board-panel/);
   assert.doesNotMatch(board, /visibleParent|style\.display|getElementById\("clubBoard"\)/);
   assert.doesNotMatch(board, /window\.alert|window\.confirm/);
@@ -476,18 +406,3 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(club, /data-react-club-panel/);
 });
 
-test('PDGA event titles decode common HTML entities without innerHTML', async () => {
-  const { pdgaEventTitle, groupPdgaEventsByYear, pdgaEventYear } = await import(new URL('../src/members-app/pdga-dashboard.js', import.meta.url));
-
-  assert.equal(pdgaEventTitle('2026 Ayden Founders&#039; Day Classic'), "2026 Ayden Founders' Day Classic");
-  assert.equal(pdgaEventTitle('CEP Charity & Rated'), 'CEP Charity & Rated');
-  assert.equal(pdgaEventTitle('Hex &#x26; Flex'), 'Hex & Flex');
-
-  const grouped = groupPdgaEventsByYear([
-    { tournament: "Winter", date: "31-Dec-2024", epoch: 1735689600 },
-    { tournament: "Spring", date: "12-Apr-2026", epoch: 1775966400 },
-    { tournament: "Summer", date: "11-Jul-2026", epoch: 1783742400 },
-  ]);
-  assert.deepEqual(grouped.map((group) => [group.year, group.events.length]), [["2026", 2], ["2024", 1]]);
-  assert.equal(pdgaEventYear({ date: "11-Jul-2026" }), "2026");
-});

@@ -106,16 +106,19 @@ gh workflow run live-qa-drive.yml -R kgbrah/gvdg-club-site --ref main -f only="a
 
 ## Conventions that bite if missed
 
-- **Next migration number is `0073`** (`0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
+- **Next migration number is `0079`** (`0078` PDGA compliance: scraped/stored PDGA data removed; `0063` marketplace, `0064` Lost & Found, `0065` Lost & Found weight
   and hole, `0066` My Bag photos and the bag / marketplace cross-checks, `0067` whole-bag and accessory photos,
   `0068` bags and accessories in the marketplace + "Sell this" links, `0069` members' PDGA registrations, `0070` club donations
   from marketplace sales, `0071` the round karma watch: flags and admin karma adjustments, `0072` guest promo spots).
 - **A new place that shows a player's name gets their karma chip** (`KarmaChip` from `src/shared/karma.js`, by
   `memberId`, `pdga`, a payload's `karmaKey`, or a marketplace `traderKey`). Name-only payloads add
   `karmaKey: karmaKey(memberId)` (`auth-worker/src/karma-directory.ts`); never send the member id itself.
-- **pdga.com:** player pages are behind a Cloudflare challenge (403 to servers); the member JSON API, the event search and
-  event pages are not. Keep pdga.com reads bounded per tick (the Free plan allows 50 outside requests a run) and parse with
-  plain regular expressions, never a DOM.
+- **PDGA data comes ONLY from PDGA's documented developer APIs** (the REST API in `auth-worker/src/pdga-api.ts`, with
+  the club's developer login). Never read pdga.com pages or undocumented pdga.com endpoints (PDGA's Developer Program,
+  2026-11-20). PDGA's API license allows **temporary caching only**: every PDGA cache needs an expiry and a purge (see
+  `purgePdgaCaches`, `pdga-event-cache.ts`, the anchor purge in `ratings-recompute.ts`); never store PDGA data
+  permanently or build tables from it. Every screen showing PDGA data carries `PdgaCredit` and links PDGA player, event
+  and course names to pdga.com. Don't add new PDGA integrations until PDGA has reviewed the current one.
 - **Changing a CHECK constraint means rebuilding the table.** Do it the way `0068` does: `PRAGMA defer_foreign_keys = on`,
   create the new table, copy every row with its id, drop the old, rename, recreate the indexes, `PRAGMA defer_foreign_keys = off`,
   and replay it on a seeded database inside a transaction with foreign keys on (`auth-worker/test/market-gear-migration.test.ts`).

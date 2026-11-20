@@ -162,12 +162,9 @@ try {
   await browser.close();
 }
 
-// The hourly PDGA registration check: counts only (events watched per state, last read, members found).
-const pdgaRegistrations = me.isAdmin ? await api("/admin/pdga-registrations/status", { token }).catch((error) => ({ error: String(error.message || error) })) : null;
 const summary = { siteUrl, version: await fetch(siteUrl + "/version.json").then((r) => r.json()).catch(() => null), visited,
-  member: MEMBER_DESTINATIONS.length, admin: ADMIN_DESTINATIONS.length, variants: variants.map((v) => v.name), findings, pdgaRegistrations };
+  member: MEMBER_DESTINATIONS.length, admin: ADMIN_DESTINATIONS.length, variants: variants.map((v) => v.name), findings };
 await writeFile(join(out, "summary.json"), JSON.stringify(summary, null, 2));
 console.log(`Visited ${visited} live screens (${MEMBER_DESTINATIONS.length} member + ${ADMIN_DESTINATIONS.length} admin x ${variants.length} variants).`);
-if (pdgaRegistrations) console.log("PDGA registration check: " + JSON.stringify(pdgaRegistrations));
 for (const finding of findings) console.log(`${finding.role} ${finding.destination} @${finding.variant}\n  ` + finding.issues.join("\n  "));
 if (findings.length) process.exitCode = 1;

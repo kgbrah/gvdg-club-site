@@ -8,6 +8,7 @@ import {
   safePayUrl, traderHref, validEmail,
 } from "../shared/market-model.js";
 import { clearGuest, errorMessage, IDENTITY_EVENT, marketRequest, photoSrc, readGuest, writeGuest } from "./market-api.js";
+import { shownProfilePhoto } from "../shared/profile-photo.js";
 
 const h = React.createElement;
 const EMPTY_VIEWER = { kind: "public", key: null, name: null, isAdmin: false };
@@ -94,7 +95,7 @@ function traderPhoto(photo) {
   if (typeof photo !== "string") return "";
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) return photo;
   const safe = safeExternalUrl(photo);
-  return safe.startsWith("https://") ? safe : "";
+  return safe.startsWith("https://") ? shownProfilePhoto(safe) : "";
 }
 
 export function FeedbackText({ summary }) {

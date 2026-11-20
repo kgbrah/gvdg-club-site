@@ -13,6 +13,7 @@ import { publicMemberCasualResult } from "./casual-archive.js";
 import { playRowKind, playStatsByKind } from "./play-stats.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { publicMembership } from "./membership-year.js";
+import { sanitizeProfilePhoto } from "./profile-photo.js";
 
 // Iteration count must stay <=100000 to match crypto.ts / the workerd PBKDF2 cap, so the
 // no-such-member path computes a real PBKDF2 (constant-time-ish) instead of throwing immediately.
@@ -48,7 +49,7 @@ export function memberSessionBody(member: Member): Record<string, unknown> {
     name: member.name,
     pdgaNo: member.pdgaNo ?? null,
     udisc: member.udisc ?? null,
-    photo: member.photo ?? null,
+    photo: sanitizeProfilePhoto(member.photo),
     isAdmin: member.isAdmin === true,
     welcome: member.welcomePending === true,
     membership: publicMembership(member),
@@ -242,7 +243,7 @@ export async function handleProfile(request: Request, env: Env, origin: string |
   if (!result.ok) return json({ error: "conflict", field: result.conflict }, 409, origin);
   const m = result.member;
   return json(
-    { pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, photo: m.photo ?? null, name: m.name, mustChangePin: m.mustChangePin, membership: publicMembership(m) },
+    { pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, photo: sanitizeProfilePhoto(m.photo), name: m.name, mustChangePin: m.mustChangePin, membership: publicMembership(m) },
     200,
     origin,
   );

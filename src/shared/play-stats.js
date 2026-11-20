@@ -322,7 +322,7 @@ export function playStatsView(players, memberId) {
   });
 }
 
-export const PLAY_KINDS = ["competitive", "casual", "pdga"];
+export const PLAY_KINDS = ["competitive", "casual"];
 export const PLAY_GROUPS = ["all", "singles", "doubles"];
 export const PLAY_STYLES = ["all", "stroke", "matchplay"];
 
@@ -433,30 +433,6 @@ export function playStatsByKind(rows, memberId) {
     competitive: playStatsKindPayload(competitive, memberId),
     pdga: playStatsKindPayload(pdga, memberId),
   };
-}
-
-export function pdgaRowsFromStats(stats, memberId, memberName) {
-  const rounds = Array.isArray(stats && stats.play_rounds) ? stats.play_rounds : [];
-  if (rounds.length) {
-    return rounds.map((round) => ({
-      breakdown: round.breakdown != null ? round.breakdown : round,
-      group_format: playRowGroup(round),
-      kind: "pdga",
-      member_id: memberId,
-      name: memberName || String(stats && stats.name || "Player"),
-      scoring_style: playRowStyle(round),
-    }));
-  }
-  const play = stats && stats.play;
-  if (!play || !num(play.holes)) return [];
-  return [{
-    breakdown: play,
-    group_format: "singles",
-    kind: "pdga",
-    member_id: memberId,
-    name: memberName || String(stats.name || "Player"),
-    scoring_style: "stroke",
-  }];
 }
 
 export function scoreMixRows(categories) {

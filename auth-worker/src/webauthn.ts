@@ -18,6 +18,7 @@ import { getMember } from "./roster.js";
 import { publicMembership } from "./membership-year.js";
 import type { SessionClaims } from "./jwt.js";
 import { emailRequired } from "./member-routes.js";
+import { sanitizeProfilePhoto } from "./profile-photo.js";
 
 export interface StoredCredential {
   id: string; // base64url credential ID
@@ -213,7 +214,7 @@ export async function authenticationVerify(
       name: member.name,
       pdgaNo: member.pdgaNo ?? null,
       udisc: member.udisc ?? null,
-      photo: member.photo ?? null,
+      photo: sanitizeProfilePhoto(member.photo),
       isAdmin: member.isAdmin === true, // so the admin portal link shows immediately after a passkey login
       membership: publicMembership(member),
     },

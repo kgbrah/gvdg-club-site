@@ -33,13 +33,12 @@ export { LiveEventDO } from "./live.js";
 
 import { runRatingsRecompute } from "./ratings-recompute.js";
 import { isPdgaEventCron, refreshClubPdgaEvents } from "./pdga-events.js";
-import { handlePdgaRegistrationStatus, handlePdgaRegistrations, runPdgaRegistrationTick } from "./pdga-registrations.js";
 import { handleKarma } from "./karma-directory.js";
 import { handleActiveRounds } from "./active-rounds.js";
 import { handleGuestSpots } from "./guest-accounts.js";
 import { runKarmaWatch } from "./karma-watch.js";
-import { handlePdgaBaselines, isPdgaBaselineRoute } from "./pdga-baseline-routes.js";
-import { runPdgaBaselineTick } from "./pdga-baseline-ingest.js";
+import { purgePdgaCaches } from "./pdga-api.js";
+import { refreshClubPdgaEventCopies } from "./pdga-event-cache.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
 import { handleMemberPush } from "./member-push.js";
 import { handleMemberMessages } from "./member-messages.js";
@@ -125,7 +124,6 @@ export default {
       if (pathname === "/admin/course-health" || pathname.startsWith("/admin/course-health/")) {
         return await handleCourseHealth(request, env, origin);
       }
-      if (isPdgaBaselineRoute(pathname)) return await handlePdgaBaselines(request, env, origin);
       if (pathname === "/me/course-favorites" || /^\/me\/course-favorites\/\d+$/.test(pathname)) {
         return await handleCourseFavorites(request, env, origin);
       }
@@ -166,8 +164,6 @@ export default {
       if (pathname === "/my-live-rounds" && method === "GET") return await handleMyLiveRounds(request, env, origin);
       if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin);
       if (pathname === "/my-registrations" && method === "GET") return await handleMyRegistrations(request, env, origin);
-      if (pathname === "/pdga-registrations" && method === "GET") return await handlePdgaRegistrations(request, env, origin);
-      if (pathname === "/admin/pdga-registrations/status" && method === "GET") return await handlePdgaRegistrationStatus(request, env, origin);
       if (pathname === "/set-pin" && method === "POST") return await handleSetPin(request, env, origin);
       if (pathname === "/profile" && method === "POST") return await handleProfile(request, env, origin);
       if (pathname === "/me/dashboard-theme") return await handleDashboardTheme(request, env, origin, method);
@@ -260,22 +256,17 @@ export default {
             return;
           }
           if (isPdgaEventCron(controller.cron)) {
+            // PDGA's API license allows temporary caching only: drop PDGA data past its cache time, hourly.
+            try {
+              const purged = await purgePdgaCaches(env, Date.now());
+              if (purged.players || purged.events) console.log(JSON.stringify({ message: "pdga_cache_purged", ...purged }));
+              const copies = await refreshClubPdgaEventCopies(env, Date.now());
+              console.log(JSON.stringify({ message: "pdga_event_copies", ...copies }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "pdga_cache_purge_failed", error: error instanceof Error ? error.stack : String(error) }));
+            }
             const result = await refreshClubPdgaEvents(env);
             console.log(JSON.stringify({ message: "pdga_events_refresh", cron: controller.cron, ...result }));
-            // PDGA layout baselines: a few bounded pdga.com JSON reads per hour, isolated from the rest.
-            try {
-              const baselines = await runPdgaBaselineTick(env);
-              console.log(JSON.stringify({ message: "pdga_baseline_tick", cron: controller.cron, ...baselines }));
-            } catch (error) {
-              console.error(JSON.stringify({ message: "pdga_baseline_tick_failed", error: error instanceof Error ? error.stack : String(error) }));
-            }
-            // Club members registered for PDGA events in NC / VA / SC: a bounded number of pdga.com pages an hour.
-            try {
-              const registrations = await runPdgaRegistrationTick(env, controller.scheduledTime);
-              console.log(JSON.stringify({ message: "pdga_registration_tick", cron: controller.cron, ...registrations }));
-            } catch (error) {
-              console.error(JSON.stringify({ message: "pdga_registration_tick_failed", error: error instanceof Error ? error.stack : String(error) }));
-            }
             const leagues = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
             if (!leagues.skipped) console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...leagues }));
             return;

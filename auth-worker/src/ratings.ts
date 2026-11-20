@@ -3,9 +3,6 @@ import type { D1Like } from "./db-types.js";
 import { aggregatePlayerRating, roundRatingForScoreWithWeather, MIN_OVERALL_ROUNDS, type RatingMethod, type RatingRound as EngineRound, type RatingStream } from "./rating-engine.js";
 import { CURRENT_RESULT_FIELDS, STORED_EVIDENCE_FIELDS, matchesStoredRatingEvidence, singlesStrokeEvidence } from "./rating-source.js";
 import { getSourceRatingBaselines, type LayoutRatingBaseline, type SourceBaselineKey } from "./rating-store.js";
-import { pdgaBaselinesForPlayed, pdgaEvidenceUnchanged, playedHolesFromShape, type PlayedBaselineRequest } from "./pdga-baseline-store.js";
-import { clubCalendarDay, type PdgaBaseline } from "./pdga-baselines.js";
-import { readArchivedRatingHoles, ratingGeometrySnapshot } from "./rating-layout.js";
 
 export type RatingKind = "competitive" | "casual";
 export type RatingSource = "stored" | "unrated";
@@ -166,25 +163,6 @@ const JOINS = {
 type RatingRow = Record<string, unknown>;
 /** Checks a batch of stored ratings against their current sources (one verdict per row, in order). */
 type ValidRatings = (rows: readonly RatingRow[], stream: RatingStream) => Promise<boolean[]>;
-type PdgaCheck = { layoutId: number; roundDate: string; total: number; holes: NonNullable<ReturnType<typeof readArchivedRatingHoles>> };
-type PdgaRederive = PlayedBaselineRequest & { key: string };
-
-/** What a PDGA-based rating's baseline is read from: its as-played layout and club day (and, to re-derive it, hole shape). */
-function pdgaCheckFor(row: RatingRow): PdgaCheck | null {
-  const holes = readArchivedRatingHoles(row.scorecard, true);
-  const layoutId = holes?.[0]?.layoutId ?? null;
-  const roundDate = stringOrNull(row.round_date);
-  const total = intOrNull(row.total);
-  if (!holes || layoutId == null || !roundDate || total == null) return null;
-  return { layoutId, roundDate, total, holes };
-}
-
-function pdgaRederive(check: PdgaCheck): PdgaRederive {
-  const shape = ratingGeometrySnapshot(check.holes);
-  return { key: check.layoutId + ":" + (clubCalendarDay(check.roundDate) ?? check.roundDate) + ":" + shape,
-    layoutId: check.layoutId, played: playedHolesFromShape(shape), roundDate: check.roundDate };
-}
-
 // Columns only the ratings list shows; the check never reads them.
 const DISPLAY_ONLY_FIELDS = new Set(["rating", "event_name", "course_name", "layout_name", "udisc_course_id"]);
 
@@ -201,19 +179,8 @@ function layoutBaselineKey(row: RatingRow): (SourceBaselineKey & { key: string }
   return revision && eventId != null && intOrNull(row.total) != null ? { key: revision + ":" + eventId, revision, eventId } : null;
 }
 
-/** A PDGA-based rating must still match the baseline the current PDGA evidence gives that round. */
-function pdgaRatingMatches(row: RatingRow, check: PdgaCheck, baseline: PdgaBaseline | null): boolean {
-  if (!baseline || baseline.ssa !== numberOrNull(row.pdga_baseline_ssa) || baseline.rounds !== intOrNull(row.pdga_baseline_rounds)) return false;
-  const predicted = roundRatingForScoreWithWeather({
-    score: check.total, ssa: baseline.ssa, ppt: baseline.ppt, weather: { windGustMph: numberOrNull(row.wind_gust_mph) },
-  });
-  return predicted.roundRating === row.round_rating;
-}
-
 export function makeRatingValidator(db: D1Like): ValidRatings {
   const baselines = new Map<string, Promise<LayoutRatingBaseline | null>>();
-  const pdgaBaselines = new Map<string, Promise<PdgaBaseline | null>>();
-  const evidenceChanges: NonNullable<Parameters<typeof pdgaEvidenceUnchanged>[2]> = new Map();
   const verdicts = new Map<string, Promise<boolean>>();
   return (rows, stream) => {
     const keys = rows.map((row) => verdictKey(row, stream));
@@ -227,18 +194,6 @@ export function makeRatingValidator(db: D1Like): ValidRatings {
   };
   async function checkRows(rows: readonly RatingRow[], stream: RatingStream): Promise<boolean[]> {
     const evidence = await Promise.all(rows.map((row) => matchesStoredRatingEvidence(row, stream)));
-    const pdga = rows.map((row, index) => evidence[index] && row.rating_method === "pdga" && row.round_rating != null ? pdgaCheckFor(row) : null);
-    // A PDGA rating written after the last change to the evidence its baseline reads is still right (checked when written).
-    const unchanged = await pdgaEvidenceUnchanged(db, pdga.map((check, index) => check
-      ? { layoutId: check.layoutId, roundDate: check.roundDate, ratedAt: stringOrNull(rows[index]!.rated_at) } : null), evidenceChanges);
-    // The rest are re-derived from the current evidence, every baseline still needed read together.
-    const rederive = pdga.map((check, index) => check && !unchanged[index] ? pdgaRederive(check) : null);
-    const needed = [...new Map(rederive.flatMap((request) => request && !pdgaBaselines.has(request.key)
-      ? [[request.key, request] as const] : [])).values()];
-    if (needed.length) {
-      const batch = pdgaBaselinesForPlayed(db, needed);
-      needed.forEach((request, index) => pdgaBaselines.set(request.key, batch.then((found) => found[index] ?? null)));
-    }
     // Every club calibration still to verify, verified together.
     const calibrations = [...new Map(rows.flatMap((row, index) => {
       const source = evidence[index] ? layoutBaselineKey(row) : null;
@@ -249,13 +204,11 @@ export function makeRatingValidator(db: D1Like): ValidRatings {
       calibrations.forEach((source, index) => baselines.set(source.key, batch.then((found) => found[index] ?? null)));
     }
     return Promise.all(rows.map((row, index) => evidence[index]
-      ? validStoredRating(row, pdga[index] ?? null, unchanged[index] === true, rederive[index] ?? null) : false));
+      ? validStoredRating(row) : false));
   }
-  async function validStoredRating(row: RatingRow, check: PdgaCheck | null, unchanged: boolean, rederive: PdgaRederive | null): Promise<boolean> {
-    if (row.rating_method === "pdga" && row.round_rating != null) {
-      if (!check) return false;
-      return unchanged || (rederive != null && pdgaRatingMatches(row, check, await pdgaBaselines.get(rederive.key)!));
-    }
+  async function validStoredRating(row: RatingRow): Promise<boolean> {
+    // PDGA-based ratings came from PDGA rounds the club no longer keeps (PDGA's API license: temporary caching only).
+    if (row.rating_method === "pdga" && row.round_rating != null) return false;
     // A casual estimate must still agree with its source event's current valid calibration.
     if (row.rating_method !== "layout" || row.round_rating == null) return true;
     const source = layoutBaselineKey(row);

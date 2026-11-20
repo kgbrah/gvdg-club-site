@@ -14,6 +14,7 @@ import { deadlinePassed } from "./event-deadlines.js";
 import {
   lookupPdgaEvent, lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, pdgaEventUrl, PdgaApiError, PDGA_ATTRIBUTION, type PdgaApiEnv, type PdgaPlayer,
 } from "./pdga-api.js";
+import { freshPdgaEventCopy, stampPdgaEvent } from "./pdga-event-cache.js";
 import {
   eligibilityProblem, nonMemberFeeFor, parseTournamentRules, paypalFeeRates, pdgaCheckMatters, pdgaPlayersUpload, pdgaResultsUpload, tournamentQuote, tournamentRulesInput, zelleCode,
   type PaymentMethod, type PdgaNames, type TournamentRules, type UploadPlayer, type UploadRegistration, type UploadResult, type UploadRound,
@@ -81,8 +82,7 @@ function quoteFor(env: Env, cfg: TournamentConfig, reg: Row, method: PaymentMeth
 
 /** The public part of a tournament's registration page: its PDGA event, rules, cap, the paid field and the waitlist. */
 export async function tournamentView(env: Env, eventId: number, cfg: TournamentConfig, registrationId: number | null = null) {
-  let pdgaEvent: Row | null = null;
-  try { pdgaEvent = cfg.pdga_event ? JSON.parse(cfg.pdga_event) as Row : null; } catch { pdgaEvent = null; }
+  const pdgaEvent = freshPdgaEventCopy(cfg.pdga_event) as Row | null;
   const field = await tdb.publicField(env.DB, eventId, new Date(), registrationId);
   const rules = rulesOf(cfg);
   return {
@@ -321,16 +321,14 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
       try {
         const info = await lookupPdgaEvent(apiEnv(env), pdgaEventId);
         if (!info) return json({ error: "pdga_event_not_found" }, 404, origin);
-        pdgaEvent = JSON.stringify(info);
+        pdgaEvent = stampPdgaEvent(info);
       } catch { /* keep the number; the details are read when the settings are next saved */ }
     }
     const row = await env.DB.prepare(`INSERT INTO event_config (event_id, pdga_event_id, pdga_event) VALUES (?, ?, ?)
         ON CONFLICT(event_id) DO UPDATE SET pdga_event_id = excluded.pdga_event_id,
           pdga_event = CASE WHEN excluded.pdga_event_id IS NULL THEN NULL ELSE COALESCE(excluded.pdga_event, event_config.pdga_event) END
         RETURNING pdga_event_id, pdga_event`).bind(eventId, pdgaEventId, pdgaEvent).first<{ pdga_event_id: number | null; pdga_event: string | null }>();
-    let info: unknown = null;
-    try { info = row?.pdga_event ? JSON.parse(row.pdga_event) : null; } catch { info = null; }
-    return json({ pdgaEventId: row?.pdga_event_id ?? null, pdgaEvent: info }, 200, origin);
+    return json({ pdgaEventId: row?.pdga_event_id ?? null, pdgaEvent: freshPdgaEventCopy(row?.pdga_event) }, 200, origin);
   }
   if (seg[3] === "tournament" && method === "GET") {
     const cfg = (await db.getEventConfig(env.DB, eventId)) as TournamentConfig | null;
@@ -352,7 +350,7 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
       try {
         const info = await lookupPdgaEvent(apiEnv(env), pdgaEventId);
         if (!info) return json({ error: "pdga_event_not_found" }, 404, origin);
-        pdgaEvent = JSON.stringify(info);
+        pdgaEvent = stampPdgaEvent(info);
       } catch { /* keep the number; the event's details are read next time */ }
     }
     const row = await tdb.saveTournamentSettings(env.DB, eventId, {
@@ -389,10 +387,8 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
 }
 
 function tournamentSettingsView(cfg: TournamentConfig) {
-  let pdgaEvent: unknown = null;
-  try { pdgaEvent = cfg.pdga_event ? JSON.parse(cfg.pdga_event) : null; } catch { pdgaEvent = null; }
   return {
-    pdgaEventId: cfg.pdga_event_id ?? null, pdgaEvent, rules: parseTournamentRules(cfg.pdga_rules ?? null), playerCap: cfg.player_cap ?? null,
+    pdgaEventId: cfg.pdga_event_id ?? null, pdgaEvent: freshPdgaEventCopy(cfg.pdga_event), rules: parseTournamentRules(cfg.pdga_rules ?? null), playerCap: cfg.player_cap ?? null,
     paypalFeePassthrough: Number(cfg.paypal_fee_passthrough) === 1, zelleTo: cfg.zelle_to ?? null, zelleName: cfg.zelle_name ?? null,
     tdEmail: cfg.td_email ?? null,
     divisions: (() => { try { const list = JSON.parse(cfg.divisions || "[]"); return Array.isArray(list) ? list.filter((item) => typeof item === "string") : []; } catch { return []; } })(),

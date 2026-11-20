@@ -58,7 +58,7 @@ describe("dashboard D1 fallback reads", () => {
     await expect((await get("/leagues/active")).json()).resolves.toEqual({ leagues: [], liveEvents: [] });
   });
 
-  it("returns the seeded staging QA PDGA stats when D1 and pdga.com are unavailable", async () => {
+  it("returns the seeded staging QA PDGA stats when D1 and PDGA are unavailable", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("pdga unavailable"));
 
     const res = await get("/pdga-stats?pdga=90000001");
@@ -67,9 +67,8 @@ describe("dashboard D1 fallback reads", () => {
       pdga: "90000001",
       name: "GVDG QA Dashboard",
       official_rating: 935,
-      live_rating: 941,
-      peak_rating: 958,
-      events_count: 3,
+      live_rating: null,
+      events: [],
     });
   });
 });
@@ -108,18 +107,11 @@ describe("pdga-stats per-IP limit", () => {
     for (let i = 0; i < 40; i++) expect((await ask(e, "90000001")).status).toBe(200);
   });
 
-  it("still limits lookups that would reach pdga.com, and serves an older copy instead of an error", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("pdga unavailable"));
-    const miss = statsEnv(null);
-    const statuses: number[] = [];
-    for (let i = 0; i < 31; i++) statuses.push((await ask(miss, "273070")).status);
-    expect(statuses.slice(0, 30).every((status) => status === 200)).toBe(true);
-    expect(statuses[30]).toBe(429);
-
-    const stale = statsEnv({ data: stats("273070"), fetched_at: Date.now() - 2 * 60 * 60 * 1000 });
-    let last: Response | null = null;
-    for (let i = 0; i < 31; i++) last = await ask(stale, "273070");
-    expect(last?.status).toBe(200);
-    await expect(last?.json()).resolves.toMatchObject({ name: "Cached Player" });
+  it("without the club's PDGA login, answers with no rating and never reaches PDGA", async () => {
+    const outbound = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no outbound expected"));
+    const response = await ask(statsEnv(null), "273070");
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ pdga: "273070", official_rating: null, events: [] });
+    expect(outbound).not.toHaveBeenCalled();
   });
 });

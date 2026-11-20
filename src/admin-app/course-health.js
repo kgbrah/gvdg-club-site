@@ -3,7 +3,6 @@ import React from "react";
 import { COVERAGE_LABELS } from "../shared/course-quality.js";
 import { adminRequest, adminToken } from "./admin-api.js";
 import { useAdminResource as useResource } from "./admin-resource.js";
-import { CoursePdgaBaselines, PdgaBaselineTools } from "./pdga-baselines-panel.js";
 import { currentAdminAuthGateState, currentAdminRoute } from "./admin-shell-state.js";
 import { requestAdminTab } from "./navigation.js";
 
@@ -300,7 +299,6 @@ export function AdminCourseHealth() {
   const token = active ? adminToken() : "";
   const directory = useResource(active ? BASE : "", token);
   const [search, setSearch] = React.useState("");
-  const [pdgaRevision, setPdgaRevision] = React.useState(0);
   if (!active) return null;
   const selection = String(route.courseId || "");
   const courses = directory.data?.courses ?? [];
@@ -319,8 +317,6 @@ export function AdminCourseHealth() {
     directory.status === "error" ? h("p", { role: "alert", key: "error" }, "Could not load the course list.") : null,
     !filtered.length && directory.status === "ready" ? h("p", { className: "al-note", key: "empty" }, "No courses match.") : null,
     selection ? h(ReportWindow, { base: BASE + "/" + encodeURIComponent(selection), token, key: "report-" + selection }) : null,
-    selection ? h(CoursePdgaBaselines, { courseId: selection, token, revision: pdgaRevision, key: "pdga-" + selection }) : null,
     selection ? h(Maintenance, { base: BASE + "/" + encodeURIComponent(selection), token, key: "maintenance-" + selection }) : null,
-    h(PdgaBaselineTools, { token, revision: pdgaRevision, onChanged: () => setPdgaRevision((value) => value + 1), key: "pdga-tools" }),
   ]);
 }

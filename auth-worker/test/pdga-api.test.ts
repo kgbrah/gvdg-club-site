@@ -4,14 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
 import {
-  lookupPdgaPlayer, lookupPdgaPlayers, normalPdgaNumber, PdgaApiError, resetPdgaApiSession, searchPdgaEvents, type PdgaApiEnv,
+  lookupPdgaPlayer, lookupPdgaPlayers, normalPdgaNumber, PdgaApiError, purgePdgaCaches, resetPdgaApiSession, searchPdgaEvents, type PdgaApiEnv,
 } from "../src/pdga-api.js";
+import { freshPdgaEventCopy, refreshClubPdgaEventCopies, stampPdgaEvent } from "../src/pdga-event-cache.js";
 import { listNearbyPdgaEvents, pdgaApiEventDate, pdgaApiTierLabel } from "../src/pdga-events.js";
-import { runPdgaRegistrationTick } from "../src/pdga-registrations.js";
-import { runRatingsRecompute } from "../src/ratings-recompute.js";
+import { ANCHOR_KEEP_DAYS, runRatingsRecompute } from "../src/ratings-recompute.js";
 
-// The official PDGA REST API (the club's developer account): login once and reuse the session, cache players, and
-// let ratings, membership and event search use it when the login is configured (the earlier sources otherwise).
+// The official PDGA REST API (the club's developer account) is the ONLY way the Worker reads PDGA data (PDGA's
+// Developer Program, 2026-11-20): login once and reuse the session, cache players a few hours, and purge every PDGA
+// cache past its time (the API license allows temporary caching only).
 
 const API = "https://api.test.pdga";
 const NOW = Date.UTC(2026, 10, 18, 15, 0, 0); // an NC hour for the registrations tick
@@ -176,25 +177,6 @@ describe("the PDGA API client", () => {
 });
 
 describe("features using the official API when the club's login is set", () => {
-  it("lists a state's PDGA events for the clubmates check from the API (each event's own page still lists who registered)", async () => {
-    const pdga = fakePdga({ events: [
-      { tournament_id: "501", tournament_name: "Greenville Open", city: "Greenville", state_prov: "NC", start_date: "2026-11-21", end_date: "2026-11-22", tier: "B" },
-    ] });
-    vi.stubGlobal("fetch", pdga.handler);
-    const roster = kv({ "member:m_80024": JSON.stringify({ memberId: "m_80024", name: "Ada Lovelace", pdgaNo: "80024", pinHash: "x", mustChangePin: false }) });
-    const env = { ...apiEnv(), ROSTER: roster } as unknown as Env;
-    const read: string[] = [];
-    const tick = await runPdgaRegistrationTick(env, NOW, async (url) => {
-      read.push(url);
-      return `<table><tr><td class="player"><a href="/player/80024">Ada</a></td><td class="pdga-number">80024</td></tr></table>`;
-    });
-    expect(tick).toMatchObject({ state: "NC", listed: 1, removed: 0 });
-    expect(read.some((url) => url.includes("/tour/search"))).toBe(false);
-    expect(db.raw.prepare("SELECT event_id, name, tier, location, start_date, end_date FROM pdga_watch_events").all()).toEqual([
-      { event_id: 501, name: "Greenville Open", tier: "B", location: "Greenville, NC", start_date: "2026-11-21", end_date: "2026-11-22" },
-    ]);
-  });
-
   it("lists nearby PDGA events from the API with their PDGA pages, nearest within 100 miles, soonest first", async () => {
     const pdga = fakePdga({ events: [
       { tournament_id: "702", tournament_name: "Later B", city: "Raleigh", state_prov: "NC", latitude: "35.78", longitude: "-78.64",
@@ -233,15 +215,68 @@ describe("features using the official API when the club's login is set", () => {
       "member:m_bo": JSON.stringify({ memberId: "m_bo", name: "Bo", pdgaNo: "123456", pinHash: "x", mustChangePin: false }),
     });
     const env = { ...apiEnv(), ROSTER: roster } as unknown as Env;
-    const site = vi.fn(async () => new Response("unused", { status: 500 }));
-    const result = await runRatingsRecompute(env, site as unknown as typeof fetch);
+    const result = await runRatingsRecompute(env, new Date(NOW));
     expect(result).toMatchObject({ pdgaRefreshed: 2, pdgaRefreshErrors: 0 });
-    expect(site).not.toHaveBeenCalled();
     expect(pdga.calls.filter((call) => call.url.includes("/players"))).toHaveLength(1);
+    expect(pdga.calls.every((call) => call.url.startsWith(API))).toBe(true);
     expect(db.raw.prepare("SELECT member_id, effective_at, rating FROM rating_anchor_snapshots ORDER BY member_id").all()).toEqual([
       { member_id: "m_80024", effective_at: "2026-11-11T00:00:00.000Z", rating: 935 },
       { member_id: "m_bo", effective_at: "2026-11-11T00:00:00.000Z", rating: 1012 },
     ]);
+  });
+
+  it("keeps a member's PDGA rating only while the API confirms it, and deletes it 7 days after it stops", async () => {
+    let rating = 935;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => fakePdga({ players: { "80024": player("80024", rating) } }).handler(input, init));
+    const roster = kv({ "member:m_80024": JSON.stringify({ memberId: "m_80024", name: "Ada", pdgaNo: "80024", pinHash: "x", mustChangePin: false }) });
+    const env = { ...apiEnv(), ROSTER: roster } as unknown as Env;
+    const day = (n: number) => new Date(NOW + n * 86_400_000);
+    // An old rating history (as the club used to keep) goes on the first run, except what PDGA still confirms.
+    db.raw.exec("INSERT INTO rating_anchor_snapshots (member_id, observed_at, effective_at, rating, confirmed_at) VALUES ('m_old', '2025-01-01T00:00:00.000Z', '2024-12-11T00:00:00.000Z', 900, '2025-01-01T00:00:00.000Z')");
+    await runRatingsRecompute(env, day(0));
+    await runRatingsRecompute(env, day(1)); // the same rating: confirmed, not added again
+    const rows = () => db.raw.prepare("SELECT member_id, rating, observed_at, confirmed_at FROM rating_anchor_snapshots ORDER BY observed_at").all();
+    expect(rows()).toEqual([{ member_id: "m_80024", rating: 935, observed_at: day(0).toISOString(), confirmed_at: day(1).toISOString() }]);
+    // PDGA publishes a new rating: the old one stays a week for rounds played before it, then goes.
+    rating = 948;
+    resetPdgaApiSession();
+    db.raw.exec("DELETE FROM pdga_api_players");
+    await runRatingsRecompute(env, day(2));
+    expect(rows().map((row) => (row as { rating: number }).rating)).toEqual([935, 948]);
+    db.raw.exec("DELETE FROM pdga_api_players");
+    await runRatingsRecompute(env, day(2 + ANCHOR_KEEP_DAYS + 1));
+    expect(rows().map((row) => (row as { rating: number }).rating)).toEqual([948]);
+  });
+
+  it("purges PDGA player records and nearby-event lists past their cache time", async () => {
+    vi.stubGlobal("fetch", fakePdga({ players: { "80024": player("80024", 941) } }).handler);
+    await lookupPdgaPlayer(apiEnv(), "80024");
+    db.raw.exec("INSERT INTO kv_store (ns, key, value, expires_at) VALUES ('pdgaevents', 'old', '[]', 1), ('pdgaevents', 'fresh', '[]', 9999999999999), ('ratelimit', 'x', '1', 1)");
+    expect(await purgePdgaCaches({ DB: db as never }, Date.now())).toEqual({ players: 0, events: 1 });
+    expect(await purgePdgaCaches({ DB: db as never }, Date.now() + 6 * 3_600_000 + 1)).toEqual({ players: 1, events: 0 });
+    expect(db.raw.prepare("SELECT ns, key FROM kv_store ORDER BY ns, key").all()).toEqual([{ ns: "pdgaevents", key: "fresh" }, { ns: "ratelimit", key: "x" }]);
+  });
+
+  it("re-reads the club's PDGA events from the API, and clears PDGA data from events two weeks past", async () => {
+    const pdga = fakePdga({ events: [{ tournament_id: "702", tournament_name: "Greenville Open", tier: "B", start_date: "2026-12-05", end_date: "2026-12-06" }] });
+    vi.stubGlobal("fetch", pdga.handler);
+    db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (9, 'Greenville Open', 'tournament', 'scheduled', '2026-12-05'),
+      (8, 'Spring Open', 'tournament', 'final', '2026-03-01')`);
+    db.raw.exec(`INSERT INTO event_config (event_id, pdga_event_id, pdga_event) VALUES (9, 702, '{"name":"stale copy"}'), (8, 650, '{"name":"old"}')`);
+    db.raw.exec(`INSERT INTO registrations (event_id, member_id, name, pdga_number, pdga_status, pdga_rating) VALUES
+      (9, 'm_a', 'Ada', '80024', 'current', 935), (8, 'm_a', 'Ada', '80024', 'current', 930)`);
+    expect(await refreshClubPdgaEventCopies({ ...apiEnv() }, NOW)).toEqual({ refreshed: 1, cleared: 0, pastCleared: 1 });
+    const copy = (id: number) => (db.raw.prepare("SELECT pdga_event FROM event_config WHERE event_id = ?").get(id) as { pdga_event: string | null }).pdga_event;
+    expect(freshPdgaEventCopy(copy(9), NOW)).toMatchObject({ id: 702, name: "Greenville Open", tier: "B" });
+    expect(copy(8)).toBeNull();
+    expect(db.raw.prepare("SELECT event_id, pdga_number, pdga_status, pdga_rating FROM registrations ORDER BY event_id").all()).toEqual([
+      { event_id: 8, pdga_number: "80024", pdga_status: null, pdga_rating: null },
+      { event_id: 9, pdga_number: "80024", pdga_status: "current", pdga_rating: 935 },
+    ]);
+    // A copy counts only while fresh; one without a read time (from before) counts as none.
+    expect(freshPdgaEventCopy(copy(9), NOW + 24 * 3_600_000 + 1)).toBeNull();
+    expect(freshPdgaEventCopy('{"name":"stale copy"}', NOW)).toBeNull();
+    expect(freshPdgaEventCopy(stampPdgaEvent({ id: 1, name: "X", tier: "C", status: "", startDate: "", endDate: "", city: null, state: null, director: null, registrationUrl: null, url: "" }, NOW), NOW)).toMatchObject({ name: "X" });
   });
 
   it("takes the Stats panel's official rating from the API", async () => {
@@ -250,15 +285,26 @@ describe("features using the official API when the club's login is set", () => {
     const env = { ...apiEnv(), ROSTER: kv(), JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN } as unknown as Env;
     const response = await worker.fetch(new Request("https://worker/pdga-stats?pdga=80024", { headers: { Origin: ORIGIN } }), env);
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ official_rating: 941, rating_date: "2026-11-11" });
+    expect(await response.json()).toMatchObject({ official_rating: 941, rating_date: "2026-11-11", events: [], live_rating: null, source: "pdga-api" });
+    expect(pdga.calls.every((call) => call.url.startsWith(API))).toBe(true);
   });
 
-  it("keeps the earlier sources when the login isn't set", async () => {
+  it("reads nothing from PDGA at all when the login isn't set (no pdga.com pages, no internal endpoints)", async () => {
     const pdga = fakePdga();
     vi.stubGlobal("fetch", pdga.handler);
-    const env = { ...apiEnv(), PDGA_API_USERNAME: "", ROSTER: kv(), JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN } as unknown as Env;
-    await worker.fetch(new Request("https://worker/pdga-stats?pdga=80024", { headers: { Origin: ORIGIN } }), env);
-    expect(pdga.calls.some((call) => call.url.startsWith(API))).toBe(false);
-    expect(pdga.calls.some((call) => call.url.includes("pdga.com"))).toBe(true);
+    const roster = kv({ "member:m_80024": JSON.stringify({ memberId: "m_80024", name: "Ada", pdgaNo: "80024", pinHash: "x", mustChangePin: false }) });
+    const env = { ...apiEnv(), PDGA_API_USERNAME: "", ROSTER: roster, JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN } as unknown as Env;
+    const response = await worker.fetch(new Request("https://worker/pdga-stats?pdga=80024", { headers: { Origin: ORIGIN } }), env);
+    expect(await response.json()).toMatchObject({ official_rating: null, events: [] });
+    await runRatingsRecompute(env, new Date(NOW));
+    expect(pdga.calls).toEqual([]);
+  });
+
+  it("no longer serves the scraped registration lists or the PDGA baseline admin", async () => {
+    const env = { ...apiEnv(), ROSTER: kv(), JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN } as unknown as Env;
+    for (const path of ["/pdga-registrations", "/admin/pdga-registrations/status", "/admin/pdga-baselines"]) {
+      const response = await worker.fetch(new Request("https://worker" + path, { headers: { Origin: ORIGIN } }), env);
+      expect([401, 403, 404]).toContain(response.status);
+    }
   });
 });

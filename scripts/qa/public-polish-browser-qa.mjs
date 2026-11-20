@@ -50,7 +50,13 @@ const fixtures = new Map([
   ["/events/2/ace-pot", { ace_pot: null }],
   ["/registration/open", { events: [event] }],
   ["/club-feed", { events: [], clubEvents: [] }],
-  ["/pdga-events", { events: [] }],
+  // Area Tournaments on the home page: PDGA's API through the Worker (names link to pdga.com).
+  ["/pdga-events", { miles: 100, events: [
+    { name: "Pitt County Winter Open Presented by the Greenville Disc Golf Association", date: "Dec 13, 2026", tier: "C-tier",
+      place: "Greenville, NC", miles: 3.2, url: "https://www.discgolfscene.com/tournaments/x", pdgaUrl: "https://www.pdga.com/tour/event/90001" },
+    { name: "Pitt County Fall Open", date: "Jan 9-10, 2027", tier: "C-tier", place: "Greenville, NC", miles: 0.4,
+      url: "/events#event/2", pdgaUrl: "https://www.pdga.com/tour/event/90002", clubEventId: 2 },
+  ] }],
   ["/leagues", { leagues: [league] }],
   ["/leagues/4", league],
   ["/shop/wallet", { balance_cents: 2600, orders: [] }],

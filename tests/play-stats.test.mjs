@@ -29,7 +29,6 @@ import {
   sumPlayTotals,
   totalsFromPdgaScoreLine,
   mergePartnerPlayInputs,
-  pdgaRowsFromStats,
 } from "../src/shared/play-stats.js";
 
 const TEE = { lat: 35.6, lng: -77.37 };
@@ -196,12 +195,6 @@ test("PDGA hole lines become a scoring mix without touching club ranks", () => {
   assert.equal(payload.competitive.mine.totals.birdies, 8);
   assert.equal(payload.pdga.mine.totals.birdies, 1);
   assert.equal(payload.pdga.mine.totals.holes, 18);
-  const fromStats = pdgaRowsFromStats({
-    name: "Ben",
-    play_rounds: [{ breakdown: mix, group_format: "singles", scoring_style: "stroke" }],
-  }, "b", "Ben");
-  assert.equal(fromStats[0].kind, "pdga");
-  assert.equal(fromStats[0].member_id, "b");
 });
 
 test("doubles partners both receive the team hole mix", () => {

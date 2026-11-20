@@ -31,9 +31,11 @@ test('home React feed components own events and tournaments without DOM fallback
   assert.match(panels, /export function HomeEventsFeed/);
   assert.match(panels, /export function AreaTournamentsFeed/);
   assert.match(panels, /data-react-home-events/);
-  assert.match(panels, /parseTournamentDate\(tournament\.date, now\)/);
-  assert.match(panels, /row\.when\.isPast === false/);
-  assert.match(panels, /TOURNAMENT_FEED_URL\}&_cb=/);
+  // Area Tournaments: PDGA's API (the Worker's /pdga-events), names linked to pdga.com, PDGA credited.
+  assert.match(panels, /fetch\(`\$\{resolveApiBase\(\)\}\/pdga-events\?\$\{query\}`/);
+  assert.match(panels, /h\(PdgaLink, \{ as: "h4", className: "tournament-name", href: tournament\.pdgaUrl/);
+  assert.match(panels, /h\(PdgaCredit, \{ key: "pdga-credit" \}\)/);
+  assert.doesNotMatch(panels, /docs\.google\.com\/spreadsheets\/d\/e\/2PACX-1vRz6V6|discgolfscene/);
   assert.match(panels, /safeExternalUrl/);
   assert.match(panels, /ChevronDown/);
   assert.match(panels, /MapPin/);

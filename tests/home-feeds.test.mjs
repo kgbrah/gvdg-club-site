@@ -6,9 +6,7 @@ import {
   parseCsvLine,
   parseHomepageEventCsv,
   parseHomepageEventDate,
-  parseTournamentCsv,
   parseTournamentDate,
-  upcomingTournaments,
 } from '../src/shared/home-feed-parse.js';
 
 test('isClubEvent flags club business but keeps tournaments/league rounds', () => {
@@ -20,13 +18,6 @@ test('isClubEvent flags club business but keeps tournaments/league rounds', () =
 
 test('parseCsvLine handles quoted commas and escaped quotes', () => {
   assert.deepEqual(parseCsvLine('"One, Two","He said ""go""",Plain'), ['One, Two', 'He said "go"', 'Plain']);
-});
-
-test('parseTournamentCsv maps sheet columns into tournament cards', () => {
-  const csv = 'date,name,location,tier,url\n"Aug 3, 2026","Throwdown, East",Greenville,C,https://example.com';
-  assert.deepEqual(parseTournamentCsv(csv), [
-    { date: 'Aug 3, 2026', name: 'Throwdown, East', location: 'Greenville', tier: 'C', url: 'https://example.com' },
-  ]);
 });
 
 test('parseTournamentDate handles short month dates', () => {
@@ -43,32 +34,6 @@ test('parseTournamentDate handles short month dates', () => {
   assert.equal(undated.day, 3);
   assert.equal(undated.year, 2026);
   assert.equal(parseTournamentDate('TBD'), null);
-});
-
-test('upcomingTournaments hides past dates and sorts soonest first', () => {
-  const now = new Date(2026, 8, 18);
-  const list = upcomingTournaments([
-    { date: 'May 24, 2026', name: 'Ladies Craven Chains' },
-    { date: 'Oct 23, 2026', name: 'Down East Players Cup' },
-    { date: 'Sep 12, 2026', name: 'Joel Smith Memorial' },
-    { date: 'Sep 19, 2026', name: 'The Global at Creekside' },
-    { date: 'Dec 12, 2026', name: 'Scorpion Match Play' },
-    { date: 'Sep 18, 2026', name: 'Today still counts' },
-  ], now);
-  assert.deepEqual(list.map((row) => row.name), [
-    'Today still counts',
-    'The Global at Creekside',
-    'Down East Players Cup',
-    'Scorpion Match Play',
-  ]);
-});
-
-test('upcomingTournaments drops a fully elapsed sheet', () => {
-  const now = new Date(2026, 8, 18);
-  assert.deepEqual(upcomingTournaments([
-    { date: 'May 24, 2026', name: 'Ladies Craven Chains' },
-    { date: 'Sep 12, 2026', name: 'Joel Smith Memorial' },
-  ], now), []);
 });
 
 test('parseHomepageEventCsv filters inactive and blank events', () => {
@@ -124,4 +89,25 @@ test('feedDateInfo uses the sheet calendar date, not a rolled-forward epoch', ()
   const epochOnly = feedDateInfo({ date: '', epoch: Date.UTC(2026, 11, 12) }, now);
   assert.equal(epochOnly.isPast, false);
   assert.equal(epochOnly.dateObj.getUTCMonth(), 11);
+});
+
+// PDGA's tech team: the public Area Tournaments list PDGA-sanctioned events, so it reads PDGA's API and links each
+// name to its pdga.com event page (not Disc Golf Scene).
+test('areaTournamentsFromPdga keeps events within 60 miles with their pdga.com pages', async () => {
+  const { areaTournamentsFromPdga } = await import('../src/home-app/feed-panels.js');
+  const rows = areaTournamentsFromPdga({ events: [
+    { name: 'Pitt County Winter Open', date: 'Dec 13, 2026', tier: 'C-tier', place: 'Greenville, NC', miles: 3.2,
+      url: 'https://www.discgolfscene.com/tournaments/x', pdgaUrl: 'https://www.pdga.com/tour/event/90001' },
+    { name: 'Club Classic', date: 'Jan 9, 2027', tier: 'C-tier', place: 'Greenville, NC', miles: 0.4,
+      url: '/events#event/12', pdgaUrl: 'https://www.pdga.com/tour/event/90002', clubEventId: 12 },
+    { name: 'Raleigh Far Away', date: 'Dec 20, 2026', tier: 'B-tier', place: 'Raleigh, NC', miles: 78.5, pdgaUrl: 'https://www.pdga.com/tour/event/90003' },
+    { name: 'Odd Link', date: 'Dec 27, 2026', miles: null, pdgaUrl: 'javascript:alert(1)' },
+  ] });
+  assert.deepEqual(rows.map((row) => [row.name, row.pdgaUrl, row.clubEventId]), [
+    ['Pitt County Winter Open', 'https://www.pdga.com/tour/event/90001', null],
+    ['Club Classic', 'https://www.pdga.com/tour/event/90002', 12],
+    ['Odd Link', '', null],
+  ]);
+  assert.equal(rows[0].location, 'Greenville, NC');
+  assert.deepEqual(areaTournamentsFromPdga(null), []);
 });

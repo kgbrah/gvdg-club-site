@@ -1,42 +1,19 @@
+// /pdga-stats now comes only from PDGA's official API: the official rating and its date (PDGA's terms; no rounds or
+// event history).
 const stats = {
   pdga: "90000001",
   name: "GVDG QA Dashboard",
   official_rating: 935,
   rating_date: "2026-07-01",
-  live_rating: 941,
-  peak_rating: 958,
-  events_count: 3,
-  events: [
-    {
-      tournament: "Memorial Day Showdown 2026 (CEP Charity - Rated)",
-      date: "Jul 4 2026",
-      epoch: 1783123200,
-      division: "MA2",
-      rounds: [
-        { rating: 943, score: 54, round: "1" },
-        { rating: 951, score: 52, round: "2" },
-      ],
-    },
-    {
-      tournament: "Irate Armada Challenge IV (CEP Charity - Rated)",
-      date: "Jun 14 2026",
-      epoch: 1781481600,
-      division: "MA40",
-      rounds: [
-        { rating: 906, score: 56, round: "1" },
-      ],
-    },
-    {
-      tournament: "GVDG Monthly",
-      date: "May 31 2026",
-      epoch: 1780185600,
-      division: "MA2",
-      rounds: [
-        { rating: 888, score: 59, round: "1" },
-        { rating: 836, score: 64, round: "2" },
-      ],
-    },
-  ],
+  previous_rating: null,
+  previous_rating_date: null,
+  live_rating: null,
+  peak_rating: null,
+  events_count: 0,
+  events: [],
+  play_rounds: [],
+  source: "pdga-api",
+  stats_version: 4,
 };
 
 const myRatings = {
@@ -76,9 +53,8 @@ const myRatings = {
         to_par: -4,
         rating: 948,
         rating_source: "stored",
-        rating_method: "pdga",
-        pdga_baseline_rounds: 6,
-        pdga_baseline_ssa: 49.6,
+        rating_method: "layout",
+        propagator_count: 4,
         udisc_course_id: null,
         scorecard: JSON.stringify([
           { hole: 1, par: 3, strokes: 3 },

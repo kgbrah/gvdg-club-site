@@ -2,6 +2,7 @@ import { NAME_KEY, TOKEN_KEY, storageGet } from "./api.js";
 import { clearAuthError, setAuthBusy, setAuthFormValues, setAuthMode, showAuthError } from "./member-auth-dom.js";
 import { applyProfile, memberAuthProfile } from "./member-auth-state.js";
 import { passkeysSupported } from "./member-passkeys.js";
+import { shownProfilePhoto } from "../shared/profile-photo.js";
 
 let pendingPhoto = null;
 const PROFILE_PREVIEW_EVENT = "gvdg:member-profile-preview";
@@ -55,7 +56,7 @@ export function createProfileController({ api, showLogin, showMembersContent }) 
       udisc: profile.udisc || "",
     });
     pendingPhoto = null;
-    setProfilePreview(profile.photo || "");
+    setProfilePreview(shownProfilePhoto(profile.photo));
   }
 
   async function onPhotoChosen(event) {

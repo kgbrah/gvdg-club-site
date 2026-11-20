@@ -27,14 +27,15 @@ describe("buildMessages (Crotts assistant prompt assembly)", () => {
     expect(sys.indexOf("background")).toBeLessThan(sys.indexOf("Current club context"));
   });
 
-  it("injects the founding-members PDGA profiles and general disc-golf history", () => {
+  it("injects the founding members (PDGA numbers only) and general disc-golf history", () => {
     const sys = buildMessages({ userMessage: "who are the club's founders?" })[0]!.content;
     // 2004 founding members + their PDGA info
     expect(sys).toMatch(/founded in 2004/);
     expect(sys).toMatch(/Max Crotts/);
     expect(sys).toMatch(/Scott Faison/);
     expect(sys).toMatch(/25901|14844/); // PDGA numbers present
-    expect(sys).toMatch(/MP40|MA2/); // divisions present
+    // No PDGA ratings, divisions or event counts copied from pdga.com (PDGA's API license: no stored copies).
+    expect(sys).not.toMatch(/MP40|MA2|rated,|career PDGA events/);
     expect(sys).toMatch(/in memoriam/); // Robert Wynn handled respectfully
     // general disc golf history
     expect(sys).toMatch(/Headrick/);

@@ -28,19 +28,6 @@ export function parseCsvLine(line) {
   return values;
 }
 
-export function parseTournamentCsv(csv) {
-  const lines = String(csv || '').trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-  const tournaments = [];
-  for (let i = 1; i < lines.length; i++) {
-    const v = parseCsvLine(lines[i]);
-    if (v.length >= 2 && v[1]) {
-      tournaments.push({ date: v[0] || '', name: v[1] || '', location: v[2] || '', tier: v[3] || '', url: v[4] || '' });
-    }
-  }
-  return tournaments;
-}
-
 const TOURNAMENT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const TOURNAMENT_MONTH_INDEX = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
@@ -64,14 +51,6 @@ export function parseTournamentDate(raw, now = new Date()) {
     dateObj,
     isPast: dateObj < today,
   };
-}
-
-export function upcomingTournaments(tournaments, now = new Date()) {
-  return (Array.isArray(tournaments) ? tournaments : [])
-    .map((tournament) => ({ tournament, date: parseTournamentDate(tournament && tournament.date, now) }))
-    .filter((row) => row.date && !row.date.isPast)
-    .sort((a, b) => a.date.dateObj - b.date.dateObj)
-    .map((row) => row.tournament);
 }
 
 export function parseHomepageEventCsv(csv) {

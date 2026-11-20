@@ -1,18 +1,14 @@
-// Best-effort reader for public PDGA player ratings — the live source behind the member
-// dashboard's rating/stats panel. pdga.com's HTML player pages are behind a Cloudflare
-// challenge, so the primary source is the public member API:
-//   /api/v1/feat/members/<n>/overview       -> name + current official rating
-//   /api/v1/feat/members/<n>/rating-detail  -> per-round ratings (live/peak/recent form)
-// The old HTML scrape remains a fallback. Hole scoring still comes from the live-results
-// API, which is not challenged. Any field that doesn't match becomes null/empty rather
-// than throwing. Results are cached in D1 (handlePdgaStats) to bound requests to pdga.com.
+// GET /pdga-stats: a member's official PDGA rating for the member dashboard and the scorer, read ONLY through the
+// PDGA REST API with the club's developer account (pdga-api.ts). PDGA's Developer Program asked the club to stop
+// reading pdga.com pages and PDGA's internal (undocumented) member endpoints; the per-round ratings, recent events, live
+// rating estimate and PDGA hole mix those gave are gone. The response keeps its old shape (those fields empty) so older
+// clients still render. Player records are cached a few hours by pdga-api.ts and purged after (temporary caching only).
 
 import type { Env } from "./env.js";
 import { clientIp, json } from "./http.js";
-import { readD1OrFallback } from "./d1-retry.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
-import { emptyPlayTotals, sumPlayTotals, totalsFromPdgaScoreLine, type PlayTotals } from "./play-stats.js";
-import { lookupPdgaPlayer, pdgaApiConfigured, type PdgaApiEnv } from "./pdga-api.js";
+import { emptyPlayTotals, type PlayTotals } from "./play-stats.js";
+import { cachedPdgaPlayers, lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, type PdgaApiEnv, type PdgaPlayer } from "./pdga-api.js";
 
 export interface PdgaRound { rating: number; score: number | null; round: string }
 export interface PdgaPlayRound {
@@ -39,463 +35,59 @@ export interface PdgaStats {
   play?: PlayTotals;
   play_rounds?: PdgaPlayRound[];
   stats_version?: number;
+  /** Where the numbers came from: always the PDGA REST API now. */
+  source?: "pdga-api";
 }
 
-const UA = "Mozilla/5.0 (compatible; GVDGClubBot/1.0; +https://gvdgclub.com)";
-const PDGA_API = "https://www.pdga.com/api/v1";
-const PDGA_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
-const CACHE_TTL_MS = 15 * 60 * 1000;
-const PDGA_STATS_VERSION = 3;
-const RECENT_ROUNDS = 8; // "live" rating = mean of the most recent N round ratings (recent-form estimate)
-const MAX_HOLE_ROUNDS = 80; // newest-first hole mix; keeps worker subrequests bounded
+export const PDGA_STATS_VERSION = 4;
 const STAGING_QA_PDGA = "90000001";
-const STAGING_QA_PLAY = {
-  ...emptyPlayTotals(),
-  holes: 54,
-  aces: 0,
-  eagles: 1,
-  birdies: 12,
-  pars: 28,
-  bogeys: 11,
-  doubles_plus: 2,
-  birdie_hit: 12,
-  par_hit: 28,
-} satisfies PlayTotals;
-const STAGING_QA_STATS: PdgaStats = {
-  pdga: STAGING_QA_PDGA,
-  name: "GVDG QA Dashboard",
-  official_rating: 935,
-  rating_date: "2026-07-01",
-  previous_rating: 928,
-  previous_rating_date: "2026-06-01",
-  live_rating: 941,
-  peak_rating: 958,
-  events_count: 3,
-  events: [
-    { tournament: "GVDG QA Monthly", date: "2026-06-20", epoch: 1781913600, division: "MA1", rounds: [{ rating: 958, score: 54, round: "1" }] },
-    { tournament: "GVDG QA League", date: "2026-05-12", epoch: 1778544000, division: "MA1", rounds: [{ rating: 941, score: 56, round: "1" }] },
-    { tournament: "GVDG QA Flex", date: "2026-04-18", epoch: 1776470400, division: "MA1", rounds: [{ rating: 924, score: 58, round: "1" }] },
-  ],
-  play: STAGING_QA_PLAY,
-  play_rounds: [
-    { tournament: "GVDG QA Monthly", date: "2026-06-20", division: "MA1", round: "1", breakdown: STAGING_QA_PLAY, group_format: "singles", scoring_style: "stroke" },
-  ],
-  stats_version: PDGA_STATS_VERSION,
-};
 
-function cap(re: RegExp, s: string): string | null {
-  return re.exec(s)?.[1] ?? null;
-}
-
-/** Parse name + current official rating from a /player/<n> page. */
-export function parsePlayerPage(html: string): { name: string | null; official_rating: number | null; rating_date: string | null } {
-  const ratingStr = cap(/class="current-rating">\s*<strong>Current Rating:<\/strong>\s*(\d+)/i, html);
-  const rawName = cap(/id="page-title"[^>]*>([^<]+)</i, html) ?? cap(/<title>([^|<]+?)\s*#\d+/i, html) ?? "";
-  const name = rawName.replace(/\s*#\d+.*$/, "").trim() || null;
+/** The stats for a PDGA number: the official rating (and its date) from the API; nothing else PDGA lets the club read. */
+export function statsFromPlayer(pdga: string, player: PdgaPlayer | null): PdgaStats {
   return {
-    name,
-    official_rating: ratingStr ? parseInt(ratingStr, 10) : null,
-    rating_date: cap(/class="rating-date">\s*\(as of ([^)]+)\)/i, html),
-  };
-}
-
-/** Parse per-round ratings from a /player/<n>/details page, grouped into events (most recent first). */
-export function parseDetailRounds(html: string): PdgaEvent[] {
-  const events = new Map<string, PdgaEvent>();
-  for (const row of html.split(/<tr[ >]/).slice(1)) {
-    const ratingStr = cap(/<td class="round-rating">\s*(\d+)\s*</i, row);
-    if (!ratingStr) continue; // header rows / non-round rows have no round-rating cell
-    const tournament = (cap(/<td class="tournament">(?:<a[^>]*>)?\s*([^<]+)/i, row) ?? "Event").trim();
-    const eventId = cap(/href="\/tour\/event\/(\d+)/i, row);
-    const date = (cap(/<td class="date"[^>]*>\s*([^<]+?)\s*</i, row) ?? "").trim();
-    const epoch = parseInt(cap(/<td class="date"[^>]*data-text="(\d+)"/i, row) ?? "0", 10) || 0;
-    const division = (cap(/<td class="division">\s*([^<]*?)\s*</i, row) ?? "").trim();
-    const round = (cap(/<td class="round[^"]*"[^>]*>\s*([^<]+?)\s*</i, row) ?? "").trim();
-    const scoreStr = cap(/<td class="score">\s*(-?\d+)/i, row);
-    const key = `${tournament}|${date}|${division}`;
-    const existing = events.get(key);
-    const parsedRound = { rating: parseInt(ratingStr, 10), score: scoreStr ? parseInt(scoreStr, 10) : null, round };
-    if (existing) {
-      existing.rounds.push(parsedRound);
-      if (eventId && !existing.eventId) existing.eventId = eventId;
-    } else events.set(key, { tournament, date, epoch, division, eventId, rounds: [parsedRound] });
-  }
-  return [...events.values()]
-    .map((event) => ({ ...event, rounds: newestRoundsFirst(event.rounds) }))
-    .sort((a, b) => b.epoch - a.epoch);
-}
-
-type PlayerEventRef = {
-  readonly id: string;
-  readonly tournament: string;
-  readonly date: string;
-  readonly epoch: number;
-  readonly division: string;
-};
-
-function recentEventRefs(playerHtml: string, detailHtml: string): PlayerEventRef[] {
-  const known = new Set([...detailHtml.matchAll(/href="\/tour\/event\/(\d+)"/gi)].flatMap((match) => match[1] ? [match[1]] : []));
-  const events: PlayerEventRef[] = [];
-  for (const row of playerHtml.split(/<tr[ >]/).slice(1)) {
-    const event = /<td class="tournament"><a href="\/tour\/event\/(\d+)#([^"]+)">([^<]+)/i.exec(row);
-    const date = /<td class="dates"[^>]*data-text="(\d+)"[^>]*>\s*([^<]+?)\s*</i.exec(row);
-    const id = event?.[1];
-    const tournament = event?.[3]?.trim();
-    const epoch = Number(date?.[1]);
-    const dateText = date?.[2]?.trim();
-    const division = event?.[2];
-    if (id && tournament && dateText && division && Number.isFinite(epoch)) events.push({ id, tournament, date: dateText, epoch, division });
-  }
-  return events
-    .sort((a, b) => b.epoch - a.epoch)
-    .filter((event, index) => index === 0 || !known.has(event.id))
-    .slice(0, RECENT_ROUNDS);
-}
-
-function parseRecentEvent(html: string, pdga: string, event: PlayerEventRef): PdgaEvent | null {
-  const row = html.split(/<tr[ >]/).slice(1).find((candidate) => new RegExp(`href="/player/${pdga}"`, "i").test(candidate));
-  if (!row) return null;
-  const rounds: PdgaRound[] = [];
-  for (const match of row.matchAll(/<td class="round"[^>]*>\s*<a[^>]*href="\/live\/event\/\d+\/[^/"]+\/scores\?round=(\d+)"[^>]*>\s*(-?\d+)\s*<\/a>\s*<\/td>\s*<td class="round-rating"[^>]*>\s*(\d+)\s*<\/td>/gi)) {
-    if (match[1] && match[2] && match[3]) rounds.push({ round: match[1], score: Number(match[2]), rating: Number(match[3]) });
-  }
-  return rounds.length
-    ? { tournament: event.tournament, date: event.date, epoch: event.epoch, division: event.division, eventId: event.id, rounds: newestRoundsFirst(rounds) }
-    : null;
-}
-
-function newestRoundsFirst(rounds: readonly PdgaRound[]): PdgaRound[] {
-  return [...rounds].sort((a, b) => {
-    const difference = Number(b.round) - Number(a.round);
-    return Number.isFinite(difference) ? difference : 0;
-  });
-}
-
-function mergeEvents(refreshed: readonly PdgaEvent[], detailed: readonly PdgaEvent[]): PdgaEvent[] {
-  const events = new Map(detailed.map((event) => [eventKey(event), event]));
-  for (const event of refreshed) {
-    const key = eventKey(event);
-    const existing = events.get(key);
-    if (!existing) {
-      events.set(key, event);
-      continue;
-    }
-    const rounds = new Map(existing.rounds.map((round) => [roundKey(round), round]));
-    for (const round of event.rounds) rounds.set(roundKey(round), round);
-    events.set(key, { ...existing, ...event, eventId: event.eventId || existing.eventId, rounds: newestRoundsFirst([...rounds.values()]) });
-  }
-  return [...events.values()].sort((a, b) => b.epoch - a.epoch);
-}
-
-function eventKey(event: PdgaEvent): string {
-  return `${event.epoch}|${event.division}`;
-}
-
-function roundKey(round: PdgaRound): string {
-  return round.round || `${round.score ?? ""}|${round.rating}`;
-}
-
-function emptyPdgaStats(pdga: string): PdgaStats {
-  return { pdga, name: null, official_rating: null, rating_date: null, previous_rating: null, previous_rating_date: null, live_rating: null, peak_rating: null, events_count: 0, events: [], play: emptyPlayTotals(), play_rounds: [], stats_version: PDGA_STATS_VERSION };
-}
-
-function fallbackPdgaStats(pdga: string): PdgaStats | null {
-  return pdga === STAGING_QA_PDGA ? STAGING_QA_STATS : null;
-}
-
-type LiveRoundTarget = { eventId: string; division: string; round: number; tournament: string; date: string };
-
-function holeScoreTargets(events: readonly PdgaEvent[]): LiveRoundTarget[] {
-  const out: LiveRoundTarget[] = [];
-  const seen = new Set<string>();
-  for (const event of events) {
-    const eventId = String(event.eventId || "").replace(/\D/g, "");
-    const division = String(event.division || "").trim();
-    if (!eventId || !division) continue;
-    for (const round of event.rounds) {
-      const n = Number(round.round);
-      if (!Number.isInteger(n) || n < 1) continue;
-      const key = `${eventId}|${division}|${n}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ eventId, division, round: n, tournament: event.tournament, date: event.date });
-      if (out.length >= MAX_HOLE_ROUNDS) return out;
-    }
-  }
-  return out;
-}
-
-function parseLiveRoundPlayer(json: unknown, pdga: string): { breakdown: PlayTotals; groupFormat: "singles" | "doubles" } | null {
-  const data = json && typeof json === "object" && "data" in json ? (json as { data?: unknown }).data : json;
-  const scores = data && typeof data === "object" && Array.isArray((data as { scores?: unknown }).scores)
-    ? (data as { scores: Record<string, unknown>[] }).scores
-    : [];
-  const player = scores.find((row) => String(row?.PDGANum ?? "").replace(/\D/g, "") === pdga);
-  if (!player) return null;
-  const holes = Number(player.Holes) || 18;
-  const breakdown = totalsFromPdgaScoreLine(player.Scores, player.Pars, holes);
-  if (!breakdown.holes) return null;
-  const teammates = Array.isArray(player.Teammates) ? player.Teammates : [];
-  const doubles = teammates.length > 0 || (player.Team != null && String(player.Team) !== "");
-  return { breakdown, groupFormat: doubles ? "doubles" : "singles" };
-}
-
-async function fetchPdgaHoleRounds(
-  pdga: string,
-  events: readonly PdgaEvent[],
-  doFetch: typeof fetch,
-  headers: Record<string, string>,
-): Promise<PdgaPlayRound[]> {
-  const targets = holeScoreTargets(events);
-  const results = await Promise.allSettled(targets.map(async (target) => {
-    const url = `https://www.pdga.com/apps/tournament/live-api/live_results_fetch_round?TournID=${encodeURIComponent(target.eventId)}&Division=${encodeURIComponent(target.division)}&Round=${target.round}`;
-    const response = await doFetch(url, { headers: { ...headers, accept: "application/json" } });
-    if (!response.ok) return null;
-    let json: unknown = null;
-    try { json = await response.json(); } catch { return null; }
-    const parsed = parseLiveRoundPlayer(json, pdga);
-    if (!parsed) return null;
-    return {
-      tournament: target.tournament,
-      date: target.date,
-      division: target.division,
-      round: String(target.round),
-      breakdown: parsed.breakdown,
-      group_format: parsed.groupFormat,
-      scoring_style: "stroke" as const,
-    };
-  }));
-  return results.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
-}
-
-function withStatsVersion(stats: PdgaStats): PdgaStats {
-  return { ...stats, stats_version: PDGA_STATS_VERSION };
-}
-
-export function isFreshPdgaCache(cached: unknown, fetchedAt: number, now = Date.now()): cached is PdgaStats {
-  if (now - fetchedAt >= CACHE_TTL_MS) return false;
-  if (!cached || typeof cached !== "object") return false;
-  const stats = cached as PdgaStats;
-  if (stats.stats_version !== PDGA_STATS_VERSION) return false;
-  if (!Array.isArray(stats.play_rounds)) return false;
-  if (Array.isArray(stats.events) && stats.events.length < Number(stats.events_count || 0)) return false;
-  return true;
-}
-
-function finiteNumber(value: unknown): number | null {
-  const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
-  return Number.isFinite(n) ? n : null;
-}
-
-/** Turn a PDGA ISO date (`2026-07-14T00:00:00+00:00`) into the dashboard's `14-Jul-2026` form. */
-export function pdgaDisplayDate(iso: string): { date: string; epoch: number } {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  const year = Number(match?.[1]);
-  const month = Number(match?.[2]);
-  const day = Number(match?.[3]);
-  if (!match || month < 1 || month > 12 || day < 1 || day > 31) return { date: "", epoch: 0 };
-  const monthName = PDGA_MONTHS[month - 1];
-  if (!monthName) return { date: "", epoch: 0 };
-  return {
-    date: `${String(day).padStart(2, "0")}-${monthName}-${year}`,
-    epoch: Math.floor(Date.UTC(year, month - 1, day) / 1000),
-  };
-}
-
-type PdgaPlayer = {
-  name: string | null;
-  official_rating: number | null;
-  rating_date: string | null;
-  previous_rating: number | null;
-  previous_rating_date: string | null;
-};
-
-function emptyPlayer(): PdgaPlayer {
-  return { name: null, official_rating: null, rating_date: null, previous_rating: null, previous_rating_date: null };
-}
-
-/** Name + current and previous official ratings from `/feat/members/<n>/overview`. */
-export function parseMemberOverview(json: unknown): PdgaPlayer {
-  const root = json && typeof json === "object" ? json as Record<string, unknown> : {};
-  const member = root.member && typeof root.member === "object" ? root.member as Record<string, unknown> : {};
-  const current = root.currentRating && typeof root.currentRating === "object" ? root.currentRating as Record<string, unknown> : {};
-  const previous = root.previousRating && typeof root.previousRating === "object" ? root.previousRating as Record<string, unknown> : {};
-  const first = typeof member.firstName === "string" ? member.firstName.trim() : "";
-  const last = typeof member.lastName === "string" ? member.lastName.trim() : "";
-  const rating = finiteNumber(current.rating);
-  const dated = pdgaDisplayDate(typeof current.effectiveDate === "string" ? current.effectiveDate : "");
-  const previousRating = finiteNumber(previous.rating);
-  const previousDated = pdgaDisplayDate(typeof previous.effectiveDate === "string" ? previous.effectiveDate : "");
-  return {
-    name: [first, last].filter(Boolean).join(" ") || null,
-    official_rating: rating == null ? null : Math.round(rating),
-    rating_date: dated.date || null,
-    previous_rating: previousRating == null ? null : Math.round(previousRating),
-    previous_rating_date: previousDated.date || null,
-  };
-}
-
-/** Per-round ratings from `/feat/members/<n>/rating-detail`, grouped into events (most recent first). */
-export function parseRatingDetail(json: unknown): PdgaEvent[] {
-  if (!Array.isArray(json)) return [];
-  const events = new Map<string, PdgaEvent>();
-  for (const row of json) {
-    if (!row || typeof row !== "object") continue;
-    const record = row as Record<string, unknown>;
-    const rating = finiteNumber(record.rating);
-    if (rating == null) continue;
-    const tournament = record.tournament && typeof record.tournament === "object" ? record.tournament as Record<string, unknown> : {};
-    const name = (typeof tournament.officialName === "string" ? tournament.officialName.trim() : "") || "Event";
-    const dated = pdgaDisplayDate(typeof tournament.startDate === "string" ? tournament.startDate : "");
-    const division = typeof record.division === "string" ? record.division.trim() : "";
-    const eventId = String(record.tournId ?? tournament.tournId ?? "").replace(/\D/g, "") || null;
-    const score = finiteNumber(record.score);
-    const key = `${name}|${dated.date}|${division}`;
-    const parsedRound = { rating: Math.round(rating), score: score == null ? null : Math.round(score), round: record.round == null ? "" : String(record.round).trim() };
-    const existing = events.get(key);
-    if (existing) {
-      existing.rounds.push(parsedRound);
-      if (eventId && !existing.eventId) existing.eventId = eventId;
-    } else events.set(key, { tournament: name, date: dated.date, epoch: dated.epoch, division, eventId, rounds: [parsedRound] });
-  }
-  return [...events.values()]
-    .map((event) => ({ ...event, rounds: newestRoundsFirst(event.rounds) }))
-    .sort((a, b) => b.epoch - a.epoch);
-}
-
-async function readJson(doFetch: typeof fetch, url: string, headers: Record<string, string>): Promise<unknown | null> {
-  try {
-    const response = await doFetch(url, { headers });
-    if (!response.ok) return null;
-    const text = await response.text();
-    const trimmed = text.trim();
-    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
-    return JSON.parse(trimmed) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-async function assemblePdgaStats(
-  pdga: string,
-  player: PdgaPlayer,
-  events: readonly PdgaEvent[],
-  doFetch: typeof fetch,
-  headers: Record<string, string>,
-): Promise<PdgaStats> {
-  const play_rounds = await fetchPdgaHoleRounds(pdga, events, doFetch, headers);
-  const play = play_rounds.length ? sumPlayTotals(play_rounds.map((round) => ({ breakdown: round.breakdown }))) : emptyPlayTotals();
-  const ratings = events.flatMap((event) => event.rounds.map((round) => round.rating));
-  const recent = ratings.slice(0, RECENT_ROUNDS);
-  return withStatsVersion({
     pdga,
-    name: player.name,
-    official_rating: player.official_rating,
-    rating_date: player.rating_date,
-    previous_rating: player.previous_rating,
-    previous_rating_date: player.previous_rating_date,
-    live_rating: recent.length ? Math.round(recent.reduce((sum, rating) => sum + rating, 0) / recent.length) : null,
-    peak_rating: ratings.length ? ratings.reduce((max, rating) => Math.max(max, rating), 0) : null,
-    events_count: events.length,
-    events: [...events],
-    play,
-    play_rounds,
-  });
+    name: player?.name ?? null,
+    official_rating: player?.rating ?? null,
+    rating_date: player?.ratingDate ?? null,
+    previous_rating: null,
+    previous_rating_date: null,
+    live_rating: null,
+    peak_rating: null,
+    events_count: 0,
+    events: [],
+    play: emptyPlayTotals(),
+    play_rounds: [],
+    stats_version: PDGA_STATS_VERSION,
+    source: "pdga-api",
+  };
 }
 
-/** Build the full stats object for a digits-only PDGA number. Prefers the public member API. */
-export async function fetchPdgaStats(pdga: string, doFetch: typeof fetch = fetch): Promise<PdgaStats> {
-  const jsonHeaders = { "user-agent": UA, accept: "application/json" };
-  const base = `${PDGA_API}/feat/members/${encodeURIComponent(pdga)}`;
-  const [overview, detail] = await Promise.all([
-    readJson(doFetch, `${base}/overview`, jsonHeaders),
-    readJson(doFetch, `${base}/rating-detail`, jsonHeaders),
-  ]);
-  if (overview || detail) {
-    const player = overview ? parseMemberOverview(overview) : emptyPlayer();
-    const events = detail ? parseRatingDetail(detail) : [];
-    if (player.official_rating != null || events.length) return assemblePdgaStats(pdga, player, events, doFetch, jsonHeaders);
-  }
-
-  const headers = { "user-agent": UA, accept: "text/html" };
-  const page = `https://www.pdga.com/player/${pdga}`;
-  const [pRes, dRes] = await Promise.all([doFetch(page, { headers }), doFetch(`${page}/details`, { headers })]);
-  const [playerHtml, detailHtml] = await Promise.all([pRes.ok ? pRes.text() : Promise.resolve(""), dRes.ok ? dRes.text() : Promise.resolve("")]);
-  const player = { ...emptyPlayer(), ...parsePlayerPage(playerHtml) };
-  const detailEvents = parseDetailRounds(detailHtml);
-  const recentResults = await Promise.allSettled(recentEventRefs(playerHtml, detailHtml).map(async (event) => {
-    const response = await doFetch(`https://www.pdga.com/tour/event/${event.id}`, { headers });
-    return response.ok ? parseRecentEvent(await response.text(), pdga, event) : null;
-  }));
-  const refreshed = recentResults.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
-  return assemblePdgaStats(pdga, player, mergeEvents(refreshed, detailEvents), doFetch, headers);
+/** The live QA drive's dashboard member: fixed numbers, no PDGA call (not a real PDGA number). */
+function qaStats(pdga: string): PdgaStats | null {
+  if (pdga !== STAGING_QA_PDGA) return null;
+  return { ...statsFromPlayer(pdga, null), name: "GVDG QA Dashboard", official_rating: 935, rating_date: "2026-07-01" };
 }
 
-/** The current official rating and its date from the PDGA API (the club's developer account) when it has one. */
-async function withOfficialPdgaRating(env: Env, pdga: string, stats: PdgaStats): Promise<PdgaStats> {
-  const apiEnv = env as unknown as PdgaApiEnv;
-  if (!pdgaApiConfigured(apiEnv)) return stats;
-  try {
-    const player = await lookupPdgaPlayer(apiEnv, pdga);
-    if (player?.rating == null) return stats;
-    return { ...stats, official_rating: player.rating, rating_date: player.ratingDate ?? stats.rating_date };
-  } catch {
-    return stats;
-  }
-}
-
-/** GET /pdga-stats?pdga=<digits> — D1-cached (15m), IP-rate-limited, public read of pdga.com ratings. */
+/** GET /pdga-stats?pdga=<digits>: the official rating from the PDGA API (cached a few hours, IP-rate-limited). */
 export async function handlePdgaStats(request: Request, env: Env, origin: string | null): Promise<Response> {
-  const pdga = (new URL(request.url).searchParams.get("pdga") ?? "").replace(/\D/g, "");
-  if (!pdga || pdga.length > 8) return json({ error: "invalid_pdga" }, 400, origin);
+  const raw = (new URL(request.url).searchParams.get("pdga") ?? "").trim();
+  const headers = { "Cache-Control": "private, max-age=300" };
+  const qa = qaStats(raw);
+  if (qa) return json(qa, 200, origin, headers);
+  const pdga = normalPdgaNumber(raw);
+  if (!pdga) return json({ error: "invalid_pdga" }, 400, origin);
 
-  const now = Date.now();
-  const headers = { "Cache-Control": "public, max-age=300" };
-  let stale: unknown = null;
+  const apiEnv = env as unknown as PdgaApiEnv;
+  if (!pdgaApiConfigured(apiEnv)) return json(statsFromPlayer(pdga, null), 200, origin, { "Cache-Control": "no-store" });
+  // A fresh cached record is free; only a lookup that would call PDGA counts against the per-IP limit (many members
+  // share one IP behind a carrier NAT or event Wi-Fi, and counting cached reads blanked their ratings).
+  const cached = await cachedPdgaPlayers(apiEnv, [pdga]).catch(() => new Map<string, PdgaPlayer | null>());
+  if (cached.has(pdga)) return json(statsFromPlayer(pdga, cached.get(pdga) ?? null), 200, origin, headers);
+  if (await kvRateLimited(env, "pdga:" + clientIp(request), 30, 60)) return json({ error: "rate_limited" }, 429, origin);
   try {
-    const row = await readD1OrFallback(
-      () => env.DB.prepare("SELECT data, fetched_at FROM pdga_cache WHERE pdga = ?1").bind(pdga).first<{ data: string; fetched_at: number }>(),
-      () => null,
-    );
-    if (row) {
-      const cached = JSON.parse(row.data);
-      if (isFreshPdgaCache(cached, Number(row.fetched_at), now)) {
-        return json(cached, 200, origin, headers);
-      }
-      stale = cached;
-    }
+    return json(statsFromPlayer(pdga, await lookupPdgaPlayer(apiEnv, pdga)), 200, origin, headers);
   } catch (error) {
-    console.warn(JSON.stringify({ message: "pdga_cache_read_failed", error: error instanceof Error ? error.message : String(error) }));
+    console.warn(JSON.stringify({ message: "pdga_stats_api_failed", error: error instanceof Error ? error.message : String(error) }));
+    return json({ error: "pdga_unavailable" }, 503, origin);
   }
-
-  // The per-IP limit protects pdga.com from lookups on user input, so only a request that would actually go
-  // out counts. Fresh cache hits and the built-in QA stats are free: many members share one IP behind a
-  // carrier NAT or event Wi-Fi, and counting cached reads blanked their ratings (and tripped the live QA drive).
-  const fallback = fallbackPdgaStats(pdga);
-  if (!fallback && await kvRateLimited(env, "pdga:" + clientIp(request), 30, 60)) {
-    // An older copy beats an error.
-    if (stale) return json(stale, 200, origin, { "Cache-Control": "no-store" });
-    return json({ error: "rate_limited" }, 429, origin);
-  }
-
-  let stats: PdgaStats;
-  try {
-    stats = fallback ?? await fetchPdgaStats(pdga);
-  } catch {
-    stats = fallback ?? emptyPdgaStats(pdga);
-  }
-  if (!fallback) stats = await withOfficialPdgaRating(env, pdga, stats);
-  stats = withStatsVersion(stats);
-  // Only cache a useful result, so a transient pdga.com outage isn't pinned for the full TTL.
-  if (stats.official_rating != null || stats.events.length) {
-    try {
-      await env.DB.prepare(
-        "INSERT INTO pdga_cache (pdga, data, fetched_at) VALUES (?1, ?2, ?3) " +
-          "ON CONFLICT(pdga) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
-      ).bind(pdga, JSON.stringify(stats), now).run();
-    } catch (error) {
-      console.warn(JSON.stringify({ message: "pdga_cache_write_failed", error: error instanceof Error ? error.message : String(error) }));
-    }
-  }
-  return json(stats, 200, origin, headers);
 }

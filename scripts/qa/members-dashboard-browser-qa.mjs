@@ -199,41 +199,6 @@ async function assertNoHorizontalOverflow(page, label) {
   throw new Error(`${label} has horizontal overflow of ${overflow}px: ${JSON.stringify(offenders)}`);
 }
 
-async function assertPdgaRatingsStacked(page, label) {
-  await page.locator("#membersReactRatingPanel details.dash-collapse").evaluateAll((nodes) => {
-    nodes.forEach((node) => { node.open = true; });
-  });
-  const rows = await page.locator("#membersReactRatingPanel .dash-event").evaluateAll((events) =>
-    events.map((event, index) => {
-      const main = event.querySelector(".dash-event-main");
-      const copy = event.querySelector(".dash-event-copy");
-      const title = event.querySelector(".dash-event-name");
-      const date = event.querySelector(".dash-event-date");
-      const ratingRow = event.querySelector(".dash-event-rating-row");
-      const ratings = event.querySelector(".dash-event-ratings");
-      const eventRect = event.getBoundingClientRect();
-      const mainRect = main?.getBoundingClientRect();
-      const copyRect = copy?.getBoundingClientRect();
-      const titleRect = title?.getBoundingClientRect();
-      const dateRect = date?.getBoundingClientRect();
-      const ratingRowRect = ratingRow?.getBoundingClientRect();
-      const ratingsRect = ratings?.getBoundingClientRect();
-      return {
-        index,
-        title: main?.textContent?.trim() || "",
-        missing: !main || !copy || !title || !date || !ratingRow || !ratings,
-        ratingRowBelowCopy: Boolean(copyRect && ratingRowRect && ratingRowRect.top >= copyRect.bottom - 1),
-        ratingsBelowText: Boolean(titleRect && dateRect && ratingsRect && ratingsRect.top >= dateRect.bottom - 1 && ratingsRect.top > titleRect.top),
-        ratingRowFullWidth: Boolean(mainRect && ratingRowRect && ratingRowRect.left >= mainRect.left - 1 && ratingRowRect.right <= mainRect.right + 1 && ratingRowRect.width >= mainRect.width - 2),
-        ratingsInsideMain: Boolean(mainRect && ratingsRect && ratingsRect.left >= mainRect.left - 1 && ratingsRect.right <= mainRect.right + 1),
-        ratingsInsideCard: Boolean(ratingsRect && ratingsRect.left >= eventRect.left - 1 && ratingsRect.right <= eventRect.right + 1),
-      };
-    })
-  );
-  const badRows = rows.filter((row) => row.missing || !row.ratingRowBelowCopy || !row.ratingsBelowText || !row.ratingRowFullWidth || !row.ratingsInsideMain || !row.ratingsInsideCard);
-  if (badRows.length) throw new Error(`${label} PDGA ratings are not stacked below event text: ${JSON.stringify(badRows)}`);
-}
-
 async function captureAuthGate(browser, origin, viewport, slug) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
@@ -351,7 +316,7 @@ async function captureState(browser, origin, viewport, slug) {
   if (mountedAtHome.length) throw new Error(`Hidden screens rendered on Home: ${mountedAtHome.join(", ")}`);
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-home-jobs="ready"]', { timeout: 10_000 });
-  await waitForText(page, "[data-react-home-hero]", "941", "React live rating");
+  await waitForText(page, "[data-react-home-hero] [data-react-pdga-rating='true']", "935", "React PDGA official rating");
   await waitForText(page, "[data-react-home-hero]", "QA Admin", "React home name");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
   await waitForText(page, "[data-react-home-next]", "GVDG QA Doubles", "React next event");
@@ -419,15 +384,16 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-season-page]", "GVDG QA Weekly", "season result row");
   await waitForText(page, "[data-react-season-page]", "GVDG QA League", "season league standing");
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
-  await waitForText(page, "#membersReactRatingPanel", "Memorial Day Showdown 2026", "React long PDGA event title");
-  await assertPdgaRatingsStacked(page, slug);
+  await waitForText(page, "#membersReactRatingPanel", "935", "React PDGA official rating");
+  await waitForText(page, "#membersReactRatingPanel", "As of 2026-07-01", "React PDGA rating date");
+  // PDGA's terms: Stats shows no PDGA event history or round ratings.
+  if (await page.locator("#membersReactRatingPanel .dash-event").count()) throw new Error("Stats still lists PDGA events.");
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
-  // A round rated from PDGA rounds on its layout names that basis and how many rounds it rests on.
-  const pdgaRow = page.locator(".club-rating-row").filter({ hasText: "Based on 6 PDGA rated rounds on this layout" });
-  await pdgaRow.getByText("PDGA baseline", { exact: true }).waitFor({ timeout: 10_000 });
-  await pdgaRow.scrollIntoViewIfNeeded();
-  await pdgaRow.screenshot({ path: path.join(evidenceDir, `${slug}-pdga-rating-label.png`) });
+  // A layout-calibrated casual round names its basis (club evidence only; no PDGA baselines).
+  const layoutRow = page.locator(".club-rating-row").filter({ hasText: "Earlier same-layout field · 4 anchors" });
+  await layoutRow.getByText("Layout estimate", { exact: true }).waitFor({ timeout: 10_000 });
+  if (await page.getByText("PDGA baseline", { exact: true }).count()) throw new Error("A PDGA baseline label is still shown.");
   await captureFullPage(page, path.join(evidenceDir, `${slug}-season.png`));
 
   await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Events" }).click();

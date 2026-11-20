@@ -7,6 +7,7 @@ import { runRatingRepairCycle, runRatingsRecompute } from "../src/ratings-recomp
 import { readArchivedRatingHoles, ratingLayoutRevision } from "../src/rating-layout.js";
 import { getLayoutRatingBaseline, priorRatingAnchors, queueRatingRepair } from "../src/rating-store.js";
 import { getMemberRatings } from "../src/ratings.js";
+import { resetPdgaApiSession } from "../src/pdga-api.js";
 import type { Env } from "../src/env.js";
 
 const TEE = { lat: 35.60, lng: -77.37 };
@@ -39,6 +40,8 @@ async function fixture() {
     "0062_pdga_layout_baselines.sql", "0073_pdga_evidence_changes.sql"]) {
     sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
   }
+  // 0078's change to the anchors table (the rest of 0078 needs tables these tests don't load).
+  sqlite.exec("ALTER TABLE rating_anchor_snapshots ADD COLUMN confirmed_at TEXT");
   const startingLayout = sqlite.prepare("INSERT INTO course_layouts (id, course_id, name, holes) VALUES (?,1,'Renamed since first event',?)");
   sqlite.exec("INSERT INTO courses (id, name) VALUES (1,'Historical Park')");
   startingLayout.run(LAYOUT, JSON.stringify(positions(MOVED)));
@@ -334,22 +337,53 @@ describe("versioned, transactional rating repair", () => {
       .toEqual({ round_date: "2026-06-10T15:00:00.000Z" });
   });
 
-  it("captures a dated rating from the PDGA overview and ignores undated provider responses", async () => {
+  it("captures a dated rating from the PDGA API and ignores undated ones, reading nothing else", async () => {
     const { db, sqlite } = await fixture();
     const records = {
       "member:m_123": JSON.stringify({ memberId: "m_123", pdgaNo: "123", name: "Dated Member" }),
       "member:m_456": JSON.stringify({ memberId: "m_456", pdgaNo: "456", name: "Undated Member" }),
     };
-    const env = { DB: db, ROSTER: {
-      list: async () => ({ keys: Object.keys(records).map((name) => ({ name })), list_complete: true }),
-      get: async (key: keyof typeof records) => records[key] ?? null,
-    } } as unknown as Env;
-    const doFetch = (async (url: RequestInfo | URL) => new Response(JSON.stringify({ currentRating: {
-      rating: 996, ...(String(url).includes("/123/") ? { effectiveDate: "2025-06-10" } : {}),
-    } }))) as typeof fetch;
-    expect((await runRatingsRecompute(env, doFetch)).pdgaRefreshed).toBe(1);
+    const env = { DB: db, PDGA_API_USERNAME: "club", PDGA_API_PASSWORD: "pw", PDGA_API_BASE: "https://api.test.pdga",
+      RATELIMIT: { get: async () => null, put: async () => {}, delete: async () => {} },
+      ROSTER: {
+        list: async () => ({ keys: Object.keys(records).map((name) => ({ name })), list_complete: true }),
+        get: async (key: keyof typeof records) => records[key] ?? null,
+      } } as unknown as Env;
+    sqlite.exec("CREATE TABLE pdga_api_players (pdga_number TEXT PRIMARY KEY, data TEXT, fetched_at INTEGER NOT NULL)");
+    resetPdgaApiSession();
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      urls.push(url);
+      if (url.endsWith("/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
+      return Response.json({ players: [
+        { pdga_number: "123", first_name: "Dated", last_name: "Member", membership_status: "current", rating: "996", rating_effective_date: "2025-06-10" },
+        { pdga_number: "456", first_name: "Undated", last_name: "Member", membership_status: "current", rating: "990" },
+      ] });
+    });
+    try {
+      expect((await runRatingsRecompute(env, new Date("2026-09-01T00:00:00.000Z"))).pdgaRefreshed).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(urls.every((url) => url.startsWith("https://api.test.pdga/services/json/"))).toBe(true);
     expect(sqlite.prepare("SELECT member_id, effective_at, rating FROM rating_anchor_snapshots WHERE member_id IN ('m_123','m_456')").all())
       .toEqual([{ member_id: "m_123", effective_at: "2025-06-10T00:00:00.000Z", rating: 996 }]);
+  });
+
+  it("leaves an old field's ratings as rated once the PDGA ratings that calibrated it are gone", async () => {
+    const { db, sqlite } = await fixture();
+    await repairRatingSource(db, "competition", 2);
+    const rated = () => sqlite.prepare("SELECT member_id, round_rating, rating_method FROM round_ratings WHERE event_id=2 ORDER BY member_id").all();
+    const before = rated();
+    expect(before.some((row) => (row as { round_rating: number | null }).round_rating != null)).toBe(true);
+    // PDGA's API license: anchors are kept only a few days. The rolling scan must not re-solve old fields without them.
+    sqlite.exec("DELETE FROM rating_anchor_snapshots");
+    expect(await repairRatingSource(db, "competition", 2, null, { keepRatedBefore: "2030-01-01T00:00:00.000Z" })).toMatchObject({ kept: true, rows: 0 });
+    expect(rated()).toEqual(before);
+    // A round played after the cutoff is still re-solved (here: without anchors, so it changes).
+    expect(await repairRatingSource(db, "competition", 2, null, { keepRatedBefore: "2000-01-01T00:00:00.000Z" })).not.toHaveProperty("kept");
+    expect(rated()).not.toEqual(before);
   });
 
   it("steps past a failing source, retries it on the next scheduled pass, and excludes unproven or ineligible rounds", async () => {

@@ -35,7 +35,6 @@ export async function handleMemberPhoto(pathname: string, env: { ROSTER: KVLike;
   if (sig !== expected) return new Response("not found", { status: 404 });
   const photo = sanitizeProfilePhoto((await getMember(env.ROSTER, memberId!).catch(() => null))?.photo);
   if (!photo) return new Response("not found", { status: 404, headers: { "Cache-Control": "no-store" } });
-  if (!photo.startsWith("data:")) return Response.redirect(photo, 302);
   const [, type, data] = /^data:(image\/[a-z]+);base64,(.*)$/.exec(photo)!;
   const bytes = Uint8Array.from(atob(data!), (char) => char.charCodeAt(0));
   return new Response(bytes, {
@@ -55,7 +54,8 @@ export function sanitizeProfilePhoto(raw: unknown): string | null {
   const value = raw.trim();
   if (!value || value.length > MAX_PROFILE_PHOTO_LEN) return null;
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) return value;
-  if (/^https:\/\/([a-z0-9-]+\.)*pdga\.com\//i.test(value) && value.length <= 500 && !/[\s<>]/.test(value)) return value;
+  // pdga.com picture links (set automatically long ago) are no longer used: the club reads PDGA data only through
+  // PDGA's developer API, which has no player photos.
   return null;
 }
 
