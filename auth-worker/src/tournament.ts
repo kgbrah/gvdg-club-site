@@ -181,7 +181,10 @@ export type UploadRegistration = { event_id: number; member_id: string | null; n
 const nameKey = (name: string) => String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
 const cell = (value: unknown) => (value == null ? "" : String(value).replace(/[\t\r\n]+/g, " ").trim());
 
-export function pdgaResultsUpload(rounds: UploadRound[], results: UploadResult[], registrations: UploadRegistration[]) {
+/** PDGA's own first and last names by PDGA number (from the stored PDGA player records), for the name columns. */
+export type PdgaNames = Map<string, { first: string; last: string }>;
+
+export function pdgaResultsUpload(rounds: UploadRound[], results: UploadResult[], registrations: UploadRegistration[], pdgaNames: PdgaNames = new Map()) {
   const used = rounds.slice(0, 4);
   const roundOf = new Map(used.map((round, index) => [round.eventId, index]));
   const byMember = new Map<string, UploadRegistration>();
@@ -217,8 +220,12 @@ export function pdgaResultsUpload(rounds: UploadRound[], results: UploadResult[]
   list.sort((a, b) => a.division.localeCompare(b.division) || (places.get(a) ?? 9999) - (places.get(b) ?? 9999) || a.name.localeCompare(b.name));
   const header = [...PDGA_UPLOAD_HEADER, ...used.map((_, index) => `Rd${index + 1}`)];
   const rows = list.map((player) => {
+    // PDGA's split when it knows the number ("Steady Ed" + "Headrick"); otherwise the first word is the first name.
+    const known = player.pdga ? pdgaNames.get(player.pdga) : undefined;
     const [first, ...rest] = player.name.split(/\s+/);
-    return [player.division, "", places.get(player) ?? "", first ?? "", rest.join(" "), player.pdga, ...player.scores.map((score) => score ?? "")].map(cell);
+    const firstName = known?.first || first || "";
+    const lastName = known ? known.last : rest.join(" ");
+    return [player.division, "", places.get(player) ?? "", firstName, lastName, player.pdga, ...player.scores.map((score) => score ?? "")].map(cell);
   });
   return {
     header, rows,

@@ -148,7 +148,7 @@ function Row({ eventId, row, kind, onChanged }) {
  * Scores tab (PDGA help, "Tournament Manager: Scoring Management"). Every club event linked to the PDGA event is a
  * round, in date order.
  */
-function PdgaResults({ eventId }) {
+export function PdgaResults({ eventId }) {
   const [state, setState] = React.useState({ status: "idle", data: null });
   const [copied, setCopied] = React.useState(false);
   async function load() {

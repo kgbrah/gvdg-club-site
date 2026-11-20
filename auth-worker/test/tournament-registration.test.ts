@@ -246,7 +246,7 @@ describe("marking an event as a PDGA event from the event form", () => {
     const linked = await call("/admin/events/7/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 104547 } });
     expect(linked.data).toMatchObject({ pdgaEventId: 104547, pdgaEvent: { name: "Greenville Fall Classic", tier: "C" } });
     expect((await call("/admin/events/7/tournament", { token: adminToken })).data.settings).toMatchObject({ playerCap: 50, zelleTo: "pay@gvdgclub.test" });
-    expect((await call("/events/7")).data.event).toMatchObject({ pdga_event_id: 104547 });
+    expect((await call("/events/7")).data.event).toMatchObject({ pdga_event_id: 104547, entry_fee_cents: 5000, divisions: ["MPO", "MA3"] });
     expect(((await call("/events")).data.events as { id: number; pdga_event_id: number | null }[]).find((event) => event.id === 7)).toMatchObject({ pdga_event_id: 104547 });
     expect((await call("/admin/events/7/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: "abc" } })).data.error).toBe("invalid_pdga_event");
     expect((await call("/admin/events/99/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 1 } })).status).toBe(404);

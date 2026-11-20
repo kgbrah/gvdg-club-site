@@ -6,6 +6,8 @@ import { AdminScoringLeaderboard, AdminScoringOverride, AdminScoringScorecard } 
 import { AdminLiveRounds } from "./live-rounds-panel.js";
 import { AdminScoringTeeSigns } from "./scoring-tee-signs.js";
 import { eventConfig, isPutting, layoutLabel, normalizeConfig, playableEvents } from "./scoring-model.js";
+import { PdgaResults } from "./tournament-panel.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 const EMPTY_EVENTS_STATE = { events: [], status: "loading" };
@@ -348,6 +350,10 @@ export function AdminScoringPanel() {
   }, []);
 
   const eventsView = useSettledWhileLoading(eventsState);
+  // A finished PDGA event: Results for PDGA right here, where the TD looks after the round (owner: "add the results
+  // for pdga to the events results screen").
+  const selected = eventsView.events.find((event) => String(event.id) === String(state.eventId));
+  const pdgaResults = selected && selected.pdga_event_id && (selected.status === "final" || state.status === "final");
 
   return h("div", { className: "admin-scoring-card", "data-react-admin-scoring": state.status }, [
     h(AdminLiveRounds, { key: "casual-rounds" }),
@@ -356,5 +362,9 @@ export function AdminScoringPanel() {
     state.status === "error" ? h("p", { className: "al-note err", key: "error", role: "alert" }, state.message || "Unable to load live scoring.") : null,
     state.status === "start" ? h("div", { className: "admin-scoring-card-block", key: `start-${state.eventId}` }, h(StartControls, { state })) : null,
     state.status === "live" || state.status === "final" ? h(LiveControls, { key: `live-${state.eventId}`, state }) : null,
+    pdgaResults ? h("div", { className: "admin-scoring-card-block", key: `pdga-results-${state.eventId}`, "data-admin-results-pdga": "" }, [
+      h(PdgaResults, { eventId: state.eventId, key: "rows" }),
+      h(PdgaCredit, { key: "credit" }),
+    ]) : null,
   ]);
 }
