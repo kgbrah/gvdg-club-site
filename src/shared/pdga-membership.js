@@ -87,19 +87,22 @@ export function PdgaMembershipCard({ data, compact = false, credit = true, onChe
     : data.lookup === "unavailable" ? "PDGA couldn't be checked right now."
       : !player ? "PDGA has no player with the number on your profile."
         : status === "current"
-          ? `Current PDGA member through ${player.membershipExpires || "the end of the year"}${left != null && left <= SOON_DAYS ? ` (${Math.max(0, left)} days left)` : ""}.`
+          ? `Current PDGA member through ${player.membershipExpires || "the end of the year"}${left != null && left <= SOON_DAYS ? ` (${Math.max(0, left)} days left)` : ". You're all set"}.`
           : `Your PDGA membership ${status === "expired" ? "expired" : "isn't current"}${player.membershipExpires ? ` (${player.membershipExpires})` : ""}.`;
   const renew = Boolean(player) && (status !== "current" || (left != null && left <= SOON_DAYS));
+  // Already renewed (current, not ending within SOON_DAYS): just the status, no renew button or club code (owner:
+  // "I already renewed" — the card still offered "Renew early with PDGA" and the code).
+  const settled = Boolean(player) && status === "current" && !renew;
   const href = data.lookup === "none" || (!player && data.lookup === "ok") ? data.joinUrl : data.renewUrl;
-  const label = data.lookup === "none" || (!player && data.lookup === "ok") ? "Join the PDGA" : renew ? "Renew with PDGA" : "Renew early with PDGA";
+  const label = data.lookup === "none" || (!player && data.lookup === "ok") ? "Join the PDGA" : "Renew with PDGA";
   return h("div", { className: `pdga-membership${compact ? " compact" : ""}`, "data-pdga-membership": status || data.lookup }, [
     h("h3", { key: "title" }, "PDGA membership"),
     h("p", { className: "player-card-meta", key: "line" }, line),
-    h("div", { className: "member-action-grid", key: "actions" }, [
+    settled ? null : h("div", { className: "member-action-grid", key: "actions" }, [
       h("a", { className: `player-btn${renew || data.lookup === "none" ? " primary" : ""}`, href, ...SIGNUP_LINK, key: "go", onClick: () => markPdgaRenewStarted() }, label),
       renew && onCheckAgain ? h(CheckAgain, { onCheckAgain, key: "again" }) : null,
     ]),
-    data.promo ? h(PromoCode, { promo: data.promo, key: "promo" })
+    settled ? null : data.promo ? h(PromoCode, { promo: data.promo, key: "promo" })
       : data.clubDiscountAvailable ? h("p", { className: "dash-note", key: "promo-note" }, "Current GVDG members get $5 off with the club's code.") : null,
     player && credit ? h(PdgaCredit, { key: "credit" }) : null,
   ]);

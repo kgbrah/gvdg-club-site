@@ -46,3 +46,27 @@ test("tapping Join / Renew marks a renewal; coming back within 2 hours asks PDGA
   assert.match(card, /onClick: \(\) => markPdgaRenewStarted\(\) \}, label\)/);
   assert.match(card, /renew && onCheckAgain \? h\(CheckAgain/);
 });
+
+// Owner: "I already renewed" (the card, current through 2027-12-31, still offered "Renew early with PDGA" and the code).
+test("a renewed member sees the status only; one ending soon or lapsed gets Renew, the code and I've renewed", async () => {
+  const React = (await import("react")).default;
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { PdgaMembershipCard } = await import("../src/shared/pdga-membership.js");
+  const year = new Date().getUTCFullYear();
+  const base = { lookup: "ok", joinUrl: "https://www.pdga.com/membership", renewUrl: "https://www.pdga.com/membership/renew", promo: { code: "27GREEN", validThrough: String(year + 1) }, clubDiscountAvailable: true };
+  const card = (player) => renderToStaticMarkup(React.createElement(PdgaMembershipCard, { data: { ...base, player }, onCheckAgain: async () => null }));
+  const renewed = card({ name: "Kevin", membershipStatus: "current", membershipExpires: `${year + 1}-12-31` });
+  assert.match(renewed, new RegExp(`Current PDGA member through ${year + 1}-12-31\\. You&#x27;re all set\\.`));
+  assert.doesNotMatch(renewed, /Renew|27GREEN|Copy code|I&#x27;ve renewed/, "nothing to renew once renewed");
+  const soon = card({ name: "Kevin", membershipStatus: "current", membershipExpires: new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10) });
+  assert.match(soon, /days left/);
+  assert.match(soon, /Renew with PDGA/);
+  assert.match(soon, /27GREEN/);
+  assert.match(soon, /I&#x27;ve renewed/);
+  const lapsed = card({ name: "Kevin", membershipStatus: "expired", membershipExpires: `${year - 1}-12-31` });
+  assert.match(lapsed, /Renew with PDGA/);
+  assert.match(lapsed, /27GREEN/);
+  const joining = renderToStaticMarkup(React.createElement(PdgaMembershipCard, { data: { ...base, lookup: "none", player: null } }));
+  assert.match(joining, /Join the PDGA/);
+  assert.match(joining, /27GREEN/);
+});
