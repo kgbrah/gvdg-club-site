@@ -3,6 +3,7 @@ import { KarmaChip } from "../shared/karma.js";
 import { CalendarDays, Search, Star, Trophy, Users } from "lucide-react";
 
 import { memberFullName, memberInitials } from "./club-data.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 const PAGE_SIZE = 12;
@@ -101,13 +102,16 @@ export function MemberDirectoryPanel({ data }) {
   if (!data) return h("div", { className: "dash-note", "data-react-member-directory": "loading" }, "Loading member directory…");
 
   const visible = filtered.slice(0, displayCount);
+  const nameSuggestions = members.map((member) => memberFullName(member));
   const remaining = Math.max(0, filtered.length - displayCount);
   return h("section", { className: "react-member-directory", "data-react-member-directory": "ready", "aria-labelledby": "reactMemberDirectoryTitle" }, [
     h("h3", { className: "my-dashboard-title", id: "reactMemberDirectoryTitle", key: "title" }, "Member Directory"),
     h(DirectoryStats, { members, yearData, key: "stats" }),
     h(GrowthChart, { yearData, key: "chart" }),
     h("div", { className: "members-controls", key: "controls" }, [
-      h("input", {
+      h(AutocompleteInput, {
+        suggestions: nameSuggestions,
+        wrapperClassName: "members-search-wrap",
         type: "search",
         className: "members-search",
         placeholder: "Search members by name or PDGA #…",

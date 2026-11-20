@@ -1,5 +1,6 @@
 import React from "react";
 import { currentAdminRoute } from "./admin-shell-state.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 
@@ -37,10 +38,27 @@ export function AdminWalletAdjustmentForm() {
       if (event.detail?.tab !== "wallets" || !event.detail.memberId) return;
       setForm({ ...EMPTY_FORM, memberId: event.detail.memberId });
     }
+    // "Adjust" in the balances list below fills the member (and puts the cursor in the amount).
+    function adjustMember(event) {
+      if (!event.detail?.memberId) return;
+      setForm({ ...EMPTY_FORM, memberId: event.detail.memberId });
+      window.requestAnimationFrame(() => document.getElementById("waAmount")?.focus());
+    }
     window.addEventListener("gvdg:admin-active-tab", selectMember);
-    return () => window.removeEventListener("gvdg:admin-active-tab", selectMember);
+    window.addEventListener("gvdg:admin-wallet-member", adjustMember);
+    return () => {
+      window.removeEventListener("gvdg:admin-active-tab", selectMember);
+      window.removeEventListener("gvdg:admin-wallet-member", adjustMember);
+    };
   }, []);
   const [busy, setBusy] = React.useState(false);
+  // Member names to autocomplete, from the balances list below (picking one fills the member's id: no ambiguity).
+  const [roster, setRoster] = React.useState([]);
+  React.useEffect(() => {
+    const take = (event) => setRoster(Array.isArray(event.detail?.members) ? event.detail.members : []);
+    window.addEventListener("gvdg:admin-wallet-roster", take);
+    return () => window.removeEventListener("gvdg:admin-wallet-roster", take);
+  }, []);
   const currentRequest = React.useRef("");
   const requestCounter = React.useRef(0);
 
@@ -80,7 +98,8 @@ export function AdminWalletAdjustmentForm() {
   }, [
     h("div", { key: "member" }, [
       h("label", { htmlFor: "waMemberId", key: "label" }, "Member"),
-      h("input", {
+      h(AutocompleteInput, {
+        suggestions: roster.map((member) => ({ label: member.name, value: member.memberId, hint: member.pdgaNo ? "PDGA #" + member.pdgaNo : "", key: member.memberId })),
         id: "waMemberId",
         key: "input",
         maxLength: 80,

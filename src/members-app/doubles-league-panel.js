@@ -5,6 +5,7 @@ import { Trophy, X } from "lucide-react";
 import { DOUBLES_LEAGUE_DATA } from "./doubles-league-data.js";
 import { useAccessibleDialog } from "../shared/a11y.js";
 import { clusterPlayerNames, preferredPlayerName } from "../shared/player-identity.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 const PAGE_SIZE = 25;
@@ -228,7 +229,9 @@ function AllTimePanel({ leaderboard, onPlayerSelect }) {
   }
 
   return h("div", { className: "doubles-panel active", id: "dblPanel-alltime", role: "tabpanel" }, [
-    h("input", {
+    h(AutocompleteInput, {
+      suggestions: leaderboard.map((player) => player.n),
+      wrapperClassName: "doubles-search-wrap",
       type: "search",
       className: "doubles-search-bar",
       placeholder: "Search player name…",

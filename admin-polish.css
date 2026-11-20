@@ -1043,3 +1043,13 @@ body.admin-page.player-theme-active {
   .admin-page .admin-member-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-page .admin-member-actions > .admin-member-tier { grid-column: 1 / -1; }
 }
+/* Admin › Money › Wallets: every member's balance. */
+.admin-wallet-balances { margin-top: 1rem; }
+.admin-wallet-balance-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: .5rem 0 .75rem; }
+.admin-wallet-balance-tools .ac { flex: 1 1 14rem; max-width: 24rem; }
+.admin-wallet-balance-tools input[type="search"] { min-height: 44px; }
+.admin-wallet-zero { display: inline-flex; align-items: center; gap: .4rem; color: var(--text-secondary); }
+.admin-wallet-balance-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.admin-wallet-balance { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.admin-wallet-balance.negative { color: var(--over, #c62828); }
+.admin-wallet-search-label { flex-basis: 100%; font-weight: 700; color: var(--text-primary); }

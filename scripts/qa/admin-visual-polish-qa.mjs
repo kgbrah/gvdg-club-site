@@ -169,6 +169,11 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/shop/products") return { products: [{ id: 13, name: "River fairway driver", category: "disc", price_cents: 1800, stock: 9, active: 1, description: "A straight fairway driver." }] };
   if (path === "/admin/wallets/recent") return { transactions: [{ id: 4, member_id: "m_jordan", member_name: "Jordan Reyes", amount_cents: 1250, note: "Club payout", created_at: date }] };
   if (path === "/admin/wallets/credit") return { balance_cents: 1750 };
+  if (path === "/admin/wallets/balances") return { totalCents: 4250, withBalance: 2, members: [
+    { memberId: "m_jordan", name: "Jordan Reyes", pdgaNo: "234567", balanceCents: 3000, transactions: 3, lastActivityAt: "2026-11-10 10:00:00", onRoster: true },
+    { memberId: "m_casey", name: "Casey Lin", pdgaNo: null, balanceCents: 1250, transactions: 1, lastActivityAt: "2026-11-01 10:00:00", onRoster: true },
+    { memberId: "m_ada", name: "Ada Park", pdgaNo: null, balanceCents: 0, transactions: 0, lastActivityAt: null, onRoster: true },
+  ] };
   if (path === "/admin/tee-signs") return { teeSigns: query.get("status") === "candidate" ? [tee] : [] };
   if (path.endsWith("/tee-signs")) return { signs: [], teeSigns: [] };
   if (path === "/admin/course-health") return { courses: [course] };
@@ -613,6 +618,29 @@ async function verifyRoutes(variant) {
     assert.equal((await orderSaved).status(), 200);
 
     pane = await route(page, "wallets");
+    // Every member's balance (owner: "need admin to be able to view all member wallet balances"), with the total.
+    const balances = pane.locator("[data-admin-wallet-balances='ready']");
+    await balances.waitFor();
+    assert.match(await balances.locator("[data-wallet-total]").innerText(), /\$42\.50 in store credit across 2 members/);
+    assert.deepEqual(await balances.locator("[data-wallet-member]").evaluateAll((rows) => rows.map((row) => row.dataset.walletMember)), ["m_jordan", "m_casey"]);
+    // The search autocompletes names; picking one narrows the list.
+    await balances.getByLabel("Find a member's balance").fill("ca");
+    await balances.locator(".ac-option", { hasText: "Casey Lin" }).waitFor();
+    await shot(page, "wallet-autocomplete-" + variant.name);
+    await balances.locator(".ac-option", { hasText: "Casey Lin" }).click();
+    assert.equal(await balances.getByLabel("Find a member's balance").inputValue(), "Casey Lin");
+    assert.deepEqual(await balances.locator("[data-wallet-member]").evaluateAll((rows) => rows.map((row) => row.dataset.walletMember)), ["m_casey"]);
+    await shot(page, "wallet-balances-" + variant.name);
+    // "Adjust" fills the adjustment form with that member.
+    await balances.locator("[data-wallet-member='m_casey']").getByRole("button", { name: "Adjust" }).click();
+    assert.equal(await pane.getByLabel("Member", { exact: true }).inputValue(), "m_casey");
+    await balances.getByLabel("Find a member's balance").fill("");
+    await balances.getByLabel("Show $0 balances").check();
+    assert.equal(await balances.locator("[data-wallet-member]").count(), 3);
+    // The form's member field autocompletes too (picking fills the member's id).
+    await pane.getByLabel("Member", { exact: true }).fill("jor");
+    await pane.locator("#adminWalletForm .ac-option", { hasText: "Jordan Reyes" }).click();
+    assert.equal(await pane.getByLabel("Member", { exact: true }).inputValue(), "m_jordan");
     await pane.getByLabel("Member", { exact: true }).fill("234567");
     await pane.getByLabel("Adjustment ($)").fill("5");
     const walletSaved = page.waitForResponse((response) => response.url().endsWith("/admin/wallets/credit"));

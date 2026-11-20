@@ -4,8 +4,11 @@ import React from "react";
 import { discTitle, holdingText, postHref, postMeta, POST_STATUS_LABELS } from "../shared/lost-found-model.js";
 import { LfLoad, LfPhoto, lfRequest, PersonLine, useLfVersion } from "./lf-ui.js";
 import { CoursePicker, useHere } from "./course-picker.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
+import { discSearchSuggestions } from "../shared/disc-catalog.js";
 
 const h = React.createElement;
+const LF_SUGGESTIONS = discSearchSuggestions({ colors: true });
 
 export function PostCard({ post, showPoster = true }) {
   const href = postHref(post.id);
@@ -91,7 +94,8 @@ export function PostList({ kind, route }) {
     h("div", { "aria-label": found ? "Found disc filters" : "Lost disc filters", className: "filters shop-filters market-filters lf-filters", key: "filters" }, [
       h("div", { className: "shop-search-row", key: "row" }, [
         h("label", { className: "lf-filter-label", htmlFor: "lfSearch", key: "search-label" }, "Disc"),
-        h("input", {
+        h(AutocompleteInput, {
+          suggestions: LF_SUGGESTIONS, wrapperClassName: "shop-search-ac",
           "aria-label": found ? "Search found discs" : "Search lost discs", id: "lfSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value),
           placeholder: "Brand, mold, colour…", type: "search", value: q,
         }),

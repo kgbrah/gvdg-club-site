@@ -100,6 +100,15 @@ export const DISC_COLOR_NAMES = ["Red", "Orange", "Yellow", "Lime", "Green", "Te
   "Glow", "Tie-dye", "Swirl", "Gold", "Silver", "Brown", "Tan"];
 
 /** Heaviest first: most discs are 165–180 g, so those sit at the top of the phone's picker. */
+/** Autocomplete for disc searches (Marketplace, WANTED, Lost & Found): brands, then each brand's molds (and colours). */
+export function discSearchSuggestions({ colors = false } = {}) {
+  return [
+    ...DISC_BRANDS.map((brand) => ({ label: brand.name, value: brand.name, hint: "Brand", key: "brand:" + brand.name })),
+    ...DISC_BRANDS.flatMap((brand) => brand.molds.map((mold) => ({ label: mold, value: mold, hint: brand.name, key: "mold:" + brand.name + ":" + mold }))),
+    ...(colors ? DISC_COLOR_NAMES.map((color) => ({ label: color, value: color, hint: "Colour", key: "color:" + color })) : []),
+  ];
+}
+
 export const DISC_WEIGHTS = Array.from({ length: 200 - 100 + 1 }, (_, index) => 200 - index);
 export const COMMON_WEIGHT_RANGE = [120, 180];
 

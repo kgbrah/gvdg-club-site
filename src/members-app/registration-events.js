@@ -5,12 +5,13 @@ import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromClub } from "../shared/event-calendar.js";
-import { request } from "./api.js";
+import { request, requestJson } from "./api.js";
 import { selectDashboardTab } from "./dashboard-router.js";
 import { dollars, formatEventDay } from "./format.js";
 import { memberAlert, memberConfirm } from "./member-dialogs.js";
 import { PayPalButtons, WalletPayButton } from "./registration-payments.js";
 import { clientOwed, eventFromRegistration, eventMeta, isDoublesRegistration, isTeamRegistration, parseArray, parseObject, sortRegistrations } from "./registration-utils.js";
+import { AutocompleteInput, useMemberNameSuggestions } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 
@@ -91,6 +92,8 @@ function OpenEventForm({ event, token, onReload }) {
   const [division, setDivision] = React.useState(divisions[0] || "");
   const [team, setTeam] = React.useState("");
   const [addons, setAddons] = React.useState({ ctp: false, ace: false });
+  // A partner's name autocompletes from club members (doubles events only).
+  const partnerNames = useMemberNameSuggestions(team, { token, request: requestJson, enabled: isDoublesRegistration(event) });
 
   async function submit(eventSubmit) {
     eventSubmit.preventDefault();
@@ -137,7 +140,8 @@ function OpenEventForm({ event, token, onReload }) {
       h("option", { value: "", key: "empty" }, "Select team"),
       ...teams.map((name) => h("option", { value: name, key: name }, name)),
     ]) : null,
-    isDoublesRegistration(event) ? h("input", {
+    isDoublesRegistration(event) ? h(AutocompleteInput, {
+      suggestions: partnerNames,
       type: "text",
       placeholder: "Pair label or partner",
       "aria-label": "Pair label or partner",

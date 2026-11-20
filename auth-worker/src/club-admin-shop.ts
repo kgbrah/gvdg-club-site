@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as shopDb from "./shop-db.js";
-import { resolveMemberFlexible, type KVListLike } from "./roster.js";
+import { listMembers, resolveMemberFlexible, type KVListLike } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, inSet } from "./input.js";
 import { reverseStoreOrder } from "./order-reversal.js";
@@ -174,6 +174,29 @@ export async function handleAdminShop(
 
   if (seg[1] === "wallets") {
     if (method === "GET" && seg[2] === "recent") return json({ transactions: await shopDb.listRecentWalletTransactions(env.DB) }, 200, origin);
+    // Every member's store-credit balance (owner: "need admin to be able to view all member wallet balances"): the
+    // roster (current names; held accounts left out) joined with the ledger, plus anyone the ledger has who's gone.
+    if (method === "GET" && seg[2] === "balances") {
+      const [roster, ledger] = await Promise.all([listMembers(env.ROSTER as unknown as KVListLike), shopDb.walletLedgerSummaries(env.DB)]);
+      const byId = new Map(ledger.map((row) => [row.member_id, row]));
+      const members = roster.filter((member) => member.held !== true || byId.has(member.memberId)).map((member) => {
+        const row = byId.get(member.memberId);
+        byId.delete(member.memberId);
+        return { memberId: member.memberId, name: member.name, pdgaNo: member.pdgaNo ?? null, balanceCents: row?.balance_cents ?? 0,
+          transactions: row?.transactions ?? 0, lastActivityAt: row?.last_at ?? null, onRoster: true };
+      });
+      for (const row of byId.values()) {
+        members.push({ memberId: row.member_id, name: row.member_name || row.member_id, pdgaNo: null, balanceCents: row.balance_cents,
+          transactions: row.transactions, lastActivityAt: row.last_at, onRoster: false });
+      }
+      members.sort((a, b) => b.balanceCents - a.balanceCents || a.name.localeCompare(b.name));
+      const withBalance = members.filter((member) => member.balanceCents !== 0);
+      return json({
+        members,
+        totalCents: members.reduce((sum, member) => sum + Math.max(0, member.balanceCents), 0),
+        withBalance: withBalance.length,
+      }, 200, origin);
+    }
     if (method === "GET" && seg[2]) {
       const memberId = decodeURIComponent(seg[2]);
       const [balance, transactions] = await Promise.all([shopDb.walletBalance(env.DB, memberId), shopDb.listWalletTransactions(env.DB, memberId)]);

@@ -5,6 +5,7 @@ import { communityRequest } from "./community-panel.js";
 import { memberConfirm } from "./member-dialogs.js";
 import { readMemberToken } from "../shared/member-session.js";
 import { AMENITY_OPTIONS, communityDate, COURSE_AMENITIES, COURSE_DIFFICULTIES, REVIEW_REASONS } from "../shared/community-labels.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 const EMPTY_FILTER = { q: "", difficulty: "", favorites: false, amenities: {} };
@@ -179,7 +180,21 @@ export function MemberCourseDiscovery({ courseId, token }) {
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const [version, reload] = React.useReducer((value) => value + 1, 0);
+  const [courseNames, setCourseNames] = React.useState([]);
   const valid = () => token === readMemberToken();
+
+  // Course names (and their towns) for the search field's autocomplete.
+  React.useEffect(() => {
+    const controller = new AbortController();
+    communityRequest("/courses", { token, signal: controller.signal })
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setCourseNames((Array.isArray(data?.courses) ? data.courses : []).filter((course) => course?.name)
+          .map((course) => ({ label: course.name, value: course.name, hint: course.location || "", key: "course-" + course.id })));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [token]);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -247,7 +262,9 @@ export function MemberCourseDiscovery({ courseId, token }) {
       apply({ ...filter, q: filter.q.trim() });
     } }, [
       h("label", { className: "community-field", key: "name" }, [
-        "Course or town", h("input", { className: "form-input", type: "search", maxLength: 80, key: "input", value: filter.q, onChange: (event) => setFilter({ ...filter, q: event.target.value }) }),
+        "Course or town", h(AutocompleteInput, { className: "form-input", type: "search", maxLength: 80, key: "input", value: filter.q,
+          suggestions: courseNames, onChange: (event) => setFilter({ ...filter, q: event.target.value }),
+          onPick: (item) => { setMessage(""); apply({ ...filter, q: item.value }); } }),
       ]),
       h("label", { key: "favorites" }, [
         h("input", { type: "checkbox", key: "check", checked: filter.favorites, onChange: (event) => setFilter({ ...filter, favorites: event.target.checked }) }), " Favorites only",

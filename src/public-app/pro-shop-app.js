@@ -4,6 +4,7 @@ import { Disc3, Package } from "lucide-react";
 import { resolveApiBase } from "../shared/api-base.js";
 import { readMemberToken } from "../shared/member-session.js";
 import { SITE_DONATE_URL } from "../shared/site-nav.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 
@@ -288,7 +289,9 @@ function Filters({ filters, onChange, onReset, products }) {
   return h("div", { "aria-label": "Shop filters", className: "filters shop-filters" }, [
     h("div", { className: "shop-search-row", key: "search-row" }, [
       h("label", { className: "public-sr-only", htmlFor: "shopSearch", key: "search-label" }, "Search shop"),
-      h("input", {
+      h(AutocompleteInput, {
+        suggestions: (products || []).map((product) => String(product?.name || "")).filter(Boolean),
+        wrapperClassName: "shop-search-ac",
         id: "shopSearch",
         key: "search",
         onChange: (event) => onChange("shopSearch", event.target.value),

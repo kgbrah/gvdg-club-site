@@ -9,8 +9,11 @@ import {
 } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
 import { BrandPick, MoldInput, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
+import { discSearchSuggestions } from "../shared/disc-catalog.js";
 
 const h = React.createElement;
+const DISC_SUGGESTIONS = discSearchSuggestions();
 
 const WANTED_STATUS = { open: "Open", closed: "Closed", expired: "Expired" };
 
@@ -78,7 +81,8 @@ export function MarketWantedList({ route }) {
     h(Note, { key: "intro" }, "Looking for a certain mold, plastic or weight? Post it here. Sellers who have one reply with \"I have one\"."),
     h("div", { "aria-label": "WANTED filters", className: "filters shop-filters", key: "filters" }, h("div", { className: "shop-search-row" }, [
       h("label", { className: "public-sr-only", htmlFor: "wantedSearch", key: "search-label" }, "Search WANTED posts"),
-      h("input", { id: "wantedSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value), placeholder: "Search WANTED", type: "search", value: q }),
+      h(AutocompleteInput, { suggestions: DISC_SUGGESTIONS, wrapperClassName: "shop-search-ac",
+        id: "wantedSearch", key: "search", maxLength: 60, onChange: (event) => setQ(event.target.value), placeholder: "Search WANTED", type: "search", value: q }),
       h("label", { className: "public-sr-only", htmlFor: "wantedType", key: "type-label" }, "Disc type"),
       h("select", { id: "wantedType", key: "type", onChange: (event) => setType(event.target.value), value: type }, [
         h("option", { key: "any", value: "" }, "All types"),
