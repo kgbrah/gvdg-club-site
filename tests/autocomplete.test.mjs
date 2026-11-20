@@ -90,3 +90,25 @@ test("admin wallet balances: money, and which members show", () => {
   assert.deepEqual(visibleWalletRows(members, { query: "8002" }).map((member) => member.memberId), ["m_a"]);
   assert.match(readFileSync("admin.html", "utf8"), /<div id="adminWalletFormReactApp"><\/div>\s*<div id="adminWalletBalancesReactApp"><\/div>/);
 });
+
+// Owner: "Would be nice to have a drill down for wallet transactions here in admin so admin can see each transaction
+// with every member."
+test("the wallet drill-down: what each entry was, signed amounts, the balance after each, and who posted it", async () => {
+  const { walletLedgerRows } = await import("../src/admin-app/wallet-balances.js");
+  const rows = walletLedgerRows([
+    { id: 9, amount_cents: -1500, source: "event_entry", event_id: 4, event_name: "Fall Classic", created_at: "2026-11-20 15:00:00", created_by: null },
+    { id: 7, amount_cents: 1000, source: "manual_adjustment", note: "League payout", created_at: "2026-11-10 12:00:00", created_by: "m_admin" },
+    { id: 3, amount_cents: 3100, source: "sheet_import", created_at: "2026-09-01 12:00:00", created_by: "m_gone" },
+    { id: 2, amount_cents: 500, source: "marketplace_sale", order_id: 12 },
+  ], { balanceCents: 2600, names: new Map([["m_admin", "Club Admin"]]) });
+  assert.deepEqual(rows.map((row) => [row.what, row.detail, row.amountCents, row.balanceAfterCents, row.by]), [
+    ["Event entry", "Fall Classic", -1500, 2600, ""],
+    ["Admin adjustment", "", 1000, 4100, "Club Admin"],
+    ["Google Sheet balance", "", 3100, 3100, "m_gone"],
+    ["Marketplace sale", "Order #12", 500, 0, ""],
+  ]);
+  assert.equal(rows[1].note, "League payout");
+  assert.match(rows[0].when, /Nov 20, 2026/);
+  // A later page continues the running balance from where the first stopped.
+  assert.equal(walletLedgerRows([{ id: 1, amount_cents: 200 }], { balanceCents: 2600, newerCents: 2400 })[0].balanceAfterCents, 200);
+});

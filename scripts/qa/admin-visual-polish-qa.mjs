@@ -169,6 +169,15 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/shop/products") return { products: [{ id: 13, name: "River fairway driver", category: "disc", price_cents: 1800, stock: 9, active: 1, description: "A straight fairway driver." }] };
   if (path === "/admin/wallets/recent") return { transactions: [{ id: 4, member_id: "m_jordan", member_name: "Jordan Reyes", amount_cents: 1250, note: "Club payout", created_at: date }] };
   if (path === "/admin/wallets/credit") return { balance_cents: 1750 };
+  if (path === "/admin/wallets/m_casey") {
+    const all = [
+      { id: 12, amount_cents: -500, transaction_type: "debit", source: "event_entry", event_id: 4, event_name: "Fall Classic", note: null, created_by: null, created_at: "2026-11-01 10:00:00" },
+      { id: 8, amount_cents: 1000, transaction_type: "credit", source: "manual_adjustment", note: "League payout", created_by: "m_jordan", created_at: "2026-10-20 10:00:00" },
+      { id: 3, amount_cents: 750, transaction_type: "credit", source: "sheet_import", note: "Balance from the club's Google Sheet", created_by: "m_jordan", created_at: "2026-09-01 10:00:00" },
+    ];
+    const older = query.get("before");
+    return older ? { balance_cents: 1250, transactions: all.slice(2), more: false } : { balance_cents: 1250, transactions: all.slice(0, 2), more: true };
+  }
   if (path === "/admin/wallets/balances") return { totalCents: 4250, withBalance: 2, members: [
     { memberId: "m_jordan", name: "Jordan Reyes", pdgaNo: "234567", balanceCents: 3000, transactions: 3, lastActivityAt: "2026-11-10 10:00:00", onRoster: true },
     { memberId: "m_casey", name: "Casey Lin", pdgaNo: null, balanceCents: 1250, transactions: 1, lastActivityAt: "2026-11-01 10:00:00", onRoster: true },
@@ -631,6 +640,18 @@ async function verifyRoutes(variant) {
     assert.equal(await balances.getByLabel("Find a member's balance").inputValue(), "Casey Lin");
     assert.deepEqual(await balances.locator("[data-wallet-member]").evaluateAll((rows) => rows.map((row) => row.dataset.walletMember)), ["m_casey"]);
     await shot(page, "wallet-balances-" + variant.name);
+    // The drill-down: every transaction for that member, the balance after each, who posted it; older ones on demand.
+    await balances.locator("[data-wallet-member='m_casey']").getByRole("button", { name: "Transactions" }).click();
+    const ledger = balances.locator("[data-wallet-member='m_casey'] [data-wallet-ledger='ready']");
+    await ledger.waitFor();
+    assert.deepEqual(await ledger.locator("[data-wallet-tx]").evaluateAll((rows) => rows.map((row) => row.dataset.walletTx)), ["12", "8"]);
+    assert.match(await ledger.locator("[data-wallet-tx='12']").innerText(), /Event entry: Fall Classic[\s\S]*−\$5\.00[\s\S]*balance after \$12\.50/);
+    assert.match(await ledger.locator("[data-wallet-tx='8']").innerText(), /Admin adjustment[\s\S]*\+\$10\.00[\s\S]*League payout[\s\S]*balance after \$17\.50 · by Jordan Reyes/);
+    await ledger.getByRole("button", { name: "Show older transactions" }).click();
+    await ledger.locator("[data-wallet-tx='3']").waitFor();
+    assert.match(await ledger.locator("[data-wallet-tx='3']").innerText(), /Google Sheet balance[\s\S]*\+\$7\.50[\s\S]*balance after \$7\.50/);
+    assert.equal(await ledger.getByRole("button", { name: "Show older transactions" }).count(), 0);
+    await shot(page, "wallet-drilldown-" + variant.name);
     // "Adjust" fills the adjustment form with that member.
     await balances.locator("[data-wallet-member='m_casey']").getByRole("button", { name: "Adjust" }).click();
     assert.equal(await pane.getByLabel("Member", { exact: true }).inputValue(), "m_casey");

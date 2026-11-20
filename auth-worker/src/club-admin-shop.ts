@@ -182,11 +182,11 @@ export async function handleAdminShop(
       const members = roster.filter((member) => member.held !== true || byId.has(member.memberId)).map((member) => {
         const row = byId.get(member.memberId);
         byId.delete(member.memberId);
-        return { memberId: member.memberId, name: member.name, pdgaNo: member.pdgaNo ?? null, balanceCents: row?.balance_cents ?? 0,
+        return { memberId: member.memberId, name: member.name, pdgaNo: member.pdgaNo ?? null, udisc: member.udisc ?? null, balanceCents: row?.balance_cents ?? 0,
           transactions: row?.transactions ?? 0, lastActivityAt: row?.last_at ?? null, onRoster: true };
       });
       for (const row of byId.values()) {
-        members.push({ memberId: row.member_id, name: row.member_name || row.member_id, pdgaNo: null, balanceCents: row.balance_cents,
+        members.push({ memberId: row.member_id, name: row.member_name || row.member_id, pdgaNo: null, udisc: null, balanceCents: row.balance_cents,
           transactions: row.transactions, lastActivityAt: row.last_at, onRoster: false });
       }
       members.sort((a, b) => b.balanceCents - a.balanceCents || a.name.localeCompare(b.name));
@@ -199,6 +199,15 @@ export async function handleAdminShop(
     }
     if (method === "GET" && seg[2]) {
       const memberId = decodeURIComponent(seg[2]);
+      // The admin drill-down pages through a member's ledger (owner: "a drill down for wallet transactions ... so admin
+      // can see each transaction with every member"); without ?page it answers as before (the newest 50).
+      const params = new URL(request.url).searchParams;
+      if (params.has("page")) {
+        const before = params.get("before") ? asInt(params.get("before")) : null;
+        if (params.get("before") && (before == null || before <= 0)) return json({ error: "invalid_before" }, 400, origin);
+        const [balance, page] = await Promise.all([shopDb.walletBalance(env.DB, memberId), shopDb.listWalletTransactionsPage(env.DB, memberId, { before })]);
+        return json({ balance_cents: balance, transactions: page.transactions, more: page.more }, 200, origin);
+      }
       const [balance, transactions] = await Promise.all([shopDb.walletBalance(env.DB, memberId), shopDb.listWalletTransactions(env.DB, memberId)]);
       return json({ balance_cents: balance, transactions }, 200, origin);
     }
