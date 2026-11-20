@@ -358,6 +358,72 @@ async function fit(page, label) {
   assert.deepEqual(labels, [], label + " has clipped or spilling labels");
 }
 
+/**
+ * Text the theme forgot: any visible text whose colour against what's behind it is under 3:1 (owner, with a screenshot
+ * of dark text on a dark card in Today's "Up next": "Got some theme unaware text in admin section"). Text over a
+ * photo or gradient is skipped (its background can't be read), as is text faded on purpose (opacity under .6).
+ */
+async function readable(page, label) {
+  const low = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const cache = new Map();
+    const rgba = (css) => {
+      if (!cache.has(css)) {
+        ctx.clearRect(0, 0, 1, 1);
+        ctx.fillStyle = "#000";
+        ctx.fillStyle = css;
+        ctx.fillRect(0, 0, 1, 1);
+        const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+        cache.set(css, { r, g, b, a: a / 255 });
+      }
+      return cache.get(css);
+    };
+    const over = (top, bottom) => ({ r: top.r * top.a + bottom.r * (1 - top.a), g: top.g * top.a + bottom.g * (1 - top.a), b: top.b * top.a + bottom.b * (1 - top.a), a: 1 });
+    const lum = ({ r, g, b }) => [r, g, b].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
+      .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    function background(el) {
+      const layers = [];
+      for (let node = el; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.backgroundImage && style.backgroundImage !== "none") return null;
+        const color = rgba(style.backgroundColor);
+        if (color.a > 0) { layers.push(color); if (color.a >= 0.99) break; }
+      }
+      let base = { r: 255, g: 255, b: 255, a: 1 };
+      for (let i = layers.length - 1; i >= 0; i -= 1) base = over(layers[i], base);
+      return base;
+    }
+    const out = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const seen = new Set();
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
+      if (!el || seen.has(el) || !node.textContent.trim()) continue;
+      seen.add(el);
+      if (el.closest("script, style, [hidden], [aria-hidden='true'], [inert], option")) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2 || box.bottom < 0 || box.top > innerHeight * 4) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility !== "visible" || style.display === "none") continue;
+      let opacity = 1;
+      for (let n = el; n; n = n.parentElement) opacity *= Number(getComputedStyle(n).opacity);
+      if (opacity < 0.6) continue;
+      const bg = background(el);
+      if (!bg) continue;
+      const fg = over(rgba(style.color), bg);
+      const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+      const ratio = (hi + 0.05) / (lo + 0.05);
+      if (ratio < 3) out.push(`"${node.textContent.trim().slice(0, 40)}" ${ratio.toFixed(2)}:1 (${el.tagName.toLowerCase()}.${String(el.className).split(" ").slice(0, 2).join(".")} in ${el.closest("[class]") && el.closest("button, a, section, article, li, div[class]")?.className?.toString().split(" ")[0]})`);
+    }
+    return out;
+  });
+  for (const line of low) unreadable.add(label.replace(/^\S+ /, "") + " [" + label.split(" ")[0] + "]: " + line);
+}
+// Collected across every screen and theme, reported once at the end (so one run lists them all).
+const unreadable = new Set();
+
 async function shot(page, name) {
   if (photos) await page.screenshot({ path: join(photos, name + ".png"), animations: "disabled", timeout: 20_000 });
 }
@@ -387,6 +453,12 @@ async function verifyRoutes(variant) {
           assert.equal(await score.isEditable(), item.key === "scoring");
         }
         await fit(page, variant.name + " " + item.key);
+        await readable(page, variant.name + " " + item.key);
+        if (item.key === "today" && variant.dark) {
+          // Today's "Up next" rows are whole buttons: their names follow the theme (the owner's dark-on-dark screenshot).
+          const upNext = page.locator("button.admin-evrow").first();
+          if (await upNext.count()) await shot(upNext, "today-up-next-" + variant.name);
+        }
         if (variant.name === "390" || ["today", "check-in", "scoring", "layouts", "more"].includes(item.key)) {
           await page.evaluate(() => window.scrollTo(0, 0));
           await shot(page, item.key + "-" + variant.name);
@@ -720,6 +792,7 @@ try {
   }
   assert.deepEqual(errors, []);
   assert.deepEqual(warnings.filter((warning) => !warning.includes("CrottsWidget")), [], "Admin renders without missing React keys");
+  assert.deepEqual([...unreadable], [], "Admin text the theme left unreadable (under 3:1), by screen [size/theme]");
 } finally {
   await browser.close();
   await vite.close();

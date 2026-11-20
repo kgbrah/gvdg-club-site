@@ -10,6 +10,9 @@
   --secondary: #004E89;
   --accent: #F7B801;
   --green: #2D5016;
+  /* Text in the brand orange and green that stays readable in both themes (the fills above don't change). */
+  --primary-text: #C8410F;
+  --green-text: #2D5016;
   --dark: #1A1A2E;
   --light: #F4F4F9;
 
@@ -82,6 +85,8 @@
   --text-tertiary: #C0C0C0;
   --text-muted: #A0A0A0;
   --secondary-text: #6cb4e8;
+  --primary-text: #FF8A5C;
+  --green-text: #8FD18A;
 
   --over: #FF7A5C;
   --under: #4FD37E;

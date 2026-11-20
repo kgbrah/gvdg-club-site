@@ -118,7 +118,7 @@
         .status-box { text-align: center; padding: 3rem 1.5rem; color: var(--text-muted); }
         .status-box .spinner { width: 42px; height: 42px; border: 4px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; margin: 0 auto 1rem; animation: spin 0.9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .back-link { display: inline-block; margin-top: 0.5rem; color: rgba(255, 255, 255, 0.94); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+        .back-link { display: inline-block; margin-top: 0.5rem; color: var(--text-secondary); text-decoration: none; font-size: 0.95rem; background: none; border: none; cursor: pointer; font: inherit; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
         .back-link:hover { color: var(--primary); }
 
         /* ---- Admin gate (sign-in / access states) ---- */
@@ -148,7 +148,7 @@
         .ts-strip-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--bg-tertiary); }
         .ts-strip-svg svg { width: 100%; height: auto; }
         .ts-strip-meta { font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; }
-        .ts-strip-hole { color: var(--primary); font-weight: 700; }
+        .ts-strip-hole { color: var(--primary-text); font-weight: 700; }
         .hole-map-card { padding: 0.55rem; }
         .hole-map-frame { position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--border-color); aspect-ratio: 16 / 9; background: var(--bg-tertiary); }
         .hole-map-satellite { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -286,7 +286,7 @@
         .al-est .src { font-size: 0.7rem; color: var(--text-muted); }
         .al-verified { font-size: 0.7rem; font-weight: 700; color: #2e9e44; background: rgba(46,158,68,0.16); border-radius: 999px; padding: 0.05rem 0.45rem; white-space: nowrap; }
         tr.al-row-verified .al-par, tr.al-row-verified .al-manual { opacity: 0.6; }
-        .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
+        .al-poolitem { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 999px; padding: 0.2rem 0.6rem; margin: 0.15rem; font-size: 0.78rem; }
         .al-poolitem button { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; line-height: 1; }
         .sc-start-grid { display: grid; grid-template-columns: 1fr; gap: 0.85rem; align-items: stretch; }
         .sc-start-field { display: grid; gap: 0.35rem; min-width: 0; color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
@@ -564,7 +564,7 @@
             .admin-event-course-row .admin-btn { justify-self: start; }
         }
         .admin-msg { font-size: 0.9rem; margin-bottom: 0.75rem; min-height: 1.2em; }
-        .admin-msg.ok { color: var(--green); } .admin-msg.err { color: var(--over); }
+        .admin-msg.ok { color: var(--green-text); } .admin-msg.err { color: var(--over); }
         @media (max-width: 768px) {
             html { scroll-padding-top: 4.75rem; scroll-padding-bottom: calc(6.75rem + env(safe-area-inset-bottom)); }
             .admin-page input, .admin-page select, .admin-page textarea { scroll-margin-top: 5.25rem; scroll-margin-bottom: calc(7rem + env(safe-area-inset-bottom)); }
@@ -598,6 +598,8 @@
         }
         .admin-evrow { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding: 0.6rem 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); margin-bottom: 0.5rem; }
         .admin-evrow .ev-name { font-weight: 600; flex: 1; min-width: 140px; }
+        /* A row that is one big button (Today's "Up next"): buttons don't inherit the text colour, so set it. */
+        button.admin-evrow { color: var(--text-primary); font: inherit; text-align: left; width: 100%; cursor: pointer; }
         .admin-evrow input, .admin-evrow select { padding: 0.35rem 0.45rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); }
         .admin-mark-paid-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; flex: 1 1 100%; }
         .admin-mark-paid-form input { flex: 1 1 12rem; min-height: 44px; }
@@ -645,7 +647,7 @@
         .admin-wallet-form-wide { grid-column: 1 / -1; }
         .wallet-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; flex-wrap: wrap; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); padding: 0.65rem 0.75rem; }
         .wallet-row strong { color: var(--text-primary); }
-        .wallet-row .credit { color: var(--green); font-weight: 700; }
+        .wallet-row .credit { color: var(--green-text); font-weight: 700; }
         .wallet-row .debit { color: var(--primary); font-weight: 700; }
         .credit-award { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
         .credit-award input { width: 5rem; min-height: 44px; padding: 0.3rem; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 16px; }
