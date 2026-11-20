@@ -80,7 +80,7 @@ test("a normal browser tab is left alone (its new tab already has the person's s
 
 test("Home's PDGA card credits PDGA once (the membership card inside it doesn't repeat the line)", async () => {
   const { readFileSync } = await import("node:fs");
-  assert.match(readFileSync("src/members-app/overview-dashboard.js", "utf8"), /h\(PdgaMembershipCard, \{ data: pdgaMembership, compact: true, credit: false \}\)/);
+  assert.match(readFileSync("src/members-app/overview-dashboard.js", "utf8"), /h\(PdgaMembershipCard, \{ data: pdgaMembership, compact: true, credit: false, onCheckAgain: checkPdgaMembershipAgain \}\)/);
   assert.match(readFileSync("src/shared/pdga-membership.js", "utf8"), /player && credit \? h\(PdgaCredit/);
   for (const file of ["src/public-app/tournament-registration.js", "src/shared/pdga-membership.js", "src/members-app/pdga-events-panel.js", "src/members-app/overview-dashboard.js", "src/members-app/club-leagues.js"]) {
     assert.match(readFileSync(file, "utf8"), /\.\.\.SIGNUP_LINK|: SIGNUP_LINK\)/, file + " marks its sign-up link");

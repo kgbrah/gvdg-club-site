@@ -9,6 +9,7 @@ import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { getMember } from "./roster.js";
 import { membershipStatus } from "./membership-year.js";
+import { kvRateLimited } from "./kv-rate-limit.js";
 import { lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, PDGA_ATTRIBUTION, type PdgaApiEnv } from "./pdga-api.js";
 
 export const PDGA_JOIN_URL = "https://www.pdga.com/membership";
@@ -51,7 +52,10 @@ export async function handlePdgaMembership(request: Request, env: Env, origin: s
   let lookup: "ok" | "none" | "unavailable" = pdgaNumber ? "unavailable" : "none";
   if (pdgaNumber && pdgaApiConfigured(env as unknown as PdgaApiEnv)) {
     try {
-      const found = await lookupPdgaPlayer(env as unknown as PdgaApiEnv, pdgaNumber);
+      // ?fresh=1: the member is back from PDGA's renewal page, so ask PDGA now (at most 4 a minute per member).
+      const fresh = new URL(request.url).searchParams.get("fresh") === "1"
+        && !(await kvRateLimited(env, "pdga-fresh:" + claims.sub, 4, 60));
+      const found = await lookupPdgaPlayer(env as unknown as PdgaApiEnv, pdgaNumber, fresh ? "all" : "none");
       lookup = "ok";
       player = found ? { name: found.name, membershipStatus: found.membershipStatus, membershipExpires: found.membershipExpires, url: found.url } : null;
     } catch { /* lookup stays "unavailable" */ }

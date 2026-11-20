@@ -20,7 +20,7 @@ import { fieldTestUsed } from "../shared/field-test-gate.js";
 import { FieldTestSwitch, useFieldTestMode } from "../shared/field-test-ui.js";
 import { KarmaChip } from "../shared/karma.js";
 import { PdgaMembershipCard } from "../shared/pdga-membership.js";
-import { usePdgaMembership } from "./pdga-membership.js";
+import { checkPdgaMembershipAgain, usePdgaMembership } from "./pdga-membership.js";
 
 const h = React.createElement;
 const PASSKEY_STATE_EVENT = "gvdg:member-passkey-state";
@@ -91,7 +91,7 @@ export function MemberMorePage() {
   return h("div", { className: "react-more-page member-subpage", "data-react-more-page": "ready" }, [
     h(ToolFinder, { key: "finder", isAdmin, onNavigate: selectDashboardTab }),
     pdgaMembership ? h("section", { className: "member-link-section player-card", "aria-label": "PDGA membership", key: "pdga-membership" },
-      h(PdgaMembershipCard, { data: pdgaMembership })) : null,
+      h(PdgaMembershipCard, { data: pdgaMembership, onCheckAgain: checkPdgaMembershipAgain })) : null,
     h("div", { className: "member-subgrid", key: "groups" }, [
       h(MemberLinkSection, { title: "Members and club activity", key: "people" }, [
         h(MemberLinkRow, { tab: "club", title: "Club directory", detail: "Members, course conditions and minutes", icon: Users, key: "club" }),

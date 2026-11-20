@@ -45,6 +45,10 @@ function response(path, query) {
   if (path === "/me") return member;
   if (path === "/me/dashboard-theme") return { theme: themeFor(query) };
   // PDGA membership (an expired one, so Home shows the renewal card) with the club's code.
+  // "I've renewed" asks with ?fresh=1: PDGA now shows the renewal.
+  if (path === "/pdga/membership" && query.fresh === "1") return { pdgaNumber: "123456", lookup: "ok", joinUrl: "https://www.pdga.com/membership", renewUrl: "https://www.pdga.com/membership/renew",
+    player: { name: member.name, membershipStatus: "current", membershipExpires: (new Date().getUTCFullYear() + 1) + "-12-31", url: "https://www.pdga.com/player/123456" },
+    promo: { code: "GVDG2026", validThrough: "2026" }, clubDiscountAvailable: true, attribution: "Player, event, and course data provided by PDGA" };
   if (path === "/pdga/membership") return { pdgaNumber: "123456", lookup: "ok", joinUrl: "https://www.pdga.com/membership", renewUrl: "https://www.pdga.com/membership/renew",
     player: { name: member.name, membershipStatus: "expired", membershipExpires: "2025-12-31", url: "https://www.pdga.com/player/123456" },
     promo: { code: "GVDG2026", validThrough: "2026" }, clubDiscountAvailable: true, attribution: "Player, event, and course data provided by PDGA" };
@@ -86,7 +90,7 @@ const vite = await createServer({
         } else if (url.pathname.startsWith(apiRoot + "/")) {
           const path = url.pathname.slice(apiRoot.length);
           const ref = request.headers.referer ? new URL(request.headers.referer) : null;
-          const query = Object.fromEntries(ref?.searchParams || []);
+          const query = { ...Object.fromEntries(ref?.searchParams || []), fresh: url.searchParams.get("fresh") || "" };
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify(response(path, query)));
         } else next();
@@ -152,7 +156,13 @@ try {
           await story.locator("[data-pdga-membership]").waitFor();
           assert.equal(await story.locator(".pdga-credit").count(), 1, "Home's PDGA card shows one credit line");
           assert.equal(await story.getByRole("link", { name: "Renew with PDGA" }).getAttribute("data-signup-link"), "true");
-          if (glass === "frosted" && mode === "dark") await story.locator("[data-pdga-membership]").screenshot({ path: join(images, "member-home-pdga-renewal-390.png") });
+          if (glass === "frosted" && mode === "dark") {
+            await story.locator("[data-pdga-membership]").screenshot({ path: join(images, "member-home-pdga-renewal-390.png") });
+            // Owner: "the notification should go away once the player has renewed".
+            await story.getByRole("button", { name: "I've renewed" }).click();
+            await story.locator("[data-pdga-membership]").waitFor({ state: "detached" });
+            assert.equal(await story.locator(".pdga-credit").count(), 1, "Home's PDGA card keeps its one credit line");
+          }
         }
         await page.screenshot({ path: join(images, "member-" + route + "-" + glass + "-" + mode + "-390.png"), animations: "disabled" });
         assert.deepEqual(errors, []);

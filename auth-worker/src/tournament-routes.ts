@@ -50,7 +50,7 @@ export async function handlePdgaPlayerLookup(request: Request, env: Env, origin:
   if (!pdgaApiConfigured(apiEnv(env))) return json({ error: "pdga_unavailable" }, 503, origin);
   if (await kvRateLimited(env, "pdgalookup:" + clientIp(request), 30, 60)) return json({ error: "rate_limited" }, 429, origin);
   try {
-    const player = await lookupPdgaPlayer(apiEnv(env), number);
+    const player = await lookupPdgaPlayer(apiEnv(env), number, "lapsed");
     return json({ player: player ? playerView(player) : null, attribution: PDGA_ATTRIBUTION }, 200, origin);
   } catch (error) {
     return json({ error: error instanceof PdgaApiError && error.code === "rate_limited" ? "rate_limited" : "pdga_unavailable" }, 503, origin);
@@ -135,7 +135,7 @@ export async function registerForTournament(
   let checked = false;
   if (pdgaNumber && pdgaApiConfigured(apiEnv(env))) {
     try {
-      player = await lookupPdgaPlayer(apiEnv(env), pdgaNumber);
+      player = await lookupPdgaPlayer(apiEnv(env), pdgaNumber, "lapsed");
       checked = true;
     } catch { /* PDGA unreachable: decided below */ }
     if (checked && !player) return json({ error: "pdga_not_found" }, 400, origin);

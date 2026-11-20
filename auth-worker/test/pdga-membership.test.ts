@@ -118,3 +118,67 @@ describe("PDGA membership and the club's discount code", () => {
     expect(promoCurrent({ code: "A1", validThrough: "2026-03-31", updatedAt: "" }, new Date("2026-04-01T12:00:00Z"))).toBe(false);
   });
 });
+
+describe("a renewal shows up (owner: \"the notification should go away once the player has renewed\")", () => {
+  // PDGA's answer for 70007 changes once they renew; count how often PDGA is asked.
+  function renewable() {
+    const state = { renewed: false, asked: 0 };
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = new URL(String(input instanceof Request ? input.url : input));
+      if (url.pathname.endsWith("/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
+      state.asked += 1;
+      return Response.json({ status: 0, players: [{ first_name: "Cy", last_name: "Young", pdga_number: "70007",
+        membership_status: state.renewed ? "current" : "expired", membership_expiration_date: state.renewed ? `${YEAR + 1}-12-31` : `${YEAR - 1}-12-31` }] });
+    });
+    return state;
+  }
+
+  it("fresh=1 (back from PDGA's renewal page) asks PDGA now; without it the stored answer is used", async () => {
+    const state = renewable();
+    expect((await call("/pdga/membership", { sub: "m_lapsed" })).data.player.membershipStatus).toBe("expired");
+    state.renewed = true;
+    expect((await call("/pdga/membership", { sub: "m_lapsed" })).data.player.membershipStatus).toBe("expired");
+    expect(state.asked).toBe(1);
+    const fresh = await call("/pdga/membership?fresh=1", { sub: "m_lapsed" });
+    expect(fresh.data.player).toMatchObject({ membershipStatus: "current", membershipExpires: `${YEAR + 1}-12-31` });
+    expect((await call("/pdga/membership", { sub: "m_lapsed" })).data.player.membershipStatus).toBe("current");
+  });
+
+  it("fresh checks are limited to 4 a minute per member (then the stored answer)", async () => {
+    const state = renewable();
+    for (let i = 0; i < 6; i += 1) await call("/pdga/membership?fresh=1", { sub: "m_lapsed" });
+    expect(state.asked).toBe(4);
+  });
+
+  it("a lapsed or ending-soon membership is asked again after 15 minutes, a settled one after 6 hours", async () => {
+    const { lookupPdgaPlayer, membershipMayChange } = await import("../src/pdga-api.js");
+    const now = Date.parse(`${YEAR}-06-01T12:00:00Z`);
+    expect(membershipMayChange({ membershipStatus: "expired", membershipExpires: `${YEAR - 1}-12-31` } as never, now)).toBe(true);
+    expect(membershipMayChange({ membershipStatus: "current", membershipExpires: `${YEAR}-07-01` } as never, now)).toBe(true);
+    expect(membershipMayChange({ membershipStatus: "current", membershipExpires: `${YEAR}-12-31` } as never, now)).toBe(false);
+    const state = renewable();
+    await lookupPdgaPlayer(env as never, "70007");
+    const stored = (minutesAgo: number) => (env.DB as unknown as { raw: { exec(sql: string): void } }).raw
+      .exec(`UPDATE pdga_api_players SET fetched_at = ${Date.now() - minutesAgo * 60_000} WHERE pdga_number = '70007'`);
+    stored(10);
+    await lookupPdgaPlayer(env as never, "70007");
+    expect(state.asked).toBe(1);
+    stored(16);
+    state.renewed = true;
+    expect((await lookupPdgaPlayer(env as never, "70007"))?.membershipStatus).toBe("current");
+    expect(state.asked).toBe(2);
+    stored(60);
+    await lookupPdgaPlayer(env as never, "70007");
+    expect(state.asked).toBe(2);
+  });
+
+  it("registration's PDGA check asks PDGA again when the stored membership has lapsed", async () => {
+    const state = renewable();
+    expect((await call("/pdga/player?number=70007")).data.player.membershipStatus).toBe("expired");
+    state.renewed = true;
+    expect((await call("/pdga/player?number=70007")).data.player.membershipStatus).toBe("current");
+    expect(state.asked).toBe(2);
+    await call("/pdga/player?number=70007");
+    expect(state.asked).toBe(2);
+  });
+});
