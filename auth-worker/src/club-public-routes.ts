@@ -211,7 +211,18 @@ export async function handleClubPublic(
     const ev = await db.getEvent(env.DB, id);
     if (!ev) return json({ error: "not_found" }, 404, origin);
     const fields = await readD1OrFallback(() => publicFieldsByEvent(env, [id]), () => new Map());
-    return json({ event: { ...ev, field: fields.get(id) || [] } }, 200, origin);
+    // The event page's Entry and Divisions facts come from the registration settings (it said "Entry: Free" for a $50
+    // event: the PDGA end-to-end test).
+    const cfg = await readD1OrFallback(() => db.getEventConfig(env.DB, id), () => null) as Record<string, unknown> | null;
+    let divisions: unknown = [];
+    try { divisions = cfg?.divisions ? JSON.parse(String(cfg.divisions)) : []; } catch { divisions = []; }
+    const settings = cfg ? {
+      entry_fee_cents: cfg.entry_fee_cents ?? null,
+      ctp_fee_cents: cfg.ctp_fee_cents ?? null,
+      divisions: Array.isArray(divisions) ? divisions : [],
+      ...(cfg.play_format ? { play_format: cfg.play_format } : {}),
+    } : {};
+    return json({ event: { ...ev, ...settings, field: fields.get(id) || [] } }, 200, origin);
   }
   if (method === "GET" && seg[0] === "events" && seg.length === 3 && seg[2] === "results") {
     const eid = asInt(seg[1]);

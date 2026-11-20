@@ -97,5 +97,9 @@ describe("pdgaResultsUpload", () => {
       ["MA1", "", "1", "Cal", "Ray Jr", "3", "60"],
     ]);
     expect(upload).toMatchObject({ players: 4, missingScores: 1, noDivision: 2, noPdga: 2 });
+    // PDGA's own first/last split when it knows the number ("Steady Ed" + "Headrick", not "Steady" + "Ed Headrick").
+    const named = pdgaResultsUpload([{ eventId: 1, name: "R1", date: null }], [{ event_id: 1, member_id: "e", name: "Steady Ed Headrick", total: 61 }],
+      [{ event_id: 1, member_id: "e", name: "Steady Ed Headrick", division: "MPO", pdga_number: "1" }], new Map([["1", { first: "Steady Ed", last: "Headrick" }]]));
+    expect(named.rows[0]).toEqual(["MPO", "", "1", "Steady Ed", "Headrick", "1", "61"]);
   });
 });

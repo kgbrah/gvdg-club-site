@@ -11,7 +11,8 @@
 //      PDGA, divisions and the fee follow PDGA's actual answer, they register and pay by Zelle.
 //   5. Admin: Zelle received; the player is in the field and on the pre-registration list.
 //   6. A second real PDGA number (a lapsed membership): the non-member fee and PDGA's renewal.
-//   7. After the round: Results for PDGA builds the rows for PDGA Tournament Manager with the real PDGA numbers.
+//   7. After the round (Events › Past › the event, its Results screen): Results for PDGA builds the rows for PDGA
+//      Tournament Manager with the real PDGA numbers.
 // Needs PDGA_API_USERNAME / PDGA_API_PASSWORD (GitHub secrets; never printed). Without them, GVDG_PDGA_FAKE=1 runs the
 // same steps against a small stand-in for PDGA, to check the script itself.
 //   npm run build && npm ci --prefix auth-worker && GVDG_QA_NO_SANDBOX=1 node scripts/qa/pdga-event-e2e-qa.mjs
@@ -281,6 +282,8 @@ try {
     assert.equal(await panel.getAttribute("data-tournament-registration"), "open");
     assert.ok(await page.locator(".pdga-badge").first().isVisible(), "the PDGA badge on the event");
     assert.ok(await page.getByText("Player, event, and course data provided by").first().isVisible(), "PDGA's credit");
+    const facts = await page.locator(".detail-facts").innerText();
+    assert.ok(/Entry\s+\$50(?:\.00)?\b/i.test(facts) && /Divisions\s+MPO · MA3/i.test(facts), "the event's facts show the real entry fee and divisions: " + facts.replace(/\s+/g, " "));
     const rules = await page.locator(".tournament-rules").innerText();
     for (const text of ["Entry $50.00", "$10.00 added for players who aren't current PDGA members", "MA3: rated 899 or below", "Field capped at 2 players"]) assert.ok(rules.includes(text), "rules show: " + text);
     await panel.getByLabel("PDGA number").fill(PLAYER);
@@ -356,23 +359,29 @@ try {
     sqlite.prepare("INSERT INTO results (event_id, member_id, name, place, total) VALUES (?, ?, ?, 1, 54)").run(eventId, regs[0].member_id, regs[0].name);
     sqlite.prepare("INSERT INTO results (event_id, member_id, name, place, total) VALUES (?, ?, ?, 2, 61)").run(eventId, regs[1].member_id, regs[1].name);
     sqlite.prepare("UPDATE events SET status = 'final' WHERE id = ?").run(eventId);
-    // A finished event leaves the Registration screen's menu: the admin opens it from Events › ⋯ › Registration.
+    // After the round the TD opens the event from Events › Past, which goes to its Results screen; Results for PDGA
+    // is there (owner: "add the results for pdga to the events results screen").
+    // (This harness has no live-scoring room, a Durable Object, so the Worker logs the Results screen's live read
+    // failing; the screen itself carries on.)
     const { page, context } = await open(`/admin.html#events`, { admin: true, width: 1100 });
     await page.getByRole("button", { name: "Past", exact: true }).or(page.getByRole("tab", { name: "Past", exact: true })).first().click();
-    await page.getByRole("button", { name: `More actions for ${pdgaEvent.name}` }).click();
-    await page.locator("#adminEventsListReactApp").getByRole("button", { name: "Registration", exact: true }).click();
-    await registrationScreen(page, eventId);
-    await page.getByRole("button", { name: "Get results for PDGA" }).click();
+    await page.locator("#adminEventsListReactApp .admin-event-card-main").filter({ hasText: pdgaEvent.name.slice(0, 40) }).first().click();
+    const section = page.locator("[data-admin-results-pdga]");
+    await section.waitFor({ timeout: 30_000 });
+    await section.getByRole("button", { name: "Get results for PDGA" }).click();
     await page.locator("[data-admin-pdga-results=ready]").waitFor();
     const rows = await page.getByLabel("Results for PDGA").inputValue();
     const [first, ...rest] = player.name.split(/\s+/);
     assert.ok(rows.startsWith("DivCode\tT.O.\tPlace\tFirst Name\tLast Name\tPDGA\tRd1\n"), rows);
     assert.ok(rows.includes(`MPO\t\t1\t${first}\t${rest.join(" ")}\t${PLAYER}\t54`), rows);
     assert.ok(rows.includes(`\t${LAPSED}\t61`), rows);
+    // PDGA's own first/last names (e.g. "Steady Ed" + "Headrick"), from the stored PDGA records.
+    const lapsedRaw = JSON.parse(sqlite.prepare("SELECT data FROM pdga_api_players WHERE pdga_number = ?").get(LAPSED).data);
+    assert.ok(rows.includes(`\t${lapsedRaw.first_name}\t${lapsedRaw.last_name}\t${LAPSED}\t61`), "PDGA's first and last name: " + rows);
     await shot(page, "7-admin-results-for-pdga");
     assert.deepEqual(page.errors, []);
     await context.close();
-    step("Results for PDGA: the rows for PDGA Tournament Manager, with the real PDGA numbers");
+    step("Results for PDGA, on the event's Results screen: the rows for PDGA Tournament Manager, with the real PDGA numbers");
   }
 
   const calls = pdgaCalls.reduce((map, call) => map.set(call, (map.get(call) || 0) + 1), new Map());

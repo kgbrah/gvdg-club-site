@@ -280,7 +280,19 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
       env.DB.prepare(`SELECT event_id, member_id, name, total FROM results WHERE event_id IN (${marks})`).bind(...ids).all<UploadResult>(),
       env.DB.prepare(`SELECT event_id, member_id, name, division, pdga_number FROM registrations WHERE event_id IN (${marks}) ORDER BY paid_entry DESC, id`).bind(...ids).all<UploadRegistration>(),
     ]) : [{ results: [] }, { results: [] }];
-    const upload = pdgaResultsUpload(rounds, results.results ?? [], registrations.results ?? []);
+    const numbers = [...new Set((registrations.results ?? []).map((row) => normalPdgaNumber(row.pdga_number)).filter((n): n is string => Boolean(n)))];
+    const names = new Map<string, { first: string; last: string }>();
+    if (numbers.length) {
+      const stored = await env.DB.prepare(`SELECT pdga_number, data FROM pdga_api_players WHERE pdga_number IN (${numbers.map(() => "?").join(", ")})`)
+        .bind(...numbers).all<{ pdga_number: string; data: string | null }>();
+      for (const row of stored.results ?? []) {
+        try {
+          const raw = row.data ? JSON.parse(row.data) as { first_name?: unknown; last_name?: unknown } : null;
+          if (raw && typeof raw.first_name === "string" && typeof raw.last_name === "string") names.set(row.pdga_number, { first: raw.first_name.trim(), last: raw.last_name.trim() });
+        } catch { /* the first word is the first name */ }
+      }
+    }
+    const upload = pdgaResultsUpload(rounds, results.results ?? [], registrations.results ?? [], names);
     return json({ pdgaEventId: link.pdga_event_id, rounds: rounds.slice(0, 4), ...upload }, 200, origin);
   }
   // The event form's "PDGA-sanctioned event": link (or unlink) only the PDGA event; the rest of the settings stay.
