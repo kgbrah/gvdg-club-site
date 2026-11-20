@@ -283,6 +283,10 @@ try {
     assert.equal(await panel.getAttribute("data-tournament-registration"), "open");
     assert.ok(await page.locator(".pdga-badge").first().isVisible(), "the PDGA badge on the event");
     assert.ok(await page.getByText("Player, event, and course data provided by").first().isVisible(), "PDGA's credit");
+    // The PDGA event's page links to it on pdga.com and credits PDGA (their attribution rules).
+    const pdgaFact = page.locator(".detail-facts").getByRole("link", { name: `Event #${pdgaEvent.id} on pdga.com` });
+    assert.equal(await pdgaFact.getAttribute("href"), `https://www.pdga.com/tour/event/${pdgaEvent.id}`);
+    assert.ok(await page.locator(".detail-facts .pdga-credit").isVisible(), "PDGA's credit on the event page");
     const facts = await page.locator(".detail-facts").innerText();
     assert.ok(/Entry\s+\$50(?:\.00)?\b/i.test(facts) && /Divisions\s+MPO · MA3/i.test(facts), "the event's facts show the real entry fee and divisions: " + facts.replace(/\s+/g, " "));
     const rules = await page.locator(".tournament-rules").innerText();

@@ -26,6 +26,7 @@ import { EventCalendarButton, EventShareButton } from "./events-actions.js";
 import { countdownLabel, countdownParts, relativeEventWhen } from "../shared/events-display.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
 import { DonateDollar } from "../shared/donate-prompt.js";
+import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 
@@ -151,6 +152,15 @@ function DetailFacts({ course, courseSummary, event }) {
         value: h(ExternalLink, { href: externalHref, text: "External link", signup: true }),
       })
       : null,
+    // A PDGA-sanctioned event: its pdga.com page, and PDGA's attribution (their data: the event's name and details).
+    event.pdga_event_id
+      ? h(DetailFact, {
+        key: "pdga",
+        label: "PDGA",
+        value: h(PdgaLink, { href: pdgaEventHref(event.pdga_event_id) }, `Event #${event.pdga_event_id} on pdga.com`),
+      })
+      : null,
+    event.pdga_event_id ? h(PdgaCredit, { key: "pdga-credit" }) : null,
   ]);
 }
 

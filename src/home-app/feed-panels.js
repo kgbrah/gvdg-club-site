@@ -9,6 +9,7 @@ import {
   parseTournamentCsv,
   parseTournamentDate,
 } from "../shared/home-feed-parse.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 const VISIBLE_LIMIT = 5;
@@ -202,5 +203,7 @@ export function AreaTournamentsFeed() {
         h("span", { key: "text" }, "View on Disc Golf Scene"),
         icon(ChevronRight, { key: "icon", size: 14 }),
       ])),
+    // PDGA-sanctioned events: PDGA's attribution where their data shows.
+    h(PdgaCredit, { key: "pdga-credit" }),
   ]);
 }
