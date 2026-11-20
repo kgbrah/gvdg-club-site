@@ -15,6 +15,27 @@ const SESSION_KEY = "pdga-api:session";
 const SESSION_TTL_SECONDS = 6 * 60 * 60;
 const FOUND_TTL_MS = 6 * 60 * 60 * 1000;
 const MISSING_TTL_MS = 60 * 60 * 1000;
+/**
+ * A player whose PDGA membership has lapsed or ends within RECHECK_DAYS is about to renew, so their record is asked
+ * for again after 15 minutes instead of 6 hours (owner: "the notification should go away once the player has
+ * renewed").
+ */
+const RECHECK_TTL_MS = 15 * 60 * 1000;
+const RECHECK_DAYS = 45;
+
+/** True when a player's membership has lapsed or ends within RECHECK_DAYS of `now`. */
+export function membershipMayChange(player: PdgaPlayer | null, now = Date.now()): boolean {
+  if (!player) return false;
+  if (player.membershipStatus !== "current") return true;
+  const ends = Date.parse(String(player.membershipExpires || "") + "T23:59:59Z");
+  return Number.isFinite(ends) && ends - now <= RECHECK_DAYS * 86_400_000;
+}
+
+/**
+ * How fresh a stored record must be: "lapsed" asks PDGA again whenever the stored membership isn't current (for a
+ * fee or a division that depends on it); "all" always asks PDGA (the player says they just renewed).
+ */
+export type PdgaRefresh = "none" | "lapsed" | "all";
 
 export type PdgaApiEnv = {
   DB: D1Like;
@@ -182,16 +203,21 @@ export function parsePdgaEvent(raw: unknown): PdgaEventInfo | null {
  * PDGA players by number (up to 200 per PDGA call), from D1 when read in the last few hours. A number PDGA doesn't
  * know maps to null. Throws PdgaApiError when PDGA can't be asked and nothing fresh is stored.
  */
-export async function lookupPdgaPlayers(env: PdgaApiEnv, numbers: readonly string[], now = Date.now()): Promise<Map<string, PdgaPlayer | null>> {
+export async function lookupPdgaPlayers(env: PdgaApiEnv, numbers: readonly string[], now = Date.now(), refresh: PdgaRefresh = "none"): Promise<Map<string, PdgaPlayer | null>> {
   const wanted = [...new Set(numbers.map(normalPdgaNumber).filter((value): value is string => value != null))];
   const found = new Map<string, PdgaPlayer | null>();
   if (!wanted.length) return found;
   const cached = await env.DB.prepare(`SELECT pdga_number, data, fetched_at FROM pdga_api_players WHERE pdga_number IN (${wanted.map(() => "?").join(", ")})`)
     .bind(...wanted).all<{ pdga_number: string; data: string | null; fetched_at: number }>();
   for (const row of cached.results ?? []) {
+    if (refresh === "all") break;
     const age = now - Number(row.fetched_at);
-    if (age > (row.data ? FOUND_TTL_MS : MISSING_TTL_MS) || age < 0) continue;
-    found.set(row.pdga_number, row.data ? parsePdgaPlayer(JSON.parse(row.data)) : null);
+    let player: PdgaPlayer | null = null;
+    try { player = row.data ? parsePdgaPlayer(JSON.parse(row.data)) : null; } catch { continue; }
+    const ttl = !row.data ? MISSING_TTL_MS : membershipMayChange(player, now) ? RECHECK_TTL_MS : FOUND_TTL_MS;
+    if (age > ttl || age < 0) continue;
+    if (refresh === "lapsed" && player && player.membershipStatus !== "current") continue;
+    found.set(row.pdga_number, player);
   }
   const missing = wanted.filter((number) => !found.has(number));
   for (let offset = 0; offset < missing.length; offset += 200) {
@@ -213,8 +239,8 @@ export async function lookupPdgaPlayers(env: PdgaApiEnv, numbers: readonly strin
   return found;
 }
 
-export async function lookupPdgaPlayer(env: PdgaApiEnv, pdgaNumber: string): Promise<PdgaPlayer | null> {
-  return (await lookupPdgaPlayers(env, [pdgaNumber])).get(normalPdgaNumber(pdgaNumber) ?? "") ?? null;
+export async function lookupPdgaPlayer(env: PdgaApiEnv, pdgaNumber: string, refresh: PdgaRefresh = "none"): Promise<PdgaPlayer | null> {
+  return (await lookupPdgaPlayers(env, [pdgaNumber], Date.now(), refresh)).get(normalPdgaNumber(pdgaNumber) ?? "") ?? null;
 }
 
 export type PdgaEventSearch = {

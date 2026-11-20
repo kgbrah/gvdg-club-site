@@ -22,6 +22,49 @@ export function pdgaMembershipNeedsAttention(data) {
   return left != null && left <= SOON_DAYS;
 }
 
+// Tapping Join / Renew marks the time; coming back to the app within RENEW_WINDOW_MS asks PDGA again right away, so
+// the renewal shows up (owner: "the notification should go away once the player has renewed").
+const RENEW_KEY = "gvdg_pdga_renew_started";
+const RENEW_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+export function markPdgaRenewStarted(storage = typeof sessionStorage !== "undefined" ? sessionStorage : null) {
+  try { storage && storage.setItem(RENEW_KEY, String(Date.now())); } catch { /* private mode: the button still works */ }
+}
+
+/** True within RENEW_WINDOW_MS of tapping Join / Renew. */
+export function pdgaRenewPending(storage = typeof sessionStorage !== "undefined" ? sessionStorage : null, now = Date.now()) {
+  try {
+    const started = Number(storage && storage.getItem(RENEW_KEY));
+    return Number.isFinite(started) && started > 0 && now - started < RENEW_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
+
+export function clearPdgaRenewStarted(storage = typeof sessionStorage !== "undefined" ? sessionStorage : null) {
+  try { storage && storage.removeItem(RENEW_KEY); } catch { /* harmless */ }
+}
+
+/** "I've renewed": asks PDGA now, and says so when PDGA hasn't caught up yet. */
+function CheckAgain({ onCheckAgain }) {
+  const [state, setState] = React.useState("idle");
+  async function check() {
+    setState("checking");
+    try {
+      const next = await onCheckAgain();
+      setState(pdgaMembershipNeedsAttention(next) ? "not-yet" : "idle");
+    } catch {
+      setState("failed");
+    }
+  }
+  return h(React.Fragment, null, [
+    h("button", { className: "player-btn", type: "button", key: "check", disabled: state === "checking", onClick: check },
+      state === "checking" ? "Checking PDGA…" : "I've renewed"),
+    state === "not-yet" ? h("p", { className: "dash-note", role: "status", key: "not-yet" }, "PDGA hasn't updated your membership yet. If you just paid, give it a few minutes and check again.") : null,
+    state === "failed" ? h("p", { className: "dash-note", role: "status", key: "failed" }, "PDGA couldn't be checked right now. Try again in a few minutes.") : null,
+  ]);
+}
+
 function PromoCode({ promo }) {
   const [copied, setCopied] = React.useState(false);
   return h("div", { className: "pdga-promo", "data-pdga-promo": "" }, [
@@ -35,7 +78,7 @@ function PromoCode({ promo }) {
 
 /** The card: status from PDGA, the join/renew button, and the code (or how to get it). */
 /** credit: false inside a card that already credits PDGA (Home), so the line isn't shown twice. */
-export function PdgaMembershipCard({ data, compact = false, credit = true }) {
+export function PdgaMembershipCard({ data, compact = false, credit = true, onCheckAgain = null }) {
   if (!data || !data.joinUrl) return null; // no answer (signed out, or the check failed): nothing to show
   const player = data.player;
   const status = player ? player.membershipStatus : null;
@@ -53,7 +96,8 @@ export function PdgaMembershipCard({ data, compact = false, credit = true }) {
     h("h3", { key: "title" }, "PDGA membership"),
     h("p", { className: "player-card-meta", key: "line" }, line),
     h("div", { className: "member-action-grid", key: "actions" }, [
-      h("a", { className: `player-btn${renew || data.lookup === "none" ? " primary" : ""}`, href, ...SIGNUP_LINK, key: "go" }, label),
+      h("a", { className: `player-btn${renew || data.lookup === "none" ? " primary" : ""}`, href, ...SIGNUP_LINK, key: "go", onClick: () => markPdgaRenewStarted() }, label),
+      renew && onCheckAgain ? h(CheckAgain, { onCheckAgain, key: "again" }) : null,
     ]),
     data.promo ? h(PromoCode, { promo: data.promo, key: "promo" })
       : data.clubDiscountAvailable ? h("p", { className: "dash-note", key: "promo-note" }, "Current GVDG members get $5 off with the club's code.") : null,

@@ -26,7 +26,7 @@ import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registra
 import { KarmaChip } from "../shared/karma.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 import { PdgaMembershipCard, pdgaMembershipNeedsAttention } from "../shared/pdga-membership.js";
-import { usePdgaMembership } from "./pdga-membership.js";
+import { checkPdgaMembershipAgain, usePdgaMembership } from "./pdga-membership.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
@@ -354,7 +354,7 @@ export function MemberOverviewDashboard() {
       h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
       // Renewal nudge: only when the member's PDGA membership has lapsed or ends soon.
       pdgaMembershipNeedsAttention(pdgaMembership)
-        ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true, credit: false })) : null,
+        ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true, credit: false, onCheckAgain: checkPdgaMembershipAgain })) : null,
       h(PdgaCredit, { key: "pdga-credit" }),
     ]),
     h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
