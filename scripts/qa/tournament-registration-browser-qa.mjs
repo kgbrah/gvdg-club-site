@@ -129,6 +129,11 @@ const vite = await createServer({
         return reply({ settings: state.settings });
       }
       if (key === "/admin/pdga-events/104547") return reply({ event: state.settings.pdgaEvent });
+      if (key === "/admin/events/7/pdga-players") {
+        const header = ["DivCode", "First Name", "Last Name", "PDGA", "Start"];
+        const rows = [["MPO", "Ada", "Lovelace", "80024", ""], ["MA3", "Cy", "Young", "70007", "Waitlist #1"]];
+        return reply({ pdgaEventId: 104547, header, rows, text: [header, ...rows].map((row) => row.join("\t")).join("\n") + "\n", registered: 1, waitlisted: 1, unpaid: 1, noDivision: 0, noPdga: 0 });
+      }
       if (key === "/admin/events/7/pdga-results") {
         const header = ["DivCode", "T.O.", "Place", "First Name", "Last Name", "PDGA", "Rd1", "Rd2"];
         const rows = [["MA3", "", "1", "Ada", "Lovelace", "80024", "54", "52"], ["MPO", "", "", "Cy", "Young", "70007", "50", ""]];
@@ -233,6 +238,16 @@ try {
     assert.ok(await page.getByText("Player, event, and course data provided by").isVisible());
     // Results for PDGA Tournament Manager: the rows to paste, what to fix there, and a copy button.
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin });
+    // Players for PDGA: the list to paste so players registered here show on pdga.com (owner: "Yes please").
+    await page.getByRole("button", { name: "Get players for PDGA" }).click();
+    const players = page.locator("[data-admin-pdga-players=ready]");
+    await players.waitFor();
+    assert.match(await page.getByLabel("Players for PDGA").inputValue(), /^DivCode\tFirst Name\tLast Name\tPDGA\tStart\nMPO\tAda\tLovelace\t80024\t\nMA3\tCy\tYoung\t70007\tWaitlist #1\n$/);
+    assert.ok((await players.innerText()).includes("1 registered player · 1 on the waitlist · 1 signed up, not paid (not listed)"));
+    await page.getByRole("button", { name: "Copy players for PDGA" }).click();
+    await players.getByRole("button", { name: "Copied" }).waitFor();
+    assert.ok((await page.evaluate(() => navigator.clipboard.readText())).startsWith("DivCode\tFirst Name\tLast Name\tPDGA"));
+    await players.screenshot({ path: join(shots, "admin-pdga-players-1100.png") });
     await page.getByRole("button", { name: "Get results for PDGA" }).click();
     const results = page.locator("[data-admin-pdga-results=ready]");
     await results.waitFor();

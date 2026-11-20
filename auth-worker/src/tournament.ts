@@ -237,3 +237,43 @@ export function pdgaResultsUpload(rounds: UploadRound[], results: UploadResult[]
     extraRounds: Math.max(0, rounds.length - used.length),
   };
 }
+
+/**
+ * The event's player list for PDGA Tournament Manager (its Upload page, "Upload Player Data - Basic": rows pasted from
+ * the TD Report with DivCode, First Name, Last Name, PDGA; Team Name first for team events). Owner, on whether players
+ * registered here show on pdga.com: "Yes please" to a copy-ready list. Paid players in field order (PDGA 1.02: entered
+ * once paid), then the waitlist marked "Waitlist #N" in the Start field (PDGA's help: shown on the PDGA event page);
+ * signed up but unpaid isn't registered yet, so it's left out.
+ */
+export type UploadPlayer = {
+  id: number; name: string; division: string | null; team: string | null; pdga_number: string | null;
+  paid_entry: number | null; paid_at: string | null; waitlisted: number | null; waitlisted_at: string | null;
+};
+
+export function pdgaPlayersUpload(registrations: UploadPlayer[], pdgaNames: PdgaNames = new Map()) {
+  const paid = registrations.filter((row) => Number(row.paid_entry) === 1).sort(fieldOrder);
+  const waitlist = registrations.filter((row) => Number(row.paid_entry) !== 1 && Number(row.waitlisted) === 1)
+    .sort((a, b) => String(a.waitlisted_at ?? "").localeCompare(String(b.waitlisted_at ?? "")) || a.id - b.id);
+  const teams = registrations.some((row) => cell(row.team));
+  const header = [...(teams ? ["Team Name"] : []), "DivCode", "First Name", "Last Name", "PDGA", ...(waitlist.length ? ["Start"] : [])];
+  const line = (row: UploadPlayer, start: string) => {
+    const pdga = cell(row.pdga_number);
+    const known = pdga ? pdgaNames.get(pdga) : undefined;
+    const [first, ...rest] = String(row.name || "").trim().split(/\s+/);
+    return [
+      ...(teams ? [cell(row.team)] : []),
+      cell(row.division).toUpperCase(), cell(known?.first || first || ""), cell(known ? known.last : rest.join(" ")), pdga,
+      ...(waitlist.length ? [start] : []),
+    ];
+  };
+  const rows = [...paid.map((row) => line(row, "")), ...waitlist.map((row, index) => line(row, `Waitlist #${index + 1}`))];
+  return {
+    header, rows,
+    text: [header, ...rows].map((row) => row.join("\t")).join("\n") + "\n",
+    registered: paid.length,
+    waitlisted: waitlist.length,
+    unpaid: registrations.filter((row) => Number(row.paid_entry) !== 1 && Number(row.waitlisted) !== 1).length,
+    noDivision: [...paid, ...waitlist].filter((row) => !cell(row.division)).length,
+    noPdga: [...paid, ...waitlist].filter((row) => !cell(row.pdga_number)).length,
+  };
+}

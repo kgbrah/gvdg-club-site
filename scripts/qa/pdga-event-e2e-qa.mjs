@@ -9,7 +9,8 @@
 //      a $10 non-member fee, Zelle, the TD's email.
 //   4. The public event page: the PDGA badge and credit; a guest enters a real PDGA number, the app checks it with
 //      PDGA, divisions and the fee follow PDGA's actual answer, they register and pay by Zelle.
-//   5. Admin: Zelle received; the player is in the field and on the pre-registration list.
+//   5. Admin: Zelle received; the player is in the field, on the pre-registration list, and in Players for PDGA (the
+//      rows to paste into Tournament Manager so they show on pdga.com).
 //   6. A second real PDGA number (a lapsed membership): the non-member fee and PDGA's renewal.
 //   7. After the round (Events › Past › the event, its Results screen): Results for PDGA builds the rows for PDGA
 //      Tournament Manager with the real PDGA numbers.
@@ -322,10 +323,16 @@ try {
     await page.getByText("Registered and paid (1 of 2)").waitFor();
     const csv = decodeURIComponent((await page.getByRole("link", { name: "Download the list (CSV)" }).getAttribute("href")).split(",").slice(1).join(","));
     assert.ok(csv.includes(`Registered,1,${player.name},${PLAYER},MPO`), csv);
+    // Players for PDGA: the list to paste into Tournament Manager so they show on pdga.com.
+    await page.getByRole("button", { name: "Get players for PDGA" }).click();
+    await page.locator("[data-admin-pdga-players=ready]").waitFor();
+    const list = await page.getByLabel("Players for PDGA").inputValue();
+    const playerRaw = JSON.parse(sqlite.prepare("SELECT data FROM pdga_api_players WHERE pdga_number = ?").get(PLAYER).data);
+    assert.equal(list, `DivCode\tFirst Name\tLast Name\tPDGA\nMPO\t${playerRaw.first_name}\t${playerRaw.last_name}\t${PLAYER}\n`, "the paid player, with PDGA's own names: " + list);
     await shot(page, "5-admin-paid");
     assert.deepEqual(page.errors, []);
     await context.close();
-    step("Admin confirmed the Zelle payment: in the field (1 of 2) and on PDGA's pre-registration list");
+    step("Admin confirmed the Zelle payment: in the field (1 of 2), on the pre-registration list, and in Players for PDGA");
   }
 
   // 6. A lapsed PDGA membership: the non-member fee and PDGA's renewal.

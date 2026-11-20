@@ -38,7 +38,7 @@ export async function handleClubAdmin(
 
   if (sub === "courses") response = await handleAdminCourses(request, env, origin, method, seg, adminId, id);
   else if (sub === "bag-tags") response = await handleAdminBagTags(request, env, origin, method, seg, adminId, ctx);
-  else if ((sub === "events" && (seg[3] === "tournament" || seg[3] === "pdga" || seg[3] === "pdga-results" || (seg[3] === "registrations" && (seg[5] === "zelle-received" || seg[5] === "offer"))))
+  else if ((sub === "events" && (seg[3] === "tournament" || seg[3] === "pdga" || seg[3] === "pdga-results" || seg[3] === "pdga-players" || (seg[3] === "registrations" && (seg[5] === "zelle-received" || seg[5] === "offer"))))
     || sub === "pdga-events") response = await handleTournamentAdmin(request, env, origin, method, seg);
   else if (sub === "club-settings" && seg[2] === "pdga-promo") response = await handleAdminPdgaPromo(request, env, origin, method, adminId);
   else if (sub === "events") response = await handleAdminEvents(request, env, origin, method, seg, adminId, id);
