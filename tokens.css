@@ -911,3 +911,11 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
   padding: .55rem 1rem; border-radius: 12px; font-weight: 700; text-decoration: none; }
 /* A club-run PDGA-sanctioned event (public, member and admin event lists). */
 .pdga-badge { font-weight: 700; letter-spacing: .02em; }
+/* "$1 for the club, or No thanks" (finished casual rounds, finished club events). */
+.donate-prompt { margin: 1rem 0; padding: .85rem 1rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); }
+.donate-prompt-text { margin: 0 0 .65rem; font-weight: 600; line-height: 1.35; }
+.donate-prompt-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.donate-prompt-give { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1rem; border-radius: 10px; background: var(--primary-strong); color: #fff; font-weight: 700; text-decoration: none; }
+.donate-prompt-give:hover { color: #fff; filter: brightness(1.08); }
+.donate-prompt-dismiss { min-height: 44px; padding: .55rem 1rem; border-radius: 10px; border: 1px solid var(--border-color); background: transparent; color: var(--text-secondary); font: inherit; font-weight: 600; cursor: pointer; }
+.donate-prompt.thanks { font-weight: 600; color: var(--green-text); }

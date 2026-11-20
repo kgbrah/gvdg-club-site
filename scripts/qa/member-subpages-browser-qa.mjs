@@ -11,7 +11,9 @@ import { MEMBER_DESTINATIONS } from "../../src/shared/app-navigation.js";
 process.env.VITE_DISABLE_REACT_DEVTOOLS = "1";
 
 const JORDAN_KEY = "9f54821bf08584f9";
-const member = { sub: "m_qa", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: false };
+const member = { sub: "m_qa", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: false,
+  // Paid through this year: the Club page offers next year's dues and a donation.
+  membership: { throughYear: new Date().getFullYear(), currentYear: new Date().getFullYear(), current: true, lapsed: false, guest: false, remind: false, renewalYear: new Date().getFullYear() + 1 } };
 const now = new Date().toISOString();
 const course = { id: 7, name: "West Meadowbrook Park", location: "Greenville", difficulty: "intermediate", reviewCount: 1, averageRating: 4,
   amenities: { restrooms: "yes", accessibleParking: "yes", practiceBasket: "yes", drinkingWater: "no", stepFreeRoute: "unknown" }, updatedAt: now };
@@ -398,6 +400,17 @@ async function verifyDestinations(width, mode) {
       }
       if (item.key === "account") {
         await view.page.locator(".member-settings-profile h2 .karma-chip[data-karma='30']").waitFor();
+      }
+      if (item.key === "more") {
+        // GVDG membership under the PDGA card, with PayPal links to renew or donate (owner: "Let's put GVDG Membership
+        // status under here with a quick PayPal app link to renew or donate to the club").
+        const card = view.page.locator("[data-club-membership]");
+        await card.waitFor();
+        const year = new Date().getFullYear();
+        assert.ok((await card.innerText()).includes(`Member through December 31, ${year}.`), width + " GVDG membership status");
+        assert.equal(await card.getByRole("link", { name: `Renew for ${year + 1}, $15` }).getAttribute("href"), "https://paypal.me/greenvillediscgolf/15");
+        assert.equal(await card.getByRole("link", { name: "Donate" }).getAttribute("href"), "https://paypal.me/greenvillediscgolf");
+        if (width === 390) await card.screenshot({ path: join(screenshotDir, "club-membership-390-" + mode + ".png") });
       }
       if (item.key === "club") {
         const conditions = view.page.locator("[data-react-course-conditions]");

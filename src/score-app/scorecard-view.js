@@ -20,6 +20,7 @@ import { ShotLedgerPanel } from "./shot-ledger-view.js";
 import { FieldTestBadge, FieldTestToolSwitch } from "./field-test-chip.js";
 import { closeRangeLock, postRangeLock, rangeLockChanged, rangeLockNote, readRangeLockEnabled, writeRangeLockEnabled } from "../shared/range-lock.js";
 import { PdgaCredit } from "../shared/pdga-credit.js";
+import { RoundDonatePrompt } from "../shared/donate-prompt.js";
 
 const h = React.createElement;
 
@@ -1581,6 +1582,9 @@ export function ScorecardView(props) {
       h(ScorecardBox, { ...props, key: "scorecard", onOpenPad: setPadRow, onScore }),
       h(CtpClaim, { key: "ctp", ctpClaim: props.ctpClaim, onCtpVote: props.onCtpVote }),
       h(FinishCard, { key: "finish", finish: props.finish, onOpenFinish: props.onOpenFinish, onShare: props.onShare }),
+      // Every 5th finished casual round on this phone: $1 for the club, or No thanks.
+      props.finish && props.finish.locked && props.finish.status === "final" && !props.eventId && props.roundCode
+        ? h(RoundDonatePrompt, { key: "donate", roundCode: props.roundCode }) : null,
       shortDock ? finishDock : null,
     ]),
     shortDock ? null : finishDock,

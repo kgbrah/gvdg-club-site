@@ -25,6 +25,7 @@ import { LiveStandings } from "./live-standings.js";
 import { EventCalendarButton, EventShareButton } from "./events-actions.js";
 import { countdownLabel, countdownParts, relativeEventWhen } from "../shared/events-display.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
+import { DonateDollar } from "../shared/donate-prompt.js";
 
 const h = React.createElement;
 
@@ -416,6 +417,9 @@ export function EventsEventDetailApp() {
       h(DetailWhen, { course, event, key: "when" }),
       event.status === "live" ? h(LivePanel, { data, key: "live" }) : null,
       event.status === "final" ? h(FinalResults, { course, data, event, key: "final" }) : null,
+      // A finished club event's results: $1 for the club, or No thanks (remembered for this event).
+      event.status === "final" ? h(DonateDollar, { key: "donate", promptKey: "event:" + event.id, className: "event-donate",
+        text: "Thanks for playing! Chip in $1 to help the club run events like this one?" }) : null,
       h(DetailFacts, { course, courseSummary: data.courseSummary, event, key: "facts" }),
       event.notes ? h("div", { className: "detail-notes", key: "notes" }, String(event.notes)) : null,
       event.status === "scheduled" ? h(EventRegistrationPanel, { eventId: event.id, key: "register" }) : null,
