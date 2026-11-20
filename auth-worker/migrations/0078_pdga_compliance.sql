@@ -4,9 +4,11 @@
 
 -- 1. Data read from pdga.com pages or internal endpoints, and PDGA rounds stored to build course baselines: deleted.
 --    (Dropping pdga_rated_rounds / pdga_layout_matches drops the pdga_evidence_* triggers defined on them.)
+--    D1 enforces foreign keys: a child table goes before the table it references (pdga_registrations ->
+--    pdga_watch_events), or the drop's implicit DELETE fails.
 DROP TABLE IF EXISTS pdga_cache;
-DROP TABLE IF EXISTS pdga_watch_events;
 DROP TABLE IF EXISTS pdga_registrations;
+DROP TABLE IF EXISTS pdga_watch_events;
 DROP TABLE IF EXISTS pdga_evidence_changes;
 DROP TABLE IF EXISTS pdga_round_scores;
 DROP TABLE IF EXISTS pdga_layout_matches;

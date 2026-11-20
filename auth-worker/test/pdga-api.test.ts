@@ -185,6 +185,8 @@ describe("features using the official API when the club's login is set", () => {
         start_date: "2026-12-05", end_date: "2026-12-05", tier: "C" },
       { tournament_id: "703", tournament_name: "Far", city: "Atlanta", state_prov: "GA", latitude: "33.75", longitude: "-84.39",
         start_date: "2026-12-01", end_date: "2026-12-01", tier: "A" },
+      // No coordinates: can't be shown to be near (PDGA returned a Swedish event like this), so it isn't listed.
+      { tournament_id: "705", tournament_name: "Ale DGK Vintertour", city: "Nol", start_date: "2026-11-29", end_date: "2026-11-29", tier: "C" },
       // A weekly league that began in September and is still running: not listed (no "Register" for it).
       { tournament_id: "704", tournament_name: "Shelob's Web (Flex Start)", city: "New Hill", state_prov: "NC", latitude: "35.66", longitude: "-78.93",
         start_date: "2026-09-22", end_date: "2026-12-15", tier: "L" },
@@ -298,6 +300,14 @@ describe("features using the official API when the club's login is set", () => {
     expect(await response.json()).toMatchObject({ official_rating: null, events: [] });
     await runRatingsRecompute(env, new Date(NOW));
     expect(pdga.calls).toEqual([]);
+  });
+
+  it("asks for a location instead of searching near 0°, 0° when lat or lng is missing", async () => {
+    const env = { ...apiEnv(), ROSTER: kv(), JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN } as unknown as Env;
+    for (const query of ["", "?lat=35.6", "?lng=-77.4", "?lat=&lng="]) {
+      const response = await worker.fetch(new Request("https://worker/pdga-events" + query, { headers: { Origin: ORIGIN } }), env);
+      expect(response.status).toBe(400);
+    }
   });
 
   it("no longer serves the scraped registration lists or the PDGA baseline admin", async () => {

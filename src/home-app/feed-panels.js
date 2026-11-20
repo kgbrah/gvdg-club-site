@@ -82,7 +82,8 @@ function EventItem({ event, index, visible }) {
 export function areaTournamentsFromPdga(data, miles = AREA_MILES) {
   const events = Array.isArray(data && data.events) ? data.events : [];
   return events
-    .filter((event) => event && event.name && (event.miles == null || Number(event.miles) <= miles))
+    // "Within 60 miles": an event PDGA lists without coordinates can't be shown to be near, unless the club runs it.
+    .filter((event) => event && event.name && ((event.miles != null && Number(event.miles) <= miles) || Number(event.clubEventId) > 0))
     .map((event) => {
       const pdgaUrl = safeExternalUrl(event.pdgaUrl);
       const clubEventId = Number(event.clubEventId);
