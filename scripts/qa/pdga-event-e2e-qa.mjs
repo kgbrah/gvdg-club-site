@@ -391,6 +391,26 @@ try {
     step("Results for PDGA, on the event's Results screen: the rows for PDGA Tournament Manager, with the real PDGA numbers");
   }
 
+  // 8. The finished event's public results page asks for $1, once per event (owner: "on the results page of every
+  //    completed club event giving the user an easy way to donate $1 or dismiss").
+  {
+    const { page, context } = await open(`/events.html#event/${eventId}`);
+    const prompt = page.locator(`[data-donate-prompt="event:${eventId}"]`);
+    await prompt.waitFor({ timeout: 30_000 });
+    assert.equal(await prompt.getByRole("link", { name: "Donate $1 with PayPal" }).getAttribute("href"), "https://paypal.me/greenvillediscgolf/1");
+    await prompt.scrollIntoViewIfNeeded();
+    await prompt.screenshot({ path: path.join(shots, "8-public-results-donate.png") });
+    await prompt.getByRole("button", { name: "No thanks" }).click();
+    await prompt.waitFor({ state: "detached" });
+    await page.reload();
+    await page.locator(".detail-card").first().waitFor();
+    await page.waitForTimeout(800);
+    assert.equal(await prompt.count(), 0, "No thanks is remembered for this event");
+    assert.deepEqual(page.errors, []);
+    await context.close();
+    step("The finished event's results page offers $1 for the club; No thanks hides it for this event");
+  }
+
   const calls = pdgaCalls.reduce((map, call) => map.set(call, (map.get(call) || 0) + 1), new Map());
   console.log(`PDGA API calls (${realPdga ? "real" : "stand-in"}): ` + [...calls].map(([call, count]) => `${call} ×${count}`).join(", "));
   console.log("PDGA event end-to-end QA passed; screenshots in " + shots);

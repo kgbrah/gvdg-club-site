@@ -1067,8 +1067,32 @@ if (serve) {
   await final.page.getByRole("button", { name: /Looks good.*lock card/ }).click();
   await final.page.getByText(/scores are locked/).waitFor();
   assert.equal(await final.page.locator(".score-glove-dock .stepper .plus").first().isDisabled(), true);
+  assert.equal(await final.page.locator("[data-donate-prompt]").count(), 0, "the 1st finished casual round on this phone doesn't ask");
   await final.screenshot("finished-scorecard-phone");
   await final.context.close();
+
+  // The 5th finished casual round on this phone asks for $1 (owner: "a PayPal app link at the end of every 5th completed
+  // casual round ... to donate $1 or dismiss"); No thanks hides it, and it stays hidden.
+  const fifth = await makePage({ width: 390, height: 844, complete: true });
+  await fifth.page.addInitScript(() => {
+    if (sessionStorage.getItem("qa-rounds-seeded")) return;
+    localStorage.setItem("gvdg_finished_casual_rounds", JSON.stringify({ count: 4, recent: ["R1", "R2", "R3", "R4"], asked: [] }));
+    sessionStorage.setItem("qa-rounds-seeded", "1");
+  });
+  await fifth.go("?round=" + code);
+  await fifth.ready();
+  await fifth.button("Finish card").click();
+  await fifth.page.getByRole("button", { name: /Looks good.*lock card/ }).click();
+  await fifth.page.getByText(/scores are locked/).waitFor();
+  const prompt = fifth.page.locator(`[data-donate-prompt="round:${code}"]`);
+  await prompt.waitFor();
+  assert.equal(await prompt.getByRole("link", { name: "Donate $1 with PayPal" }).getAttribute("href"), "https://paypal.me/greenvillediscgolf/1");
+  await prompt.scrollIntoViewIfNeeded();
+  await fifth.screenshot("finished-scorecard-donate-phone");
+  await prompt.getByRole("button", { name: "No thanks" }).click();
+  await prompt.waitFor({ state: "detached" });
+  assert.ok(JSON.parse(await fifth.page.evaluate(() => localStorage.getItem("gvdg_finished_casual_rounds"))).count === 5, "this round counted once");
+  await fifth.context.close();
 
   if (!sampleCourse) {
     // Maps load from tiles: the slow on-demand export is never needed while the tiles load.

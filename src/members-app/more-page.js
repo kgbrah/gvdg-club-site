@@ -20,6 +20,7 @@ import { fieldTestUsed } from "../shared/field-test-gate.js";
 import { FieldTestSwitch, useFieldTestMode } from "../shared/field-test-ui.js";
 import { KarmaChip } from "../shared/karma.js";
 import { PdgaMembershipCard } from "../shared/pdga-membership.js";
+import { ClubMembershipCard } from "./club-membership-card.js";
 import { checkPdgaMembershipAgain, usePdgaMembership } from "./pdga-membership.js";
 
 const h = React.createElement;
@@ -92,6 +93,7 @@ export function MemberMorePage() {
     h(ToolFinder, { key: "finder", isAdmin, onNavigate: selectDashboardTab }),
     pdgaMembership ? h("section", { className: "member-link-section player-card", "aria-label": "PDGA membership", key: "pdga-membership" },
       h(PdgaMembershipCard, { data: pdgaMembership, onCheckAgain: checkPdgaMembershipAgain })) : null,
+    h(ClubMembershipCard, { key: "club-membership" }),
     h("div", { className: "member-subgrid", key: "groups" }, [
       h(MemberLinkSection, { title: "Members and club activity", key: "people" }, [
         h(MemberLinkRow, { tab: "club", title: "Club directory", detail: "Members, course conditions and minutes", icon: Users, key: "club" }),
