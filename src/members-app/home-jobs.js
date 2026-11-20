@@ -117,7 +117,7 @@ function HomeConditionsCard() {
       }, [
         h("div", { key: "copy" }, [
           h("div", { className: "player-condition-name", key: "name" }, report.courseName || "Course"),
-          h("div", { className: "player-card-meta", key: "meta" }, [report.when, report.note].filter(Boolean).join(" · ")),
+          h("div", { className: "player-card-meta", key: "meta" }, [report.stamp, report.note].filter(Boolean).join(" · ")),
         ]),
         h("span", {
           className: "course-condition-badge " + report.status,

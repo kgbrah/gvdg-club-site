@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatConditionStamp,
   formatConditionWhen,
   homeConditionRows,
   isStaleCondition,
@@ -34,6 +35,8 @@ test("normalizeCondition keeps allowlisted status and drops junk", () => {
     note: "12 is a puddle",
     status: "wet",
     when: "1h ago",
+    stamp: "Today, 11:00 AM",
+    stale: false,
   });
 });
 
@@ -66,4 +69,34 @@ test("homeConditionRows drops stale reports and ranks alerts first", () => {
     { id: 4, course_id: 4, course_name: "Snipers Landing", status: "flooded", created_at: "2026-09-11 14:00:00" },
   ], NOW, 3);
   assert.deepEqual(rows.map((row) => row.courseName), ["Snipers Landing", "West Meadowbrook Park", "ECU North Rec Complex"]);
+});
+
+// Owner (a two-month-old report showing "just now"): "Course conditions need a date and time stamp. This report is from
+// weeks ago." latestConditionsByCourse used .map(normalizeCondition), and map passed each report's index as `now`.
+test("an old report is never 'just now': the list uses the real time, and every report has a date and time", () => {
+  const later = Date.parse("2026-11-20T15:00:00Z");
+  const old = { id: 1, course_id: 4, course_name: "Covenant Church", member_name: "Kevin Gray", status: "playable", note: "Beautiful day at the course!!!", created_at: "2026-09-18 23:13:19" };
+  const [row] = latestConditionsByCourse([old], later);
+  assert.notEqual(row.when, "just now");
+  assert.equal(row.stamp, "Sep 18, 7:13 PM", "Eastern time (23:13 UTC in September is 7:13 PM EDT)");
+  assert.equal(row.stale, true);
+  // Without a time passed in, it's the real clock (not the index 0, 1, 2…).
+  for (const each of latestConditionsByCourse([old, { ...old, id: 2, course_id: 5, course_name: "Elm Street" }])) {
+    assert.notEqual(each.when, "just now");
+    assert.equal(each.stale, true);
+  }
+  assert.deepEqual(homeConditionRows([old]), [], "Home leaves out a two-month-old report");
+});
+
+test("the stamp: Today, Yesterday, a date this year, or a date with the year (Eastern)", () => {
+  const now = Date.parse("2026-11-20T15:00:00Z"); // 10:00 AM EST
+  assert.equal(formatConditionStamp("2026-11-20 13:41:00", now), "Today, 8:41 AM");
+  assert.equal(formatConditionStamp("2026-11-20 03:30:00", now), "Yesterday, 10:30 PM", "late evening Eastern is still the day before");
+  assert.equal(formatConditionStamp("2026-11-19 14:05:00", now), "Yesterday, 9:05 AM");
+  assert.equal(formatConditionStamp("2026-11-02 20:15:00", now), "Nov 2, 3:15 PM");
+  assert.equal(formatConditionStamp("2025-12-30 17:00:00", now), "Dec 30, 2025, 12:00 PM");
+  assert.equal(formatConditionStamp("", now), "");
+  const fresh = normalizeCondition({ id: 3, course_id: 4, course_name: "Covenant Church", status: "wet", created_at: "2026-11-20 13:41:00" }, now);
+  assert.equal(fresh.stamp, "Today, 8:41 AM");
+  assert.equal(fresh.stale, false);
 });

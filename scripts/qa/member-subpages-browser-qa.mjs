@@ -175,8 +175,11 @@ async function serveFixture(path, query, request, ref, reply) {
   else if (path === "/courses/7/layouts") reply({ layouts: empty ? [] : [layout] });
   else if (path === "/course-traffic") reply({ courses: [] });
   else if (path === "/casual-rounds") reply({ requests: [] });
+  // One report from just now and one from two months back (owner: "Course conditions need a date and time stamp.
+  // This report is from weeks ago" — it showed "just now").
   else if (path === "/course-conditions") reply({ reports: empty ? [] : [{ id: 1, course_id: 7, course_name: course.name,
-    member_name: "Jordan", status: "wet", note: "Low spots on hole seven", created_at: now }] });
+    member_name: "Jordan", status: "wet", note: "Low spots on hole seven", created_at: now },
+  { id: 2, course_id: 8, course_name: "Covenant Church", member_name: "Kevin", status: "playable", note: "Beautiful day", created_at: "2026-09-18 23:13:19" }] });
   else if (path === "/board" && request.method === "POST") {
     const body = await readBody(request);
     const post = { id: 44, member_id: member.sub, author_name: member.name, created_at: "Today", body: body.body, replies: [] };
@@ -395,6 +398,15 @@ async function verifyDestinations(width, mode) {
       }
       if (item.key === "account") {
         await view.page.locator(".member-settings-profile h2 .karma-chip[data-karma='30']").waitFor();
+      }
+      if (item.key === "club") {
+        const conditions = view.page.locator("[data-react-course-conditions]");
+        await conditions.getByText("Covenant Church").waitFor();
+        const text = await conditions.innerText();
+        assert.ok(text.includes("Sep 18, 7:13 PM · may be out of date"), width + " an old report shows its date and time, marked old");
+        assert.match(text, /Today, \d{1,2}:\d{2} [AP]M/, width + " today's report shows today's time");
+        assert.ok(!text.includes("just now"), width + " no report reads 'just now' by mistake");
+        if (width === 390) await conditions.screenshot({ path: join(screenshotDir, "course-conditions-stamps-390-" + mode + ".png") });
       }
       await view.page.getByRole("heading", { name: item.label, level: 1, exact: true }).waitFor();
       if (readiness[item.key]) await view.page.locator(readiness[item.key]).first().waitFor({ state: "attached" });
