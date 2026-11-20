@@ -56,6 +56,8 @@ test("canonical routes round trip selected context and accept old query-based no
 test("search covers common tasks while showing only authorized tool names", () => {
   const tasks = {
     "import event": "import",
+    "google sheets": "sheets",
+    "store credit balances": "sheets",
     "new tournament": "create",
     "approve an application": "applications",
     "check attendance": "check-in",

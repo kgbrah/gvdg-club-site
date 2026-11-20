@@ -93,6 +93,7 @@ const probes = {
   results: "[data-react-admin-scoring-live='final']",
   members: "[data-react-admin-members-list='ready']",
   applications: "[data-react-admin-membership-applications='ready']",
+  sheets: "[data-admin-sheet-import]",
   shop: "[data-react-admin-products-list='ready']",
   orders: "[data-react-admin-orders-list='ready']",
   wallets: "[data-react-admin-wallet-recent='ready']",
@@ -572,8 +573,10 @@ async function verifyRoutes(variant) {
     assert.ok(requested.some((call) => call.path === "/admin/members/set-tier" && call.body?.memberId === "m_jordan" && call.body?.tier === "guest"));
     assert.ok(requested.some((call) => call.path === "/admin/members/link-held" && call.body?.heldId === "m_h_nsamlee" && call.body?.memberId === "m_jordan"));
 
-    // The club's Google Sheets: paste the cells, check the guessed columns, review, pick who "Avery Brooke" is, apply.
-    pane = await route(page, "import");
+    // The club's Google Sheets (Members › Google Sheets): paste the cells, check the guessed columns, review, pick who
+    // "Avery Brooke" is, apply.
+    pane = await route(page, "sheets");
+    assert.equal(await page.locator("#apane-import [data-admin-sheet-import]").count(), 0, "the sheets aren't under Import event any more");
     const sheet = pane.locator("[data-admin-sheet-import]");
     await sheet.getByRole("radio", { name: "Store credit balances" }).click();
     await sheet.getByLabel("Or paste the cells (select the sheet, copy, paste here)").fill("Player\tStore credit\nJordan Reyes\t$20.00\nSam Lee\t$12.50\nAvery Brooke\t$3.00\n");
