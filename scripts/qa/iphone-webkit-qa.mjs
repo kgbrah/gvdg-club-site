@@ -60,7 +60,8 @@ async function newPage({ token = "", dark = false } = {}) {
   page.errors = [];
   page.on("pageerror", (error) => page.errors.push(error.message + (process.env.GVDG_QA_STACKS ? "\n" + String(error.stack || "").split("\n").slice(0, 6).join("\n") : "")));
   page.on("console", (message) => {
-    if (message.type() === "error" && !/Failed to load resource|favicon|fonts\.g|access control|Origin .* is not allowed|due to access control/i.test(message.text())) page.errors.push("console: " + message.text().slice(0, 300));
+    // WebKit logs Chrome's viewport "interactive-widget" key as an error (it ignores it): not a problem.
+    if (message.type() === "error" && !/Failed to load resource|favicon|fonts\.g|access control|Origin .* is not allowed|due to access control|Viewport argument key "interactive-widget"/i.test(message.text())) page.errors.push("console: " + message.text().slice(0, 300));
   });
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, (route) => route.abort());
   await page.addInitScript(({ token, dark }) => {
@@ -213,7 +214,13 @@ await check("start-up safety net when the app can't load", async () => {
   await page.screenshot({ path: path.join(shots, "iphone-boot-rescue.png") });
   breakApp = false;
   await page.getByRole("button", { name: "Reload", exact: true }).click();
-  await page.locator("#identifierInput").waitFor();
+  try {
+    await page.locator("#identifierInput").waitFor({ timeout: 25_000 });
+  } catch (error) {
+    await page.screenshot({ path: path.join(shots, "iphone-boot-rescue-after-reload.png") }).catch(() => {});
+    const state = await page.evaluate(() => ({ rescue: Boolean(document.getElementById("gvdgBootRescue")), text: document.body.innerText.slice(0, 300) })).catch((e) => String(e));
+    throw new Error("Reload didn't bring the app back: " + JSON.stringify(state));
+  }
   assert.equal(await page.locator("#gvdgBootRescue").count(), 0, "gone once the app starts");
   await context.close();
 });

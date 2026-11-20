@@ -37,8 +37,25 @@
   }
   function blank() { return appText().length < 5; }
 
-  function reloadFresh() {
+  // Fetch the app's own code from the network first (Safari can otherwise reuse the copy that failed), then reload.
+  // Never waits more than a few seconds.
+  function refreshAppCode() {
     var jobs = [];
+    try {
+      var scripts = document.querySelectorAll('script[type="module"][src]');
+      for (var i = 0; i < scripts.length && window.fetch; i += 1) {
+        jobs.push(fetch(scripts[i].src, { cache: "reload", credentials: "same-origin" })["catch"](function () { return null; }));
+      }
+    } catch (error) { /* reload anyway */ }
+    return Promise.race([Promise.all(jobs), new Promise(function (resolve) { window.setTimeout(resolve, 4000); })]);
+  }
+  function reload() {
+    refreshAppCode().then(go, go);
+    function go() { window.location.reload(); }
+  }
+
+  function reloadFresh() {
+    var jobs = [refreshAppCode()];
     try {
       if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
         jobs.push(navigator.serviceWorker.getRegistrations().then(function (list) {
@@ -82,7 +99,7 @@
     line.style.cssText = "margin:0 0 8px;";
     box.appendChild(title);
     box.appendChild(line);
-    box.appendChild(button("Reload", function () { window.location.reload(); }, true));
+    box.appendChild(button("Reload", reload, true));
     box.appendChild(button("Reload fresh", reloadFresh, false));
     var details = document.createElement("p");
     details.style.cssText = "margin:18px 0 0;font-size:12px;opacity:.75;word-break:break-word;";
