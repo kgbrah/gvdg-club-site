@@ -50,3 +50,10 @@ test("an event can be marked a PDGA event in the event form, and lists badge it"
   assert.match(readFileSync("src/members-app/registration-events.js", "utf8"), /tournament \? h\("span", \{ className: "player-chip pdga-badge"/);
   assert.match(readFileSync("src/admin-app/events-list.js", "utf8"), /event\.source\?\.pdga_event_id \?/);
 });
+
+test("the event page keeps the PDGA link (normalizeEvent used to drop it, hiding the PDGA badge)", async () => {
+  const { normalizeEvent } = await import("../src/shared/events-model.js");
+  assert.equal(normalizeEvent({ id: 7, name: "Fall Classic", pdga_event_id: 104547 }).pdga_event_id, 104547);
+  assert.equal(normalizeEvent({ id: 8, name: "League night" }).pdga_event_id, null);
+  assert.equal(normalizeEvent({ id: 9, name: "Bad", pdga_event_id: "abc" }).pdga_event_id, null);
+});

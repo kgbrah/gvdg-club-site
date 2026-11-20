@@ -1,0 +1,53 @@
+name: PDGA event end to end (real PDGA API)
+
+# Owner: "Can you run a full end to end test of creating a PDGA event using PDGA API?"
+# The built admin and event pages against the real Worker code (in-process, a throwaway in-memory database: nothing on
+# gvdgclub.com changes and no member is notified) and the REAL PDGA API with the club's login: link a real upcoming
+# PDGA event in the event form, set the PDGA rules, register guests with real PDGA numbers (checked live), pay by
+# Zelle, confirm it, and build Results for PDGA. Runs on demand and when the PDGA event code changes.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/qa/pdga-event-e2e-qa.mjs
+      - .github/workflows/pdga-event-e2e.yml
+      - auth-worker/src/pdga-api.ts
+      - auth-worker/src/tournament*.ts
+      - auth-worker/src/db-tournament.ts
+      - src/admin-app/event-form.js
+      - src/admin-app/tournament-panel.js
+      - src/public-app/tournament-registration.js
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pdga-event-e2e-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  pdga-e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix auth-worker
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium-headless-shell
+      - name: Create and run a PDGA event against the real PDGA API
+        env:
+          PDGA_API_USERNAME: ${{ secrets.PDGA_API_USERNAME }}
+          PDGA_API_PASSWORD: ${{ secrets.PDGA_API_PASSWORD }}
+          GVDG_PDGA_E2E_SHOTS: ${{ runner.temp }}/pdga-e2e
+        run: node scripts/qa/pdga-event-e2e-qa.mjs
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdga-event-e2e-screens
+          path: ${{ runner.temp }}/pdga-e2e
+          if-no-files-found: ignore

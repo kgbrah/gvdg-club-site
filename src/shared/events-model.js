@@ -333,6 +333,8 @@ export function normalizeEvent(raw) {
     league_id: ev.league_id != null ? String(ev.league_id) : '',
     source: ev.source != null ? String(ev.source) : '',
     external_url: ev.external_url != null ? String(ev.external_url) : '',
+    // A club-run PDGA-sanctioned event: the event page's PDGA badge (the PDGA E2E found it dropped here).
+    pdga_event_id: ev.pdga_event_id != null && Number(ev.pdga_event_id) > 0 ? Number(ev.pdga_event_id) : null,
     notes: ev.notes != null ? String(ev.notes) : '',
     event_courses: normalizeEventCourses(ev.event_courses),
     // Detail payloads carry a players array; hub payloads don't.
