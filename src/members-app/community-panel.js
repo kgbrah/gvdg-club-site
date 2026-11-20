@@ -3,6 +3,7 @@ import { KarmaChip } from "../shared/karma.js";
 import { request } from "./api.js";
 import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { memberConfirm } from "./member-dialogs.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 const AUDIENCES = [
@@ -325,7 +326,8 @@ export function MemberCommunityPage({ token }) {
       h("h2", { key: "heading" }, "Community directory"),
       note("Find members who have shared a community profile."),
       h("form", { className: "community-form member-inline-search", role: "search", key: "filter", onSubmit: (event) => { event.preventDefault(); setQuery(wanted); } }, [
-        field("Find a member", "input", { name: "memberSearch", type: "search", ref: searchRef, enterKeyHint: "search", autoComplete: "off", value: filter, maxLength: 60, onChange: (event) => setFilter(event.target.value) }),
+        field("Find a member", AutocompleteInput, { suggestions: page.profiles.map((item) => item.displayName).filter((name) => name && name !== "Member"),
+          name: "memberSearch", type: "search", ref: searchRef, enterKeyHint: "search", autoComplete: "off", value: filter, maxLength: 60, onChange: (event) => setFilter(event.target.value) }),
         action("Search members", { type: "submit", key: "search" }),
       ]),
       page.status === "loading" || (wanted !== query && page.status !== "error") ? note("Searching the directory…", "loading") : page.status === "error" ? h("div", { className: "member-subactions", key: "directory-error" }, [

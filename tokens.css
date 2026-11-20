@@ -934,3 +934,24 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
 /* PDGA's attribution in the public pages' footers: footer text colour (the footer is dark in both themes). */
 footer .footer-pdga-credit { margin: .4rem 0 0; font-size: .82rem; color: inherit; opacity: .9; }
 footer .footer-pdga-credit a, footer p.footer-pdga-credit a { display: inline; margin: 0; padding: 0; min-height: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+/* Shared autocomplete (src/shared/autocomplete.js): suggestions under a search or name field, in the theme's colours. */
+.ac { position: relative; display: block; min-width: 0; }
+.ac > input { width: 100%; box-sizing: border-box; }
+.ac-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 60;
+  margin: 0; padding: 4px; list-style: none; max-height: 18rem; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--bg-secondary); color: var(--text-primary);
+  border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 10px 28px var(--shadow);
+  text-align: left;
+}
+.ac-list[hidden] { display: none; }
+.ac-option {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  min-height: 44px; padding: .55rem .75rem; border-radius: 8px; cursor: pointer;
+  font-size: .95rem; font-weight: 500; line-height: 1.25; color: var(--text-primary);
+}
+.ac-option.active, .ac-option:hover { background: var(--bg-tertiary); }
+.ac-option b { font-weight: 800; color: inherit; }
+.ac-label { min-width: 0; overflow-wrap: anywhere; }
+.ac-hint { flex: none; color: var(--text-secondary); font-size: .82rem; }
+.ac.ac-up .ac-list { top: auto; bottom: calc(100% + 4px); }

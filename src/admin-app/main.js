@@ -41,6 +41,7 @@ import { AdminTeeSignReviewControls, AdminTeeSignReviewList } from "./tee-sign-r
 import { AdminTodayDashboard } from "./today-dashboard.js";
 import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
+import { AdminWalletBalances } from "./wallet-balances.js";
 import { startAdminController } from "./admin-controller.js";
 import { CrottsWidget } from "../shared/crotts-widget.js";
 import { renewMemberSession } from "../shared/member-session.js";
@@ -251,6 +252,10 @@ if (walletRecentMount) {
   flushSync(() => createRoot(walletRecentMount).render(h(AdminWalletRecentList)));
 }
 
+const walletBalancesMount = document.getElementById("adminWalletBalancesReactApp");
+if (walletBalancesMount) {
+  flushSync(() => createRoot(walletBalancesMount).render(h(AdminWalletBalances)));
+}
 const walletFormMount = document.getElementById("adminWalletFormReactApp");
 if (walletFormMount) {
   flushSync(() => createRoot(walletFormMount).render(h(AdminWalletAdjustmentForm)));

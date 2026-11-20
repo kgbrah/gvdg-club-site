@@ -510,7 +510,23 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-club-panel]", "Membership Growth Since 2004", "React club growth chart");
   await waitForText(page, "[data-react-club-panel]", "Future Course Improvements - Ayden", "React meeting minutes");
   await waitForText(page, "[data-react-doubles-league]", "Doubles League Records", "React doubles title");
-  await clubPanel.locator(".members-search").fill("Martinez");
+  // Player names autocomplete (owner: "auto complete for all searches, especially player names"): type part of a
+  // name, pick the suggestion, and the field holds the whole name.
+  await clubPanel.locator(".members-search").fill("Marti");
+  const directorySuggestion = clubPanel.locator(".members-search-wrap .ac-option", { hasText: "Juan Martinez" });
+  await directorySuggestion.waitFor({ state: "visible", timeout: 10_000 });
+  if (!/Marti/.test(await directorySuggestion.locator("b").innerText())) throw new Error("The typed part of the suggestion isn't bold.");
+  {
+    const box = await clubPanel.locator(".members-search-wrap").boundingBox();
+    const view = page.viewportSize();
+    if (box && view) {
+      await page.screenshot({ path: path.join(evidenceDir, `${slug}-directory-autocomplete.png`),
+        clip: { x: 0, y: Math.max(0, box.y - 80), width: view.width, height: Math.min(view.height, 420) } });
+    }
+  }
+  await directorySuggestion.click();
+  if (await clubPanel.locator(".members-search").inputValue() !== "Juan Martinez") throw new Error("Picking a suggestion didn't fill the name.");
+  if (await clubPanel.locator(".members-search-wrap .ac-list").isVisible()) throw new Error("The suggestions stayed open after picking one.");
   await waitForText(page, "[data-react-club-panel] .members-grid", "Juan Martinez", "React directory search");
   await waitForText(page, "[data-react-club-panel] .members-count", "Showing 1 of 1 members", "React directory search count");
   await clubPanel.locator(".members-search").fill("");
@@ -527,7 +543,9 @@ async function captureState(browser, origin, viewport, slug) {
   await minutesToggle.click();
   if (await minutesToggle.getAttribute("aria-expanded") !== "true") throw new Error("React meeting minutes did not re-expand.");
   await doublesPanel.getByRole("tab", { name: "All-Time Leaders" }).click();
-  await doublesPanel.locator(".doubles-search-bar").fill("Blake Poland");
+  await doublesPanel.locator(".doubles-search-bar").fill("blake p");
+  await doublesPanel.locator(".ac-option", { hasText: "Blake Poland" }).first().click();
+  if (await doublesPanel.locator(".doubles-search-bar").inputValue() !== "Blake Poland") throw new Error("Doubles player autocomplete didn't fill the name.");
   await waitForText(page, "[data-react-doubles-league] .doubles-table-wrap", "Blake Poland", "React doubles all-time search");
   await doublesPanel.locator("tbody tr.clickable-row").filter({ hasText: "Blake Poland" }).first().click();
   await waitForText(page, ".player-modal", "Season History", "React doubles player modal");

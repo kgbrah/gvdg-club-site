@@ -1345,3 +1345,8 @@ body.player-theme-glass[data-member-shell="members"] #members :is(.field-tile, .
 #members .bag-accessory-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--text-primary); }
 #members .bag-accessory-form { display: grid; gap: 8px; margin-top: 8px; }
 #members .bag-accessory-add { display: inline-flex; align-items: center; gap: 6px; }
+/* The shared autocomplete's wrapper takes the search field's place in these layouts. */
+#members .members-controls .members-search-wrap { grid-column: 1 / -1; flex: 1 1 12.5rem; min-width: min(12.5rem, 100%); }
+#members .members-controls .members-search-wrap .members-search { min-height: 44px; }
+#members .doubles-search-wrap { max-width: 400px; margin-bottom: 1rem; }
+#members .doubles-search-wrap .doubles-search-bar { margin-bottom: 0; max-width: none; }

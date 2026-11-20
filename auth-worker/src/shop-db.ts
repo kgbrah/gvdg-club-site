@@ -181,6 +181,22 @@ export async function walletBalance(db: D1Like, memberId: string): Promise<numbe
   return rowNumber(row, "balance_cents");
 }
 
+export type WalletLedgerSummary = { member_id: string; member_name: string | null; balance_cents: number; transactions: number; last_at: string | null };
+
+/** Every member with wallet activity: balance, transaction count, last activity, and the newest name on the ledger. */
+export async function walletLedgerSummaries(db: D1Like): Promise<WalletLedgerSummary[]> {
+  const result = await db.prepare(
+    `SELECT w.member_id, SUM(w.amount_cents) AS balance_cents, COUNT(*) AS transactions, MAX(w.created_at) AS last_at,
+       (SELECT n.member_name FROM wallet_transactions n WHERE n.member_id = w.member_id AND n.member_name IS NOT NULL
+         ORDER BY n.id DESC LIMIT 1) AS member_name
+     FROM wallet_transactions w GROUP BY w.member_id`,
+  ).all<WalletLedgerSummary>();
+  return (result.results ?? []).map((row) => ({
+    member_id: String(row.member_id), member_name: row.member_name ?? null, balance_cents: Number(row.balance_cents) || 0,
+    transactions: Number(row.transactions) || 0, last_at: row.last_at ?? null,
+  }));
+}
+
 export async function createWalletTransaction(db: D1Like, t: WalletTransactionInput) {
   return db
     .prepare(

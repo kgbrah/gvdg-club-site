@@ -22,6 +22,7 @@ import { coursePackKey } from "../shared/course-packs.js";
 import { ApplyForClubLogin } from "./auth-flow.js";
 import { useCourseFavorites } from "./course-favorites.js";
 import { coursePackDate, PackLayoutActions, SavedCoursesView, SavedLayoutPreview, useCoursePacks } from "./saved-courses-view.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 
@@ -300,7 +301,12 @@ function CoursePickView({ courses, onBack, onSelect }) {
     h("label", { className: "lbl", htmlFor: "courseSearch", key: "searchLabel" }, "Search"),
     h("div", { className: "course-search", key: "search" }, [
       icon(Search, { size: 16, key: "icon" }),
-      h("input", {
+      // Course names autocomplete (with their town); the list below still filters as you type.
+      h(AutocompleteInput, {
+        suggestions: (courses || []).filter((course) => course?.name).map((course) => ({
+          label: course.name, value: course.name, hint: course.location || "", key: "course-" + course.id,
+        })),
+        wrapperClassName: "course-search-ac",
         className: "field",
         id: "courseSearch",
         key: "input",
@@ -432,7 +438,8 @@ function LayoutPickView({ course, layouts, onBack, onSelect }) {
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, course.name),
     h("label", { className: "lbl", key: "search" }, "Search layouts",
-      h("input", { className: "field", placeholder: "Layout name", type: "search", value: query,
+      h(AutocompleteInput, { className: "field", placeholder: "Layout name", type: "search", value: query,
+        suggestions: sorted.map((layout) => String(layout.name || "")).filter(Boolean),
         onChange: (event) => setQuery(event.target.value) })),
     !online ? h("p", { className: "muted", key: "offline" }, "You can view saved layouts offline. Starting a round here needs a connection.") : null,
     h("p", { className: "muted", key: "packInfo" }, "Offline saves include available hole data and schematic maps."),

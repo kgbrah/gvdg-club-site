@@ -12,13 +12,14 @@ import {
   distanceBetween, distanceFromMeters, localDate, metersFromDistance, practicePercent,
   puttingMakeTotals, SHOT_TYPES, stagePutting,
 } from "./practice-model.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 const EMPTY_DISC = { brand: "", model: "", plastic: "", weightGrams: "", notes: "", inBag: true, archived: false, color: "", ink: "" };
 
 function field(label, settings) {
   const { options, rows, ...props } = settings;
-  const type = options ? "select" : rows ? "textarea" : "input";
+  const type = options ? "select" : rows ? "textarea" : props.suggestions ? AutocompleteInput : "input";
   return h("label", { className: "member-practice-field", key: props.name }, [
     h("span", { key: "label" }, label),
     h(type, { ...props, rows, className: "form-input", key: "control" },
@@ -307,7 +308,8 @@ export function MemberBagPage({ workspace }) {
       },
       onClose: closeEditor,
     }) : null,
-    workspace.data.discs.length > 5 ? field("Find in my bag", { name: "search", type: "search", value: query, onChange: (event) => setQuery(event.target.value) }) : null,
+    workspace.data.discs.length > 5 ? field("Find in my bag", { name: "search", type: "search", value: query, onChange: (event) => setQuery(event.target.value),
+      suggestions: workspace.data.discs.map(({ record }) => [record.brand, record.model].filter(Boolean).join(" ")).filter(Boolean) }) : null,
     formError(error),
     active.length ? group(active) : h("p", { className: "dash-note", key: "empty" }, term ? "No matching discs." : "No discs in your bag yet."),
     archived.length ? h("details", { className: "player-card", key: "archived" }, [

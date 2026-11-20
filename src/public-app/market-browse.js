@@ -5,8 +5,11 @@ import {
 } from "../shared/market-model.js";
 import { marketRequest } from "./market-api.js";
 import { FeedbackText, GuestBadge, LoadState, MarketPhoto, StatusChip } from "./market-ui.js";
+import { AutocompleteInput } from "../shared/autocomplete.js";
+import { discSearchSuggestions } from "../shared/disc-catalog.js";
 
 const h = React.createElement;
+const DISC_SUGGESTIONS = discSearchSuggestions();
 
 export function ListingCard({ listing, showSeller = true }) {
   const title = listingTitle(listing);
@@ -57,7 +60,8 @@ function BrowseFilters({ filters, facets, onChange, onReset }) {
   return h("div", { "aria-label": "Marketplace filters", className: "filters shop-filters market-filters" }, [
     h("div", { className: "shop-search-row", key: "search" }, [
       h("label", { className: "public-sr-only", htmlFor: "marketSearch", key: "search-label" }, "Search marketplace"),
-      h("input", {
+      h(AutocompleteInput, {
+        suggestions: DISC_SUGGESTIONS, wrapperClassName: "shop-search-ac",
         id: "marketSearch", key: "search-input", maxLength: 60, onChange: (event) => onChange("q", event.target.value),
         placeholder: "Search used discs and gear", type: "search", value: filters.q,
       }),
