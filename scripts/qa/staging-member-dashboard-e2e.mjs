@@ -114,13 +114,11 @@ function collectPageErrors(page) {
   return errors;
 }
 
-async function usefulStats(apiBase, pdgaNo) {
+/** The QA member's PDGA official rating from /pdga-stats (PDGA's official API only), or null when PDGA has none. */
+async function officialRating(apiBase, pdgaNo) {
   const data = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdgaNo)}`);
-  if (data?.live_rating == null) {
-    throw new Error(
-      `QA member PDGA #${pdgaNo} has no live dashboard rating. Run npm run qa:ensure-staging-dashboard-data.`,
-    );
-  }
+  const rating = Number(data?.official_rating);
+  return Number.isInteger(rating) && rating > 0 ? rating : null;
 }
 
 async function waitForText(page, selector, expected, label) {
@@ -136,20 +134,21 @@ async function waitForText(page, selector, expected, label) {
   }
 }
 
-async function waitForLiveRating(page) {
-  const selector = "[data-react-home-hero] [data-react-live-rating] .dash-tile-num";
+/** Home's hero shows the PDGA official rating (PDGA's API), or "—" when PDGA has none for the QA number. */
+async function waitForPdgaRating(page, expected) {
+  const selector = "[data-react-home-hero] [data-react-pdga-rating] .dash-tile-num";
+  const want = expected == null ? "—" : String(expected);
   try {
     await page.waitForFunction(
-      ({ selector: query }) => /^\d{3,4}$/.test(document.querySelector(query)?.textContent?.trim() || ""),
-      { selector },
+      ({ selector: query, want: text }) => document.querySelector(query)?.textContent?.trim() === text,
+      { selector, want },
       { timeout: 15_000 },
     );
   } catch {
     const body = await page.locator("body").innerText().catch(() => "");
     const actual = await page.locator(selector).innerText().catch(() => "<missing>");
-    throw new Error(`Expected a numeric React live rating, got ${actual.trim()}. Page text:\n${body}`);
+    throw new Error(`Expected the Home PDGA rating ${want}, got ${actual.trim()}. Page text:\n${body}`);
   }
-  return (await page.locator(selector).innerText()).trim();
 }
 
 async function installAuthSubmitCapture(page) {
@@ -333,7 +332,7 @@ async function runAuthGateQa(browser, siteUrl) {
   await context.close();
 }
 
-async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
+async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin, pdgaRating = null }) {
   const browser = await chromium.launch({ headless: true });
   try {
     await runAuthGateQa(browser, siteUrl);
@@ -405,7 +404,7 @@ async function runBrowserQa({ siteUrl, token, memberName, memberIsAdmin }) {
       throw new Error("Migrated member dashboard legacy nodes are still present in the DOM.");
     }
 
-    await waitForLiveRating(page);
+    await waitForPdgaRating(page, pdgaRating);
 
     await page.getByRole("navigation", { name: "Member app" }).getByRole("button", { name: "Stats" }).click();
     await waitForText(page, "#membersReactDashboardShell", "Stats", "season tab title");
@@ -510,8 +509,8 @@ async function main() {
   if (!member || typeof member.name !== "string") throw new Error("QA token did not resolve to a named member.");
   if (!member.pdgaNo) throw new Error("QA member has no linked PDGA number. Run npm run qa:ensure-staging-dashboard-data.");
 
-  await usefulStats(apiBase, member.pdgaNo);
-  await runBrowserQa({ siteUrl, token, memberName: member.name, memberIsAdmin: member.isAdmin === true });
+  const pdgaRating = await officialRating(apiBase, member.pdgaNo);
+  await runBrowserQa({ siteUrl, token, memberName: member.name, memberIsAdmin: member.isAdmin === true, pdgaRating });
   console.log("staging member dashboard E2E passed");
 }
 

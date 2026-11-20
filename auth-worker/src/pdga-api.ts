@@ -5,11 +5,18 @@
 //
 // The session from a login is reused (in memory, and in RATELIMIT storage across isolates) until PDGA refuses it.
 // Player records are kept in D1 for a few hours, so a registration form and its submit don't each call PDGA.
+//
+// PDGA's API license (Section 6) allows TEMPORARY caching only: PDGA data (ratings, scores, events) is never stored
+// permanently or used to build the club's own database. Every PDGA cache here has an expiry, and purgePdgaCaches
+// (hourly cron) deletes what's past it. This client is the ONLY way the Worker reads PDGA data: no pdga.com pages, no
+// internal pdga.com endpoints (e.g. /api/v1/feat/...), nothing PDGA hasn't documented for developers.
 
 import type { D1Like } from "./db-types.js";
 import type { KVLike } from "./ratelimit.js";
 
 export const PDGA_ATTRIBUTION = "Player, event, and course data provided by PDGA";
+/** The longest any PDGA player record is kept (the longest it's ever used is FOUND_TTL_MS). */
+export const PDGA_PLAYER_CACHE_MAX_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_BASE = "https://api.pdga.com";
 const SESSION_KEY = "pdga-api:session";
 const SESSION_TTL_SECONDS = 6 * 60 * 60;
@@ -205,20 +212,7 @@ export function parsePdgaEvent(raw: unknown): PdgaEventInfo | null {
  */
 export async function lookupPdgaPlayers(env: PdgaApiEnv, numbers: readonly string[], now = Date.now(), refresh: PdgaRefresh = "none"): Promise<Map<string, PdgaPlayer | null>> {
   const wanted = [...new Set(numbers.map(normalPdgaNumber).filter((value): value is string => value != null))];
-  const found = new Map<string, PdgaPlayer | null>();
-  if (!wanted.length) return found;
-  const cached = await env.DB.prepare(`SELECT pdga_number, data, fetched_at FROM pdga_api_players WHERE pdga_number IN (${wanted.map(() => "?").join(", ")})`)
-    .bind(...wanted).all<{ pdga_number: string; data: string | null; fetched_at: number }>();
-  for (const row of cached.results ?? []) {
-    if (refresh === "all") break;
-    const age = now - Number(row.fetched_at);
-    let player: PdgaPlayer | null = null;
-    try { player = row.data ? parsePdgaPlayer(JSON.parse(row.data)) : null; } catch { continue; }
-    const ttl = !row.data ? MISSING_TTL_MS : membershipMayChange(player, now) ? RECHECK_TTL_MS : FOUND_TTL_MS;
-    if (age > ttl || age < 0) continue;
-    if (refresh === "lapsed" && player && player.membershipStatus !== "current") continue;
-    found.set(row.pdga_number, player);
-  }
+  const found = await cachedPdgaPlayers(env, wanted, now, refresh);
   const missing = wanted.filter((number) => !found.has(number));
   for (let offset = 0; offset < missing.length; offset += 200) {
     const group = missing.slice(offset, offset + 200);
@@ -235,6 +229,25 @@ export async function lookupPdgaPlayers(env: PdgaApiEnv, numbers: readonly strin
     });
     if (env.DB.batch) await env.DB.batch(writes);
     else for (const write of writes) await write.run();
+  }
+  return found;
+}
+
+/** The players read from PDGA recently enough to use without asking again (a number PDGA doesn't know maps to null). */
+export async function cachedPdgaPlayers(env: Pick<PdgaApiEnv, "DB">, numbers: readonly string[], now = Date.now(), refresh: PdgaRefresh = "none"): Promise<Map<string, PdgaPlayer | null>> {
+  const wanted = [...new Set(numbers.map(normalPdgaNumber).filter((value): value is string => value != null))];
+  const found = new Map<string, PdgaPlayer | null>();
+  if (!wanted.length || refresh === "all") return found;
+  const cached = await env.DB.prepare(`SELECT pdga_number, data, fetched_at FROM pdga_api_players WHERE pdga_number IN (${wanted.map(() => "?").join(", ")})`)
+    .bind(...wanted).all<{ pdga_number: string; data: string | null; fetched_at: number }>();
+  for (const row of cached.results ?? []) {
+    const age = now - Number(row.fetched_at);
+    let player: PdgaPlayer | null = null;
+    try { player = row.data ? parsePdgaPlayer(JSON.parse(row.data)) : null; } catch { continue; }
+    const ttl = !row.data ? MISSING_TTL_MS : membershipMayChange(player, now) ? RECHECK_TTL_MS : FOUND_TTL_MS;
+    if (age > ttl || age < 0) continue;
+    if (refresh === "lapsed" && player && player.membershipStatus !== "current") continue;
+    found.set(row.pdga_number, player);
   }
   return found;
 }
@@ -280,6 +293,16 @@ export async function lookupPdgaEvent(env: PdgaApiEnv, eventId: number): Promise
   const body = await apiGet(env, "/services/json/event?tournament_id=" + encodeURIComponent(String(eventId)));
   const events = Array.isArray(body?.events) ? body!.events as unknown[] : [];
   return parsePdgaEvent(events[0]);
+}
+
+/**
+ * Delete PDGA data past its cache time: player records older than PDGA_PLAYER_CACHE_MAX_MS and expired nearby-event
+ * lists (pdga-events.ts, D1KV namespace "pdgaevents", one hour).
+ */
+export async function purgePdgaCaches(env: { DB: D1Like }, now = Date.now()): Promise<{ players: number; events: number }> {
+  const players = await env.DB.prepare("DELETE FROM pdga_api_players WHERE fetched_at < ?").bind(now - PDGA_PLAYER_CACHE_MAX_MS).run();
+  const events = await env.DB.prepare("DELETE FROM kv_store WHERE ns = ? AND expires_at IS NOT NULL AND expires_at <= ?").bind("pdgaevents", now).run();
+  return { players: Number(players.meta?.changes) || 0, events: Number(events.meta?.changes) || 0 };
 }
 
 /** For tests: forget the in-memory session. */

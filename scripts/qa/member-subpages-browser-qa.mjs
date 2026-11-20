@@ -116,18 +116,13 @@ async function serveFixture(path, query, request, ref, reply) {
     if (request.method !== "GET") fixture.themeWrites += 1;
     reply({ theme: ref.get("mode") === "blue" ? blue : null });
   }
-  else if (path === "/pdga-stats") reply({ name: member.name, official_rating: 905, live_rating: 918, events: [] });
-  // Karma next to names: the signed-in member (board posts) and Jordan Parker (PDGA "going").
+  // PDGA's official API only (PDGA's terms): the official rating and its date.
+  else if (path === "/pdga-stats") reply({ name: member.name, official_rating: 905, rating_date: "2026-11-01", live_rating: null, events: [], play_rounds: [], source: "pdga-api" });
   else if (path === "/karma") reply({ players: empty ? {} : { [handicapKey(member.sub)]: 30, [JORDAN_KEY]: 40 }, traders: {} });
-  else if (path === "/pdga-registrations") reply(empty ? { mine: [], club: [] } : {
-    mine: [{ eventId: 501, name: "Greenville Winter Classic Presented by the Pitt County Disc Golf Association", tier: "B",
-      location: "Greenville, North Carolina", start: "2026-12-12", end: "2026-12-13", url: "https://www.pdga.com/tour/event/501",
-      checkedAt: "2026-11-18 15:00:00", division: "MA2", going: [{ name: "Jordan Parker", division: "MA3", karmaKey: JORDAN_KEY }, { name: "Sam Rivera", division: "MPO" }] }],
-    club: [{ eventId: 502, name: "Raleigh Doubles", tier: "C", location: "Raleigh, North Carolina", start: "2027-01-09", end: "2027-01-09",
-      url: "https://www.pdga.com/tour/event/502", checkedAt: null, going: [{ name: "Jordan Parker", division: "MA3" }] }],
-  });
-  else if (path === "/pdga-events") reply({ events: empty ? [] : [{ name: "Pitt County Winter Open", date: "Dec 13, 2026",
-    location: "Greenville", tier: "C", miles: 7.2, course: course.name, url: "https://www.pdga.com/tour/event/12345" }] });
+  // Nearby PDGA events from PDGA's API (the Worker's /pdga-events).
+  else if (path === "/pdga-events") reply({ events: empty ? [] : [{ name: "Greenville Winter Classic Presented by the Pitt County Disc Golf Association",
+    date: "Dec 12-13, 2026", place: "Greenville, NC", tier: "B-tier", miles: 7.2, course: "",
+    url: "https://www.discgolfscene.com/tournaments/Greenville_Winter_Classic_2026", pdgaUrl: "https://www.pdga.com/tour/event/501" }] });
   else if (path === "/my-results") reply({ results: [], casual: empty ? [] : [score] });
   else if (path === "/my-ratings") reply({ competitive: { rounds: [] }, casual: { rounds: [] } });
   else if (path === "/my-live-rounds") reply({ rounds: [] });
@@ -396,12 +391,13 @@ async function verifyDestinations(width, mode) {
       await view.go(item.hash);
       if (item.key === "overview") {
         await view.page.locator("#myDashboard [data-react-live-scoring='ready']").waitFor();
-        // Next PDGA is the member's own registered event, found on PDGA's registration lists.
-        const next = view.page.locator("[data-react-home-pdga='registered']");
-        await next.getByText("You're registered · MA2").waitFor();
-        await next.getByText("Also going: Jordan Parker (MA3)", { exact: false }).waitFor();
-        await next.locator(".karma-chip[data-karma='40']").waitFor();
-        assert.equal(await next.locator(".karma-chip").count(), 1, "only the clubmate with karma gets a chip");
+        // Next PDGA: the nearest PDGA event from PDGA's API, its name linking to its pdga.com page.
+        const next = view.page.locator("[data-react-home-pdga='ready']");
+        assert.equal(await next.getByRole("link", { name: /Greenville Winter Classic/ }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
+        // The hero: PDGA's official rating (PDGA's API) and the member's PDGA number linking to their pdga.com page.
+        await view.page.locator("[data-react-home-hero] [data-react-pdga-rating='true']").getByText("905", { exact: true }).waitFor();
+        assert.equal(await view.page.locator("[data-react-home-hero] a.pdga-link").getAttribute("href"), "https://www.pdga.com/player/123456");
+        assert.equal(await view.page.getByText("Live rating estimate").count(), 0, "no PDGA-derived live estimate");
         // Your own karma, next to your name on the Home card; the chip stays whole however long the name.
         const own = view.page.locator("[data-react-home-hero] .player-who h2 .karma-chip[data-karma='30']");
         await own.waitFor();
@@ -446,14 +442,12 @@ async function verifyDestinations(width, mode) {
         const mine = view.page.locator("section[aria-label='My events']");
         await mine.waitFor();
         assert.equal(await mine.getByText("Fall Finale Doubles").count(), 0, "finished events leave My events");
-        // PDGA events the member is registered for join My events; clubmates' others get their own section.
-        const pdga = mine.locator("[data-pdga-registration='501'][data-pdga-mine='true']");
-        await pdga.getByText("You're registered · MA2").waitFor();
-        await pdga.getByText("Also going: Jordan Parker (MA3)", { exact: false }).waitFor();
-        assert.equal(await pdga.locator(".karma-chip").getAttribute("title"), "40 karma");
-        assert.equal(await pdga.getByRole("link", { name: "PDGA page" }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
-        await view.page.locator("[data-pdga-club-going='1'] [data-pdga-registration='502']").getByText("Going: Jordan Parker (MA3)").waitFor();
-        await checkCalendarMenu(view.page, pdga, width);
+        // PDGA's terms: no "who's registered" lists from pdga.com; the nearby PDGA list (PDGA's API) stays.
+        assert.equal(await view.page.locator("[data-pdga-registration], [data-pdga-club-going]").count(), 0);
+        const nearby = view.page.locator("[data-pdga-events='ready'] .pdga-event-card").first();
+        assert.equal(await nearby.getByRole("link", { name: /Greenville Winter Classic/ }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
+        await view.page.locator("[data-pdga-events='ready'] [data-pdga-credit]").waitFor();
+        await checkCalendarMenu(view.page, nearby, width);
       }
       if (item.key === "board") {
         // Karma next to the post author's name.

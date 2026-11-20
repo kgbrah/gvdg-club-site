@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ratingFromPdgaCache, sortPublicField, unionFieldSeeds } from "../src/event-field.js";
+import { sortPublicField, unionFieldSeeds } from "../src/event-field.js";
 
 describe("public event field", () => {
   it("merges guest and club-member rows onto one person", () => {
@@ -9,12 +9,6 @@ describe("public event field", () => {
     );
     expect(seeds).toHaveLength(1);
     expect(seeds[0]).toMatchObject({ memberId: "m_tj", pdgaNo: "12345", team: "KG/TJ" });
-  });
-
-  it("reads official PDGA rating and falls back to live", () => {
-    expect(ratingFromPdgaCache(JSON.stringify({ official_rating: 890, live_rating: 910 }))).toBe(890);
-    expect(ratingFromPdgaCache(JSON.stringify({ live_rating: 910 }))).toBe(910);
-    expect(ratingFromPdgaCache("nope")).toBeNull();
   });
 
   it("sorts a division by rating then name", () => {

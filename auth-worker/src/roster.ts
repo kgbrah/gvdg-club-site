@@ -13,7 +13,7 @@ export interface Member {
   name: string;
   pdgaNo?: string;
   udisc?: string;
-  /** Profile photo: a pdga.com URL (auto) or a small data-URL (member upload). */
+  /** Profile photo: a small data-URL (member upload). (Old pdga.com picture links are ignored everywhere.) */
   photo?: string;
   /** Club admin — may manage events/courses/leagues/etc. Granted by an admin via provisioning. */
   isAdmin?: boolean;

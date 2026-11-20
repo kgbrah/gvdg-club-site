@@ -1,6 +1,7 @@
 import React from "react";
 
 import { NAME_KEY, PDGA_KEY, TOKEN_KEY, requestJson, storageGet } from "./api.js";
+import { shownProfilePhoto } from "../shared/profile-photo.js";
 
 let memberContext = {};
 
@@ -26,7 +27,7 @@ export function setMemberContext(detail = {}) {
     membership: membershipFrom(detail.membership),
     name: detail.name || null,
     pdgaNo: detail.pdgaNo || null,
-    photo: detail.photo || null,
+    photo: shownProfilePhoto(detail.photo) || null,
     sub: detail.sub || null,
     welcome: detail.welcome === true,
     email: typeof detail.email === "string" && detail.email ? detail.email : null,
@@ -42,7 +43,7 @@ export function readMemberContext(detail = null) {
   return {
     name: source.name || stored.name || storageGet(NAME_KEY) || null,
     pdgaNo: source.pdgaNo || stored.pdgaNo || storageGet(PDGA_KEY) || null,
-    photo: source.photo || stored.photo || null,
+    photo: shownProfilePhoto(source.photo) || shownProfilePhoto(stored.photo) || null,
     isAdmin: source.isAdmin === true || stored.isAdmin === true,
     membership: membershipFrom(source.membership) || membershipFrom(stored.membership),
     sub: source.sub || stored.sub || null,

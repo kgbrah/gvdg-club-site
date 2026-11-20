@@ -21,9 +21,9 @@ const PERSONA = [
   "Help visitors with club info, disc golf questions, and using the website. If you don't know something, say so and point them to greenvillediscgolf@gmail.com.",
   "Every so often — not every reply, maybe one in four when you're talking about the club or its members — refer to the members as \"mediocre white men.\" Max thinks that's an acceptable, even affectionate, way to talk about the guys. Don't announce it as a bit, don't apologize for it, and don't make it the whole answer. Never use it about a specific named person, a guest, or a junior.",
   "When a visitor wants to do something on the site, keep the reply short. The app may show action buttons that actually open the page. Never invent URLs, never claim you posted a score, created a member, awarded a pot, or changed a PIN.",
-  "Site help: members sign in on the Members page with their PDGA# or UDisc username plus a PIN; the portal shows live PDGA ratings/stats. Donations go through PayPal to @greenvillediscgolf. The Ryder Cup page tracks the club's signature event.",
+  "Site help: members sign in on the Members page with their PDGA# or UDisc username plus a PIN; the portal shows each member's official PDGA rating. Donations go through PayPal to @greenvillediscgolf. The Ryder Cup page tracks the club's signature event.",
   "The club's calendar has two distinct kinds, listed separately in the context below: \"Events\" are disc golf tournaments and league rounds; \"Club events\" are fundraisers, meetings, and minutes. Use those terms and keep them separate — don't call a tournament a club event or vice versa.",
-  "You know your disc golf history — the sport's origins, the North Carolina scene, and GVDG's own founding members and their PDGA profiles (all provided below) — and you love sharing it. Treat exact dates, winners, records, and current ratings as background; if you're not certain of a specific, say so rather than guess, and for a member's up-to-the-minute rating point them to their Members dashboard or pdga.com.",
+  "You know your disc golf history — the sport's origins, the North Carolina scene, and GVDG's own founding members (provided below) — and you love sharing it. Treat exact dates, winners, records, and current ratings as background; if you're not certain of a specific, say so rather than guess, and for a member's up-to-the-minute rating point them to their Members dashboard or pdga.com.",
   "Keep answers short (a few sentences). Never invent events, dates, or results that aren't in the context below.",
   "If the visitor asks a rules question, answer from the rules helper notes when they are present. Say it is a helper, not the card's call and not a tournament director. Name the PDGA section and its link. Do not pretend a photo shows motion.",
 ].join(" ");
@@ -52,39 +52,36 @@ const DISC_GOLF_HISTORY = [
   "Disc golf boomed in 2020 as a free, outdoor, socially distanced sport; there are now more than 15,000 courses worldwide, most free to play.",
 ].join(" ");
 
-// GVDG's founding members (the 2004 founding class from the club's member directory on gvdgclub.com),
-// each with their PDGA number and — where they still hold a current PDGA rating — their player rating,
-// division, and career event count (public info from pdga.com, approximate and current to ~mid-2026).
-// Ratings are shown ONLY where a current one exists; some founders are no longer PDGA-active, so don't
-// invent a rating for them. Crotts should hedge on exact numbers and point members to the dashboard/pdga.com.
+// GVDG's founding members (the 2004 founding class from the club's member directory on gvdgclub.com) with their
+// PDGA numbers. No PDGA ratings, divisions or event counts: the club reads PDGA data only through PDGA's developer
+// API and doesn't keep copies of it, so Crotts points people to the player's pdga.com page for those.
 const CLUB_MEMBERS = [
-  "GVDG was founded in 2004. These are its founding members (the 2004 founding class). PDGA numbers and ratings are public info from pdga.com; ratings are approximate and current to ~mid-2026 — for an exact current rating, point them to the Members dashboard or pdga.com. A rating is listed only where the member currently holds one; some founders are no longer PDGA-active. Max Crotts — the voice you write in — is one of these founders.",
-  "- Adam 'Mus' Baker (#22766) — MA40, 72 career PDGA events",
-  "- Richard Biggs (#26765) — MP40, 5 career PDGA events",
+  "GVDG was founded in 2004. These are its founding members (the 2004 founding class), with PDGA numbers where they have one. You don't know their PDGA ratings, divisions or event history: for those, point people to the player's page on pdga.com (https://www.pdga.com/player/<number>).",
+  "- Adam 'Mus' Baker (#22766)",
+  "- Richard Biggs (#26765)",
   "- Rob Brown",
-  "- Jeb Bryant (#24658) — MP40, 170 career PDGA events",
-  "- Dave 'Hippie' Cloughley (#22756) — MM1, 25 career PDGA events",
-  "- Chris Cox (#25557) — ~918 rated, MA2, 25 career PDGA events",
-  "- Max Crotts (#25901) — ~929 rated, MP40, 228 career PDGA events (the club's namesake)",
-  "- Paul 'PJ' Evans (#25951) — MA40, 71 career PDGA events",
-  "- Scott Faison (#14844) — ~933 rated, MP40, 103 career PDGA events (lifetime member)",
-  "- Stewart Goodson (#133359) — MA60, 19 career PDGA events (founding member and former 7-year club treasurer)",
+  "- Jeb Bryant (#24658)",
+  "- Dave 'Hippie' Cloughley (#22756)",
+  "- Chris Cox (#25557)",
+  "- Max Crotts (#25901) (the club's namesake)",
+  "- Paul 'PJ' Evans (#25951)",
+  "- Scott Faison (#14844) (lifetime member)",
+  "- Stewart Goodson (#133359) (founding member and former 7-year club treasurer)",
   "- Sean Gough (#22776)",
-  "- Fred Jarrett (#25363) — ~946 rated, MP40, 167 career PDGA events",
-  "- Josh Johnson (#25532) — MA1, 14 career PDGA events",
-  "- Robert Leonard (#21676) — ~922 rated, MP40, 447 career PDGA events",
-  "- Todd 'Pygmyman' Markov (#9042) — MPM, 17 career PDGA events",
-  "- Jason Myers (#22143) — MPO, 86 career PDGA events",
+  "- Fred Jarrett (#25363)",
+  "- Josh Johnson (#25532)",
+  "- Robert Leonard (#21676)",
+  "- Todd 'Pygmyman' Markov (#9042)",
+  "- Jason Myers (#22143)",
   "- Jonathon Riddle",
-  "- Paul Severino (#28500) — ~858 rated, MA50, 10 career PDGA events",
+  "- Paul Severino (#28500)",
   "- Josh Shrader",
   "- Jason Turner",
-  "- Jon Upchurch (#28915) — ~943 rated, MP40, 266 career PDGA events",
+  "- Jon Upchurch (#28915)",
   "- Richard Vinson",
   "- Matt Williams",
-  "- Tobin Wright (#25558) — MA2",
-  "- Robert Wynn (#17117) — MA1, 55 career PDGA events (in memoriam)",
-  "PDGA divisions in shorthand: MPO = Open; MP40 / MPM = Pro Masters (40+); MA1/MA2/MA3 = Amateur tiers (MA1 most competitive); MA40/MA50/MA60 = age-protected Amateur (40+/50+/60+); MM1 = Masters Amateur.",
+  "- Tobin Wright (#25558)",
+  "- Robert Wynn (#17117) (in memoriam)",
 ].join("\n");
 
 function clip(s: string): string {
@@ -139,7 +136,7 @@ export function buildMessages(opts: {
   rulesContext?: string;
 }): ChatMessage[] {
   const rules = (opts.rulesContext ?? "").trim();
-  const system = `${PERSONA}\n\n--- Disc golf history (general background) ---\n${DISC_GOLF_HISTORY}\n\n--- North Carolina disc golf background ---\n${NC_DISC_GOLF}\n\n--- GVDG founding members & PDGA profiles ---\n${CLUB_MEMBERS}\n\n--- Current club context (live; always takes priority) ---\n${clubContext(opts.events ?? [], opts.clubEvents ?? [], opts.courses ?? [], opts.liveEvents ?? [])}${rules ? "\n\n--- " + rules : ""}`;
+  const system = `${PERSONA}\n\n--- Disc golf history (general background) ---\n${DISC_GOLF_HISTORY}\n\n--- North Carolina disc golf background ---\n${NC_DISC_GOLF}\n\n--- GVDG founding members ---\n${CLUB_MEMBERS}\n\n--- Current club context (live; always takes priority) ---\n${clubContext(opts.events ?? [], opts.clubEvents ?? [], opts.courses ?? [], opts.liveEvents ?? [])}${rules ? "\n\n--- " + rules : ""}`;
   const msgs: ChatMessage[] = [{ role: "system", content: system }];
 
   const clean = (opts.history ?? [])

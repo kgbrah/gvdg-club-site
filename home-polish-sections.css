@@ -209,6 +209,16 @@ header .logo:hover .logo-image { transform: none; }
 #area-tournaments .tournament-meta { flex-wrap: wrap; gap: 6px 10px; font-size: 0.8rem; }
 #area-tournaments .tournament-location { font-size: inherit; }
 #area-tournaments .tournament-tier { background: var(--bg-primary); color: var(--secondary-text); font-size: 0.65rem; }
+/* PDGA's API rows: the name links to the event's pdga.com page and covers the row (the whole card still opens it);
+   "Register with the club" (a club-run event) sits above that link. */
+#area-tournaments .tournament-item-pdga { position: relative; }
+#area-tournaments .tournament-item-pdga .tournament-name .pdga-link { color: inherit; text-decoration: none; }
+#area-tournaments .tournament-item-pdga .tournament-name .pdga-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+#area-tournaments .tournament-item-pdga:hover .tournament-name .pdga-link,
+#area-tournaments .tournament-item-pdga .tournament-name .pdga-link:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+#area-tournaments .tournament-item-pdga:focus-within { outline: 2px solid var(--secondary-text); outline-offset: 2px; }
+#area-tournaments .tournament-item-pdga .tournament-name .pdga-link:focus-visible { outline: none; }
+#area-tournaments .tournament-register { position: relative; z-index: 1; color: var(--secondary-text); font-weight: 700; text-underline-offset: 3px; }
 #events .toggle-btn,
 #area-tournaments .toggle-btn { border: 1px solid var(--border-color); color: var(--secondary-text); border-radius: 8px; min-height: 44px; }
 #events .toggle-btn:hover,

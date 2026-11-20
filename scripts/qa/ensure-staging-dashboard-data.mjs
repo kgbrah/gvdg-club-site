@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -74,63 +73,9 @@ async function qaToken(apiBase) {
   return data.token;
 }
 
-function statsFor(pdga) {
-  return {
-    pdga,
-    name: "GVDG QA Dashboard",
-    official_rating: 935,
-    rating_date: "2026-07-01",
-    live_rating: 941,
-    peak_rating: 958,
-    events_count: 3,
-    events: [
-      {
-        tournament: "GVDG QA Summer Check",
-        date: "Jul 4 2026",
-        epoch: 1783123200,
-        division: "MA2",
-        rounds: [
-          { rating: 943, score: 54, round: "1" },
-          { rating: 951, score: 52, round: "2" },
-        ],
-      },
-      {
-        tournament: "GVDG QA Spring Check",
-        date: "Apr 18 2026",
-        epoch: 1776470400,
-        division: "MA2",
-        rounds: [{ rating: 929, score: 57, round: "1" }],
-      },
-    ],
-  };
-}
-
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function seedPdgaCache(pdga) {
-  const stats = statsFor(pdga);
-  const sql = [
-    "INSERT INTO pdga_cache (pdga, data, fetched_at)",
-    `VALUES (${sqlString(pdga)}, ${sqlString(JSON.stringify(stats))}, ${Date.now()})`,
-    "ON CONFLICT(pdga) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at",
-  ].join(" ");
-
-  const result = spawnSync("npx", ["wrangler", "d1", "execute", "DB", "--env", "gvdgclub", "--remote", "--command", sql], {
-    cwd: path.join(repoRoot, "auth-worker"),
-    encoding: "utf8",
-  });
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || "").trim().split(/\r?\n/).slice(-4).join("\n");
-    throw new Error(`Could not seed staging pdga_cache for QA data.\n${detail}`);
-  }
-}
-
 async function setQaPdga(apiBase, token, preferred) {
   const candidates = preferred ? [preferred] : QA_PDGA_CANDIDATES;
   for (const pdga of candidates) {
-    seedPdgaCache(pdga);
     try {
       await requestJson(apiBase, "/profile", { method: "POST", token, body: { pdgaNo: pdga } });
       return pdga;
@@ -141,12 +86,14 @@ async function setQaPdga(apiBase, token, preferred) {
   throw new Error("Every QA PDGA candidate is already linked to another member.");
 }
 
-async function hasLiveRating(apiBase, pdga) {
+// /pdga-stats comes only from PDGA's official API (PDGA's terms: no stored PDGA data to seed). The QA numbers are not
+// real PDGA numbers; the Worker answers its QA number (90000001) with a fixed official rating so the dashboard has one.
+async function officialRating(apiBase, pdga) {
   try {
     const stats = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdga)}`);
-    return stats?.live_rating != null;
+    return stats?.official_rating ?? null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -157,19 +104,13 @@ async function main() {
   const member = await requestJson(apiBase, "/me", { token });
   const preferred = env("GVDG_STAGING_QA_PDGA");
   let pdga = "";
-  if (preferred) {
-    pdga = await setQaPdga(apiBase, token, preferred);
-  } else if (member?.pdgaNo && QA_PDGA_CANDIDATES.includes(member.pdgaNo)) {
-    pdga = member.pdgaNo;
-    seedPdgaCache(pdga);
-  } else if (member?.pdgaNo && await hasLiveRating(apiBase, member.pdgaNo)) {
-    pdga = member.pdgaNo;
-  } else {
-    pdga = await setQaPdga(apiBase, token);
-  }
-  const stats = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdga)}`);
-  if (stats?.live_rating == null) throw new Error("Seeded QA PDGA data did not return a live rating.");
-  console.log("staging dashboard QA data ready");
+  if (preferred) pdga = await setQaPdga(apiBase, token, preferred);
+  else if (member?.pdgaNo && QA_PDGA_CANDIDATES.includes(member.pdgaNo)) pdga = member.pdgaNo;
+  else pdga = await setQaPdga(apiBase, token);
+  const rating = await officialRating(apiBase, pdga);
+  console.log(rating == null
+    ? `staging dashboard QA data ready (PDGA #${pdga}: no official rating; Home shows —)`
+    : `staging dashboard QA data ready (PDGA #${pdga}: official rating ${rating})`);
 }
 
 try {

@@ -674,7 +674,7 @@ export function playerPhotoSrc(value) {
   // API host and cached for good.
   if (/^\/member-photos\/[A-Za-z0-9_.-]{1,80}\/[a-f0-9]{16}\?v=[a-f0-9]{12}$/.test(photo)) return resolveApiBase() + photo;
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(photo)) return photo;
-  if (/^https:\/\/([a-z0-9-]+\.)*pdga\.com\//i.test(photo) && photo.length <= 500 && !/[\s<>]/.test(photo)) return photo;
+  // pdga.com pictures (older profiles) are not shown: PDGA's content stays on pdga.com.
   return "";
 }
 

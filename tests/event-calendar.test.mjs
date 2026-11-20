@@ -40,18 +40,12 @@ test("a club event with a start time is a timed calendar entry", () => {
 
 test("Add to calendar links: Google and Outlook pages filled in, Apple first on Apple devices", async () => {
   const model = await import("../src/shared/event-calendar.js");
-  const allDay = model.calendarEventFromPdgaRegistration({
-    eventId: 501, name: "Greenville Open", location: "Greenville, North Carolina", start: "2026-11-21", end: "2026-11-22",
-    division: "MA2", url: "https://www.pdga.com/tour/event/501",
-  });
-  assert.deepEqual({ start: allDay.start, end: allDay.end, allDay: allDay.allDay, uid: allDay.uid }, {
-    start: "20261121", end: "20261123", allDay: true, uid: "gvdg-pdga-501@gvdgclub.com",
-  });
-  assert.equal(allDay.description, "Division: MA2\nPDGA: https://www.pdga.com/tour/event/501");
+  const allDay = model.calendarEventFromPdga({ name: "Greenville Open", date: "Nov 21-22, 2026", place: "Greenville, North Carolina", url: "https://www.pdga.com/tour/event/501" });
+  assert.deepEqual({ start: allDay.start, end: allDay.end, allDay: allDay.allDay }, { start: "20261121", end: "20261123", allDay: true });
   const google = new URL(model.googleCalendarUrl(allDay));
   assert.equal(google.origin + google.pathname, "https://calendar.google.com/calendar/render");
   assert.deepEqual(Object.fromEntries(google.searchParams), {
-    action: "TEMPLATE", text: "Greenville Open", dates: "20261121/20261123", details: allDay.description, location: "Greenville, North Carolina",
+    action: "TEMPLATE", text: "Greenville Open", dates: "20261121/20261123", details: allDay.description, location: allDay.location,
   });
   const outlook = new URL(model.outlookCalendarUrl(allDay));
   assert.equal(outlook.origin + outlook.pathname, "https://outlook.live.com/calendar/0/deeplink/compose");
@@ -59,7 +53,6 @@ test("Add to calendar links: Google and Outlook pages filled in, Apple first on 
   const timed = { summary: "Sunday Baggers", start: "20261122T190000Z", end: "20261122T230000Z", allDay: false };
   assert.equal(new URL(model.googleCalendarUrl(timed)).searchParams.get("dates"), "20261122T190000Z/20261122T230000Z");
   assert.equal(new URL(model.outlookCalendarUrl(timed)).searchParams.get("startdt"), "2026-11-22T19:00:00Z");
-  assert.equal(model.calendarEventFromPdgaRegistration({ name: "x", start: "soon" }), null);
 
   assert.equal(model.preferredCalendar("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"), "apple");
   assert.equal(model.preferredCalendar("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)"), "apple");
@@ -70,16 +63,6 @@ test("Add to calendar links: Google and Outlook pages filled in, Apple first on 
   assert.equal(model.dateRangeText("2026-09-13", "2026-11-29"), "Sep 13 – Nov 29, 2026");
   assert.equal(model.dateRangeText("2026-12-30", "2027-01-02"), "Dec 30, 2026 – Jan 2, 2027");
   assert.equal(model.dateRangeText(""), "");
-});
-
-test("PDGA registrations: who's going and the tier, as the cards show them", async () => {
-  const cards = await import("../src/members-app/pdga-registrations.js");
-  assert.equal(cards.goingText([{ name: "Ada Lovelace", division: "MA2" }, { name: "Bo Burnham", division: "" }]), "Ada Lovelace (MA2), Bo Burnham");
-  const many = Array.from({ length: 9 }, (_, index) => ({ name: "P" + index, division: "" }));
-  assert.equal(cards.goingText(many), "P0, P1, P2, P3, P4, P5 and 3 more");
-  assert.deepEqual([cards.tierLabel("c"), cards.tierLabel("L"), cards.tierLabel("NT"), cards.tierLabel("")], ["C-tier", "League", "National Tour", ""]);
-  assert.deepEqual(cards.readPdgaRegistrations(null), { mine: [], club: [] });
-  assert.equal(cards.pdgaEventMeta({ start: "2026-11-21", end: "2026-11-22", tier: "B", location: "Raleigh, North Carolina" }), "Nov 21–22, 2026 · B-tier · Raleigh, North Carolina");
 });
 
 test("a PDGA event spanning months (a league) goes on the calendar for its whole span", () => {

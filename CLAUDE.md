@@ -145,11 +145,9 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
     "17 8 * * *"    → daily ratings recompute + the Dec 1 membership reminder
     "*/15 * * * *"  → marketplace withdrawal sweep, UDisc layout import, then the Lost & Found tick LAST
                       (expiry, photo purge, due AI reads, matching incl. bags, bag-photo cleanup)
-    "7 * * * *"     → hourly PDGA events (+ layout baselines, + members' PDGA registrations in NC / VA / SC:
-                      pdga-registrations.ts reads one state's event search and up to 16 event pages a run, events
-                      within two weeks every hour, and matches registered PDGA numbers against the roster's
-                      idx:pdga:<n> keys -> pdga_watch_events / pdga_registrations, 0069; GET /pdga-registrations);
-                      the Sunday UDisc league refresh rides it
+    "7 * * * *"     → hourly PDGA events within 100 miles (PDGA's official API, cached briefly); the Sunday UDisc
+                      league refresh rides it. (PDGA layout baselines and members' PDGA registrations, which read
+                      pdga.com pages / internal endpoints and kept PDGA rounds, were removed for PDGA's terms.)
 ```
 
 ### The split router (`src/index.ts` + `club-api.ts`)
@@ -287,7 +285,7 @@ requests + league challenges (`0042-0043`, `0059`), admin push (`0044`), live ro
 (`0047`), course discovery / maintenance / community discovery (`0048`, `0052`, `0054`), private shot ledgers
 (`0049`), rating repair (`0050`), member practice + My Bag discs (`0051`), offline rounds (`0053`), spectator
 privacy (`0055`), phone activity (`0056`), personal data archive (`0057`), membership dues (`0058`), member push
-(`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`), **used-disc marketplace (`0063`)**,
+(`0060`), member messages + notices (`0061`), PDGA layout baselines (`0062`, since dropped), **used-disc marketplace (`0063`)**,
 **Lost & Found (`0064`)**, Lost & Found weight + hole (`0065`), **My Bag photos + bag / listing cross-checks (`0066`)**, whole-bag + accessory photos (`0067`), bags + accessories in the
 marketplace and "Sell this" links (`0068`: `market_listings` rebuilt with the same ids under `PRAGMA defer_foreign_keys`; see
 `test/market-gear-migration.test.ts` for how to replay a rebuild on seeded data), members' PDGA registrations (`0069`), club donations from marketplace sales (`0070`), the round karma watch (`0071`), guest promo spots (`0072`).
@@ -374,12 +372,9 @@ freeform notes.
   base 1000, iterative propagator drop) written at finalize and re-solved by the daily cron. Don't conflate.
 - **Showing ratings re-checks them** (`makeRatingValidator` in `ratings.ts`; also `/my-results` lists) — and must
   stay within D1's 50 queries/request. It checks **whole batches**, never one query per rating:
-  - PDGA-based ratings are **checked when written**: `round_ratings.rated_at` (D1 clock) vs migration 0073's
-    triggers, which record every change to the PDGA evidence (`pdga_rated_rounds`, `pdga_layout_matches`) per club
-    layout and PDGA round date (`''` = all dates) in `pdga_evidence_changes`. A rating written after every change in
-    its baseline window is trusted (`pdgaEvidenceUnchanged`); the rest are re-derived in one read per layout
-    (`pdgaBaselinesForPlayed`). **Changing `pdgaBaselineFor`, its window, or the PDGA rating math? Move
-    `PDGA_RATINGS_TRUSTED_SINCE` to the deploy time** so ratings written under the old rules are re-checked.
+  - There are no PDGA-based round ratings any more: the `pdga` method read stored PDGA rated rounds (Section 6 of
+    PDGA's API License Agreement forbids keeping them), so those ratings are not shown and their rounds are re-rated
+    from club evidence only.
   - Club-calibrated (`layout`) ratings depend on earlier ratings (a chain triggers can't follow), so they are
     re-verified on read, batched: `getSourceRatingBaselines` reads calibrations, fields and prior anchors in one
     pass each (selection identical to `priorRatingAnchors`).
@@ -409,9 +404,12 @@ freeform notes.
 - **PDGA data (Developer Program terms).** The official REST API client is `auth-worker/src/pdga-api.ts`
   (secrets `PDGA_API_USERNAME` / `PDGA_API_PASSWORD`, uploaded by `deploy-staging.yml` when the GitHub secrets exist;
   login session reused, players cached 6 h in `pdga_api_players`, limit 70 requests / 10 s per IP). With the login set,
-  rating anchors, the Stats panel's official rating, the clubmates' PDGA event list and nearby PDGA events come from
-  the API; without it each falls back to its earlier source. Round history, who's registered for an event and
-  rated rounds for PDGA baselines are not in the API and still come from pdga.com (owner's call, pending PDGA).
+  rating anchors, the Stats/Home official rating, the PDGA player checks and nearby PDGA events (members' Events,
+  Home's Next PDGA, the public Area Tournaments) come from the API. **Nothing reads pdga.com pages or PDGA's internal
+  `/api/v1/feat/*` endpoints, and PDGA data is never kept permanently** (PDGA's tech team, Nov 2026: Terms of Use;
+  API License Agreement Section 6 allows temporary caching only). Per-round PDGA ratings, the live rating estimate,
+  PDGA event history / hole mix, "who's registered" lists and PDGA-based course baselines were removed for that.
+  The Developer Program is read-only, and PDGA asks that PDGA integrations not expand until its review.
   **Every screen that shows PDGA data renders `PdgaCredit` ("Player, event, and course data provided by PDGA.") and
   links PDGA player/event names with `PdgaLink` (`src/shared/pdga-credit.js`)** — `tests/pdga-credit.test.mjs`
   lists those screens; add any new one there. Clubmates' PDGA numbers stay private (names aren't linked).
@@ -457,7 +455,7 @@ content-type says so (`rightType`), skips and deletes a wrong-typed saved copy, 
 (`scripts/qa/sw-bad-copy-browser-qa.mjs`). The **service worker**
 (`sw.js`) is **manually versioned** — bump it on any precached-asset change or
 users get stale route bundles such as `admin-app/admin-app.js`, `score.html`, or `score-app/score-app.js`; offline navigation falls back
-to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v354`, members `?v=234`, public/events `?v=216`, score `?v=249`,
+to `gvdg-members.html`. Current versions: `sw.js` `gvdg-club-v354`, members `?v=235`, public/events `?v=216`, score `?v=250`,
 home `?v=200` (tests pin them). `camera.css` is shared by `pro-shop.html`, `lost-found.html` and `gvdg-members.html`. **Add to calendar** everywhere is
 `src/shared/add-to-calendar.js`: a menu (portalled to `<body>`, styled by `.cal-menu` in `tokens.css`) offering Google Calendar /
 Outlook template links or the .ics download (`event-calendar.js`), Apple's first on Apple devices. **Karma chips** (`src/shared/karma.js`,
@@ -589,8 +587,10 @@ Per the parent `CLAUDE.md`, **nothing is "done" until it runs in the real app.**
 - **`kvRateLimited` is a non-atomic GET-then-PUT** (backs login/board/setpin/webauthn) — a concurrent burst
   can slip past. Only `/assistant` uses the atomic `ASSISTANT_RL` binding, and only on the deployed Worker.
 - `asIsoTimestamp` **rejects zone-less `YYYY-MM-DDTHH:MM`** (Worker runs UTC) → deadline PATCHes silently 400.
-- **UDisc/PDGA importers are brittle scrapers** — a markup change degrades to name-only / blank rather than
-  erroring; `safeFetch` sends a real-browser UA on purpose (removing it breaks imports).
+- **UDisc importers are brittle scrapers** — a markup change degrades to name-only / blank rather than
+  erroring; `safeFetch` sends a real-browser UA on purpose (removing it breaks imports). **Never scrape pdga.com**
+  (PDGA's Terms of Use): PDGA data comes only from PDGA's official API (`pdga-api.ts`) and PDGA Live API, cached
+  temporarily.
 - **CF Pages caches JS/CSS ~4h**; `_headers` (`must-revalidate`) is required or code changes look "not
   deployed" until the browser cache expires.
 - **Workers Free = ~10 ms CPU per invocation, uncatchable when exceeded.** It kills the whole invocation, including other

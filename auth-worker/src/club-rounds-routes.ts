@@ -22,6 +22,7 @@ import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
 import { archivedRoundActor, readRoundSharing, resolveWatchRound, roundViewerAccess, socketRequest, spectatorScorecard, spectatorSnapshot, watchKey } from "./spectator-access.js";
 import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
+import { sanitizeProfilePhoto } from "./profile-photo.js";
 
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // unambiguous (no 0/O/1/I/L)
 function genCode(): string {
@@ -265,7 +266,7 @@ export async function handleCasualRounds(
   if (method === "POST" && sub === "join") {
     if (await kvRateLimited(env, "round-join:" + actor.sub, 60, 60)) return json({ error: "rate_limited" }, 429, origin);
     const member = actor.kind === "member" ? await getMember(env.ROSTER, actor.sub) : null;
-    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: actor.name, photo: member?.photo ?? null }) }, origin);
+    return proxy(stub, "/join", { method: "POST", headers: hdr, body: JSON.stringify({ name: actor.name, photo: sanitizeProfilePhoto(member?.photo) }) }, origin);
   }
   if (method === "POST" && (sub === "join-approve" || sub === "join-decline")) {
     if (await kvRateLimited(env, "round-join-approve:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
@@ -336,7 +337,7 @@ export async function handleCasualRounds(
     if (await kvRateLimited(env, "live-loc:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const b = (await readJson(request)) ?? {};
     const member = actor.kind === "member" ? await getMember(env.ROSTER, actor.sub) : null;
-    const r = await stub.fetch("https://do/location", { method: "POST", headers: hdr, body: JSON.stringify({ ...b, photo: member?.photo ?? null }) });
+    const r = await stub.fetch("https://do/location", { method: "POST", headers: hdr, body: JSON.stringify({ ...b, photo: sanitizeProfilePhoto(member?.photo) }) });
     return json(await r.json().catch(() => ({})), r.status, origin);
   }
   if (sub === "live" && method === "POST" && seg[3] === "throws") {

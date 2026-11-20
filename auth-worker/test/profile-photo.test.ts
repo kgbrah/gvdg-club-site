@@ -5,9 +5,9 @@ import { sanitizeProfilePhoto, withMemberPhotos } from "../src/profile-photo.js"
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
 
 describe("profile photos on live maps", () => {
-  it("keeps member data URLs and PDGA https photos", () => {
+  it("keeps member data URLs and drops pdga.com picture links (PDGA data only through its developer API)", () => {
     expect(sanitizeProfilePhoto(PNG)).toBe(PNG);
-    expect(sanitizeProfilePhoto("https://www.pdga.com/files/styles/square/player.jpg")).toMatch(/^https:\/\/www\.pdga\.com\//);
+    expect(sanitizeProfilePhoto("https://www.pdga.com/files/styles/square/player.jpg")).toBeNull();
     expect(sanitizeProfilePhoto("javascript:alert(1)")).toBeNull();
     expect(sanitizeProfilePhoto("data:text/html;base64,PHNjcmlwdD4=")).toBeNull();
     expect(sanitizeProfilePhoto("https://evil.example/photo.png")).toBeNull();

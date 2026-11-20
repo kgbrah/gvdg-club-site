@@ -163,6 +163,16 @@ function apiResponse(url) {
   if (pathName === "/events/2/registration") return json({ registrations: [], players: [] });
   if (pathName === "/events/2/results") return json({ results: [] });
   if (pathName === "/club-feed") return json({ events: [], clubEvents: [] });
+  // Area Tournaments: PDGA's API through the Worker (one event too far away for the 60-mile list, one the club runs).
+  if (pathName === "/pdga-events") {
+    return json({ miles: 100, events: [
+      { name: "Pitt County Winter Open", date: "Dec 13, 2026", tier: "C-tier", place: "Greenville, NC", miles: 3.2,
+        url: "https://www.discgolfscene.com/tournaments/Pitt_County_Winter_Open_2026", pdgaUrl: "https://www.pdga.com/tour/event/90001" },
+      { name: "Release Smoke PDGA Classic", date: "Jan 9, 2027", tier: "C-tier", place: "Greenville, NC", miles: 0.4,
+        url: "/events#event/2", pdgaUrl: "https://www.pdga.com/tour/event/90002", clubEventId: 2 },
+      { name: "Far Away Open", date: "Dec 20, 2026", tier: "B-tier", place: "Raleigh, NC", miles: 78.5, pdgaUrl: "https://www.pdga.com/tour/event/90003" },
+    ] });
+  }
   if (pathName === "/fundraisers") return json({ fundraisers: [] });
   if (pathName === "/leagues") return json({ leagues: [league] });
   if (pathName === "/leagues/4") return json({ ...league, league });
@@ -299,6 +309,31 @@ try {
         console.error(`FAIL ${viewport.label} ${item.name}: ${error.message}`);
       }
     }
+  }
+  // Area Tournaments (PDGA's tech team): PDGA's API within 60 miles, each name linking to its pdga.com page, PDGA credited.
+  try {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await installRoutes(context);
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/index.html`, { waitUntil: "domcontentloaded" });
+    const area = page.locator("[data-react-home-tournaments='ready']");
+    await area.waitFor({ timeout: 12_000 });
+    const names = await area.locator(".tournament-name").allInnerTexts();
+    if (JSON.stringify(names) !== JSON.stringify(["Pitt County Winter Open", "Release Smoke PDGA Classic"])) throw new Error("area tournaments: " + JSON.stringify(names));
+    const href = await area.getByRole("link", { name: "Pitt County Winter Open" }).getAttribute("href");
+    if (href !== "https://www.pdga.com/tour/event/90001") throw new Error("area tournament name links to " + href);
+    const register = await area.getByRole("link", { name: "Register with the club" }).getAttribute("href");
+    if (register !== "events.html#event/2") throw new Error("club-run register link " + register);
+    const more = await area.getByRole("link", { name: "More events on PDGA.com" }).getAttribute("href");
+    if (more !== "https://www.pdga.com/tour/search") throw new Error("more events link " + more);
+    if (!(await area.locator("[data-pdga-credit]").count())) throw new Error("area tournaments without PDGA's credit");
+    if (await page.locator("a[href*='discgolfscene.com']").count()) throw new Error("the home page still links Disc Golf Scene");
+    await page.locator("#area-tournaments").screenshot({ path: path.join(evidenceDir, "area-tournaments-390.png") });
+    await context.close();
+    console.log("PASS area tournaments");
+  } catch (error) {
+    failures.push(`area tournaments: ${error.message}`);
+    console.error(`FAIL area tournaments: ${error.message}`);
   }
   // PayPal from inside Facebook: the dues link leaves the in-app browser (Android: an intent:// link for the PayPal app
   // or the real browser; iPhone: Safari). A normal browser is left alone.

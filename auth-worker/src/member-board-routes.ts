@@ -6,6 +6,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt } from "./input.js";
 import { getMember } from "./roster.js";
 import { readD1OrFallback } from "./d1-retry.js";
+import { sanitizeProfilePhoto } from "./profile-photo.js";
 
 const BOARD_LIMIT = 15;
 
@@ -24,7 +25,8 @@ async function boardAuthorPhotos(env: Env, posts: Record<string, unknown>[]): Pr
   await Promise.all(
     [...ids].map(async (id) => {
       const m = await getMember(env.ROSTER, id);
-      if (m?.photo) out[id] = m.photo;
+      const photo = sanitizeProfilePhoto(m?.photo);
+      if (photo) out[id] = photo;
     }),
   );
   return out;

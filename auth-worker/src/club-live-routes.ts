@@ -17,6 +17,7 @@ import { socketRequest, spectatorSnapshot } from "./spectator-access.js";
 import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
 import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
+import { sanitizeProfilePhoto } from "./profile-photo.js";
 
 type RosterPlayer = { memberId: string | null; name: string; division: string | null; startingHole: number | null; team: string | null };
 
@@ -310,7 +311,7 @@ export async function handleClubLive(
     const member = id.authMember && !id.authMember.startsWith("g_") ? await getMember(env.ROSTER, id.authMember) : null;
     const r = await stub.fetch("https://do/location", {
       method: "POST",
-      body: JSON.stringify({ ...body, photo: member?.photo ?? null }),
+      body: JSON.stringify({ ...body, photo: sanitizeProfilePhoto(member?.photo) }),
       headers: { "X-Auth-Member": id.authMember },
     });
     return json(await r.json().catch(() => ({})), r.status, origin);

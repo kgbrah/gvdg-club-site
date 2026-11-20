@@ -34,7 +34,8 @@ test("the app page has Lost & Found and PDGA in its rail, a PDGA section with PD
   assert.match(page, /<summary>Can I sign up for the club's PDGA events here\?<\/summary><p>Yes\. When GVDG runs a PDGA-sanctioned event/);
   assert.match(page, /<h3>Our events\.<br>Register with us\.<\/h3><p>When GVDG runs a PDGA-sanctioned event/);
   assert.doesNotMatch(page, /Register here\.<br>Skip the extra fee/);
-  assert.match(page, /The estimate is the club's, not an official PDGA rating\./);
+  assert.match(page, /The club rating is the club's, not an official PDGA rating\./);
+  assert.doesNotMatch(page, /Live rating estimate|Best round rating/);
 });
 
 test("the README documents the PDGA integration", () => {

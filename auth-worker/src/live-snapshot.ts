@@ -68,7 +68,7 @@ export function publicSnapshot(
   players: PlayerState[],
   liveCtps: LiveCtpStore = {},
   locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
-  ratingBaseline: { ssa: number; ppt: number; source?: string } | null = null,
+  ratingBaseline: { ssa: number; ppt: number } | null = null,
 ) {
   const holes = resolvedHoles(meta);
   const scoring = scoringState(meta, players);
@@ -120,8 +120,7 @@ export function publicSnapshot(
     liveCtps: publicLiveCtps(liveCtps, players),
     playerLocations: meta?.status === "live" ? publicPlayerLocations(players, locations, Date.now(), holes) : [],
     ratingBaseline: ratingBaseline && Number.isFinite(ratingBaseline.ssa) && Number.isFinite(ratingBaseline.ppt)
-      // source "pdga" = PDGA course data (the scorer credits PDGA when it uses it)
-      ? { ssa: ratingBaseline.ssa, ppt: ratingBaseline.ppt, ...(ratingBaseline.source === "pdga" ? { source: "pdga" } : {}) }
+      ? { ssa: ratingBaseline.ssa, ppt: ratingBaseline.ppt }
       : null,
     lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},
@@ -136,7 +135,7 @@ export function mineData(
   authMember: string | null,
   liveCtps: LiveCtpStore = {},
   locations: ReadonlyMap<number, LivePlayerLocation> = EMPTY_LOCATIONS,
-  ratingBaseline: { ssa: number; ppt: number; source?: string } | null = null,
+  ratingBaseline: { ssa: number; ppt: number } | null = null,
   shotLedgers: ShotLedgerViews = {},
 ): Record<string, unknown> {
   const holes = resolvedHoles(meta);
@@ -180,8 +179,7 @@ export function mineData(
     liveCtps: [] as ReturnType<typeof cardLiveCtps>,
     playerLocations,
     ratingBaseline: ratingBaseline && Number.isFinite(ratingBaseline.ssa) && Number.isFinite(ratingBaseline.ppt)
-      // source "pdga" = PDGA course data (the scorer credits PDGA when it uses it)
-      ? { ssa: ratingBaseline.ssa, ppt: ratingBaseline.ppt, ...(ratingBaseline.source === "pdga" ? { source: "pdga" } : {}) }
+      ? { ssa: ratingBaseline.ssa, ppt: ratingBaseline.ppt }
       : null,
     lockedCardIds: Array.isArray(meta?.lockedCardIds) ? meta.lockedCardIds : [],
     cardAttestations: meta?.cardAttestations && typeof meta.cardAttestations === "object" ? meta.cardAttestations : {},

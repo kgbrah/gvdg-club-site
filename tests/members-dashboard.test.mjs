@@ -210,7 +210,6 @@ test('overview dashboard collapses recent tournaments, casual rounds, and live s
   const pdga = readFileSync('src/members-app/pdga-dashboard.js', 'utf8');
   const casual = readFileSync('src/members-app/registration-casual.js', 'utf8');
   const activity = readFileSync('src/members-app/activity-panels.js', 'utf8');
-  assert.match(pdga, /h\("details", \{ className: "dash-collapse", key: "events" \}/);
   assert.match(casual, /h\("details", \{ className: "dash-collapse"/);
   assert.match(activity, /h\("details", \{ className: "club-board react-live-scoring dash-collapse"/);
   assert.doesNotMatch(pdga, /h\("h4", \{ className: "dash-subtitle", key: "title" \}, "Recent Tournaments"\)/);

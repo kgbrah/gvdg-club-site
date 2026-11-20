@@ -2,7 +2,6 @@ import React from "react";
 import { KarmaChip } from "../shared/karma.js";
 
 import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
-import { useMemberContext } from "./member-context.js";
 import {
   COMPACT_STAT_IDS,
   PLAY_GROUPS,
@@ -10,10 +9,8 @@ import {
   PLAY_STYLES,
   formatPct,
   formatRankNeed,
-  pdgaRowsFromStats,
   playGroupLabel,
   playKindLabel,
-  playStatsByKind,
   playStyleLabel,
   playViewKey,
   scoreMixRows,
@@ -139,14 +136,13 @@ export function PlayStatsKindBlock({
   state,
   style = "all",
 }) {
-  const selected = kind === "casual" ? "casual" : kind === "pdga" ? "pdga" : "competitive";
+  const selected = kind === "casual" ? "casual" : "competitive";
   const bucket = selectPlayStatsView(state?.payload?.[selected], group, style);
   const rows = Array.isArray(bucket?.categories) ? bucket.categories : [];
   const mix = scoreMixRows(rows);
-  const pdga = selected === "pdga";
   const cards = compact
-    ? rows.filter((row) => COMPACT_STAT_IDS.includes(row.id) && (!pdga || row.group !== "throw"))
-    : rows.filter((row) => row.group !== "mix" && (!pdga || row.group !== "throw"));
+    ? rows.filter((row) => COMPACT_STAT_IDS.includes(row.id))
+    : rows.filter((row) => row.group !== "mix");
   const holes = Number(bucket?.mine?.totals?.holes) || 0;
   const kindLabel = playKindLabel(selected);
   const formatBits = [
@@ -157,9 +153,7 @@ export function PlayStatsKindBlock({
   const hasSample = holes > 0 || cards.some((row) => row.mine && row.mine.att);
   const hasShotSample = cards.some((row) => row.group === "throw" && row.mine?.att);
   const status = state?.status || "idle";
-  const emptyCopy = selected === "pdga"
-    ? "PDGA live scorecards for recent events will fill this mix. Club event ranks stay separate."
-    : selected === "casual"
+  const emptyCopy = selected === "casual"
       ? "Finish a casual round to start those percentages. Mark lies for fairways, C1/C2, and putting."
       : "Finish a club event to start competitive percentages. Mark lies for fairways, C1/C2, and putting.";
   return h("section", {
@@ -184,7 +178,7 @@ export function PlayStatsKindBlock({
     showToggle ? h(ChipToggle, {
       key: "kind",
       label: "Scoring kind",
-      options: (Array.isArray(state?.kinds) && state.kinds.length ? state.kinds : PLAY_KINDS.filter((id) => id !== "pdga")),
+      options: (Array.isArray(state?.kinds) && state.kinds.length ? state.kinds : PLAY_KINDS),
       labels: playKindLabel,
       value: selected,
       onChange: onKind,
@@ -195,13 +189,13 @@ export function PlayStatsKindBlock({
       ? h("div", { className: "play-score-mix-wrap", key: "mix" }, [
         h("div", { className: "play-stat-k", key: "label" }, "Scoring mix"),
         h(MixBar, { key: "bar", rows: mix }),
-        h(MixLegend, { key: "legend", rows: mix, showRank: !pdga }),
+        h(MixLegend, { key: "legend", rows: mix, showRank: true }),
         compact ? null : h(ScoreDistribution, { key: "dist", rows: mix, totals: bucket?.mine?.totals }),
       ])
       : null,
     hasSample && cards.length
       ? h("div", { className: compact ? "play-stats-grid compact" : "play-stats-grid", key: "grid" },
-        cards.map((row) => h(StatCard, { compact, key: row.id, row, showLeaders: !pdga, showRank: !pdga })))
+        cards.map((row) => h(StatCard, { compact, key: row.id, row, showLeaders: true, showRank: true })))
       : status === "ready"
         ? h("p", { className: "player-card-meta", key: "empty" }, formatBits.length
           ? "No " + formatNote + kindLabel.toLowerCase() + " holes this season yet."
@@ -213,9 +207,9 @@ export function PlayStatsKindBlock({
 }
 
 export function PlayStatsGrid({ compact = false, kind, onKind, state, group, onGroup, style, onStyle }) {
-  const selected = kind === "casual" ? "casual" : kind === "pdga" ? "pdga" : "competitive";
+  const selected = kind === "casual" ? "casual" : "competitive";
   const status = state?.status || "idle";
-  const kinds = Array.isArray(state?.kinds) && state.kinds.length ? state.kinds : PLAY_KINDS.filter((id) => id !== "pdga");
+  const kinds = Array.isArray(state?.kinds) && state.kinds.length ? state.kinds : PLAY_KINDS;
   if (compact) {
     return h(PlayStatsKindBlock, {
       compact: true,
@@ -249,26 +243,13 @@ export function PlayStatsGrid({ compact = false, kind, onKind, state, group, onG
   ]);
 }
 
-export function PlayStatsPanel({ compact = false, pdgaStats = null }) {
-  const context = useMemberContext();
+/** The club's own scoring (club events and casual rounds). PDGA hole scores are not used (PDGA's API terms). */
+export function PlayStatsPanel({ compact = false }) {
   const state = usePlayStats();
   const [kind, setKind] = React.useState("competitive");
   const [group, setGroup] = React.useState("all");
   const [style, setStyle] = React.useState("all");
-  const memberId = context.sub || "me";
-  const pdgaRows = React.useMemo(
-    () => pdgaRowsFromStats(pdgaStats, memberId, context.name),
-    [pdgaStats, memberId, context.name],
-  );
-  const mergedPayload = React.useMemo(() => {
-    if (!state.payload) return state.payload;
-    return {
-      ...state.payload,
-      pdga: pdgaRows.length ? playStatsByKind(pdgaRows, memberId).pdga : state.payload.pdga,
-    };
-  }, [state.payload, pdgaRows, memberId]);
-  const hasPdga = Boolean(context.pdgaNo) || pdgaRows.length > 0 || Number(mergedPayload?.pdga?.mine?.totals?.holes) > 0;
-  const kinds = hasPdga ? PLAY_KINDS : PLAY_KINDS.filter((id) => id !== "pdga");
+  const kinds = PLAY_KINDS;
   return h(React.Fragment, null, compact ? null : h("div", { id: "stats-history" }, h(PersonalPlayHistory)), h(PlayStatsGrid, {
     compact,
     kind: kinds.includes(kind) ? kind : "competitive",
@@ -277,6 +258,6 @@ export function PlayStatsPanel({ compact = false, pdgaStats = null }) {
     onGroup: setGroup,
     style,
     onStyle: setStyle,
-    state: { ...state, payload: mergedPayload, kinds },
+    state: { ...state, kinds },
   }));
 }

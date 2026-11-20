@@ -1,267 +1,110 @@
-import { describe, it, expect } from "vitest";
-import { parsePlayerPage, parseDetailRounds, parseMemberOverview, parseRatingDetail, fetchPdgaStats, isFreshPdgaCache } from "../src/pdga.js";
+import { readdirSync, readFileSync } from "node:fs";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-// Fixtures mirror the real pdga.com markup (verified against player #273070).
-const PLAYER_HTML = `
-<h1 class="title" id="page-title">Kevin Gray #273070</h1>
-<ul><li class="current-rating"> <strong>Current Rating:</strong> 891
-  <a title="-3 point" href="/player/273070/history">-3</a>
-  <small class="rating-date">(as of 09-Jun-2026)</small> </li></ul>`;
+import worker from "../src/index.js";
+import type { Env } from "../src/env.js";
+import { resetPdgaApiSession } from "../src/pdga-api.js";
+import { PDGA_STATS_VERSION, statsFromPlayer } from "../src/pdga.js";
 
-const DETAILS_HTML = `
-<table><tr><th class="round-rating">Rating</th></tr>
-<tr class="evaluated included odd"><td class="tournament"><a href="/tour/event/104398">GVDG Monthly</a></td><td class="tier">C</td><td class="date" data-text="1780200000">31-May-2026</td><td class="division">MA2</td><td class="round tooltip" data-tooltip-content="#a">2</td><td class="score">69</td><td class="round-rating">888</td><td class="evaluated">Yes</td></tr>
-<tr class="evaluated included even"><td class="tournament"><a href="/tour/event/104398">GVDG Monthly</a></td><td class="tier">C</td><td class="date" data-text="1780200000">31-May-2026</td><td class="division">MA2</td><td class="round tooltip" data-tooltip-content="#b">1</td><td class="score">75</td><td class="round-rating">836</td><td class="evaluated">Yes</td></tr>
-<tr class="odd"><td class="tournament"><a href="/tour/event/100001">Spring Open</a></td><td class="tier">B</td><td class="date" data-text="1770000000">01-Mar-2026</td><td class="division">MA1</td><td class="round">1</td><td class="score">61</td><td class="round-rating">925</td><td class="evaluated">Yes</td></tr>
-</table>`;
+// PDGA Developer Program review (2026-11-20): the Worker reads PDGA data ONLY through PDGA's documented developer API
+// (api.pdga.com), never pdga.com pages or internal endpoints, and keeps it only temporarily.
 
-const PLAYER_WITH_PENDING_EVENT_HTML = `${PLAYER_HTML}
-<h4>MA2 · Mixed Amateur 2</h4>
-<table><tr><td class="place">8</td><td class="tournament"><a href="/tour/event/104547#MA2">Yard Gnomes Open presented by Play it Again Sports</a></td><td class="tier">B</td><td class="dates" data-text="1783742400">11-Jul-2026</td></tr></table>`;
+const ORIGIN = "http://localhost:8080";
+const API = "https://api.test.pdga";
 
-const PENDING_EVENT_HTML = `
-<h2>Unofficial Results</h2>
-<table class="results"><tr class="even"><td class="place">8</td><td class="player"><a href="/player/273070">Kevin Gray</a></td><td class="pdga-number">273070</td><td class="player-rating">891</td><td class="par">+10</td><td class="round"><a href="/live/event/104547/MA2/scores?round=1" class="score">67</a></td><td class="round-rating">818</td><td class="round"><a href="/live/event/104547/MA2/scores?round=2" class="score">66</a></td><td class="round-rating">909</td><td class="total">133</td></tr></table>`;
+function memoryKv() {
+  const rows = new Map<string, string>();
+  return {
+    async get(key: string) { return rows.get(key) ?? null; },
+    async put(key: string, value: string) { rows.set(key, value); },
+    async delete(key: string) { rows.delete(key); },
+    async list() { return { keys: [], list_complete: true }; },
+  };
+}
 
-const DETAILS_WITH_PARTIAL_EVENT_HTML = DETAILS_HTML.replace("</table>", `
-<tr class="evaluated included odd"><td class="tournament"><a href="/tour/event/104547">Yard Gnomes Open presented by Play it Again Sports</a></td><td class="tier">B</td><td class="date" data-text="1783742400">11-Jul-2026</td><td class="division">MA2</td><td class="round tooltip" data-tooltip-content="#c">1</td><td class="score">67</td><td class="round-rating">818</td><td class="evaluated">Yes</td></tr>
-</table>`);
-
-const DETAILS_WITH_ASCENDING_ROUNDS_HTML = `
-<table>
-<tr><td class="tournament"><a href="/tour/event/98457">Lancer Chain Chaser 9</a></td><td class="date" data-text="1775966400">12-Apr-2026</td><td class="division">MA2</td><td class="round">1</td><td class="score">68</td><td class="round-rating">852</td></tr>
-<tr><td class="tournament"><a href="/tour/event/98457">Lancer Chain Chaser 9</a></td><td class="date" data-text="1775966400">12-Apr-2026</td><td class="division">MA2</td><td class="round">2</td><td class="score">56</td><td class="round-rating">968</td></tr>
-</table>`;
-
-describe("pdga.com parsers", () => {
-  it("reads the public member API when player HTML is challenged", async () => {
-    const overview = {
-      member: { firstName: "Kevin", lastName: "Gray", pdgaNum: 273070 },
-      currentRating: { rating: 890, effectiveDate: "2026-07-14T00:00:00+00:00" },
-      previousRating: { rating: 891, effectiveDate: "2026-06-09T00:00:00+00:00" },
+async function env(players: Record<string, Record<string, unknown>> = {}) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec("CREATE TABLE pdga_api_players (pdga_number TEXT PRIMARY KEY, data TEXT, fetched_at INTEGER NOT NULL)");
+  const prepare = (sql: string) => {
+    let bound: unknown[] = [];
+    const statement = {
+      bind(...args: unknown[]) { bound = args; return statement; },
+      async all() { return { results: sqlite.prepare(sql).all(...(bound as never[])), success: true }; },
+      async first() { return sqlite.prepare(sql).get(...(bound as never[])) ?? null; },
+      async run() { const info = sqlite.prepare(sql).run(...(bound as never[])); return { results: [], success: true, meta: { changes: Number(info.changes) } }; },
     };
-    const detail = [
-      { tournId: 104547, division: "MA2", round: 2, score: 66, rating: 909, tournament: { officialName: "Yard Gnomes Open presented by Play it Again Sports", startDate: "2026-07-11T00:00:00+00:00" } },
-      { tournId: 104547, division: "MA2", round: 1, score: 67, rating: 818, tournament: { officialName: "Yard Gnomes Open presented by Play it Again Sports", startDate: "2026-07-11T00:00:00+00:00" } },
-      { tournId: 104398, division: "MA2", round: 1, score: 75, rating: 836, tournament: { officialName: "GVDG Monthly", startDate: "2026-05-31T00:00:00+00:00" } },
-    ];
-    const stub: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/overview")) return new Response(JSON.stringify(overview), { status: 200, headers: { "content-type": "application/json" } });
-      if (url.endsWith("/rating-detail")) return new Response(JSON.stringify(detail), { status: 200, headers: { "content-type": "application/json" } });
-      if (url.includes("live_results_fetch_round")) return new Response(JSON.stringify({ data: { scores: [] } }), { status: 200 });
-      return new Response("Just a moment...", { status: 403 });
-    };
-    const stats = await fetchPdgaStats("273070", stub);
-    expect(parseMemberOverview(overview)).toEqual({ name: "Kevin Gray", official_rating: 890, rating_date: "14-Jul-2026", previous_rating: 891, previous_rating_date: "09-Jun-2026" });
-    expect(parseRatingDetail(detail)[0]?.rounds.map((round) => round.rating)).toEqual([909, 818]);
-    expect(stats.name).toBe("Kevin Gray");
-    expect(stats.official_rating).toBe(890);
-    expect(stats.rating_date).toBe("14-Jul-2026");
-    expect(stats.previous_rating).toBe(891);
-    expect(stats.events[0]).toMatchObject({ tournament: "Yard Gnomes Open presented by Play it Again Sports", date: "11-Jul-2026", division: "MA2" });
-    expect(stats.live_rating).toBe(854);
-    expect(stats.peak_rating).toBe(909);
-    expect(stats.events_count).toBe(2);
+    return statement;
+  };
+  const calls: string[] = [];
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith("/services/json/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
+    const numbers = (new URL(url).searchParams.get("pdga_number") ?? "").split(",");
+    return Response.json({ players: numbers.flatMap((number) => players[number] ? [players[number]] : []) });
+  });
+  resetPdgaApiSession();
+  return {
+    calls,
+    env: {
+      DB: { prepare, async batch(statements: { run(): Promise<unknown> }[]) { for (const s of statements) await s.run(); return []; } },
+      RATELIMIT: memoryKv(), ROSTER: memoryKv(), JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN,
+      PDGA_API_USERNAME: "club", PDGA_API_PASSWORD: "pw", PDGA_API_BASE: API,
+    } as unknown as Env,
+  };
+}
+
+const stats = (target: Env, query: string, ip = "203.0.113.9") =>
+  worker.fetch(new Request("https://worker/pdga-stats?" + query, { headers: { Origin: ORIGIN, "CF-Connecting-IP": ip } }), target);
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("GET /pdga-stats", () => {
+  it("returns only the official rating and its date from the PDGA API; the scraped history fields stay empty", async () => {
+    const { env: target, calls } = await env({ "80024": { pdga_number: "80024", first_name: "Ada", last_name: "Lovelace",
+      membership_status: "current", rating: "941", rating_effective_date: "2026-11-11" } });
+    const response = await stats(target, "pdga=80024");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(statsFromPlayer("80024", {
+      pdgaNumber: "80024", name: "Ada Lovelace", membershipStatus: "current", membershipExpires: null, rating: 941, ratingDate: "2026-11-11",
+      classification: null, city: null, state: null, country: null, url: "https://www.pdga.com/player/80024",
+    }));
+    expect(calls.every((url) => url.startsWith(API + "/services/json/"))).toBe(true);
+    const body = statsFromPlayer("1", null);
+    expect(body).toMatchObject({ official_rating: null, previous_rating: null, live_rating: null, peak_rating: null, events_count: 0,
+      events: [], play_rounds: [], source: "pdga-api", stats_version: PDGA_STATS_VERSION });
   });
 
-  it("parses name + official rating + date from the player page", () => {
-    const p = parsePlayerPage(PLAYER_HTML);
-    expect(p).toEqual({ name: "Kevin Gray", official_rating: 891, rating_date: "09-Jun-2026" });
+  it("serves a cached record without calling PDGA or counting against the per-IP limit", async () => {
+    const { env: target, calls } = await env({ "80024": { pdga_number: "80024", rating: "941", rating_effective_date: "2026-11-11" } });
+    await stats(target, "pdga=80024");
+    const before = calls.length;
+    for (let i = 0; i < 40; i++) expect((await stats(target, "pdga=80024")).status).toBe(200);
+    expect(calls.length).toBe(before);
   });
 
-  it("returns nulls (no throw) on unexpected markup", () => {
-    expect(parsePlayerPage("<html>nope</html>")).toEqual({ name: null, official_rating: null, rating_date: null });
-    expect(parseDetailRounds("<html>nope</html>")).toEqual([]);
-  });
-
-  it("groups detail rounds into events, most recent first", () => {
-    const events = parseDetailRounds(DETAILS_HTML);
-    expect(events.length).toBe(2);
-    expect(events[0]).toMatchObject({ tournament: "GVDG Monthly", date: "31-May-2026", division: "MA2", eventId: "104398" });
-    expect(events[0]?.rounds.map((r) => r.rating)).toEqual([888, 836]);
-    expect(events[1]).toMatchObject({ tournament: "Spring Open", division: "MA1" });
-    expect(events[1]?.rounds[0]?.rating).toBe(925);
-  });
-
-  it("orders each event's rounds newest first before applying the recent-round cutoff", () => {
-    expect(parseDetailRounds(DETAILS_WITH_ASCENDING_ROUNDS_HTML)[0]?.rounds.map((round) => round.rating)).toEqual([968, 852]);
-  });
-
-  it("computes live (recent-form mean) + peak from a stubbed fetch", async () => {
-    const stub: typeof fetch = async (input) =>
-      new Response(String(input).endsWith("/details") ? DETAILS_HTML : PLAYER_HTML, { status: 200 });
-    const s = await fetchPdgaStats("273070", stub);
-    expect(s.official_rating).toBe(891);
-    expect(s.peak_rating).toBe(925); // max round rating
-    expect(s.live_rating).toBe(883); // round((888+836+925)/3)
-    expect(s.events_count).toBe(2);
-    expect(s.name).toBe("Kevin Gray");
-  });
-
-  it("includes newly reported round ratings before PDGA adds them to ratings detail", async () => {
-    // Given a player page with a newly reported event whose rounds are only on the event page.
-    const stub: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/details")) return new Response(DETAILS_HTML, { status: 200 });
-      if (url.endsWith("/tour/event/104547")) return new Response(PENDING_EVENT_HTML, { status: 200 });
-      return new Response(PLAYER_WITH_PENDING_EVENT_HTML, { status: 200 });
-    };
-
-    // When the live PDGA stats are built.
-    const stats = await fetchPdgaStats("273070", stub);
-
-    // Then the reported event leads the feed and contributes its newest rounds to the live rating.
-    expect(stats.events[0]).toMatchObject({
-      tournament: "Yard Gnomes Open presented by Play it Again Sports",
-      date: "11-Jul-2026",
-      division: "MA2",
-      rounds: [
-        { rating: 909, score: 66, round: "2" },
-        { rating: 818, score: 67, round: "1" },
-      ],
-    });
-    expect(stats.live_rating).toBe(875);
-  });
-
-  it("merges a newly reported round into an event already present in ratings detail", async () => {
-    // Given PDGA ratings detail has round one, while the event page already has round two.
-    let eventFetches = 0;
-    const stub: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/details")) return new Response(DETAILS_WITH_PARTIAL_EVENT_HTML, { status: 200 });
-      if (url.endsWith("/tour/event/104547")) {
-        eventFetches += 1;
-        return new Response(PENDING_EVENT_HTML, { status: 200 });
-      }
-      return new Response(PLAYER_WITH_PENDING_EVENT_HTML, { status: 200 });
-    };
-
-    // When live PDGA stats are built during that partially published event.
-    const stats = await fetchPdgaStats("273070", stub);
-
-    // Then the latest event is refreshed and its existing round is not duplicated.
-    expect(eventFetches).toBe(1);
-    expect(stats.events[0]?.rounds).toEqual([
-      { rating: 909, score: 66, round: "2" },
-      { rating: 818, score: 67, round: "1" },
-    ]);
-    expect(stats.live_rating).toBe(875);
-  });
-
-  it("keeps evaluated ratings when a pending event page is temporarily unavailable", async () => {
-    // Given a healthy player/detail response and a failed request for the newly reported event.
-    const stub: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/details")) return new Response(DETAILS_HTML, { status: 200 });
-      if (url.endsWith("/tour/event/104547")) throw new TypeError("event page unavailable");
-      return new Response(PLAYER_WITH_PENDING_EVENT_HTML, { status: 200 });
-    };
-
-    // When live PDGA stats are built.
-    const stats = await fetchPdgaStats("273070", stub);
-
-    // Then the existing evaluated history remains available instead of failing the whole response.
-    expect(stats.events[0]?.tournament).toBe("GVDG Monthly");
-    expect(stats.live_rating).toBe(883);
-  });
-
-  it("returns every parsed event instead of a recent slice", async () => {
-    const rows = Array.from({ length: 25 }, (_, index) => {
-      const epoch = 1770000000 - index * 86400;
-      return `<tr><td class="tournament"><a href="/tour/event/${100000 + index}">Event ${index + 1}</a></td><td class="date" data-text="${epoch}">01-Jan-2026</td><td class="division">MA2</td><td class="round">1</td><td class="score">54</td><td class="round-rating">900</td></tr>`;
-    }).join("");
-    const stub: typeof fetch = async (input) =>
-      new Response(String(input).endsWith("/details") ? `<table>${rows}</table>` : PLAYER_HTML, { status: 200 });
-    const stats = await fetchPdgaStats("273070", stub);
-    expect(stats.events_count).toBe(25);
-    expect(stats.events).toHaveLength(25);
-    expect(stats.stats_version).toBe(3);
-  });
-
-  it("includes hole-by-hole mix from earlier seasons, not only the current year", async () => {
-    const live = JSON.stringify({
-      data: {
-        scores: [{
-          PDGANum: 273070,
-          Name: "Kevin Gray",
-          Holes: 18,
-          Scores: "2,3,3,5,3,3,4,5,4,4,6,4,3,4,4,3,3,4",
-          Pars: "3,3,3,4,3,3,3,4,4,3,3,3,3,3,4,3,3,4",
-          Teammates: [],
-          Team: null,
-        }],
-      },
-    });
-    const priorYearDetails = `
-<table>
-<tr><td class="tournament"><a href="/tour/event/90001">Winter Classic</a></td><td class="date" data-text="1735689600">31-Dec-2024</td><td class="division">MA2</td><td class="round">1</td><td class="score">54</td><td class="round-rating">910</td></tr>
-</table>`;
-    const stub: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.includes("TournID=90001") && url.includes("Round=1")) {
-        return new Response(live, { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.includes("live_results_fetch_round")) {
-        return new Response(JSON.stringify({ data: { scores: [] } }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/details")) return new Response(priorYearDetails, { status: 200 });
-      return new Response(PLAYER_HTML, { status: 200 });
-    };
-    const stats = await fetchPdgaStats("273070", stub);
-    expect(stats.play?.holes).toBe(18);
-    expect(stats.play_rounds?.[0]?.tournament).toBe("Winter Classic");
-  });
-
-  it("adds hole-by-hole PDGA mix from live scorecards", async () => {
-    const live = JSON.stringify({
-      data: {
-        scores: [{
-          PDGANum: 273070,
-          Name: "Kevin Gray",
-          Holes: 18,
-          Scores: "2,3,3,5,3,3,4,5,4,4,6,4,3,4,4,3,3,4",
-          Pars: "3,3,3,4,3,3,3,4,4,3,3,3,3,3,4,3,3,4",
-          Teammates: [],
-          Team: null,
-        }],
-      },
-    });
-    const stub: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.includes("TournID=104398") && url.includes("Round=2")) {
-        return new Response(live, { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.includes("live_results_fetch_round")) {
-        return new Response(JSON.stringify({ data: { scores: [] } }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/details")) return new Response(DETAILS_HTML, { status: 200 });
-      return new Response(PLAYER_HTML, { status: 200 });
-    };
-    const stats = await fetchPdgaStats("273070", stub);
-    expect(stats.play?.holes).toBe(18);
-    expect(stats.play?.birdies).toBe(1);
-    expect(stats.play_rounds?.[0]).toMatchObject({ group_format: "singles", scoring_style: "stroke" });
+  it("rejects bad numbers, and answers the QA drive's member without calling PDGA", async () => {
+    const { env: target, calls } = await env();
+    expect((await stats(target, "pdga=abc")).status).toBe(400);
+    expect(await (await stats(target, "pdga=90000001")).json()).toMatchObject({ official_rating: 935, events: [] });
+    expect(calls).toEqual([]);
   });
 });
 
-describe("pdga cache freshness", () => {
-  const now = 1_800_000_000_000;
-  const fresh = {
-    pdga: "273070",
-    events_count: 2,
-    events: [{ tournament: "A" }, { tournament: "B" }],
-    play_rounds: [],
-    stats_version: 3,
-  };
-
-  it("keeps a current full payload", () => {
-    expect(isFreshPdgaCache(fresh, now - 60_000, now)).toBe(true);
-  });
-
-  it("refetches truncated event lists and old cache versions", () => {
-    expect(isFreshPdgaCache({ ...fresh, events: fresh.events.slice(0, 1) }, now - 60_000, now)).toBe(false);
-    expect(isFreshPdgaCache({ ...fresh, stats_version: 1 }, now - 60_000, now)).toBe(false);
-    expect(isFreshPdgaCache(fresh, now - 16 * 60 * 1000, now)).toBe(false);
+describe("the Worker's PDGA sources", () => {
+  it("has no pdga.com page reads, internal endpoints or Live API storage left in its code", () => {
+    const dir = new URL("../src/", import.meta.url);
+    const walk = (sub: string): string[] => readdirSync(new URL(sub, dir)).map(String).flatMap((name) => {
+      if (name.endsWith(".ts")) return [sub + name];
+      try { return walk(sub + name + "/"); } catch { return []; } // not a directory
+    });
+    const files = walk("").filter((name) => name.endsWith(".ts"));
+    const offenders = files.flatMap((name) => {
+      const text = readFileSync(new URL(name, dir), "utf8");
+      return [/pdga\.com\/api\/v1/, /feat\/members/, /rating-detail/, /apps\/tournament\/live-api/, /live_results_fetch/,
+        /fetch\([^)]*pdga\.com\/(?:player|tour)/].flatMap((pattern) => pattern.test(text) ? [name + " " + pattern] : []);
+    });
+    expect(offenders).toEqual([]);
   });
 });

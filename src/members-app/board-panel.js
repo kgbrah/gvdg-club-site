@@ -6,6 +6,7 @@ import { MarkdownBlocks } from "./board-markdown.js";
 import { memberConfirm } from "./member-dialogs.js";
 import { useMemberContext } from "./member-context.js";
 import { useSessionToken } from "./session-token.js";
+import { shownProfilePhoto } from "../shared/profile-photo.js";
 
 const h = React.createElement;
 
@@ -18,7 +19,7 @@ function boardInitials(name) {
 
 function BoardAvatar({ post, authors }) {
   const [failed, setFailed] = React.useState(false);
-  const photo = !failed && post.member_id ? authors[post.member_id] : "";
+  const photo = !failed && post.member_id ? shownProfilePhoto(authors[post.member_id]) : "";
   if (!photo) return h("div", { className: "board-avatar initials" }, boardInitials(post.author_name));
   return h("img", {
     className: "board-avatar",

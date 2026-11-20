@@ -54,8 +54,8 @@ function response(path, query) {
     promo: { code: "GVDG2026", validThrough: "2026" }, clubDiscountAvailable: true, attribution: "Player, event, and course data provided by PDGA" };
   if (path === "/rounds/RIVER7/live/mine") return { status: "live", cardId: 1, cardmates: [{ name: "Morgan" }] };
   if (path === "/my-live-rounds") return { rounds: [] };
-  if (path === "/pdga-stats") return { name: member.name, official_rating: 913, live_rating: 918, previous_rating: 910,
-    events: [{ tournament: "Greenville Open", date: "Oct 21, 2026", division: "MA2", rounds: [{ rating: 919, score: 55 }] }] };
+  // PDGA's official API only: the official rating and its date.
+  if (path === "/pdga-stats") return { name: member.name, official_rating: 913, rating_date: "2026-11-01", live_rating: null, previous_rating: null, events: [], play_rounds: [], source: "pdga-api" };
   if (path === "/shop/wallet") return { balance_cents: 3250,
     transactions: [{ id: 1, amount_cents: 3250, source: "event_payout", created_at: "2026-11-13T19:30:00Z" },
       { id: 2, amount_cents: -1200, source: "shop_purchase", created_at: "2026-11-10T15:00:00Z" }] };
