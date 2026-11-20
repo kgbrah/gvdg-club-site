@@ -4,7 +4,9 @@
 //   - an admin signed in before the release (a 12-hour session, no email): the session is upgraded, Home shows
 //     "Add your email", and adding it needs no PIN
 //   - changing it later asks for the PIN: the wrong PIN is refused (still signed in), the right one sends the code
-//   - a member with no email signs in with a PIN and must add one before Home
+//   - a new account (created since the email became required) with no email signs in with a PIN and must add one
+//     before Home; an account from before goes straight to Home with the reminder (owner: "Let's not block people
+//     who are already logged in and have memberships. Just require new users from here on out")
 //   - Forgot PIN: the code from the email, a new PIN, signed in; the new PIN signs in and the old one doesn't
 //   npm run build && npm ci --prefix auth-worker && GVDG_QA_NO_SANDBOX=1 node scripts/qa/account-recovery-e2e-qa.mjs
 import assert from "node:assert/strict";
@@ -90,7 +92,8 @@ const env = {
 // Like the owner: an admin with a PIN changed a couple of times, no email on file.
 await putMember(roster, { memberId: "m_7001", name: "Avery Admin", pdgaNo: "7001", isAdmin: true, pinHash: await hashPin("4821", PEPPER), mustChangePin: false, pinVer: 2 });
 // A member who has never given an email.
-await putMember(roster, { memberId: "m_7002", name: "Jordan Parker", pdgaNo: "7002", pinHash: await hashPin("1357", PEPPER), mustChangePin: false, pinVer: 1 });
+await putMember(roster, { memberId: "m_7002", name: "Jordan Parker", pdgaNo: "7002", pinHash: await hashPin("1357", PEPPER), mustChangePin: false, pinVer: 1, emailRequired: true });
+await putMember(roster, { memberId: "m_7003", name: "Sam Longtime", pdgaNo: "7003", pinHash: await hashPin("2468", PEPPER), mustChangePin: false, pinVer: 1 });
 
 const mime = new Map([[".css", "text/css"], [".html", "text/html"], [".js", "text/javascript"], [".json", "application/json"], [".png", "image/png"], [".svg", "image/svg+xml"], [".woff2", "font/woff2"], [".webmanifest", "application/manifest+json"], [".avif", "image/avif"], [".webp", "image/webp"], [".jpg", "image/jpeg"]]);
 const server = createHttpServer(async (request, response) => {
@@ -204,7 +207,20 @@ const claimsOf = (token) => JSON.parse(Buffer.from(token.split(".")[1], "base64u
   console.log("Admin: session upgraded, first email with no PIN, change with the PIN (wrong refused, right accepted)");
 }
 
-// 2. A member with no email signs in with a PIN and adds one before Home.
+// 2a. An account from before the email step, with no email: straight to Home, with the reminder.
+{
+  const { page, context } = await open();
+  await page.goto(`${origin}/gvdg-members.html`);
+  await page.locator("#identifierInput").fill("7003");
+  await page.locator("#pinInput").fill("2468");
+  await page.locator('[data-react-auth-action="login"]').click();
+  await shellIs(page, "members");
+  await page.locator("[data-react-email-reminder]").waitFor();
+  await context.close();
+  console.log("Existing member: no email, straight to Home with the reminder");
+}
+
+// 2. A new account with no email signs in with a PIN and adds one before Home.
 {
   const { page, context } = await open();
   await page.goto(`${origin}/gvdg-members.html`);

@@ -17,6 +17,7 @@ import type { KVLike } from "./ratelimit.js";
 import { getMember } from "./roster.js";
 import { publicMembership } from "./membership-year.js";
 import type { SessionClaims } from "./jwt.js";
+import { emailRequired } from "./member-routes.js";
 
 export interface StoredCredential {
   id: string; // base64url credential ID
@@ -208,6 +209,7 @@ export async function authenticationVerify(
       mustChangePin: member.mustChangePin,
       email: member.email ?? null,
       needsEmail: !member.email,
+      emailRequired: emailRequired(member),
       name: member.name,
       pdgaNo: member.pdgaNo ?? null,
       udisc: member.udisc ?? null,

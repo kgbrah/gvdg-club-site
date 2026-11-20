@@ -164,7 +164,7 @@ export async function handleEmailVerify(request: Request, env: Env, origin: stri
       "If that wasn't you, contact a club admin.", "", "- Greenville Disc Golf Club"].join("\n");
     await sendMail(env, previous, { subject: "Your GVDG account email was changed", text, html: text.split("\n").map((l) => l ? `<p>${l}</p>` : "").join("") }).catch(() => false);
   }
-  return json({ email: pending.email, needsEmail: false }, 200, origin);
+  return json({ email: pending.email, needsEmail: false, emailRequired: false }, 200, origin);
 }
 
 /** POST /pin-reset/start */

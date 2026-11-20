@@ -47,8 +47,8 @@ export function WelcomeCard() {
   ]);
 }
 
-// No email on the account yet (admins skip the sign-in step that asks for one): a reminder on Home until it's added,
-// styled like the other Home alerts.
+// No email on the account yet (accounts from before the email step, and admins, aren't stopped for one): a reminder on
+// Home until it's added, styled like the other Home alerts.
 export function EmailReminderCard() {
   const { needsEmail } = useMemberContext();
   if (!needsEmail) return null;

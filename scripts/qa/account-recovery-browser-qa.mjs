@@ -105,18 +105,19 @@ async function signIn(page, identifier = "80024", pin = "4821") {
 const gate = (page) => page.locator("[data-react-auth-gate]");
 const shellIs = (page, view) => page.waitForFunction((v) => document.body.dataset.memberShell === v, view);
 
-// 1. A member with no email: asked right after signing in, confirms with a code, then Home.
+// 1. A new account (created since the email became required) with no email: asked right after signing in, confirms
+//    with a code, then Home.
 for (const dark of [false, true]) {
   const { page, context } = await newPage({ width: 360, dark });
   let saved = false;
   const calls = await authRoutes(page, {
-    "POST /login": () => [{ token: jwt(nowSec()), ...member, email: null, needsEmail: true }],
-    "GET /me": () => [{ sub: "m_80024", ...member, email: saved ? "jordan@example.com" : null, needsEmail: !saved }],
+    "POST /login": () => [{ token: jwt(nowSec()), ...member, email: null, needsEmail: true, emailRequired: true }],
+    "GET /me": () => [{ sub: "m_80024", ...member, email: saved ? "jordan@example.com" : null, needsEmail: !saved, emailRequired: !saved }],
     "POST /me/email/start": (body) => body.email === "taken@example.com" ? [{ error: "email_in_use" }, 409] : [{ ok: true, expiresInSec: 900 }],
     "POST /me/email/verify": (body) => {
       if (body.code !== "246810") return [{ error: "invalid_code" }, 400];
       saved = true;
-      return [{ email: "jordan@example.com", needsEmail: false }];
+      return [{ email: "jordan@example.com", needsEmail: false, emailRequired: false }];
     },
   });
   await signIn(page);
@@ -149,12 +150,35 @@ for (const dark of [false, true]) {
   await context.close();
 }
 
+// 1b. An account from before the email became required (owner: "Let's not block people who are already logged in and
+//     have memberships. Just require new users from here on out"): straight to Home, with the reminder, both right
+//     after signing in and when the app is opened again; the reminder opens the email screen, and Cancel goes back.
+{
+  const { page, context } = await newPage({ width: 390 });
+  await authRoutes(page, {
+    "POST /login": () => [{ token: jwt(nowSec()), ...member, email: null, needsEmail: true, emailRequired: false }],
+    "GET /me": () => [{ sub: "m_80024", ...member, email: null, needsEmail: true, emailRequired: false }],
+  });
+  await signIn(page);
+  await shellIs(page, "members");
+  await page.locator("[data-react-email-reminder]").waitFor();
+  await page.reload();
+  await shellIs(page, "members");
+  await page.locator("[data-react-email-reminder]").click();
+  await page.locator('[data-react-auth-gate="email"]').waitFor();
+  assert.ok(await page.locator('[data-react-auth-action="email-cancel"]').isVisible(), "an existing account can cancel");
+  await page.locator('[data-react-auth-action="email-cancel"]').click();
+  await shellIs(page, "members");
+  await shot(page, "existing-member-email-reminder");
+  await context.close();
+}
+
 // 2. Adding a first email weeks after signing in: no PIN. Changing an existing one: the PIN, or "Use my passkey
 //    instead" (a passkey check for this same account), and a wrong PIN doesn't sign them out.
 {
   const { page, context } = await newPage({ width: 390, token: jwt(nowSec() - 20 * 86400) });
   const calls = await authRoutes(page, {
-    "GET /me": () => [{ sub: "m_80024", ...member, email: null, needsEmail: true }],
+    "GET /me": () => [{ sub: "m_80024", ...member, email: null, needsEmail: true, emailRequired: true }],
     "POST /me/email/start": () => [{ ok: true, expiresInSec: 900 }],
   });
   await page.goto(`${origin}/gvdg-members.html`);

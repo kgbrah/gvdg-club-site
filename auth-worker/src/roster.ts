@@ -37,6 +37,12 @@ export interface Member {
   held?: boolean;
   /** Guest accounts sign in with their email (idx:email) and must give a phone; private, admin-only. */
   email?: string;
+  /**
+   * Created after the email step became a requirement (2026-11-20): with no email on file, the app asks for one before
+   * Home. Accounts from before keep a reminder on Home instead (owner: "Let's not block people who are already logged
+   * in and have memberships. Just require new users from here on out").
+   */
+  emailRequired?: boolean;
   phone?: string;
   /** One of the first 100 approved guest applications (guest_promo): round history and stats like a member. */
   guestPromo?: boolean;
@@ -379,6 +385,7 @@ export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash
     pinHash,
     mustChangePin: opts.pinChosenByMember !== true,
     memberThroughYear: easternCalendarYear(),
+    emailRequired: true,
   };
   await putMember(kv, m);
   return { ok: true, member: m };

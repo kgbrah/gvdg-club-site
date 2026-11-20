@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v344";
+const CACHE = "gvdg-club-v345";
 // Member app screens past Home are content-hashed chunks. They live in their own cache, which keeps the
 // chunks of this version and the one before it, so a page that was open across an update can still open
 // its screens (online or offline) after their files are gone from the server.
@@ -29,6 +29,7 @@ const ASSETS = [
   "scoring-app.css",
   "site.webmanifest",
   "pwa.js",
+  "boot-rescue.js",
   "admin-app/admin-app.js",
   "home-app/home-app.js",
   "public-app/public-app.js",

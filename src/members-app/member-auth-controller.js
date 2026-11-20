@@ -88,9 +88,10 @@ export function installMemberAuthController() {
     closeOverlay();
     passkeys.stopPasskeyPriming();
     const context = memberDashboardContext();
-    // Every account needs an email (it's how a forgotten PIN gets reset). Members and guests add one before going on;
-    // admins get a reminder on Home instead (another admin can always reset an admin's PIN).
-    if (context.needsEmail && !context.isAdmin && !emailStepUnavailable) {
+    // An email is how a forgotten PIN gets reset. Accounts created since it became a requirement add one before going
+    // on; everyone from before (and admins) gets a reminder on Home instead (owner: "Let's not block people who are
+    // already logged in and have memberships. Just require new users from here on out").
+    if (context.emailRequired && !context.isAdmin && !emailStepUnavailable) {
       showEmailSetup(true);
       return;
     }

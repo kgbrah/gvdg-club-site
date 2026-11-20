@@ -31,6 +31,7 @@ export function setMemberContext(detail = {}) {
     welcome: detail.welcome === true,
     email: typeof detail.email === "string" && detail.email ? detail.email : null,
     needsEmail: detail.needsEmail === true,
+    emailRequired: detail.emailRequired === true,
   };
   return readMemberContext(memberContext);
 }
@@ -51,6 +52,7 @@ export function readMemberContext(detail = null) {
     // Same rule: only a payload that says so changes the email (routing events don't carry it).
     email: source.email === undefined ? stored.email || null : source.email || null,
     needsEmail: source.needsEmail === undefined ? stored.needsEmail === true : source.needsEmail === true,
+    emailRequired: source.emailRequired === undefined ? stored.emailRequired === true : source.emailRequired === true,
   };
 }
 
@@ -89,6 +91,7 @@ export function useMemberContext() {
           // Keep the email fields too: without them this refresh wiped the email for every screen.
           email: profile.email || null,
           needsEmail: profile.needsEmail === true,
+          emailRequired: profile.emailRequired === true,
         });
         setContext(next);
       })
