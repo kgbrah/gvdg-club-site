@@ -1,9 +1,10 @@
 import React from "react";
-import { Bell, Mail } from "lucide-react";
+import { Bell, CircleHelp, Mail, UsersRound } from "lucide-react";
 import { ClubLogo } from "../shared/club-logo.js";
 import { CrottsHelpLink } from "../shared/crotts-widget.js";
 import { appHref } from "../shared/app-navigation.js";
 import { adminJson, adminToken } from "./admin-api.js";
+import { PlayerThemeToggle } from "../shared/player-theme-chrome.js";
 
 const h = React.createElement;
 const MESSAGES_HREF = "gvdg-members.html" + appHref("member", "messages");
@@ -56,10 +57,18 @@ export function AdminPageChrome() {
       h("strong", { key: "admin" }, "Admin"),
     ]),
     h("div", { className: "admin-header-actions", key: "actions" }, [
-      h("a", { className: "admin-header-link admin-header-members", href: "gvdg-members.html", key: "members", "aria-label": "Member app" },
-        h("span", { className: "admin-header-full" }, "Member app"),
-        h("span", { className: "admin-header-short" }, "Members")),
-      h(CrottsHelpLink, { className: "admin-header-link", key: "help" }, "Help"),
+      // Light/dark, as in the member app's top bar (owner: "a light/dark theme control wired into top bar for admin").
+      h(PlayerThemeToggle, { key: "theme" }),
+      // Shorter on phones ("Members"), and icons on the narrowest, so the bar fits beside the theme button.
+      h("a", { className: "admin-header-link admin-header-members", href: "gvdg-members.html", key: "members", "aria-label": "Member app" }, [
+        h(UsersRound, { className: "admin-header-glyph", "aria-hidden": true, size: 20, key: "icon" }),
+        h("span", { className: "admin-header-full", key: "full" }, "Member app"),
+        h("span", { className: "admin-header-short", key: "short" }, "Members"),
+      ]),
+      h(CrottsHelpLink, { className: "admin-header-link admin-header-help", key: "help" }, [
+        h(CircleHelp, { className: "admin-header-glyph", "aria-hidden": true, size: 20, key: "icon" }),
+        h("span", { className: "admin-header-help-text", key: "text" }, "Help"),
+      ]),
       h(HeaderIcon, { key: "messages", name: "messages", label: "Messages", count: inbox.unread, icon: Mail }),
       h(HeaderIcon, { key: "notices", name: "notices", label: "Notifications", count: inbox.unseen, icon: Bell }),
     ]),

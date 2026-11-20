@@ -14,6 +14,8 @@ import {
 
 const h = React.createElement;
 const AUTH_EVENTS = [SCORE_AUTH_EVENT, "gvdg:member-dashboard-opened"];
+/** Light/dark changed by one toggle: the page's other toggles (top bar and Tools/Account) show the same icon. */
+const MODE_EVENT = "gvdg:theme-mode";
 
 export function themeRoot() {
   return document.body;
@@ -56,11 +58,17 @@ export function usePlayerThemeSession() {
         setPlayerTheme(event.detail.theme);
       }
     }
+    function onModeEvent(event) {
+      const next = event.detail?.theme;
+      if (next === "dark" || next === "light") setThemeState(next);
+    }
     window.addEventListener(THEME_EVENT, onThemeEvent);
+    window.addEventListener(MODE_EVENT, onModeEvent);
     for (const name of AUTH_EVENTS) window.addEventListener(name, refresh);
     return () => {
       active.abort();
       window.removeEventListener(THEME_EVENT, onThemeEvent);
+      window.removeEventListener(MODE_EVENT, onModeEvent);
       for (const name of AUTH_EVENTS) window.removeEventListener(name, refresh);
     };
   }, []);
@@ -95,7 +103,9 @@ export function usePlayerThemeSession() {
       setPlayerTheme(next);
       return;
     }
-    setThemeState((current) => (current === "dark" ? "light" : "dark"));
+    const next = theme === "dark" ? "light" : "dark";
+    setThemeState(next);
+    window.dispatchEvent(new CustomEvent(MODE_EVENT, { detail: { theme: next } }));
   }
 
   return { dark, playerTheme, toggle };

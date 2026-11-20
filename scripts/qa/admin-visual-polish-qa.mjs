@@ -517,6 +517,25 @@ async function verifyRoutes(variant) {
     assert.match(await mail.getAttribute("href"), /gvdg-members\.html#messages$/);
     await mail.locator(".admin-header-badge", { hasText: "3" }).waitFor();
     assert.equal(await page.locator("[data-admin-header='notices']").getAttribute("aria-label"), "Notifications, 1 new");
+    // Light/dark in the top bar (owner: "a light/dark theme control wired into top bar for admin like member site"),
+    // fitting beside everything else even on the narrowest phone, and switching the whole page both ways.
+    const themeButton = page.locator(".admin-app-header .theme-toggle");
+    await themeButton.waitFor();
+    const header = await page.locator(".admin-app-header nav").evaluate((nav) => ({ scroll: nav.scrollWidth, client: nav.clientWidth }));
+    assert.ok(header.scroll <= header.client + 1, "the top bar fits with the theme button: " + JSON.stringify(header));
+    // The top bar's links keep their names when they shrink to icons.
+    await page.locator(".admin-app-header").getByRole("link", { name: "Help" }).waitFor();
+    await page.locator(".admin-app-header").getByRole("link", { name: "Member app" }).waitFor();
+    const box = await themeButton.boundingBox();
+    assert.ok(box && box.width >= 36 && box.height >= 36, "a thumb-sized theme button");
+    const before = await page.evaluate(() => document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+    await themeButton.click();
+    const after = await page.evaluate(() => document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+    assert.notEqual(after, before, "the top bar's button switches light/dark");
+    assert.equal(await themeButton.getAttribute("aria-pressed"), after === "dark" ? "true" : "false");
+    await shot(page.locator(".admin-app-header"), "header-theme-" + after + "-" + variant.name);
+    await themeButton.click();
+    assert.equal(await page.evaluate(() => document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"), before);
     await shot(page.locator(".admin-app-header"), "header-inbox-" + variant.name);
     await pane.getByText("Add a member", { exact: true }).click();
     const memberForm = pane.locator("#adminMemberForm");
