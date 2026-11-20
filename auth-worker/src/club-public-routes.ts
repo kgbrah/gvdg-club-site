@@ -113,9 +113,12 @@ export async function handleClubPublic(
   }
   if (method === "GET" && pathname === "/pdga-events") {
     const url = new URL(request.url);
-    const lat = Number(url.searchParams.get("lat"));
-    const lng = Number(url.searchParams.get("lng"));
-    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    // A missing parameter is not 0 (Number(null) is): without both, there's no location to search near.
+    const rawLat = url.searchParams.get("lat");
+    const rawLng = url.searchParams.get("lng");
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+    if (!rawLat?.trim() || !rawLng?.trim() || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       return json({ error: "location_required" }, 400, origin);
     }
     try {

@@ -101,12 +101,16 @@ test('areaTournamentsFromPdga keeps events within 60 miles with their pdga.com p
     { name: 'Club Classic', date: 'Jan 9, 2027', tier: 'C-tier', place: 'Greenville, NC', miles: 0.4,
       url: '/events#event/12', pdgaUrl: 'https://www.pdga.com/tour/event/90002', clubEventId: 12 },
     { name: 'Raleigh Far Away', date: 'Dec 20, 2026', tier: 'B-tier', place: 'Raleigh, NC', miles: 78.5, pdgaUrl: 'https://www.pdga.com/tour/event/90003' },
-    { name: 'Odd Link', date: 'Dec 27, 2026', miles: null, pdgaUrl: 'javascript:alert(1)' },
+    { name: 'Odd Link', date: 'Dec 27, 2026', miles: 12, pdgaUrl: 'javascript:alert(1)' },
+    // No coordinates from PDGA: can't be shown to be within 60 miles (a Swedish event came back this way).
+    { name: 'Ale DGK Vintertour', date: 'Nov 29, 2026', place: 'Nol', miles: null, pdgaUrl: 'https://www.pdga.com/tour/event/109238' },
+    { name: 'Club Event Unplaced', date: 'Feb 1, 2027', miles: null, pdgaUrl: 'https://www.pdga.com/tour/event/90004', clubEventId: 14 },
   ] });
   assert.deepEqual(rows.map((row) => [row.name, row.pdgaUrl, row.clubEventId]), [
     ['Pitt County Winter Open', 'https://www.pdga.com/tour/event/90001', null],
     ['Club Classic', 'https://www.pdga.com/tour/event/90002', 12],
     ['Odd Link', '', null],
+    ['Club Event Unplaced', 'https://www.pdga.com/tour/event/90004', 14],
   ]);
   assert.equal(rows[0].location, 'Greenville, NC');
   assert.deepEqual(areaTournamentsFromPdga(null), []);

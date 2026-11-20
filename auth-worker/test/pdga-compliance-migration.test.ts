@@ -24,6 +24,7 @@ describe("migration 0078", () => {
     db.exec(`
       INSERT INTO pdga_cache (pdga, data, fetched_at) VALUES ('80024', '{}', 1);
       INSERT INTO pdga_watch_events (event_id, name, state, start_date, end_date) VALUES (1, 'X', 'NC', '2026-01-01', '2026-01-02');
+      INSERT INTO pdga_registrations (event_id, member_id, pdga_number) VALUES (1, 'm_a', '80024');
       INSERT INTO events (id, type, name, status, date) VALUES (1, 'league_round', 'League', 'final', '2026-06-10'),
         (2, 'tournament', 'Old Open', 'final', '2026-03-01'), (3, 'tournament', 'Next Open', 'scheduled', '2099-03-01');
       INSERT INTO casual_rounds (id, round_code, course_id, layout_id, holes, started_at, finalized_at, scoring_config)
@@ -45,7 +46,12 @@ describe("migration 0078", () => {
       INSERT INTO registrations (event_id, member_id, name, pdga_number, pdga_status, pdga_rating) VALUES
         (2, 'm_a', 'A', '80024', 'current', 941), (3, 'm_a', 'A', '80024', 'current', 941);
     `);
+    // D1 enforces foreign keys, so the migration runs with them on (and the seed must be consistent).
+    db.exec("PRAGMA foreign_keys = ON");
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+    db.exec("BEGIN");
     db.exec(readFileSync(new URL("0078_pdga_compliance.sql", MIGRATIONS), "utf8"));
+    db.exec("COMMIT");
 
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'trigger') AND name LIKE 'pdga%' ORDER BY name").all();
     expect(tables).toEqual([{ name: "pdga_api_players" }]);

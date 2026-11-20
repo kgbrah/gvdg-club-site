@@ -105,7 +105,9 @@ async function apiPlacedPdgaEvents(env: Env, origin: { lat: number; lng: number 
           lat: point?.lat ?? null, lng: point?.lng ?? null, miles: point ? Math.round(haversineMiles(origin, point) * 10) / 10 : null,
         };
       })
-      .filter((event) => event.miles == null || event.miles <= PDGA_EVENT_MILES)
+      // Within the radius: an event PDGA lists without coordinates can't be shown to be near (PDGA's search returned a
+      // Swedish event for a search near 0°, 0°), so only the club's own events skip the check.
+      .filter((event) => (event.miles != null && event.miles <= PDGA_EVENT_MILES) || event.clubEventId != null)
       .sort((a, b) => (eventDay(a.date) ?? Number.MAX_SAFE_INTEGER) - (eventDay(b.date) ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name));
   } catch (error) {
     console.warn(JSON.stringify({ message: "pdga_api_nearby_events_failed", error: error instanceof Error ? error.message : String(error) }));
