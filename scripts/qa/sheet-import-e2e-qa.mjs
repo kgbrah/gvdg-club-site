@@ -1,4 +1,4 @@
-// Admin › Import › The club's Google Sheets, end to end (the owner: "Do a full QA run through of the Google sheets
+// Admin › Members › Google Sheets, end to end (the owner: "Do a full QA run through of the Google sheets
 // imports. Need to make sure that goes very smoothly"). The BUILT admin app in a browser against the REAL Worker
 // (auth-worker/src, in-process through Vite SSR, D1 on SQLite, KV in memory, peppered like production). Every import
 // kind with the messy cells real club sheets have, checked in the app's data after each apply:
@@ -169,7 +169,7 @@ page.setDefaultTimeout(30_000);
 page.on("pageerror", (error) => pageErrors.push(error.message));
 
 await page.goto(`${origin}/admin.html`);
-await page.evaluate((hash) => { location.hash = hash; }, appHref("admin", "import"));
+await page.evaluate((hash) => { location.hash = hash; }, appHref("admin", "sheets"));
 const panel = page.locator("[data-admin-sheet-import]");
 await panel.waitFor();
 const shot = async (name) => { if (shots) await page.screenshot({ path: path.join(shots, name + ".png"), fullPage: true }); };
