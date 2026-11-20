@@ -92,7 +92,7 @@ function ClubShare({ draft, set }) {
       value: draft.donateAmount,
     })) : null,
     h("small", { className: "market-hint", key: "hint" },
-      "For a sale with a price. Buyers see it on the listing. Once it sells, send it to the club's PayPal from My marketplace; when the club confirms it arrived you get +1 karma for every dollar."),
+      "For a sale with a price. Buyers see it on the listing. Once it sells, send it to the club's PayPal from My marketplace; when the club confirms it arrived you get +10 karma for every dollar."),
   ]);
 }
 

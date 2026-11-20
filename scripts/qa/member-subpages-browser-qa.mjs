@@ -15,6 +15,10 @@ const member = { sub: "m_qa", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: 
   // Paid through this year: the Club page offers next year's dues and a donation.
   membership: { throughYear: new Date().getFullYear(), currentYear: new Date().getFullYear(), current: true, lapsed: false, guest: false, remind: false, renewalYear: new Date().getFullYear() + 1 } };
 const now = new Date().toISOString();
+// The member's donation history: one already confirmed ($5, +50 karma); new reports go on top (one fresh list per page).
+let reportedDonations = [];
+const resetDonations = () => { reportedDonations = [{ id: 1, amountCents: 500, source: "club-card", status: "confirmed", karma: 50 }]; };
+resetDonations();
 const course = { id: 7, name: "West Meadowbrook Park", location: "Greenville", difficulty: "intermediate", reviewCount: 1, averageRating: 4,
   amenities: { restrooms: "yes", accessibleParking: "yes", practiceBasket: "yes", drinkingWater: "no", stepFreeRoute: "unknown" }, updatedAt: now };
 const layout = { id: 11, name: "Main", holes: [{ hole: 1, par: 3 }] };
@@ -151,8 +155,15 @@ async function serveFixture(path, query, request, ref, reply) {
     if (format === "csv") reply(playExportCsv(archive), 200, "text/csv", headers);
     else reply(archive, 200, "application/json", headers);
   }
+  // Donations the member reported (owner: "Let's make ALL donations reward +10 karma per dollar"; an admin confirms).
+  else if (path === "/me/donations" && request.method === "POST") {
+    const body = await readBody(request);
+    reportedDonations.unshift({ id: 9 + reportedDonations.length, amountCents: body.amountCents, source: body.source, status: "pending", karma: 0 });
+    reply({ donation: reportedDonations[0], karmaPerDollar: 10 }, 201);
+  }
+  else if (path === "/me/donations") reply({ donations: reportedDonations, karmaPerDollar: 10 });
   else if (path === "/me/udisc-history") {
-    const imported = { id: 12, courseName: course.name, layoutName: layout.name, playedAt: "2026-11-12T15:20:00", total: 55, toPar: 1 };
+    const imported ={ id: 12, courseName: course.name, layoutName: layout.name, playedAt: "2026-11-12T15:20:00", total: 55, toPar: 1 };
     // Long course and layout names, and a big over-par score, as real UDisc exports have: none may push a row
     // (or, through the shared grid column, every row) past the screen edge.
     const long = [
@@ -378,6 +389,7 @@ async function checkCalendarMenu(page, card, width) {
 }
 
 async function verifyDestinations(width, mode) {
+  resetDonations();
   const view = await pageFor(width, mode, width + "-" + mode);
   try {
     for (const item of MEMBER_DESTINATIONS) {
@@ -410,6 +422,13 @@ async function verifyDestinations(width, mode) {
         assert.ok((await card.innerText()).includes(`Member through December 31, ${year}.`), width + " GVDG membership status");
         assert.equal(await card.getByRole("link", { name: `Renew for ${year + 1}, $15` }).getAttribute("href"), "https://paypal.me/greenvillediscgolf/15");
         assert.equal(await card.getByRole("link", { name: "Donate" }).getAttribute("href"), "https://paypal.me/greenvillediscgolf");
+        // A donation made elsewhere: record it, and it waits for the club with its karma ahead (+10 a dollar).
+        await card.getByText("$5 · +50 karma. Thank you!").waitFor(); // a confirmed donation shows its karma
+        await card.getByRole("button", { name: "Gave already? Record a donation" }).click();
+        await card.getByLabel("Amount ($)").fill("10");
+        await card.getByRole("button", { name: "I donated" }).click();
+        await card.getByText("Thanks! +100 karma once the club confirms it.").waitFor();
+        await card.getByText("$10 · waiting for the club to confirm").waitFor();
         if (width === 390) await card.screenshot({ path: join(screenshotDir, "club-membership-390-" + mode + ".png") });
       }
       if (item.key === "club") {

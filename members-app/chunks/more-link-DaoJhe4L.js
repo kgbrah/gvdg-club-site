@@ -1,0 +1,2 @@
+import{$n as e,cn as t,er as n,nn as r}from"../members-app.js?v=234";var i=n(e(),1).createElement;function a({tab:e,label:n,className:a=`player-more-item`}){return i(`button`,{type:`button`,className:a,onClick:()=>r(e)},n||t(`member`,e).label)}export{a as t};
+//# sourceMappingURL=more-link-DaoJhe4L.js.map

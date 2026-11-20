@@ -108,6 +108,7 @@ const probes = {
   "data-archive": "[data-react-admin-data-archive-export-controls]",
   "review-queue": ".admin-community-review",
   marketplace: "[data-admin-marketplace='ready'] .admin-market-report",
+  donations: "[data-admin-donations='ready']",
   "lost-found": "[data-admin-lost-found='ready'] [data-admin-lf-report]",
 };
 assert.deepEqual(Object.keys(probes).sort(), ADMIN_DESTINATIONS.map((item) => item.key).sort());
@@ -118,6 +119,9 @@ let orderStatus = "submitted";
 let checkedIn = false;
 let leagueChallengeOpen = true;
 let reviewPending = true;
+// A donation a member reported (owner: "Let's make ALL donations reward +10 karma per dollar"; an admin confirms).
+let donationPending = true;
+const donation = { id: 4, memberId: "m_jordan", memberName: "Jordan Reyes", amountCents: 1000, source: "club-card", status: "pending", karma: 0, createdAt: date + " 15:20:00", reviewedAt: null, reviewNote: "" };
 // Admin › Scoring › Live casual rounds: a ghost (quiet for a day) and a card out on the course now.
 const freshLiveRounds = () => [
   { code: "FRESH2", courseName: course.name, layoutName: "Main", startedAt: new Date(Date.now() - 40 * 60_000).toISOString(),
@@ -218,6 +222,8 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/market/summary") return { openReports: 1 };
   if (path === "/admin/market/overview") return marketOverview;
   if (path === "/admin/lost-found/summary") return { openReports: 1 };
+  if (path === "/admin/donations") return { pending: donationPending ? [donation] : [], recent: donationPending ? [] : [{ ...donation, status: "confirmed", karma: 100, reviewedAt: date + " 16:00:00" }], karmaPerDollar: 10 };
+  if (path === "/admin/donations/4/review" && method === "POST") { donationPending = false; return { donation: { ...donation, status: "confirmed", karma: 100 } }; }
   if (path === "/admin/lost-found/overview") return lostFoundOverview;
   if (path === "/admin/community/reviews") return { queue: reviewPending ? [review] : [], more: false };
   if (path === "/admin/community/reviews/3" && method === "PUT") { reviewPending = false; return { ok: true }; }
@@ -468,6 +474,22 @@ async function verifyRoutes(variant) {
         await shot(page, "failure-" + item.key + "-" + variant.name);
         throw new Error(variant.name + " route " + item.key, { cause: error });
       }
+    }
+
+    // Donations: Today's Needs you points to Money › Donations, where Received confirms it (+10 karma a dollar).
+    if (variant.name === "390") {
+      donationPending = true;
+      await route(page, "today");
+      await page.locator(".admin-needs-row, [data-admin-needs-item], button, a").filter({ hasText: "Donation to confirm" }).first().waitFor();
+      const donations = await route(page, "donations");
+      const row = donations.locator("[data-admin-donation='4']");
+      await row.waitFor();
+      assert.ok((await row.innerText()).includes("Jordan Reyes · $10"), "who and how much");
+      assert.ok((await row.innerText()).includes("+100 karma when confirmed"), "+10 karma a dollar");
+      await shot(page, "donations-" + variant.name);
+      await row.getByRole("button", { name: "Received", exact: true }).click();
+      await donations.getByText("Jordan Reyes · $10 · received, +100 karma", { exact: false }).waitFor();
+      assert.ok(requested.some((call) => call.path === "/admin/donations/4/review" && call.body?.decision === "received"));
     }
 
     // Live casual rounds: every open round by code; a quiet one is marked, and an admin ends it after a confirm.
