@@ -57,3 +57,20 @@ test("the event page keeps the PDGA link (normalizeEvent used to drop it, hiding
   assert.equal(normalizeEvent({ id: 8, name: "League night" }).pdga_event_id, null);
   assert.equal(normalizeEvent({ id: 9, name: "Bad", pdga_event_id: "abc" }).pdga_event_id, null);
 });
+
+// Owner: "Need PDGA attributions on the public facing site asap." PDGA's credit on every public page (the footer),
+// under the lists of PDGA-sanctioned events, and on a PDGA event's page (with its pdga.com link).
+test("every public page credits PDGA, and the PDGA event lists and pages do too", () => {
+  const credit = /Player, event, and course data provided by <a href="https:\/\/www\.pdga\.com" target="_blank" rel="noopener noreferrer">PDGA<\/a>\./;
+  for (const page of ["events.html", "ryder-cup.html", "lost-found.html", "pro-shop.html", "gvdg-blog.html", "scoring-app.html"]) {
+    const html = readFileSync(page, "utf8");
+    const footer = html.slice(html.indexOf("<footer"), html.indexOf("</footer>"));
+    assert.match(footer, credit, page + " footer credits PDGA");
+  }
+  assert.match(readFileSync("src/home-app/community-sections.js", "utf8"), /"Player, event, and course data provided by ",\s*h\("a", \{ href: "https:\/\/www\.pdga\.com"/);
+  assert.match(readFileSync("src/home-app/feed-panels.js", "utf8"), /h\(PdgaCredit, \{ key: "pdga-credit" \}\)/);
+  assert.match(readFileSync("src/public-app/events-hub-app.js", "utf8"), /hub\.feedEvents\.length \? h\(PdgaCredit/);
+  const detail = readFileSync("src/public-app/events-detail-app.js", "utf8");
+  assert.match(detail, /h\(PdgaLink, \{ href: pdgaEventHref\(event\.pdga_event_id\) \}/);
+  assert.match(detail, /event\.pdga_event_id \? h\(PdgaCredit/);
+});

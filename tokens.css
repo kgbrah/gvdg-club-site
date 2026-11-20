@@ -931,3 +931,6 @@ body.score-glove.player-theme-glass.player-theme-page .score-bottom-layout .scor
 .donation-history { list-style: none; margin: .5rem 0 0; padding: 0; display: grid; gap: .25rem; font-size: .88rem; color: var(--text-secondary); }
 /* "Gave already? Record a donation" on the Club page's GVDG membership card: a text link-button. */
 .club-membership .dash-link-btn { display: inline-block; margin: .25rem 0 0; padding: .35rem 0; min-height: 44px; border: 0; background: none; color: var(--secondary-text); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+/* PDGA's attribution in the public pages' footers: footer text colour (the footer is dark in both themes). */
+footer .footer-pdga-credit { margin: .4rem 0 0; font-size: .82rem; color: inherit; opacity: .9; }
+footer .footer-pdga-credit a, footer p.footer-pdga-credit a { display: inline; margin: 0; padding: 0; min-height: 0; color: inherit; text-decoration: underline; text-underline-offset: 2px; }

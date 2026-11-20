@@ -7,6 +7,7 @@ import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { liveWatchHref } from "../shared/live-watch.js";
 import { displayEventTitle } from "../shared/events-model.js";
 import { LiveStandings } from "./live-standings.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
 
@@ -169,6 +170,8 @@ export function EventsScheduleFeedApp() {
     h(GroupHeading, { key: "heading", sub: "Disc golf tournaments & league rounds", title: "Events" }),
     h(FeedGrid, { items: hub.feedEvents, key: "feed" }),
     !hub.hasMainContent ? h("p", { className: "events-empty", key: "empty" }, "No tournaments or league rounds are on the schedule right now.") : null,
+    // The schedule includes PDGA-sanctioned events: PDGA's attribution.
+    hub.feedEvents.length ? h(PdgaCredit, { key: "pdga-credit" }) : null,
   ]);
 }
 

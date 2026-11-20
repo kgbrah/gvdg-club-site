@@ -175,5 +175,11 @@ export function HomeFooter() {
       h("a", { href: "#contact", key: "contact" }, "Contact"),
     ]),
     h("p", { key: "copy" }, "\u00a9 2026 Greenville Disc Golf Club. All rights reserved. | Greenville, NC"),
+    // PDGA's attribution on every public page (the home page lists PDGA-sanctioned events).
+    h("p", { className: "pdga-credit footer-pdga-credit", key: "pdga-credit" }, [
+      "Player, event, and course data provided by ",
+      h("a", { href: "https://www.pdga.com", target: "_blank", rel: "noopener noreferrer", key: "pdga" }, "PDGA"),
+      ".",
+    ]),
   ]);
 }
