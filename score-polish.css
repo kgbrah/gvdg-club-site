@@ -360,6 +360,7 @@ body.score-glove.player-theme-page .score-glove-dock { background: var(--score-p
   height: auto;
   border-radius: 9px;
   font: 780 1.23rem/1 var(--score-font);
+  touch-action: manipulation;
 }
 .score-glove-dock .stepper button.val { width: 50px; border-radius: 9px; color: var(--text-primary); }
 .score-glove-dock .stepper .val .n { font: 820 1.5rem/1 var(--score-font); }
@@ -392,7 +393,8 @@ body .overlay > .sheet .section { margin-bottom: .32rem; }
 body .overlay > .score-dialog { width: min(100%, 27rem); border-radius: var(--score-radius); }
 .overlay :is(button.lb-hole, .lb-name-btn, .round-talk-form button) { min-height: 44px; }
 .overlay .sheet-close { margin-top: .8rem; }
-.overlay .score-pad-key { font: 800 1.23rem/1 var(--score-font); }
+.overlay .score-pad-key { font: 800 1.23rem/1 var(--score-font); touch-action: manipulation; }
+.overlay .score-pad-shortcuts .btn { touch-action: manipulation; }
 
 .round-tools-sheet .round-tools-direct {
   display: grid;
@@ -876,7 +878,7 @@ body.score-glove.player-theme-page .score-bottom-layout .score-glove-dock { back
   font: 790 1.07rem/1.15 var(--score-font);
   letter-spacing: normal;
 }
-.score-bottom-layout .hole-head .navbtn { min-width: 44px; min-height: 44px; background: var(--bg-tertiary); }
+.score-bottom-layout .hole-head .navbtn { min-width: 44px; min-height: 44px; background: var(--bg-tertiary); touch-action: manipulation; }
 .score-bottom-layout .hole-head .navbtn:not(:disabled):last-child { color: var(--member-round-cta-ink); background: var(--member-round-cta); }
 .score-name-compact { display: none; }
 

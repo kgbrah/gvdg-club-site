@@ -10,6 +10,7 @@ import { formatPct, holePlayStats, holeStatChips, liveRoundStatsFromCard } from 
 import { PotsStrip } from "./pots-strip.js";
 import { WeatherStrip } from "./weather-strip.js";
 import { nextHoleScore, nextPuttingScore, puttingStationRows, relClass, relText, strokeLabel } from "./score-view-model.js";
+import { RECOVERY_SYNC_GRACE_MS, recoveryBannerMode, recoveryItemTimestamp } from "./round-recovery.js";
 import { RoundHighlights, ThrowFilm, useClipRecovery } from "./throw-film.js";
 import { RoundTalk } from "./round-talk.js";
 import { WristScore } from "./wrist-score.js";
@@ -1156,9 +1157,10 @@ function FinishCard(props) {
 function FinishDockBar(props) {
   const finish = props.finish;
   if (!finish || finish.locked) return null;
-  if (finish.canFinish && typeof props.onOpenFinish === "function") {
+  if ((finish.canFinish || finish.pendingFinish) && typeof props.onOpenFinish === "function") {
     return h("div", { className: "score-glove-finish", key: "finish-bar" }, h("button", {
       className: "btn finish-round-btn",
+      disabled: !finish.canFinish,
       type: "button",
       onClick: props.onOpenFinish,
     }, "Finish card"));
@@ -1298,6 +1300,54 @@ function ConfirmScoresSheet(props) {
 
 function hasRecoveryStatus(props) {
   return Boolean(props.recoveryItems?.length || props.recoveryStorageError || props.recoveryUnavailable);
+}
+
+function useOnlineStatus() {
+  const [online, setOnline] = React.useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
+  React.useEffect(() => {
+    function update() { setOnline(typeof navigator === "undefined" ? true : navigator.onLine !== false); }
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  return online;
+}
+
+function useShowRecoveryStatus(props) {
+  const online = useOnlineStatus();
+  const items = Array.isArray(props.recoveryItems) ? props.recoveryItems : [];
+  const [latched, setLatched] = React.useState(false);
+  const mode = recoveryBannerMode({
+    items,
+    storageError: Boolean(props.recoveryStorageError),
+    unavailable: Boolean(props.recoveryUnavailable),
+    online,
+  });
+  const headId = items[0]?.id || "";
+  const headTs = recoveryItemTimestamp(items[0]);
+  const show = mode === "immediate" || (mode === "delayed" && latched);
+
+  React.useEffect(() => {
+    if (mode === "none") {
+      setLatched(false);
+      return undefined;
+    }
+    if (mode === "immediate") {
+      setLatched(true);
+      return undefined;
+    }
+    if (latched) return undefined;
+    const remaining = headTs != null
+      ? Math.max(0, RECOVERY_SYNC_GRACE_MS - (Date.now() - headTs))
+      : RECOVERY_SYNC_GRACE_MS;
+    const timer = window.setTimeout(() => setLatched(true), remaining);
+    return () => window.clearTimeout(timer);
+  }, [mode, headId, headTs, latched]);
+
+  return show;
 }
 
 function RecoveryStatus(props) {
@@ -1524,10 +1574,11 @@ export function ScorecardView(props) {
   const onMarkPin = typeof props.onMapMark === "function" ? () => onMapMark("target") : null;
   const onMarkTee = typeof props.onMapMark === "function" ? () => onMapMark("tee") : null;
   const turn = props.yourTurn ? h("p", { className: "your-turn-hint", key: "turn" }, props.yourTurn) : null;
+  const showRecovery = useShowRecoveryStatus(props);
   const status = [
     h(FieldTestBadge, { key: "field-test" }),
     props.offlineStatus,
-    hasRecoveryStatus(props)
+    showRecovery
       ? h(RecoveryStatus, { ...props, key: "recovery", compact: true, turnHint: turn, scoreRegionRef })
       : turn,
     h(JoinRequestBanner, { key: "joins", onApprove: props.onApproveJoin, onDecline: props.onDeclineJoin, requests: props.joinRequests }),
@@ -1593,7 +1644,7 @@ export function ScorecardView(props) {
   const layoutClass = "score-glove-layout" + (solo ? " solo" : "") + " players-" + playerBand;
   return h(React.Fragment, null, [
     wrist ? props.offlineStatus : null,
-    wrist ? h(RecoveryStatus, { ...props, key: "wrist-recovery" }) : null,
+    wrist && showRecovery ? h(RecoveryStatus, { ...props, key: "wrist-recovery" }) : null,
     wrist ? h(WristScore, {
       atEnd: props.atEnd,
       atStart: props.atStart,

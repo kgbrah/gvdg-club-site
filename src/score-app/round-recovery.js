@@ -1,5 +1,35 @@
 const JOURNAL = "gvdg:round-recovery:";
 const DEVICE = "gvdg:round-recovery-device";
+export const RECOVERY_SYNC_GRACE_MS = 1500;
+
+export function recoveryItemTimestamp(item) {
+  const raw = Number(String((item && item.order) || "").split(":")[0]);
+  return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+/**
+ * Decide whether the Card sync status banner should appear right now or wait for a short grace
+ * window so normal fast online score taps do not flash the banner and jump the scorecard layout.
+ */
+export function recoveryBannerMode({
+  items = [],
+  storageError = false,
+  unavailable = false,
+  online = true,
+  now = Date.now(),
+  graceMs = RECOVERY_SYNC_GRACE_MS,
+} = {}) {
+  const list = Array.isArray(items) ? items : [];
+  if (storageError || unavailable) return "immediate";
+  if (!list.length) return "none";
+  if (!online) return "immediate";
+  if (list.some((item) => item && (item.state === "error" || item.state === "auth" || Number(item.attempt) > 0))) {
+    return "immediate";
+  }
+  const headTs = recoveryItemTimestamp(list[0]);
+  if (headTs != null && now - headTs >= graceMs) return "immediate";
+  return "delayed";
+}
 
 export function roundRecoveryScope({ roundCode, eventId, roundId, cardId, playerIndex }) {
   if ((!roundCode && !eventId) || !roundId || cardId == null || !Number.isInteger(playerIndex)) return null;

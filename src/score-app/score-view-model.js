@@ -962,11 +962,13 @@ function buildFinishView(state, mode, blockers, locked, scorerIndex) {
   const agreedIndexes = Array.isArray(attestation.agreedIndexes) ? attestation.agreedIndexes : [];
   const review = cardReview(state, scorerIndex, agreedIndexes);
   const skipped = locked || blockers.ready ? [] : skippedUnscoredHoles(state, blockers);
+  const finishReady = canMode && state.status === "live" && blockers.ready && !locked;
   return {
     locked,
     ready: blockers.ready && !pending,
     status: state.status,
-    canFinish: canMode && state.status === "live" && blockers.ready && !pending && !locked,
+    canFinish: finishReady && !pending,
+    pendingFinish: finishReady && pending,
     confirmOpen: Boolean(state.finishConfirmOpen) && !pending && !locked,
     review,
     waiting: review.waiting,
