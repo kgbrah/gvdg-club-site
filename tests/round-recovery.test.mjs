@@ -3,7 +3,14 @@ import test from "node:test";
 
 import { addThrow } from "../src/shared/hole-map-model.js";
 import { drainClipDrafts } from "../src/score-app/clip-recovery.js";
-import { createRoundJournal, drainRoundJournal, resetJournalRetries, roundRecoveryScope } from "../src/score-app/round-recovery.js";
+import {
+  RECOVERY_SYNC_GRACE_MS,
+  createRoundJournal,
+  drainRoundJournal,
+  recoveryBannerMode,
+  resetJournalRetries,
+  roundRecoveryScope,
+} from "../src/score-app/round-recovery.js";
 import { buildScorecardViewState, optimisticScores, strokesFor, throwsByScorer } from "../src/score-app/score-view-model.js";
 
 function storageOnDevice() {
@@ -59,8 +66,10 @@ test("scorer switching keeps holes, marks and optimistic vote withdrawals indepe
   assert.equal(strokesFor(state, 4, 1, 8), 3);
   const view = buildScorecardViewState({ state, mode: "round", scorerIndex: 8 });
   assert.equal(view.finish.canFinish, false, "other players' writes on this local card block finish");
+  assert.equal(view.finish.pendingFinish, true, "completed card keeps Finish card slot reserved while syncing");
   const synced = buildScorecardViewState({ state: { ...state, recoveryItems: [] }, mode: "round", scorerIndex: 8 });
   assert.equal(synced.finish.canFinish, true);
+  assert.equal(synced.finish.pendingFinish, false);
   const point = { lat: 35, lng: 80 };
   assert.equal(addThrow(addThrow([], point, 0), point, 0).length, 2, "short putts at the same fix are separate throws");
 });
@@ -145,4 +154,23 @@ test("a failed durable write leaves no locally saved edit", () => {
   const journal = journalFor(storage);
   assert.throws(() => journal.enqueue("throws", { scorerIndex: 4, hole: 1, throws: lay(35) }), /quota/);
   assert.deepEqual(journal.entries(), []);
+});
+
+test("recovery banner waits through normal online saves and shows immediately on offline, retry, stall, or error", () => {
+  const now = 10_000;
+  const fresh = { id: "a", order: String(now - 50).padStart(16, "0") + ":a", state: "pending", attempt: 0 };
+  const stalled = { id: "b", order: String(now - RECOVERY_SYNC_GRACE_MS).padStart(16, "0") + ":b", state: "pending", attempt: 0 };
+  const retried = { ...fresh, attempt: 1 };
+  const errored = { ...fresh, state: "error" };
+  const auth = { ...fresh, state: "auth" };
+
+  assert.equal(recoveryBannerMode({ items: [], online: true, now }), "none");
+  assert.equal(recoveryBannerMode({ items: [fresh], online: true, now }), "delayed");
+  assert.equal(recoveryBannerMode({ items: [fresh], online: false, now }), "immediate");
+  assert.equal(recoveryBannerMode({ items: [stalled], online: true, now }), "immediate");
+  assert.equal(recoveryBannerMode({ items: [retried], online: true, now }), "immediate");
+  assert.equal(recoveryBannerMode({ items: [errored], online: true, now }), "immediate");
+  assert.equal(recoveryBannerMode({ items: [auth], online: true, now }), "immediate");
+  assert.equal(recoveryBannerMode({ items: [], storageError: true, online: true, now }), "immediate");
+  assert.equal(recoveryBannerMode({ items: [], unavailable: true, online: true, now }), "immediate");
 });

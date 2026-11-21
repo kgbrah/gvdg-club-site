@@ -256,6 +256,7 @@ async function startStaticServer() {
 
 // How long the card request takes (the saved-card check slows it down to see what shows meanwhile).
 let mineDelayMs = 0;
+let scoreDelayMs = 0;
 
 async function installApiRoutes(page) {
   await page.route(`${apiBase}/**`, async (route) => {
@@ -286,6 +287,7 @@ async function installApiRoutes(page) {
       return route.fulfill(json(roundLive));
     }
     if (pathName === "/rounds/QA1234/live/score" && method === "POST") {
+      if (scoreDelayMs) await new Promise((resolve) => setTimeout(resolve, scoreDelayMs));
       roundLive = scoreSnapshot(roundLive, parseBody(request));
       return route.fulfill(json(roundLive));
     }
@@ -418,8 +420,41 @@ async function runCasualRoundQa(browser, origin) {
     throw new Error(`Expected stroke config, got ${JSON.stringify(createdRoundBody)}`);
   }
 
-  await page.getByRole("button", { name: "Increase Ava King on hole 1", exact: true }).click();
-  await waitForPageText(page, ".totbar", "1/18", "casual score total");
+  // Normal online score entry with realistic network latency must not flash the Card sync banner or jump the screen.
+  scoreDelayMs = 250;
+  try {
+    const measureScoreLayout = () => page.evaluate(() => {
+      const top = (selector) => {
+        const el = document.querySelector(selector);
+        return el ? Math.round(el.getBoundingClientRect().top) : null;
+      };
+      return {
+        syncVisible: Boolean(document.querySelector(".card-sync-trigger")),
+        dockTop: top(".score-glove-dock"),
+        firstRowTop: top(".score-glove-scores .prow"),
+        holeStripTop: top(".score-holestrip"),
+      };
+    });
+    const layoutBefore = await measureScoreLayout();
+    await page.getByRole("button", { name: "Increase Ava King on hole 1", exact: true }).click();
+    await page.waitForTimeout(80);
+    const layoutDuring = await measureScoreLayout();
+    await waitForPageText(page, ".totbar", "1/18", "casual score total");
+    await page.waitForTimeout(300);
+    const layoutAfter = await measureScoreLayout();
+    if (layoutDuring.syncVisible) {
+      throw new Error("Normal online score tap must not flash Card sync banner mid-request");
+    }
+    for (const [label, sample] of [["during", layoutDuring], ["after", layoutAfter]]) {
+      for (const key of ["dockTop", "firstRowTop", "holeStripTop"]) {
+        if (sample[key] !== layoutBefore[key]) {
+          throw new Error(`Score entry jumped ${key} ${label} save: before=${layoutBefore[key]} ${label}=${sample[key]}`);
+        }
+      }
+    }
+  } finally {
+    scoreDelayMs = 0;
+  }
   // Karma next to a player's name on the card: Ava has some, Milo none.
   const avaRow = page.locator(".prow").filter({ hasText: "Ava King" });
   await avaRow.locator(".karma-chip[data-karma='25']").waitFor();
