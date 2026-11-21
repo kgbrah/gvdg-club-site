@@ -167,7 +167,14 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/orders") return { unfulfilled: 1, orders: !query.get("status") || query.get("status") === orderStatus ? [{ ...order, status: orderStatus }] : [] };
   if (path === "/admin/orders/6" && method === "PATCH") { orderStatus = body.status; return { ok: true }; }
   if (path === "/admin/shop/products") return { products: [{ id: 13, name: "River fairway driver", category: "disc", price_cents: 1800, stock: 9, active: 1, description: "A straight fairway driver." }] };
-  if (path === "/admin/wallets/recent") return { transactions: [{ id: 4, member_id: "m_jordan", member_name: "Jordan Reyes", amount_cents: 1250, note: "Club payout", created_at: date }] };
+  if (path === "/admin/wallets/recent") return { transactions: [
+    { id: 4, member_id: "m_jordan", member_name: "Jordan Reyes", amount_cents: 1250, source: "manual_adjustment", note: "Club payout", created_by: "m_casey", created_at: date },
+    { id: 3, member_id: "m_casey", member_name: "Casey Lin", amount_cents: 500, source: "event_payout", event_id: 4, event_name: "Putt League", note: "Event payout: Putt League", created_at: "2026-11-14 00:45:02" },
+  ] };
+  if (path === "/admin/wallets/m_jordan") return { balance_cents: 3000, more: false, transactions: [
+    { id: 4, amount_cents: 1250, transaction_type: "credit", source: "manual_adjustment", note: "Club payout", created_by: "m_casey", created_at: "2026-11-18 15:00:00" },
+    { id: 2, amount_cents: 1750, transaction_type: "credit", source: "sheet_import", note: null, created_by: "m_casey", created_at: "2026-09-01 10:00:00" },
+  ] };
   if (path === "/admin/wallets/credit") return { balance_cents: 1750 };
   if (path === "/admin/wallets/m_casey") {
     const all = [
@@ -687,6 +694,26 @@ async function verifyRoutes(variant) {
     await pane.getByRole("button", { name: "Post wallet adjustment" }).click();
     assert.equal((await walletSaved).status(), 200);
     assert.ok(requested.some((call) => call.path === "/admin/wallets/credit" && call.body?.amount_cents === 500));
+
+    // The Recent wallet ledger reads in words, and an entry opens that member's whole wallet history beneath it
+    // (owner: "Let's extend the drill down to the ledger too").
+    pane = await route(page, "wallets");
+    const recent = pane.locator("[data-react-admin-wallet-recent='ready']");
+    await recent.waitFor();
+    const payoutRow = recent.locator("[data-admin-wallet-row='1']");
+    assert.match(await payoutRow.innerText(), /Casey Lin[\s\S]*\+\$5\.00[\s\S]*Event payout: Putt League/);
+    assert.doesNotMatch(await recent.innerText(), /manual_adjustment|event_payout/);
+    const ledgerJordanRow = recent.locator("[data-admin-wallet-row='0']");
+    assert.match(await ledgerJordanRow.innerText(), /Jordan Reyes[\s\S]*Admin adjustment[\s\S]*Club payout[\s\S]*by Casey Lin/);
+    await ledgerJordanRow.getByRole("button").click();
+    assert.equal(await ledgerJordanRow.getByRole("button").first().getAttribute("aria-expanded"), "true");
+    const history = ledgerJordanRow.locator("[data-wallet-ledger='ready']");
+    await history.waitFor();
+    assert.deepEqual(await history.locator("[data-wallet-tx]").evaluateAll((rows) => rows.map((row) => row.dataset.walletTx)), ["4", "2"]);
+    assert.match(await history.locator("[data-wallet-tx='2']").innerText(), /Google Sheet balance[\s\S]*\+\$17\.50[\s\S]*balance after \$17\.50/);
+    await shot(page, "wallet-ledger-drilldown-" + variant.name);
+    await ledgerJordanRow.getByRole("button").first().click();
+    assert.equal(await history.count(), 0);
 
     pane = await route(page, "data-archive");
     const exported = page.waitForResponse((response) => response.url().endsWith("/admin/export") && response.request().method() === "POST");

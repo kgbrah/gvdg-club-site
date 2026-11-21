@@ -236,7 +236,9 @@ export async function listWalletTransactions(db: D1Like, memberId: string, limit
 }
 
 export async function listRecentWalletTransactions(db: D1Like, limit = 100) {
-  return (await db.prepare("SELECT * FROM wallet_transactions ORDER BY id DESC LIMIT ?").bind(limit).all()).results;
+  return (await db.prepare(
+    "SELECT w.*, e.name AS event_name FROM wallet_transactions w LEFT JOIN events e ON e.id = w.event_id ORDER BY w.id DESC LIMIT ?",
+  ).bind(limit).all()).results;
 }
 
 export async function listEventStoreCreditPayouts(db: D1Like, eventId: number) {

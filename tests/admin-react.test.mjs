@@ -543,7 +543,10 @@ test('admin wallet recent list is fetched by React after admin auth and wallet t
   assert.match(walletRecent, /data-react-admin-wallet-recent/);
   assert.match(walletRecent, /className: "wallet-ledger"/);
   assert.match(walletRecent, /className: "wallet-row"/);
-  assert.match(walletRecent, /className: "shop-admin-meta"/);
+  assert.match(walletRecent, /className: "shop-admin-meta wallet-row-full"/);
+  // Each entry opens that member's wallet history (owner: "Let's extend the drill down to the ledger too").
+  assert.match(walletRecent, /"aria-expanded": open \? "true" : "false"/);
+  assert.match(walletRecent, /h\(WalletLedger, \{ member, names/);
   assert.match(walletRecent, /"credit"/);
   assert.match(walletRecent, /"debit"/);
   assert.match(walletRecent, /role: "status"/);

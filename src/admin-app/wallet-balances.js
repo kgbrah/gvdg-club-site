@@ -37,26 +37,32 @@ function activityTime(iso) {
  * One ledger entry as the drill-down shows it: what it was (with the event or order), the signed amount, the balance
  * right after it (the running balance, newest first, from the member's current balance), and who posted it.
  */
+/** One ledger entry in words: what it was (and for which event or order), when, the signed amount, who posted it. */
+export function describeWalletTx(tx, names = new Map()) {
+  const source = String(tx?.source || "");
+  const what = SOURCE_LABELS[source] || (source ? source.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) : "Wallet entry");
+  const detail = tx?.event_name ? tx.event_name : tx?.event_id ? "Event #" + tx.event_id : tx?.order_id ? "Order #" + tx.order_id : "";
+  const by = tx?.created_by ? names.get(String(tx.created_by)) || String(tx.created_by) : "";
+  // A note that only repeats the label (e.g. "Event payout: <event>") adds nothing.
+  const note = tx?.note && !(detail && String(tx.note).includes(detail)) ? String(tx.note) : "";
+  return { id: tx?.id, when: activityTime(tx?.created_at), what, detail, note, amountCents: Number(tx?.amount_cents) || 0, by };
+}
+
 export function walletLedgerRows(transactions, { balanceCents = 0, newerCents = 0, names = new Map() } = {}) {
   let after = (Number(balanceCents) || 0) - (Number(newerCents) || 0);
   return (Array.isArray(transactions) ? transactions : []).map((tx) => {
-    const amount = Number(tx.amount_cents) || 0;
-    const source = String(tx.source || "");
-    const what = SOURCE_LABELS[source] || (source ? source.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()) : "Wallet entry");
-    const detail = tx.event_name ? tx.event_name : tx.event_id ? "Event #" + tx.event_id : tx.order_id ? "Order #" + tx.order_id : "";
-    const by = tx.created_by ? names.get(String(tx.created_by)) || String(tx.created_by) : "";
-    const row = { id: tx.id, when: activityTime(tx.created_at), what, detail, note: tx.note ? String(tx.note) : "", amountCents: amount, balanceAfterCents: after, by };
-    after -= amount;
+    const row = { ...describeWalletTx(tx, names), balanceAfterCents: after };
+    after -= row.amountCents;
     return row;
   });
 }
 
-function signedMoney(cents) {
+export function signedMoney(cents) {
   return (cents > 0 ? "+" : cents < 0 ? "−" : "") + walletMoney(Math.abs(cents));
 }
 
 /** A member's transactions, newest first, 25 at a time. */
-function WalletLedger({ member, names }) {
+export function WalletLedger({ member, names }) {
   const [state, setState] = React.useState({ status: "loading", transactions: [], more: false, balanceCents: member.balanceCents });
   const load = React.useCallback(async (before) => {
     setState((current) => ({ ...current, status: before ? "more" : "loading" }));

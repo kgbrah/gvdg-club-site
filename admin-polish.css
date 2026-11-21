@@ -1090,3 +1090,22 @@ body.admin-page.player-theme-active {
 @media (max-width: 360px) {
   .admin-page .admin-header-actions .theme-toggle { width: 2.25rem; min-width: 2.25rem; }
 }
+/* Recent wallet ledger: each entry opens that member's wallet history beneath it. */
+.admin-page button.wallet-row {
+  width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.admin-page button.wallet-row:hover { border-color: var(--secondary-text); }
+.admin-page button.wallet-row:disabled { cursor: default; }
+.admin-page .wallet-row-what { color: var(--text-primary); font-weight: 600; margin-top: .1rem; }
+.admin-page .wallet-row-chevron { color: var(--text-secondary); transition: transform .15s ease; }
+.admin-page .wallet-row-wrap.open .wallet-row-chevron { transform: rotate(180deg); }
+.admin-page .wallet-row-wrap.open .wallet-row { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.admin-page .wallet-row-history {
+  border: 1px solid var(--border-color); border-top: 0; border-radius: 0 0 8px 8px;
+  background: var(--bg-secondary); padding: .5rem .75rem .75rem;
+}
+.admin-page .wallet-row-history > .al-note { margin: 0 0 .25rem; font-weight: 700; color: var(--text-primary); }
+@media (prefers-reduced-motion: reduce) { .admin-page .wallet-row-chevron { transition: none; } }
+.admin-page button.wallet-row { row-gap: .15rem; }
+.admin-page button.wallet-row .wallet-row-full { grid-column: 1 / -1; }
