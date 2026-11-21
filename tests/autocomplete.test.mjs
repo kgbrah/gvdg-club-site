@@ -112,3 +112,17 @@ test("the wallet drill-down: what each entry was, signed amounts, the balance af
   // A later page continues the running balance from where the first stopped.
   assert.equal(walletLedgerRows([{ id: 1, amount_cents: 200 }], { balanceCents: 2600, newerCents: 2400 })[0].balanceAfterCents, 200);
 });
+
+test("the recent ledger's entries read in words, without repeating the event in the note", async () => {
+  const { describeWalletTx } = await import("../src/admin-app/wallet-balances.js");
+  const names = new Map([["m_admin", "Club Admin"]]);
+  assert.deepEqual(
+    (({ what, detail, note, by, amountCents }) => ({ what, detail, note, by, amountCents }))(describeWalletTx({
+      id: 3, amount_cents: 500, source: "event_payout", event_id: 4, event_name: "Putt League Test Scoring [scheduled]",
+      note: "Event payout: Putt League Test Scoring [scheduled]", created_by: "m_admin",
+    }, names)),
+    { what: "Event payout", detail: "Putt League Test Scoring [scheduled]", note: "", by: "Club Admin", amountCents: 500 },
+  );
+  assert.equal(describeWalletTx({ amount_cents: -3500, source: "manual_adjustment", note: "Kg correcting testing wallet balance" }).note, "Kg correcting testing wallet balance");
+  assert.match(readFileSync("src/admin-app/wallet-recent-list.js", "utf8"), /h\(WalletLedger, \{ member, names/);
+});
