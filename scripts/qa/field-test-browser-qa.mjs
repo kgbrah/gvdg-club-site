@@ -296,7 +296,11 @@ const probeOn = await scorer.evaluate(() => window.__fieldProbe);
 assert.ok(probeOn.listeners.includes("pointerdown") && probeOn.listeners.includes("unhandledrejection"), "the probe sees the recorder's listeners when on");
 assert.ok(probeOn.intervals.some((row) => row.recorder && row.delay === 300000) || !(await scorer.evaluate(() => typeof navigator.getBattery === "function")),
   "battery is sampled every 5 minutes where the battery API exists");
-assert.ok(probeOn.socketListeners.filter((type) => type === "open").length >= 1, "the live socket's open is followed when on");
+assert.ok(
+  probeOn.socketListeners.filter((type) => type === "open").length >= 2
+    && probeOn.socketListeners.filter((type) => type === "close").length >= 2,
+  "the live socket's open and close are followed when on",
+);
 await scorer.close();
 
 // The member Field log: summary, export, clear.
@@ -404,7 +408,7 @@ const probeOff = await plain.evaluate(() => window.__fieldProbe);
 assert.deepEqual(probeOff.listeners, [], "no recorder listeners when off");
 assert.equal(probeOff.observers, 0, "no mutation observer when off");
 assert.ok(!probeOff.intervals.some((row) => row.recorder), "no recorder timer when off");
-assert.deepEqual([...probeOff.socketListeners].sort(), ["close", "error", "message"], "the live socket keeps only its own listeners");
+assert.deepEqual([...probeOff.socketListeners].sort(), ["close", "error", "message", "open"], "the live socket keeps only its own listeners");
 const databases = await plain.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map((row) => row.name) : []));
 assert.ok(!databases.includes("gvdg-field-test"), "no field log database when off");
 if (shots) await plain.screenshot({ path: join(shots, "scorer-field-test-off-390-light.png") });
