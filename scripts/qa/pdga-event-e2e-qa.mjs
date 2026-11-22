@@ -281,7 +281,7 @@ try {
     const panel = page.locator("[data-tournament-registration]");
     await panel.waitFor({ timeout: 30_000 });
     assert.equal(await panel.getAttribute("data-tournament-registration"), "open");
-    assert.ok(await page.locator(".pdga-badge").first().isVisible(), "the PDGA badge on the event");
+    assert.ok(await page.locator("#detail .pdga-badge").first().isVisible(), "the PDGA badge on the event");
     assert.ok(await page.getByText("Player, event, and course data provided by").first().isVisible(), "PDGA's credit");
     // The PDGA event's page links to it on pdga.com and credits PDGA (their attribution rules).
     const pdgaFact = page.locator(".detail-facts").getByRole("link", { name: `Event #${pdgaEvent.id} on pdga.com` });

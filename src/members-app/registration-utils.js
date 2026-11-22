@@ -32,6 +32,7 @@ export function eventFromRegistration(row) {
     starts_at: row.event_starts_at || null,
     registration_deadline: row.event_registration_deadline || null,
     checkin_deadline: row.event_checkin_deadline || null,
+    pdga_event_id: row.pdga_event_id ?? null,
   };
 }
 

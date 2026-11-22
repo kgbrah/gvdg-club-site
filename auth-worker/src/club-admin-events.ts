@@ -11,6 +11,7 @@ import { isLiveFormatError, normalizeLiveScoringConfig } from "./live-format.js"
 import { inlineLayout } from "./admin-event-layout.js";
 import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
 import { playersMatch } from "./player-identity.js";
+import { isTournament, type TournamentConfig } from "./tournament-routes.js";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -354,7 +355,9 @@ export async function handleAdminEvents(
   }
   if ((seg[3] === "assign-starting-holes" || seg[3] === "assign-teams") && id != null && method === "POST") {
     const b = (await readJson(request)) ?? {};
-    const regs = (await db.listRegistrations(env.DB, id)) as { id: number }[];
+    const cfg = (await db.getEventConfig(env.DB, id)) as TournamentConfig | null;
+    const allRegs = (await db.listRegistrations(env.DB, id)) as { id: number; paid_entry?: unknown; waitlisted?: unknown }[];
+    const regs = isTournament(cfg) ? allRegs.filter((r) => Number(r.paid_entry) === 1 && Number(r.waitlisted) !== 1) : allRegs;
     let order = regs.map((r) => r.id);
     if (b.shuffle !== false) order = shuffle(order);
     if (seg[3] === "assign-starting-holes") {

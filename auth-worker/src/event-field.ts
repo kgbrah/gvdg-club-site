@@ -124,7 +124,12 @@ export async function publicFieldsByEvent(env: Env, eventIds: readonly number[])
 
   const inList = placeholders(ids.length);
   const [regs, walkons] = await Promise.all([
-    rowsIn<RegistrationSeed>(env.DB, `SELECT event_id, member_id, name, division, team FROM registrations WHERE event_id IN (${inList})`, ids),
+    rowsIn<RegistrationSeed>(
+      env.DB,
+      `SELECT event_id, member_id, name, division, team FROM registrations WHERE event_id IN (${inList})
+         AND ((paid_entry = 1 AND waitlisted = 0) OR NOT EXISTS (SELECT 1 FROM event_config c WHERE c.event_id = registrations.event_id AND COALESCE(c.pdga_event_id, 0) > 0))`,
+      ids,
+    ),
     rowsIn<WalkOnSeed>(env.DB, `SELECT event_id, member_id, name, pdga_no, division, team FROM event_players WHERE event_id IN (${inList})`, ids),
   ]);
   const seeds = unionFieldSeeds(regs, walkons);

@@ -18,6 +18,7 @@ import { cardFromMine, handleThrowClips } from "./throw-clip-routes.js";
 import { handleRoundMessages } from "./round-message-routes.js";
 import { dropLiveRound, noteLiveRound } from "./course-traffic.js";
 import { sanitizeProfilePhoto } from "./profile-photo.js";
+import { isTournament, type TournamentConfig } from "./tournament-routes.js";
 
 type RosterPlayer = { memberId: string | null; name: string; division: string | null; startingHole: number | null; team: string | null };
 
@@ -85,7 +86,7 @@ export async function startLiveEvent(
   const evLayout = ev.layout_id != null ? ((await db.getLayout(env.DB, ev.layout_id)) as { name?: string | null; course_id?: number | null } | null) : null;
   const evCourse = evLayout?.course_id != null ? ((await db.getCourse(env.DB, evLayout.course_id)) as { name?: string | null; lat?: number | null; lng?: number | null } | null) : null;
   const weatherLocation = weatherLocationForCourse(evCourse, evLayout); // null unless the course has coords
-  const regs = (await db.listRegistrations(env.DB, eid)) as {
+  const rawRegs = (await db.listRegistrations(env.DB, eid)) as {
     member_id?: string;
     name?: string;
     division?: string | null;
@@ -93,7 +94,11 @@ export async function startLiveEvent(
     team?: string | null;
     addons?: string | null;
     paid_entry?: number | boolean | null;
+    waitlisted?: number | boolean | null;
   }[];
+  const regs = isTournament(eventConfig as TournamentConfig | null)
+    ? rawRegs.filter((row) => registrationPaidEntry(row) && Number(row.waitlisted) !== 1)
+    : rawRegs;
   // Seed the round with BOTH registered players AND manually-added (event_players) walk-ons — nobody is
   // dropped regardless of how they were entered. (A registered player who was also manually added shows
   // once; the registration wins since it carries division / starting hole / check-in.)

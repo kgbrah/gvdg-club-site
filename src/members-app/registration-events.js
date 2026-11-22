@@ -191,7 +191,8 @@ export function EventRegistrationCard({ event, registration, token, paymentsConf
       ? h("div", { className: "register-status cancelled", key: "status" }, `This event was cancelled${registration.division ? ` - you were in ${registration.division}` : ""}`)
       : null,
     registration && event.status !== "cancelled"
-      ? h("div", { className: "register-status", "data-event-state": "in", key: "registered" }, `You're in${registration.division ? ` · ${registration.division}` : ""}${registration.checked_in ? " · checked in" : ""}`)
+      ? h("div", { className: "register-status", "data-event-state": "in", key: "registered" },
+        `${tournament ? (Number(registration.waitlisted) === 1 ? "On the waitlist" : Number(registration.paid_entry) === 1 ? "You're in" : "Signed up · payment needed") : "You're in"}${registration.division ? ` · ${registration.division}` : ""}${registration.checked_in ? " · checked in" : ""}`)
       : null,
     registration?.paid_entry ? h("div", { className: "register-status", key: "paid" }, "Paid") : null,
     registration && !registration.paid_entry && owed > 0 && !tournament

@@ -43,10 +43,11 @@ async function payEventWithWallet(env: Env, origin: string | null, eventId: numb
   if (await kvRateLimited(env, "evwallet:" + memberId, 10, 60)) return json({ error: "rate_limited" }, 429, origin);
   const member = await getMember(env.ROSTER, memberId);
   if (!member) return json({ error: "unauthorized" }, 401, origin);
+  const cfg = (await db.getEventConfig(env.DB, eventId)) as TournamentConfig | null;
+  if (isTournament(cfg)) return json({ error: "wallet_not_allowed_for_tournament" }, 409, origin);
   const reg = (await db.getMyRegistration(env.DB, eventId, memberId)) as { id: number; addons?: string; paid_entry?: number; payment_ref?: string } | null;
   if (!reg) return json({ error: "not_registered" }, 400, origin);
-  const cfg = (await db.getEventConfig(env.DB, eventId)) as OwedConfig | null;
-  const owed = computeOwed(cfg ?? {}, parseAddons(reg.addons));
+  const owed = computeOwed((cfg ?? {}) as OwedConfig, parseAddons(reg.addons));
   if (owed <= 0) return json({ error: "nothing_owed" }, 400, origin);
 
   const balanceFor = () => shopDb.walletBalance(env.DB, memberId);
@@ -182,7 +183,7 @@ export async function handleClubRegistration(
     const config = rawConfig ? (({ pdga_event: _ignored, ...rest }) => rest)(rawConfig) : null;
     // A club-run PDGA event also shows its PDGA event, rules, cap, the paid field and the waitlist.
     const tournament = isTournament(rawConfig)
-      ? await tournamentView(env, eid, rawConfig, registration ? Number((registration as { id?: unknown }).id) : null) : null;
+      ? await tournamentView(env, eid, rawConfig, registration ? Number((registration as { id?: unknown }).id) : null, registration as Record<string, unknown> | null) : null;
     return json(tournament ? { config, registration, tournament } : { config, registration }, 200, origin);
   }
   if (seg[2] === "register" && method === "POST") {
@@ -225,11 +226,13 @@ export async function handleClubRegistration(
       memberId = "g_" + guestToken;
     }
 
-    const addons = b.addons && typeof b.addons === "object" ? JSON.stringify({ ctp: !!(b.addons as Record<string, unknown>).ctp, ace: !!(b.addons as Record<string, unknown>).ace }) : null;
+    const existing = (await db.getMyRegistration(env.DB, eid, memberId)) as { addons?: string | null; paid_entry?: number; amount_paid_cents?: number } | null;
+    const addons = b.addons && typeof b.addons === "object"
+      ? JSON.stringify({ ctp: !!(b.addons as Record<string, unknown>).ctp, ace: !!(b.addons as Record<string, unknown>).ace })
+      : b.addons === undefined && existing ? (existing.addons ?? null) : null;
     // Once entry is paid, a re-registration must not silently add a paid add-on (ace pot / CTP) that was
     // never charged — that would put the registrant into a real-cash pool for free. Block any change that
     // raises the amount owed above what was actually captured (removing add-ons / editing division is fine).
-    const existing = (await db.getMyRegistration(env.DB, eid, memberId)) as { paid_entry?: number; amount_paid_cents?: number } | null;
     if (existing?.paid_entry === 1) {
       const owedNow = computeOwed(cfg as unknown as OwedConfig, addons ? (JSON.parse(addons) as { ctp?: boolean; ace?: boolean }) : {});
       if (owedNow > (existing.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);

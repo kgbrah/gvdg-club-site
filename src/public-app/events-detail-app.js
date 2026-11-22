@@ -435,7 +435,9 @@ export function EventsEventDetailApp() {
         text: "Thanks for playing! Chip in $1 to help the club run events like this one?" }) : null,
       h(DetailFacts, { course, courseSummary: data.courseSummary, event, key: "facts" }),
       event.notes ? h("div", { className: "detail-notes", key: "notes" }, String(event.notes)) : null,
-      event.status === "scheduled" ? h(EventRegistrationPanel, { eventId: event.id, key: "register" }) : null,
+      event.status === "scheduled" || (event.pdga_event_id && event.status === "live")
+        ? h(EventRegistrationPanel, { eventId: event.id, event, key: "register" })
+        : null,
       h(PlayerRoster, { event, key: "players" }),
       h(EventExtras, { extras: data.extras, key: "extras" }),
       h(TeeSigns, { apiBase: data.apiBase || "", key: "tee-signs", teeSigns: data.teeSigns }),
