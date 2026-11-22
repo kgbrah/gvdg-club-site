@@ -17,6 +17,7 @@ import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PickList, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
 import { CoursePicker, useHere } from "./course-picker.js";
 import { BagPhotoChooser, BagPicker, clearBagHandoff, readBagHandoff, useBagChoices } from "./lf-bag.js";
+import { memberTokenExpired, readMemberToken } from "../shared/member-session.js";
 
 const LF_VOICE_FIELDS = ["brand", "mold", "plastic", "color", "weightG", "courseId", "hole", "area"];
 
@@ -37,7 +38,8 @@ function useCourseLayout(courseId) {
     if (!id || courseLayouts.has(id)) return undefined;
     let live = true;
     lfRequest("/courses/" + id + "/layouts").then(({ ok, data }) => {
-      const layouts = ok && Array.isArray(data?.layouts) ? data.layouts : [];
+      if (!ok) return;
+      const layouts = Array.isArray(data?.layouts) ? data.layouts : [];
       courseLayouts.set(id, { holes: layoutHoles(layouts), count: holeCount(layouts) });
       if (live) setLoaded(new Map(courseLayouts));
     }).catch(() => {});
@@ -167,8 +169,20 @@ export function NewPost({ kind, route, edit = null }) {
   const courses = useCourses();
   const editing = Boolean(edit);
   // "I lost this disc" from My Bag fills the lost post in (a signed-in member's own bag disc only).
-  const [bag, setBag] = React.useState(() => (!editing && kind === "lost" && route?.query?.get("from") === "bag" ? readBagHandoff() : null));
+  const [bag, setBag] = React.useState(() => {
+    if (editing || kind !== "lost" || route?.query?.get("from") !== "bag") return null;
+    const token = readMemberToken();
+    return token && !memberTokenExpired(token) ? readBagHandoff() : null;
+  });
   const fromBag = bag && config.viewer?.kind === "member" ? bag : null;
+  React.useEffect(() => {
+    if (config.status === "ready" && config.viewer?.kind !== "member" && bag) {
+      setBag(null);
+      setBagChosen([]);
+      clearBagHandoff();
+      setDraft((current) => ({ ...current, brand: "", mold: "", plastic: "", color: "", weightG: "", privateInk: "" }));
+    }
+  }, [config.status, config.viewer?.kind, bag]);
   // "Lost a disc" without one picked: a signed-in member with discs saved picks one from the bag, or enters it.
   const [skipPicker, setSkipPicker] = React.useState(false);
   const member = config.viewer?.kind === "member";
@@ -277,16 +291,21 @@ export function NewPost({ kind, route, edit = null }) {
     });
   }
 
+  const sendRef = React.useRef(send);
+  sendRef.current = send;
+
   function submit(event) {
     event.preventDefault();
-    const issue = validatePost(kind, draft, editing ? remotePhotos.length : photos.length + bagChosen.length);
+    const issue = validatePost(kind, draft, editing ? remotePhotos.length : photos.length + bagChosen.length, {
+      keepEventDate: Boolean(editing && draft.eventDate === (edit?.date || "")),
+    });
     setProblem(issue);
     if (issue) {
       action.setMessage({ text: issue.text, tone: "error" });
       return;
     }
     if (editing) { void save(); return; }
-    identity.require(found ? "Verify your email to post the disc you found" : "Verify your email to post your lost disc", send);
+    identity.require(found ? "Verify your email to post the disc you found" : "Verify your email to post your lost disc", () => sendRef.current());
   }
 
   const heading = editing ? "Edit your post" : found ? "Post a found disc" : "Post a lost disc";

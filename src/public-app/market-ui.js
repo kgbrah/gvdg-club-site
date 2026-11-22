@@ -46,7 +46,7 @@ export function useMarketConfig() {
   React.useEffect(() => {
     configListeners.add(setState);
     setState(configState);
-    if (configState.status === "loading" && !configPending) void reloadMarketConfig();
+    if ((configState.status === "loading" || configState.status === "error") && !configPending) void reloadMarketConfig();
     return () => configListeners.delete(setState);
   }, []);
   return state;
@@ -365,6 +365,8 @@ export function ReportControl({ kind, id, viewer, label = "Report" }) {
       } else action.setMessage({ text: errorMessage(data), tone: "error" });
     });
   }
+  const sendRef = React.useRef(send);
+  sendRef.current = send;
 
   if (sent) return h(StatusLine, { message: action.message });
   if (!open) {
@@ -373,7 +375,15 @@ export function ReportControl({ kind, id, viewer, label = "Report" }) {
   return h("div", { className: "market-report", "data-market-report": kind }, [
     h("form", {
       className: "market-form", key: "form", noValidate: true,
-      onSubmit: (event) => { event.preventDefault(); identity.require("Verify your email to send a report", send); },
+      onSubmit: (event) => {
+        event.preventDefault();
+        if (!reason) {
+          action.setMessage({ text: "Choose a reason.", tone: "error" });
+          document.getElementById(fieldId + "-reason")?.focus();
+          return;
+        }
+        identity.require("Verify your email to send a report", () => sendRef.current());
+      },
     }, [
       h("label", { htmlFor: fieldId + "-reason", key: "reason-label" }, "Why are you reporting this?"),
       h("select", { id: fieldId + "-reason", key: "reason", onChange: (event) => setReason(event.target.value), value: reason }, [

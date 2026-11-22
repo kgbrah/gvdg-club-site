@@ -109,13 +109,26 @@ export function CameraSheet({ max, hint, onDone, onClose, onNativeCamera, onChoo
     shotsRef.current = shots;
   }, [shots]);
 
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
   // Lock the page behind the sheet, and give focus back to whatever opened it.
   React.useEffect(() => {
     const opener = document.activeElement;
+    const mountedHref = window.location.href;
     const root = document.documentElement;
     const overflow = root.style.overflow;
     root.style.overflow = "hidden";
+    function handleNav() {
+      if (window.location.href === mountedHref) return;
+      stopStream(streamRef.current);
+      streamRef.current = null;
+      onCloseRef.current?.();
+    }
+    window.addEventListener("hashchange", handleNav);
+    window.addEventListener("popstate", handleNav);
     return () => {
+      window.removeEventListener("hashchange", handleNav);
+      window.removeEventListener("popstate", handleNav);
       root.style.overflow = overflow;
       shotsRef.current.forEach((shot) => URL.revokeObjectURL(shot.url));
       if (opener && typeof opener.focus === "function" && document.contains(opener)) opener.focus();

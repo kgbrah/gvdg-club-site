@@ -293,11 +293,11 @@ function BuyerTools({ listing, viewer, onChange }) {
       onClick: () => identity.require("Verify your email to buy as a guest", buy),
     }, action.busy ? "Holding it for you…" : "Buy for " + money(listing.priceCents)) : null,
     identity.gate,
-    listing.pay ? h("div", { className: "market-pay-preview", key: "pay" }, [
-      listing.status === "active" ? h(Note, { key: "lead" }, "Tap Buy first so the seller holds it for you, then pay.") : null,
+    listing.pay && listing.status === "active" ? h("div", { className: "market-pay-preview", key: "pay" }, [
+      h(Note, { key: "lead" }, "Tap Buy first so the seller holds it for you, then pay."),
       h(PayOptions, { key: "options", pay: listing.pay, primary: false }),
     ]) : null,
-    listing.payLocked && !identity.gate && listing.status !== "sold" && listing.status !== "traded" ? h("div", { className: "market-pay-locked", key: "locked" }, [
+    listing.payLocked && !identity.gate && listing.status === "active" && listing.priceCents != null ? h("div", { className: "market-pay-locked", key: "locked" }, [
       h(Note, { key: "note" }, "Sign in or verify your email to see payment options."),
       unlocking
         ? h(GuestGate, { key: "gate", onCancel: () => setUnlocking(false), onVerified: () => { setUnlocking(false); onChange?.(); }, title: "Verify your email" })

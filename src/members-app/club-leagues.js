@@ -29,7 +29,10 @@ export function loadCurrentLeagues() {
       const rows = Array.isArray(data && data.leagues) ? data.leagues : [];
       const details = await Promise.all(rows.slice(0, 12).map((league) => requestJson(`/leagues/${encodeURIComponent(league.id)}`).catch(() => null)));
       return details.filter((detail) => detail && detail.league && isCurrentLeague(detail));
-    }).catch(() => []);
+    }).catch(() => {
+      loaded = null;
+      return [];
+    });
   }
   return loaded;
 }
@@ -83,7 +86,7 @@ export function BagTagLeagueOrder({ compact = false, skipIds = [] }) {
         ]),
         ...tags.slice(0, 20).map((row) => h("div", { className: "member-list-row", key: `${row.current_place}-${row.name}` }, [
           h("span", { className: "member-list-date", key: "tag" }, `#${row.current_place}`),
-          h("h3", { className: "member-list-name", key: "name" }, row.name || "Player"),
+          h("h3", { className: "member-list-name", key: "name" }, [row.name || "Player", h(KarmaChip, { key: "karma", memberId: row.member_id })]),
         ])),
       ]),
     ]);

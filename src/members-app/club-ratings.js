@@ -124,7 +124,7 @@ function useClubRatings(token) {
     return () => active.current?.abort();
   }, [load]);
 
-  return { state: state.owner === token ? state : initialState(), loadMore: (kind) => load({ appendKind: kind }) };
+  return { state: state.owner === token ? state : initialState(), loadMore: (kind) => load({ appendKind: kind }), reload: () => load() };
 }
 
 const UNRATED_REASONS = {
@@ -215,8 +215,15 @@ export function ClubRatings(props) {
 }
 
 function ClubRatingsBody({ token }) {
-  const { state, loadMore } = useClubRatings(token);
-  if (!token || state.status === "error") return null;
+  const { state, loadMore, reload } = useClubRatings(token);
+  if (!token) return null;
+  if (state.status === "error") {
+    return h("div", { className: "club-ratings react-club-ratings", "data-react-club-ratings": "error" }, [
+      h("h4", { className: "dash-subtitle", key: "title" }, "GVDG Round Ratings"),
+      h("p", { className: "dash-note", role: "alert", key: "msg" }, "Round ratings couldn’t load."),
+      h("button", { type: "button", className: "dashboard-action", key: "retry", onClick: reload }, "Try again"),
+    ]);
+  }
 
   return h("div", { className: "club-ratings react-club-ratings", "data-react-club-ratings": state.status }, [
     h("h4", { className: "dash-subtitle", key: "title" }, "GVDG Round Ratings"),

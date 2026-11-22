@@ -3,6 +3,7 @@
 // copies them from the bag when it's posted (the bag keeps its private originals). A photo on a listing is public, so
 // the form says so and each one can come off before posting.
 import { ACCESSORY_KINDS } from "../shared/market-model.js";
+import { memberTokenSubject, readMemberToken } from "../shared/member-session.js";
 
 export const MARKET_BAG_HANDOFF_KEY = "gvdg_market_bag_handoff";
 export const MARKET_BAG_HREF = "pro-shop.html#market/sell?from=bag";
@@ -18,11 +19,15 @@ export function bagRefKind(ref) {
 }
 
 /** The bag item handed over by My Bag, or null. */
-export function readMarketBagHandoff() {
+export function readMarketBagHandoff(expectedOwnerSub = memberTokenSubject(readMemberToken())) {
   try {
     const data = JSON.parse(sessionStorage.getItem(MARKET_BAG_HANDOFF_KEY) || "null");
     const itemKind = bagRefKind(data?.ref);
     if (!itemKind) return null;
+    if (typeof data.ownerSub === "string" && data.ownerSub && (!expectedOwnerSub || data.ownerSub !== expectedOwnerSub)) {
+      clearMarketBagHandoff();
+      return null;
+    }
     const weight = Number(data.weightG);
     const gearType = String(data.gearType || "");
     return {
@@ -44,8 +49,9 @@ export function clearMarketBagHandoff() {
 
 /** My Bag's side: remember the item and open the sell form. */
 export function sellFromBag(item) {
+  const ownerSub = item?.ownerSub || memberTokenSubject(readMemberToken());
   try {
-    sessionStorage.setItem(MARKET_BAG_HANDOFF_KEY, JSON.stringify(item));
+    sessionStorage.setItem(MARKET_BAG_HANDOFF_KEY, JSON.stringify({ ...item, ...(ownerSub ? { ownerSub } : {}) }));
   } catch {
     /* the form still opens, just without the bag details */
   }

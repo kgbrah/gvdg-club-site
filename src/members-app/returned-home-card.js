@@ -4,17 +4,12 @@ import React from "react";
 import { Disc3, HandHeart } from "lucide-react";
 
 import { authBase } from "./api.js";
+import { karmaLabel } from "../shared/lost-found-model.js";
 
 const h = React.createElement;
 
 function photoSrc(path) {
   return typeof path === "string" && /^\/lost-found\/photos\/\d{1,12}$/.test(path) ? authBase() + path : "";
-}
-
-function karmaText(finder) {
-  const karma = Number(finder?.karma) || 0;
-  const returned = Number(finder?.returned) || 0;
-  return karma > 0 ? `Karma ${karma} · ${returned} ${returned === 1 ? "disc" : "discs"} returned` : "";
 }
 
 export function ReturnedHomeCard({ recent }) {
@@ -27,7 +22,7 @@ export function ReturnedHomeCard({ recent }) {
     ]),
     h("ul", { className: "member-returned-list", key: "list" }, rows.map((row, index) => {
       const src = photoSrc(row.photo);
-      const karma = karmaText(row.finder);
+      const karma = karmaLabel(row.finder);
       return h("li", { className: "member-returned-row", key: row.claimId || index }, [
         src
           ? h("img", { alt: "", className: "member-returned-thumb", key: "img", loading: "lazy", src })

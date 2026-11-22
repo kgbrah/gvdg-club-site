@@ -99,15 +99,21 @@ export function ApplySubmitted({ active, info }) {
       if (permission !== "granted") { setPushState("none"); return; }
       const registration = await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
-      if (existing) await existing.unsubscribe();
-      const subscription = await registration.pushManager.subscribe({
+      const subscription = existing || await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: keyBytes(info.pushPublicKey),
       });
       const json = subscription.toJSON();
       const { ok } = await post(`/membership/apply/${encodeURIComponent(info.id)}/push`, { payToken: info.payToken, endpoint: json.endpoint, keys: json.keys });
-      setPushState(ok ? "on" : "off");
+      if (ok) {
+        setMessage("");
+        setPushState("on");
+      } else {
+        setMessage("Could not turn on notifications on this device. Please try again.");
+        setPushState("off");
+      }
     } catch {
+      setMessage("Could not turn on notifications on this device. Please try again.");
       setPushState("off");
     } finally {
       setBusy(false);
@@ -130,9 +136,12 @@ export function ApplySubmitted({ active, info }) {
           ],
       message ? h("div", { className: "login-error show", role: "alert", key: "message" }, `Error: ${message}`) : null,
     ]) : null,
-    pushState !== "none" ? h("div", { className: "form-group", key: "push" }, pushState === "on"
-      ? h("p", { className: "form-hint", role: "status" }, [h(BellRing, { size: 16, "aria-hidden": true, key: "icon" }), " We'll send a notification on this device when you're approved."])
-      : h("button", { type: "button", className: "login-btn login-btn-secondary", disabled: busy, onClick: turnOnPush, "data-react-apply-push": "off" }, "Notify me when I'm approved")) : null,
+    pushState !== "none" ? h("div", { className: "form-group", key: "push" }, [
+      pushState === "on"
+        ? h("p", { className: "form-hint", key: "status", role: "status" }, [h(BellRing, { size: 16, "aria-hidden": true, key: "icon" }), " We'll send a notification on this device when you're approved."])
+        : h("button", { type: "button", className: "login-btn login-btn-secondary", disabled: busy, key: "btn", onClick: turnOnPush, "data-react-apply-push": "off" }, "Notify me when I'm approved"),
+      !info.duesOnline && message ? h("div", { className: "login-error show", role: "alert", key: "message" }, `Error: ${message}`) : null,
+    ]) : null,
     h("button", { type: "button", className: "login-btn", key: "done", onClick: () => window.dispatchEvent(new CustomEvent("gvdg:member-apply-finish")) }, "Continue to log in"),
   ]);
 }

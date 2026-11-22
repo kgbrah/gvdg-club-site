@@ -45,6 +45,7 @@ export function emailRequired(member: Member): boolean {
 
 export function memberSessionBody(member: Member): Record<string, unknown> {
   return {
+    sub: member.memberId,
     mustChangePin: member.mustChangePin,
     name: member.name,
     pdgaNo: member.pdgaNo ?? null,
@@ -102,7 +103,7 @@ export async function handleMe(request: Request, env: Env, origin: string | null
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
   if (!claims || claims.play) return json({ error: "unauthorized" }, 401, origin);
   const member = await getMember(env.ROSTER, claims.sub);
-  if (!member) return json({ error: "unauthorized" }, 401, origin);
+  if (!member || member.held === true) return json({ error: "unauthorized" }, 401, origin);
   // The same revocation rule as requireAuth: a session from before a PIN change/reset signs out here too, instead of
   // looking signed in while every member route turns it away. (A forced first-login change still gets through.)
   if ((member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return json({ error: "unauthorized" }, 401, origin);
@@ -241,12 +242,7 @@ export async function handleProfile(request: Request, env: Env, origin: string |
 
   const result = await updateProfile(env.ROSTER, claims.sub, patch);
   if (!result.ok) return json({ error: "conflict", field: result.conflict }, 409, origin);
-  const m = result.member;
-  return json(
-    { pdgaNo: m.pdgaNo ?? null, udisc: m.udisc ?? null, photo: sanitizeProfilePhoto(m.photo), name: m.name, mustChangePin: m.mustChangePin, membership: publicMembership(m) },
-    200,
-    origin,
-  );
+  return json(memberSessionBody(result.member), 200, origin);
 }
 
 export async function handleSetPin(request: Request, env: Env, origin: string | null): Promise<Response> {

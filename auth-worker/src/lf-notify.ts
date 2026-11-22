@@ -26,13 +26,16 @@ export interface LfNote {
   refKey: string;
   /** Where the email links to on lost-found.html (hash). */
   hash: string;
+  /** Override the default member-portal destination when the notice points outside Lost & Found (e.g. account karma). */
+  memberHref?: string;
 }
 
 export async function deliverLfNote(env: Env, ctx: WaitCtx, personId: string, note: LfNote): Promise<void> {
   try {
     if (!isGuestId(personId)) {
-      await recordMemberNotices(env, [personId], { kind: "lostfound", title: note.title, body: note.body, href: LF_MEMBER_HREF, refKey: note.refKey });
-      notifyMembers(ctx, env, [personId], "messages", { title: note.title, body: note.body, url: LF_MEMBER_HREF, tag: note.refKey });
+      const href = note.memberHref || LF_MEMBER_HREF;
+      await recordMemberNotices(env, [personId], { kind: "lostfound", title: note.title, body: note.body, href, refKey: note.refKey });
+      notifyMembers(ctx, env, [personId], "messages", { title: note.title, body: note.body, url: href, tag: note.refKey });
     }
     if (!emailConfigured(env)) return;
     const to = await traderEmail(env, personId);

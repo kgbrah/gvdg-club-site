@@ -4,7 +4,8 @@ import { applyProfile, markEmailSaved, memberAuthProfile, memberDashboardContext
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
 import { resetPdgaMembershipCache } from "./pdga-membership.js";
-import { clearMemberSession, memberTokenSubject, writeMemberSessionValue } from "../shared/member-session.js";
+import { suppressNextRouterPop } from "./dashboard-router.js";
+import { clearMemberSession, memberTokenExpired, memberTokenSubject, writeMemberSessionValue } from "../shared/member-session.js";
 
 let installed = false;
 let sessionExpiredShown = false;
@@ -62,6 +63,7 @@ export function installMemberAuthController() {
     overlay = null;
     if (window.history.state?.gvdgAuthOverlay) {
       skipNextPop = true;
+      suppressNextRouterPop();
       window.history.back();
     }
   }
@@ -73,7 +75,7 @@ export function installMemberAuthController() {
     if (!overlay) return;
     const kind = overlay;
     overlay = null;
-    if (kind === "reset") showLogin();
+    if (kind === "reset" || kind === "apply") showLogin();
     else showMembersContent(storageGet(NAME_KEY));
   });
 
@@ -141,7 +143,7 @@ export function installMemberAuthController() {
         showAuthError("email", "Enter a valid email.");
       } else if (data.error === "email_unavailable") {
         emailStepUnavailable = true;
-        if (memberAuthProfile().needsEmail) showMembersShell(memberDashboardContext().name);
+        if (memberAuthProfile().needsEmail) showMembersContent(memberDashboardContext().name);
         else showAuthError("email", "Email isn't available right now. Try again later.");
       } else if (data.error === "email_failed") {
         showAuthError("email", "We couldn't send to that address. Check it and try again.");
@@ -390,8 +392,9 @@ export function installMemberAuthController() {
     }
   }
 
-  function openApply() {
+  function openApply(event) {
     showApplyShell(passkeysSupported());
+    if (event) openOverlay("apply");
   }
 
   function pushSupported() {
@@ -430,7 +433,11 @@ export function installMemberAuthController() {
       showAuthError("apply", "Enter a valid email. You sign in with it.");
       return;
     }
-    if (guest && phone.replace(/\D/g, "").length < 10) {
+    const phoneDigits = phone.replace(/\D/g, "");
+    const phoneOk = phone.trim().startsWith("+")
+      ? phoneDigits.length >= 8 && phoneDigits.length <= 15 && !phoneDigits.startsWith("0")
+      : phoneDigits.length >= 10;
+    if (guest && !phoneOk) {
       showAuthError("apply", "Enter a valid phone number.");
       return;
     }
@@ -514,7 +521,13 @@ export function installMemberAuthController() {
         if (String(window.location.hash || "").toLowerCase() === "#forgot-pin") openReset();
       }
     } catch {
-      showLogin();
+      const offlineSub = memberTokenSubject(token);
+      if (offlineSub && !memberTokenExpired(token)) {
+        applyProfile({ sub: offlineSub, name: storageGet(NAME_KEY) || "Member", pdgaNo: storageGet(PDGA_KEY) || null });
+        showMembersContent(storageGet(NAME_KEY));
+      } else {
+        showLogin();
+      }
     }
   }
 

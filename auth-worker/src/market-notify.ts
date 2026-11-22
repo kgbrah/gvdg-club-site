@@ -5,6 +5,7 @@
 
 import type { Env } from "./env.js";
 import { decryptEmail } from "./market-crypto.js";
+import { getMember } from "./roster.js";
 import { recordMemberNotices } from "./member-messages.js";
 import { notifyMembers } from "./member-push.js";
 import { siteBase } from "./membership-notify.js";
@@ -63,7 +64,9 @@ export async function traderEmail(env: Env, ownerId: string): Promise<string | n
   }
   const row = await env.DB.prepare("SELECT notify_email FROM market_seller_settings WHERE member_id = ?")
     .bind(ownerId).first<{ notify_email: string }>();
-  return row?.notify_email || null;
+  if (row?.notify_email) return row.notify_email;
+  const member = await getMember(env.ROSTER, ownerId).catch(() => null);
+  return member?.email || null;
 }
 
 export interface MarketNote {

@@ -4,6 +4,7 @@ import React from "react";
 import { ChevronRight, EyeOff, Handshake, HandHeart, PackageSearch, Search, Trophy } from "lucide-react";
 
 import { requestJson } from "./api.js";
+import { karmaLabel } from "../shared/lost-found-model.js";
 
 const h = React.createElement;
 const PAGE = "lost-found.html";
@@ -56,12 +57,6 @@ export function waitingRows(data) {
   return rows;
 }
 
-function karmaText(karma) {
-  const points = Number(karma?.karma) || 0;
-  const returned = Number(karma?.returned) || 0;
-  return points > 0 || returned > 0 ? `Karma ${points} · ${returned} ${returned === 1 ? "disc" : "discs"} returned` : "";
-}
-
 export function MemberLostFoundPage({ token }) {
   const [state, setState] = React.useState({ status: "loading", data: null });
   React.useEffect(() => {
@@ -72,7 +67,7 @@ export function MemberLostFoundPage({ token }) {
     return () => controller.abort();
   }, [token]);
   const rows = waitingRows(state.data);
-  const karma = karmaText(state.data?.karma);
+  const karma = karmaLabel(state.data?.karma);
   return h("div", { className: "member-subpage member-lost-found", "data-member-lost-found": state.status === "loading" ? "loading" : "ready" }, [
     h("section", { className: "member-link-section", "aria-label": "Waiting on you", key: "waiting" }, [
       h("h2", { key: "title" }, "Waiting on you"),

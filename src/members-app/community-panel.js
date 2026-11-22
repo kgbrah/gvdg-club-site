@@ -221,9 +221,13 @@ export function MemberCommunityPage({ token }) {
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState({ profiles: [], more: false, offset: 0, status: "loading" });
   const [pending, setPending] = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const searchRef = React.useRef(null);
+  const moreControllerRef = React.useRef(null);
   const [version, reload] = React.useReducer((value) => value + 1, 0);
   const valid = () => token === readMemberToken();
+
+  React.useEffect(() => () => moreControllerRef.current?.abort(), []);
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -235,6 +239,9 @@ export function MemberCommunityPage({ token }) {
   }, [token]);
 
   React.useEffect(() => {
+    moreControllerRef.current?.abort();
+    moreControllerRef.current = null;
+    setLoadingMore(false);
     const controller = new AbortController();
     const params = new URLSearchParams({ q: query, offset: "0" });
     setPage((current) => ({ ...current, status: "loading" }));
@@ -261,13 +268,29 @@ export function MemberCommunityPage({ token }) {
   }
 
   async function older() {
-    setPending(true);
+    if (loadingMore || !valid()) return;
+    moreControllerRef.current?.abort();
+    const controller = new AbortController();
+    moreControllerRef.current = controller;
+    setLoadingMore(true);
     try {
-      const params = new URLSearchParams({ q: query, offset: String(page.offset + 25) });
-      const result = await communityRequest("/community/directory?" + params, { token });
-      if (valid()) setPage({ profiles: page.profiles.concat(result.profiles), more: result.more, offset: page.offset + 25, status: "ready" });
-    } catch { setError("More profiles couldn’t load."); }
-    finally { setPending(false); }
+      const nextOffset = page.offset + 25;
+      const params = new URLSearchParams({ q: query, offset: String(nextOffset) });
+      const result = await communityRequest("/community/directory?" + params, { token, signal: controller.signal });
+      if (controller.signal.aborted || !valid()) return;
+      setPage((current) => {
+        const seen = new Set(current.profiles.map((p) => p.key));
+        const extra = (result.profiles || []).filter((p) => !seen.has(p.key));
+        return { ...current, profiles: current.profiles.concat(extra), more: result.more, offset: nextOffset, status: "ready" };
+      });
+    } catch (failure) {
+      if (failure?.name !== "AbortError" && valid()) setError("More profiles couldn’t load.");
+    } finally {
+      if (moreControllerRef.current === controller) {
+        moreControllerRef.current = null;
+        setLoadingMore(false);
+      }
+    }
   }
 
   async function update(contact, operation) {
@@ -276,7 +299,7 @@ export function MemberCommunityPage({ token }) {
       const yes = await memberConfirm({
         title: "Block this member?",
         message: "This removes any connection and hides both profiles in signed-in community views. Public links can still be opened signed out.",
-        confirmText: "Block member", danger: true,
+        confirmText: "Block member", tone: "danger",
       });
       if (!yes || !valid()) return;
     }
@@ -343,7 +366,7 @@ export function MemberCommunityPage({ token }) {
         ]),
       ]))) : note(query ? "No matching profiles." : "Type at least 2 letters to search.", "empty"),
       state.profile.audience === "private" ? note("Share a display name in your profile settings before sending requests.", "request-note") : null,
-      page.status === "ready" && page.more ? action("More members", { key: "more", disabled: pending, onClick: () => { void older(); } }) : null,
+      page.status === "ready" && page.more ? action(loadingMore ? "Loading…" : "More members", { key: "more", disabled: pending || loadingMore, onClick: () => { void older(); } }) : null,
     ]),
   ]);
 }

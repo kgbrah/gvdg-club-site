@@ -339,13 +339,13 @@ export async function handleMemberMessages(
 
   if (method === "GET") {
     const listed = await env.DB.prepare(
-      "SELECT id, sender_id, body, created_at FROM member_messages WHERE thread_id = ? ORDER BY id ASC LIMIT 200",
+      "SELECT id, sender_id, body, created_at FROM member_messages WHERE thread_id = ? ORDER BY id DESC LIMIT 200",
     ).bind(threadId).all<MessageRow>();
     await markThreadRead(env, self, threadId);
     const withId = otherId(thread, self);
     return json({
       thread: { id: thread.id, with: { memberId: withId, name: await publicName(env, withId) } },
-      messages: (listed.results ?? []).map((row) => ({
+      messages: [...(listed.results ?? [])].reverse().map((row) => ({
         id: row.id,
         body: row.body,
         mine: row.sender_id === self,

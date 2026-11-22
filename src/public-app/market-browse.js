@@ -5,6 +5,7 @@ import {
 } from "../shared/market-model.js";
 import { marketRequest } from "./market-api.js";
 import { FeedbackText, GuestBadge, LoadState, MarketPhoto, StatusChip } from "./market-ui.js";
+import { KarmaChip } from "../shared/karma.js";
 import { AutocompleteInput } from "../shared/autocomplete.js";
 import { discSearchSuggestions } from "../shared/disc-catalog.js";
 
@@ -27,6 +28,7 @@ export function ListingCard({ listing, showSeller = true }) {
       showSeller && listing.seller ? h("div", { className: "product-meta market-card-seller", key: "seller" }, [
         h("span", { key: "name" }, listing.seller.name || "Seller"),
         listing.seller.kind === "guest" ? h(GuestBadge, { key: "badge" }) : null,
+        h(KarmaChip, { key: "karma", traderKey: listing.seller.key }),
         " · ", h(FeedbackText, { key: "fb", summary: listing.seller.feedback }),
       ]) : null,
       h(StatusChip, { hidden: listing.hidden, key: "status", status: listing.status === "pending" ? null : listing.status }),
@@ -109,14 +111,19 @@ export function MarketBrowse({ route }) {
   const seller = route.query.get("seller") || "";
   const [filters, setFilters] = React.useState(() => ({ ...EMPTY_FILTERS, seller }));
   const [state, setState] = React.useState({ status: "loading", listings: [], more: false, facets: { brands: [], plastics: [] } });
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
   const query = useDebounced(listingsQuery({ ...filters, seller }), 250);
+  const moreRef = React.useRef(null);
 
   React.useEffect(() => {
     setFilters((current) => (current.seller === seller ? current : { ...current, seller }));
   }, [seller]);
 
   React.useEffect(() => {
+    moreRef.current?.abort();
+    moreRef.current = null;
+    setLoadingMore(false);
     const controller = new AbortController();
     setState((current) => ({ ...current, status: "loading" }));
     marketRequest("/market/listings" + query, { signal: controller.signal }).then(({ ok, data }) => {
@@ -129,14 +136,31 @@ export function MarketBrowse({ route }) {
         facets: data.facets && typeof data.facets === "object" ? data.facets : current.facets,
       }));
     }).catch(() => {});
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      moreRef.current?.abort();
+      moreRef.current = null;
+    };
   }, [query, attempt]);
 
   async function loadMore() {
-    const offset = state.listings.length;
-    const { ok, data } = await marketRequest("/market/listings" + listingsQuery({ ...filters, seller }, offset));
-    if (ok && Array.isArray(data.listings)) {
-      setState((current) => ({ ...current, listings: current.listings.concat(data.listings), more: data.more === true }));
+    if (loadingMore) return;
+    moreRef.current?.abort();
+    const controller = new AbortController();
+    moreRef.current = controller;
+    setLoadingMore(true);
+    try {
+      const offset = state.listings.length;
+      const { ok, data } = await marketRequest("/market/listings" + listingsQuery({ ...filters, seller }, offset), { signal: controller.signal });
+      if (!controller.signal.aborted && ok && Array.isArray(data.listings)) {
+        setState((current) => {
+          const seen = new Set(current.listings.map((row) => row.id));
+          return { ...current, listings: current.listings.concat(data.listings.filter((row) => !seen.has(row.id))), more: data.more === true };
+        });
+      }
+    } finally {
+      if (moreRef.current === controller) moreRef.current = null;
+      setLoadingMore(false);
     }
   }
 
@@ -163,6 +187,6 @@ export function MarketBrowse({ route }) {
           ? state.listings.map((listing) => h(ListingCard, { key: listing.id, listing }))
           : h("p", { className: "public-state", role: "status" }, activeFilterCount(filters) || filters.q
             ? "No discs match those filters." : "No used discs are listed right now. Members can list one with Sell a disc.")),
-    state.more ? h("button", { className: "shop-filter-reset market-more", key: "more", onClick: loadMore, type: "button" }, "Show more") : null,
+    state.more ? h("button", { className: "shop-filter-reset market-more", disabled: loadingMore, key: "more", onClick: loadMore, type: "button" }, loadingMore ? "Loading…" : "Show more") : null,
   ]);
 }

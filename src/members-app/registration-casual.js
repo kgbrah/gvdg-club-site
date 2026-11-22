@@ -133,24 +133,38 @@ function CasualRoundForm({ token, onReload }) {
 }
 
 function CasualRoundCard({ request: round, token, viewerSub, onReload }) {
+  const [busy, setBusy] = React.useState(false);
   const when = shortDateTime(round.starts_at);
+  const entries = Array.isArray(round.player_entries) ? round.player_entries : [];
   const players = Array.isArray(round.players) && round.players.length ? round.players.join(", ") : "No commitments yet";
   const count = Number(round.player_count || 0);
 
   async function joinOrLeave() {
-    const response = await request(`/casual-rounds/${encodeURIComponent(round.id)}/join`, {
-      method: round.committed ? "DELETE" : "POST",
-      token,
-      body: round.committed ? undefined : {},
-    });
-    if (response.ok) onReload();
-    else await memberAlert({
-      message: "Casual round could not be updated.",
-      title: "Round update failed",
-    });
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await request(`/casual-rounds/${encodeURIComponent(round.id)}/join`, {
+        method: round.committed ? "DELETE" : "POST",
+        token,
+        body: round.committed ? undefined : {},
+      });
+      if (response.ok) onReload();
+      else await memberAlert({
+        message: "Casual round could not be updated.",
+        title: "Round update failed",
+      });
+    } catch {
+      await memberAlert({
+        message: "Casual round could not be updated.",
+        title: "Round update failed",
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function close() {
+    if (busy) return;
     const confirmed = await memberConfirm({
       cancelText: "Keep open",
       confirmText: "Close post",
@@ -159,12 +173,22 @@ function CasualRoundCard({ request: round, token, viewerSub, onReload }) {
       tone: "danger",
     });
     if (!confirmed) return;
-    const response = await request(`/casual-rounds/${encodeURIComponent(round.id)}`, { method: "DELETE", token });
-    if (response.ok) onReload();
-    else await memberAlert({
-      message: "Casual round could not be closed.",
-      title: "Close failed",
-    });
+    setBusy(true);
+    try {
+      const response = await request(`/casual-rounds/${encodeURIComponent(round.id)}`, { method: "DELETE", token });
+      if (response.ok) onReload();
+      else await memberAlert({
+        message: "Casual round could not be closed.",
+        title: "Close failed",
+      });
+    } catch {
+      await memberAlert({
+        message: "Casual round could not be closed.",
+        title: "Close failed",
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return h("div", { className: "register-card casual-register-card" }, [
@@ -179,10 +203,21 @@ function CasualRoundCard({ request: round, token, viewerSub, onReload }) {
       ])
       : null,
     round.notes ? h("div", { className: "casual-register-note", key: "note" }, round.notes) : null,
-    h("div", { className: "casual-register-players", key: "players" }, `${count} ${count === 1 ? "player" : "players"} in - ${players}`),
+    h("div", { className: "casual-register-players", key: "players" }, entries.length
+      ? [
+        `${count} ${count === 1 ? "player" : "players"} in - `,
+        ...entries.flatMap((entry, index) => [
+          index ? ", " : null,
+          h("span", { className: "casual-player-entry", key: entry.memberId || index }, [
+            entry.name,
+            entry.memberId ? h(KarmaChip, { key: "karma", memberId: entry.memberId }) : null,
+          ]),
+        ]),
+      ]
+      : `${count} ${count === 1 ? "player" : "players"} in - ${players}`),
     h("div", { className: "register-actions", key: "actions" }, [
-      h("button", { type: "button", className: "passkey-btn", onClick: joinOrLeave, key: "join" }, round.committed ? "Leave casual round" : "Join casual round"),
-      viewerSub && round.created_by === viewerSub ? h("button", { type: "button", className: "board-link danger", onClick: close, key: "close" }, "Close") : null,
+      h("button", { type: "button", className: "passkey-btn", disabled: busy, onClick: joinOrLeave, key: "join" }, round.committed ? "Leave casual round" : "Join casual round"),
+      viewerSub && round.created_by === viewerSub ? h("button", { type: "button", className: "board-link danger", disabled: busy, onClick: close, key: "close" }, "Close") : null,
     ]),
   ]);
 }

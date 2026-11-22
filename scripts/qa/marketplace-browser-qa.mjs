@@ -70,9 +70,28 @@ async function memoryD1() {
         bind(...args) { bound = args; return stmt; },
         async all() { return { results: db.prepare(sql).all(...bound), success: true }; },
         async first() { return db.prepare(sql).get(...bound) ?? null; },
-        async run() { const info = db.prepare(sql).run(...bound); return { results: [], success: true, meta: { changes: Number(info.changes) } }; },
+        async run() {
+          if (/\bRETURNING\b/i.test(sql) || /^\s*(?:SELECT|WITH)\b/i.test(sql)) {
+            const rows = db.prepare(sql).all(...bound);
+            return { results: rows, success: true, meta: { changes: rows.length } };
+          }
+          const info = db.prepare(sql).run(...bound);
+          return { results: [], success: true, meta: { changes: Number(info.changes) } };
+        },
       };
       return stmt;
+    },
+    async batch(list) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const out = [];
+        for (const s of list) out.push(await s.run());
+        db.exec("COMMIT");
+        return out;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
     },
   };
 }
@@ -784,7 +803,7 @@ async function runBagSell() {
 }
 
 /** Giving part of a sale to the club: pledged on the sell form, shown on the card, sent from My marketplace with the
- *  club's PayPal link, confirmed by an admin, and only then +1 karma a whole dollar. */
+ *  club's PayPal link, confirmed by an admin, and only then +10 karma a whole dollar. */
 async function runDonations() {
   const P = profiles.light390;
   const seller = await open(P, { member: tokens.seller });
@@ -830,20 +849,20 @@ async function runDonations() {
   await admin.page.goto(origin + "/admin.html#marketplace", { waitUntil: "domcontentloaded" });
   const card = admin.page.locator("li[data-admin-market-donation]").first();
   await card.getByText("$4.50 from Taylor Morgan").waitFor();
-  await card.getByText("Received gives them +4 karma.", { exact: false }).waitFor();
+  await card.getByText("Received gives them +40 karma.", { exact: false }).waitFor();
   await assertFits(admin.page, "admin donation to confirm");
   await card.screenshot({ path: join(shotsDir, "flow-donation-admin-390-light.png"), animations: "disabled" });
   await card.getByRole("button", { name: "Received", exact: true }).click();
   await admin.page.getByText("No donations waiting.", { exact: false }).waitFor();
   assert.deepEqual({ ...db.raw.prepare("SELECT status, karma, amount_cents FROM market_donations WHERE deal_id = ?").get(deal.id) },
-    { status: "confirmed", karma: 4, amount_cents: 450 });
+    { status: "confirmed", karma: 40, amount_cents: 450 });
   await go(seller.page, "my-market", "[data-market-view=mine][data-market-state=ready]");
   await seller.page.locator(`[data-market-donation-deal="${deal.id}"][data-market-donation="confirmed"]`)
-    .getByText("The club received your $4.50 donation: +4 karma. Thank you!").waitFor();
-  assert.equal((await api("/lost-found/me", { token: tokens.seller })).karma.karma, 4, "the karma joins the seller's karma");
+    .getByText("The club received your $4.50 donation: +40 karma. Thank you!").waitFor();
+  assert.equal((await api("/lost-found/me", { token: tokens.seller })).karma.karma, 40, "the karma joins the seller's karma");
   await seller.context.close();
   await admin.context.close();
-  console.log("club donation: pledged 25% on the listing, sent from My marketplace, confirmed by an admin, +4 karma");
+  console.log("club donation: pledged 25% on the listing, sent from My marketplace, confirmed by an admin, +40 karma");
 }
 
 try {

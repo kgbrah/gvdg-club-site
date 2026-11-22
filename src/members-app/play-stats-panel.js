@@ -18,6 +18,8 @@ import {
 } from "../shared/play-stats.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { lazyPanel } from "./lazy-panel.js";
+import { useMemberContext } from "./member-context.js";
+import { historyLocked, MembershipNeeded } from "./membership-needed.js";
 import { MetricBar, ScoreDistribution } from "./season-charts.js";
 import { SHOT_STAT_DEFINITIONS } from "../shared/shot-stats-model.js";
 
@@ -115,7 +117,7 @@ function StatCard({ compact, row, showLeaders = true, showRank = true }) {
 }
 
 function ChipToggle({ label, options, labels, value, onChange }) {
-  return h("div", { className: "play-stats-kind", role: "tablist", "aria-label": label }, options.map((id) =>
+  return h("div", { className: "play-stats-kind", role: "group", "aria-label": label }, options.map((id) =>
     h("button", {
       "aria-pressed": value === id ? "true" : "false",
       className: value === id ? "active" : "",
@@ -245,6 +247,12 @@ export function PlayStatsGrid({ compact = false, kind, onKind, state, group, onG
 
 /** The club's own scoring (club events and casual rounds). PDGA hole scores are not used (PDGA's API terms). */
 export function PlayStatsPanel({ compact = false }) {
+  const context = useMemberContext();
+  if (historyLocked(context)) return compact ? null : h(MembershipNeeded, { what: "Scoring stats" });
+  return h(PlayStatsPanelBody, { compact });
+}
+
+function PlayStatsPanelBody({ compact = false }) {
   const state = usePlayStats();
   const [kind, setKind] = React.useState("competitive");
   const [group, setGroup] = React.useState("all");

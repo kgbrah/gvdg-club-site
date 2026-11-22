@@ -4,7 +4,7 @@
 import React from "react";
 
 import { resolveApiBase } from "../shared/api-base.js";
-import { readMemberToken } from "../shared/member-session.js";
+import { memberTokenSubject, readMemberToken } from "../shared/member-session.js";
 
 const h = React.createElement;
 export const LF_BAG_HANDOFF_KEY = "gvdg_lf_bag_handoff";
@@ -13,10 +13,14 @@ const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 const clean = (value, max) => String(value ?? "").replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, max);
 
 /** The bag disc handed over by My Bag, or null. */
-export function readBagHandoff() {
+export function readBagHandoff(expectedOwnerSub = memberTokenSubject(readMemberToken())) {
   try {
     const data = JSON.parse(sessionStorage.getItem(LF_BAG_HANDOFF_KEY) || "null");
     if (!data || !UUID.test(String(data.discId || ""))) return null;
+    if (typeof data.ownerSub === "string" && data.ownerSub && (!expectedOwnerSub || data.ownerSub !== expectedOwnerSub)) {
+      clearBagHandoff();
+      return null;
+    }
     const weight = Number(data.weightG);
     return {
       discId: data.discId, brand: clean(data.brand, 40), mold: clean(data.mold, 40), plastic: clean(data.plastic, 40), color: clean(data.color, 40),
@@ -86,7 +90,7 @@ export function bagDiscLabel(record) {
  * (still up) are left out. { status: "loading" | "ready" | "none", discs: [{ discId, label, inBag, handoff }] }.
  */
 export function bagPickChoices(practice, bag) {
-  const lostOpen = new Set((Array.isArray(bag?.lost) ? bag.lost : []).filter((row) => row && row.status !== "closed" && row.status !== "expired").map((row) => String(row.discId)));
+  const lostOpen = new Set((Array.isArray(bag?.lost) ? bag.lost : []).filter((row) => row && (row.status === "open" || row.status === "claimed")).map((row) => String(row.discId)));
   const photosOf = new Map();
   for (const photo of Array.isArray(bag?.photos) ? bag.photos : []) {
     if (!photo || !Number.isInteger(photo.id)) continue;

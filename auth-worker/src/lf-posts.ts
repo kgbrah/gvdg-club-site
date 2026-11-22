@@ -223,7 +223,7 @@ function runMatching(c: MarketCtx, id: number, kind: string): void {
 export async function editPost(c: MarketCtx, id: number): Promise<Response> {
   const row = await ownPost(c, id);
   if (row instanceof Response) return row;
-  const status = str(row, "status");
+  const status = postStatus(row);
   if (status !== "open" && status !== "claimed") return fail(c, 409, "not_open");
   const kind = str(row, "kind");
   const ink = kind === "lost"
@@ -254,7 +254,7 @@ export async function editPost(c: MarketCtx, id: number): Promise<Response> {
   const result = await c.env.DB.prepare(
     `UPDATE lf_posts SET brand = ?, mold = ?, plastic = ?, color = ?, course_id = ?, course_name = ?, area = ?, weight_g = ?, hole = ?,
        event_date = ?, holding = ?, bin_note = ?, reward_note = ?, private_ink = ?, updated_at = datetime('now')
-     WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed')`,
+     WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed') AND (status <> 'open' OR expires_at > datetime('now'))`,
   ).bind(v.brand, v.mold, v.plastic, v.color, v.courseId, courseName, v.area, v.weightG, v.hole, v.eventDate, v.holding, v.binNote,
     v.rewardNote, v.privateInk, id, c.actor!.id).run();
   if (!changed(result)) return fail(c, 409, "not_open");
@@ -268,18 +268,24 @@ export async function addPostPhoto(c: MarketCtx, id: number): Promise<Response> 
   const row = await ownPost(c, id);
   if (row instanceof Response) return row;
   if (!c.env.PHOTOS) return fail(c, 503, "storage_unavailable");
-  const status = str(row, "status");
+  const status = postStatus(row);
   if (status !== "open" && status !== "claimed") return fail(c, 409, "not_open");
   const body = (await readJson(c.request, PHOTO_BODY_BYTES)) ?? {};
   const images = photosFrom([body.image], 1, 1);
   if (!images) return fail(c, 400, "invalid_photo");
   const kind = str(row, "kind");
+  const maxPhotos = kind === "found" ? MAX_FOUND_PHOTOS : MAX_LOST_PHOTOS;
   const count = await c.env.DB.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(sort_order), -1) AS last FROM lf_photos WHERE post_id = ? AND status <> 'removed'")
     .bind(id).first<{ n: number; last: number }>();
-  if (Number(count?.n) >= (kind === "found" ? MAX_FOUND_PHOTOS : MAX_LOST_PHOTOS)) return fail(c, 409, "too_many_photos");
+  if (Number(count?.n) >= maxPhotos) return fail(c, 409, "too_many_photos");
   const blocked = await limited(c, "lfphoto:" + c.actor!.id, 20, 3600);
   if (blocked) return blocked;
-  await storePhotos(c, { ownerId: c.actor!.id, postId: id }, images, Number(count?.last ?? -1) + 1);
+  const stored = await storePhotos(c, { ownerId: c.actor!.id, postId: id }, images, Number(count?.last ?? -1) + 1, maxPhotos);
+  if (stored.rejected) {
+    const latest = await getPostRow(c.env, id);
+    const liveStatus = latest ? postStatus(latest) : "closed";
+    return fail(c, 409, liveStatus !== "open" && liveStatus !== "claimed" ? "not_open" : "too_many_photos");
+  }
   await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "photo_add" });
   runMatching(c, id, kind);
   return ok(c, { post: await postDetail(c, (await getPostRow(c.env, id))!) });
@@ -289,11 +295,13 @@ export async function closePost(c: MarketCtx, id: number): Promise<Response> {
   const row = await ownPost(c, id);
   if (row instanceof Response) return row;
   const actor = c.actor!;
+  const status = postStatus(row);
+  if (status !== "open" && status !== "claimed") return fail(c, 409, "not_open");
   const returning = await c.env.DB.prepare("SELECT 1 AS hit FROM lf_claims WHERE found_id = ? AND status = 'returned'").bind(id).first();
   if (returning) return fail(c, 409, "return_in_progress");
   const result = await c.env.DB.prepare(
     `UPDATE lf_posts SET status = 'closed', close_reason = 'owner', closed_at = datetime('now'), updated_at = datetime('now')
-     WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed')`,
+     WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed') AND (status <> 'open' OR expires_at > datetime('now'))`,
   ).bind(id, actor.id).run();
   if (!changed(result)) return fail(c, 409, "not_open");
   const claims = (await c.env.DB.prepare("SELECT id, owner_id FROM lf_claims WHERE found_id = ? AND status = 'open'").bind(id).all<{ id: number; owner_id: string }>()).results ?? [];
@@ -317,11 +325,14 @@ export async function turnInPost(c: MarketCtx, id: number): Promise<Response> {
   const row = await ownPost(c, id);
   if (row instanceof Response) return row;
   if (str(row, "kind") !== "found") return fail(c, 409, "not_found_post");
+  const status = postStatus(row);
+  if (status !== "open" && status !== "claimed") return fail(c, 409, "not_open");
   const body = (await readJson(c.request)) ?? {};
   const note = parseBinNote(body.binNote);
   if (!note) return fail(c, 400, "invalid_post", "binNote");
   const result = await c.env.DB.prepare(
-    `UPDATE lf_posts SET holding = 'club_bin', bin_note = ?, updated_at = datetime('now') WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed')`,
+    `UPDATE lf_posts SET holding = 'club_bin', bin_note = ?, updated_at = datetime('now')
+     WHERE id = ? AND owner_id = ? AND status IN ('open', 'claimed') AND (status <> 'open' OR expires_at > datetime('now'))`,
   ).bind(note, id, c.actor!.id).run();
   if (!changed(result)) return fail(c, 409, "not_open");
   await logClaim(c.env, { postId: id, actorId: c.actor!.id, action: "turn_in", note });

@@ -80,9 +80,23 @@ export async function runKarmaWatch(env: Env, now = Date.now(), ctx: { waitUntil
       "INSERT INTO karma_flags (member_id, day, rounds) VALUES (?, ?, ?) ON CONFLICT(member_id, day) DO NOTHING RETURNING id",
     ).bind(entry.memberId, entry.day, entry.rounds).first<{ id: number }>();
     if (!created) {
-      // Already flagged: keep the count current while an admin hasn't looked yet.
+      // Keep the count current while open; if more suspicious rounds finish after a clear, reopen for admin review.
       await env.DB.prepare("UPDATE karma_flags SET rounds = ? WHERE member_id = ? AND day = ? AND status = 'open' AND rounds < ?")
         .bind(entry.rounds, entry.memberId, entry.day, entry.rounds).run();
+      const reopened = await env.DB.prepare(
+        `UPDATE karma_flags SET status = 'open', rounds = ?, reviewed_at = NULL, reviewed_by = NULL, review_note = NULL
+         WHERE member_id = ? AND day = ? AND status = 'cleared' AND rounds < ? RETURNING id`,
+      ).bind(entry.rounds, entry.memberId, entry.day, entry.rounds).first<{ id: number }>();
+      if (reopened) {
+        flagged += 1;
+        const member = await getMember(env.ROSTER, entry.memberId).catch(() => null);
+        notifyAdmins(ctx ?? {}, env, {
+          title: "Unusual karma",
+          body: `${member?.name || "A member"} finished ${entry.rounds} rounds on ${dayLabel(entry.day)} (more than ${ROUNDS_PER_DAY} a day). Please review it.`,
+          url: "/admin.html#lost-found",
+          tag: "karma-flag:" + reopened.id,
+        });
+      }
       continue;
     }
     flagged += 1;
@@ -147,7 +161,7 @@ export async function undoKarmaPenalty(c: MarketCtx, adminId: string, id: number
     notifyPerson(c.env, c.ctx, flag.member_id, {
       title: "Karma restored",
       body: `A club admin took another look at your rounds on ${dayLabel(flag.day)} and gave back the ${taken} karma that was removed. Sorry about that!`,
-      refKey: "karma-flag:" + id + ":undone", hash: "mine",
+      refKey: "karma-flag:" + id + ":undone", hash: "mine", memberHref: "/gvdg-members.html#account",
     });
   }
   return ok(c, { ok: true, restored: taken });
@@ -185,7 +199,7 @@ export async function reviewKarmaFlag(c: MarketCtx, adminId: string, id: number,
     notifyPerson(c.env, c.ctx, flag.member_id, {
       title: "Karma adjusted",
       body: `A club admin reviewed your ${rounds} rounds on ${dayLabel(flag.day)} and took back their ${rounds} karma, plus a ${penalty} karma penalty for gaming the system. Contact a club admin if this is a mistake.`,
-      refKey: "karma-flag:" + id + ":penalized", hash: "mine",
+      refKey: "karma-flag:" + id + ":penalized", hash: "mine", memberHref: "/gvdg-members.html#account",
     });
   }
   return ok(c, { ok: true, removed: decision === "penalize" ? rounds : 0, penalty: decision === "penalize" ? rounds * PENALTY_MULTIPLIER : 0 });

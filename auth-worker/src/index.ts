@@ -147,7 +147,11 @@ export default {
       const messages = await handleMemberMessages(request, env, origin, pathname, method, ctx);
       if (messages) return messages;
       // Round history and stats: members, admins, and guests with a promo spot (guest-accounts.ts).
-      if ((pathname === "/my-results" || pathname === "/my-play-history" || pathname === "/my-play-export" || pathname === "/my-ratings") && method === "GET") {
+      if (
+        ((pathname === "/my-results" || pathname === "/my-play-history" || pathname === "/my-play-export" || pathname === "/my-ratings" || pathname === "/play-stats") && method === "GET") ||
+        (pathname === "/me/udisc-history" && (method === "GET" || method === "POST" || method === "DELETE")) ||
+        (/^\/me\/udisc-history\/\d+$/.test(pathname) && method === "DELETE")
+      ) {
         const blocked = await historyGate(request, env, origin);
         if (blocked) return blocked;
       }

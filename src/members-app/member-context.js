@@ -1,9 +1,12 @@
 import React from "react";
 
 import { NAME_KEY, PDGA_KEY, TOKEN_KEY, requestJson, storageGet } from "./api.js";
+import { memberTokenSubject } from "../shared/member-session.js";
 import { shownProfilePhoto } from "../shared/profile-photo.js";
 
 let memberContext = {};
+let meTokenLoaded = "";
+let meInFlight = null;
 
 function membershipFrom(value) {
   if (!value || typeof value !== "object" || !Number.isInteger(value.throughYear)) return null;
@@ -46,7 +49,7 @@ export function readMemberContext(detail = null) {
     photo: shownProfilePhoto(source.photo) || shownProfilePhoto(stored.photo) || null,
     isAdmin: source.isAdmin === true || stored.isAdmin === true,
     membership: membershipFrom(source.membership) || membershipFrom(stored.membership),
-    sub: source.sub || stored.sub || null,
+    sub: source.sub || stored.sub || memberTokenSubject(storageGet(TOKEN_KEY)) || null,
     // Routing events (e.g. gvdg:member-dashboard-ready) carry no `welcome`; only an explicit value may change
     // it, otherwise a just-approved member's welcome card vanished whenever that event landed after /me.
     welcome: source.welcome === undefined ? stored.welcome === true : source.welcome === true,
@@ -73,35 +76,53 @@ export function useMemberContext() {
     };
   }, []);
 
+  const token = storageGet(TOKEN_KEY);
   React.useEffect(() => {
-    const token = storageGet(TOKEN_KEY);
-    if (!token || context.pdgaNo) return undefined;
+    if (!token) {
+      meTokenLoaded = "";
+      meInFlight = null;
+      return undefined;
+    }
+    if (memberContext.sub && memberContext.name && meTokenLoaded === token) return undefined;
 
-    const controller = new AbortController();
-    requestJson("/me", { signal: controller.signal, token })
-      .then((profile) => {
-        if (!profile || typeof profile !== "object") return;
-        const next = setMemberContext({
-          name: profile.name || storageGet(NAME_KEY) || null,
-          pdgaNo: profile.pdgaNo || storageGet(PDGA_KEY) || null,
-          photo: profile.photo || null,
-          isAdmin: profile.isAdmin === true,
-          membership: profile.membership || null,
-          sub: profile.sub || null,
-          welcome: profile.welcome === true,
-          // Keep the email fields too: without them this refresh wiped the email for every screen.
-          email: profile.email || null,
-          needsEmail: profile.needsEmail === true,
-          emailRequired: profile.emailRequired === true,
+    let active = true;
+    const loadMe = () => {
+      if (meInFlight && meInFlight.token === token) return meInFlight.promise;
+      const promise = requestJson("/me", { token })
+        .then((profile) => {
+          meTokenLoaded = token;
+          if (!profile || typeof profile !== "object") return readMemberContext();
+          return setMemberContext({
+            name: profile.name || storageGet(NAME_KEY) || null,
+            pdgaNo: profile.pdgaNo || storageGet(PDGA_KEY) || null,
+            photo: profile.photo || null,
+            isAdmin: profile.isAdmin === true,
+            membership: profile.membership || null,
+            sub: profile.sub || null,
+            welcome: profile.welcome === true,
+            // Keep the email fields too: without them this refresh wiped the email for every screen.
+            email: profile.email || null,
+            needsEmail: profile.needsEmail === true,
+            emailRequired: profile.emailRequired === true,
+          });
+        })
+        .finally(() => {
+          if (meInFlight && meInFlight.token === token && meInFlight.promise === promise) meInFlight = null;
         });
-        setContext(next);
+      meInFlight = { token, promise };
+      return promise;
+    };
+
+    loadMe()
+      .then((next) => {
+        if (active && next) setContext(next);
       })
-      .catch((error) => {
-        if (error.name !== "AbortError") setContext(readMemberContext());
+      .catch(() => {
+        if (active) setContext(readMemberContext());
       });
 
-    return () => controller.abort();
-  }, [context.pdgaNo]);
+    return () => { active = false; };
+  }, [token]);
 
   return context;
 }

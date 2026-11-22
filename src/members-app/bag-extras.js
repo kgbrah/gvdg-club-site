@@ -12,6 +12,7 @@ import { resizeImageFile } from "../shared/image-resize.js";
 import { openPhotoInput, useCameraCapture, useCameraMode } from "../public-app/photo-add.js";
 import { LF_BAG_HANDOFF_KEY } from "../public-app/lf-bag.js";
 import { sellFromBag } from "../public-app/market-bag.js";
+import { memberTokenSubject, readMemberToken } from "../shared/member-session.js";
 import { ACCESSORY_KINDS } from "../shared/market-model.js";
 import { memberConfirm } from "./member-dialogs.js";
 
@@ -140,20 +141,23 @@ const LOST_STATUS = { open: "Reported lost", claimed: "Someone says they have it
 
 /** "I lost this disc", or where its lost post stands (with a link). */
 export function BagDiscLost({ disc, record, extras }) {
+  const context = useMemberContext();
   if (extras.status !== "ready" || record.archived) return null;
   const lost = extras.lost.find((row) => row.discId === disc.id);
-  if (lost && lost.status !== "closed" && lost.status !== "expired") {
+  if (lost && (lost.status === "open" || lost.status === "claimed")) {
     return h("p", { className: "player-card-meta bag-lost-status", "data-bag-lost": lost.status }, [
       h("strong", { key: "status" }, LOST_STATUS[lost.status] || "Reported lost"), " · ",
       h("a", { href: "lost-found.html#post/" + lost.postId, key: "link" }, "View post"),
     ]);
   }
+  const ownerSub = context.sub || memberTokenSubject(readMemberToken());
   function report() {
     const photos = extras.photos.filter((photo) => photo.discId === disc.id).map((photo) => photo.id);
     try {
       sessionStorage.setItem(LF_BAG_HANDOFF_KEY, JSON.stringify({
         discId: disc.id, brand: record.brand || "", mold: record.model || "", plastic: record.plastic || "", color: record.color || "",
         weightG: record.weightGrams == null ? "" : String(Math.round(record.weightGrams)), ink: record.ink || "", photos,
+        ...(ownerSub ? { ownerSub } : {}),
       }));
     } catch {
       /* the form still opens, just without the bag details */
@@ -181,7 +185,11 @@ export function BagSell({ itemRef, item, extras, label = "Sell this" }) {
       h("a", { href: "pro-shop.html#market/listing/" + listing.listingId, key: "link" }, "View listing"),
     ]);
   }
-  return h("button", { className: "dashboard-action bag-sell-button", "data-bag-sell": itemRef, onClick: () => sellFromBag({ ref: itemRef, ...item() }), type: "button" }, [
+  const ownerSub = context.sub || memberTokenSubject(readMemberToken());
+  return h("button", {
+    className: "dashboard-action bag-sell-button", "data-bag-sell": itemRef,
+    onClick: () => sellFromBag({ ref: itemRef, ...item(), ...(ownerSub ? { ownerSub } : {}) }), type: "button",
+  }, [
     h(Tag, { "aria-hidden": true, key: "icon", size: 16 }), label,
   ]);
 }
@@ -189,7 +197,7 @@ export function BagSell({ itemRef, item, extras, label = "Sell this" }) {
 /** "Sell this" on a saved bag disc (not while it's reported lost). */
 export function BagDiscSell({ disc, record, extras }) {
   const lost = extras.lost.find((row) => row.discId === disc.id);
-  if (lost && lost.status !== "closed" && lost.status !== "expired") return null;
+  if (lost && (lost.status === "open" || lost.status === "claimed")) return null;
   return h(BagSell, {
     extras, itemRef: "disc:" + disc.id,
     item: () => ({
@@ -306,7 +314,7 @@ export function BagAccessories({ token, extras }) {
   const done = () => { setEditing(null); extras.refresh(); };
   async function remove(item) {
     const confirmed = await memberConfirm({
-      title: "Delete this accessory?", message: "Its photos are deleted too.", confirmText: "Delete accessory", danger: true,
+      title: "Delete this accessory?", message: "Its photos are deleted too.", confirmText: "Delete accessory", tone: "danger",
     });
     if (!confirmed) return;
     setError("");

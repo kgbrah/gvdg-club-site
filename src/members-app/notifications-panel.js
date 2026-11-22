@@ -88,7 +88,7 @@ export function MemberNotificationsPanel() {
       const subscription = (await registration.pushManager.getSubscription())
         || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey.current) });
       const json = subscription.toJSON();
-      const saved = await api(token, "/me/push-subscription", "PUT", { endpoint: json.endpoint, keys: json.keys, prefs: { bagTags: true } });
+      const saved = await api(token, "/me/push-subscription", "PUT", { endpoint: json.endpoint, keys: json.keys, prefs: { bagTags, messages } });
       if (!saved.ok) throw new Error("subscribe failed");
       setBagTags(saved.data.prefs?.bagTags !== false);
       setMessages(saved.data.prefs?.messages !== false);
@@ -107,7 +107,10 @@ export function MemberNotificationsPanel() {
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
-      if (subscription) await api(token, "/me/push-subscription", "DELETE", { endpoint: subscription.endpoint });
+      if (subscription) {
+        const removed = await api(token, "/me/push-subscription", "DELETE", { endpoint: subscription.endpoint });
+        if (!removed.ok) throw new Error("unsubscribe failed");
+      }
       setState("off");
     } catch {
       setMessage("Could not turn notifications off. Try again.");
@@ -125,6 +128,7 @@ export function MemberNotificationsPanel() {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       const json = subscription && subscription.toJSON();
+      if (!json?.endpoint) throw new Error("missing subscription");
       const saved = await api(token, "/me/push-subscription", "PUT", {
         endpoint: json.endpoint,
         keys: json.keys,

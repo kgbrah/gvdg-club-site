@@ -117,6 +117,7 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
     }
 
     setAuthBusy("login", "passkey", true);
+    let succeeded = false;
     try {
       const prefetched = passkeyPrefetch;
       passkeyPrefetch = null;
@@ -162,6 +163,7 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
       }
       const data = await verifyResponse.json();
       writeMemberSessionValue(TOKEN_KEY, data.token);
+      succeeded = true;
       applyProfile(data);
       if (data.mustChangePin) showPinChange();
       else showMembersContent(data.name);
@@ -171,7 +173,7 @@ export function createPasskeyController({ api, showMembersContent, showPinChange
         : "Passkey sign-in failed. Use your PIN instead.");
     } finally {
       setAuthBusy("login", "passkey", false);
-      void prefetchPasskey();
+      if (!succeeded) void prefetchPasskey();
     }
   }
 

@@ -204,15 +204,38 @@ export function postPayload(kind, draft, photos) {
   return body;
 }
 
+function validEventDate(value, { keepEventDate = false, now = Date.now() } = {}) {
+  const date = String(value ?? "").trim();
+  if (!date) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const at = Date.parse(date + "T12:00:00Z");
+  if (!Number.isFinite(at) || new Date(at).toISOString().slice(0, 10) !== date) return false;
+  if (at > now + 36 * 3_600_000) return false;
+  if (!keepEventDate && at < now - 366 * 86_400_000) return false;
+  return true;
+}
+
 /** The first problem with a draft, as { field, text }, or null. Mirrors the Worker's rules. */
-export function validatePost(kind, draft, photoCount) {
+export function validatePost(kind, draft, photoCount, { keepEventDate = false, now = Date.now() } = {}) {
   const value = (key) => String(draft?.[key] ?? "").trim();
   for (const key of ["brand", "mold", "plastic", "color"]) {
     if (value(key).length > LF_LIMITS[key]) return { field: key, text: "That's too long." };
   }
   if (value("area").length > LF_LIMITS.areaDetail) return { field: "area", text: "That's too long." };
+  const weightRaw = value("weightG");
+  if (weightRaw) {
+    const weight = /^\d{1,3}$/.test(weightRaw) ? Number(weightRaw) : NaN;
+    if (!Number.isInteger(weight) || weight < 100 || weight > 200) {
+      return { field: "weightG", text: "Enter a whole weight between 100 and 200 grams." };
+    }
+  }
+  if (!validEventDate(draft?.eventDate, { keepEventDate, now })) {
+    return { field: "eventDate", text: "Pick a date within the past year (and not in the future)." };
+  }
   if (kind === "found" && photoCount < 1) return { field: "photos", text: "Add at least one photo of the disc." };
   if (kind === "found" && draft?.holding === "club_bin" && !value("binNote")) return { field: "binNote", text: "Say which club bin you left it in." };
+  if (kind === "found" && value("binNote").length > LF_LIMITS.binNote) return { field: "binNote", text: "That's too long." };
+  if (kind !== "found" && value("rewardNote").length > LF_LIMITS.rewardNote) return { field: "rewardNote", text: "That's too long." };
   if (kind === "lost" && !value("brand") && !value("mold") && !value("color") && !value("privateInk")) {
     return { field: "mold", text: "Add the mold, brand, colour or what's written on it so we can match it." };
   }

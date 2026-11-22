@@ -43,8 +43,10 @@ export function MarketWantedList({ route }) {
   const [q, setQ] = React.useState(route.query.get("q") || "");
   const [type, setType] = React.useState("");
   const [state, setState] = React.useState({ status: "loading", wanted: [], more: false });
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
   const [query, setQuery] = React.useState("");
+  const moreRef = React.useRef(null);
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -57,20 +59,42 @@ export function MarketWantedList({ route }) {
   }, [q, type]);
 
   React.useEffect(() => {
+    moreRef.current?.abort();
+    moreRef.current = null;
+    setLoadingMore(false);
     const controller = new AbortController();
     setState((current) => ({ ...current, status: "loading" }));
     marketRequest("/market/wanted" + query, { signal: controller.signal }).then(({ ok, data }) => {
       if (ok && Array.isArray(data.wanted)) setState({ status: "ready", wanted: data.wanted, more: data.more === true });
       else setState((current) => ({ ...current, status: "error" }));
     }).catch(() => {});
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      moreRef.current?.abort();
+      moreRef.current = null;
+    };
   }, [query, attempt]);
 
   async function loadMore() {
-    const params = new URLSearchParams(query.slice(1));
-    params.set("offset", String(state.wanted.length));
-    const { ok, data } = await marketRequest("/market/wanted?" + params);
-    if (ok && Array.isArray(data.wanted)) setState((current) => ({ ...current, wanted: current.wanted.concat(data.wanted), more: data.more === true }));
+    if (loadingMore) return;
+    moreRef.current?.abort();
+    const controller = new AbortController();
+    moreRef.current = controller;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams(query.slice(1));
+      params.set("offset", String(state.wanted.length));
+      const { ok, data } = await marketRequest("/market/wanted?" + params, { signal: controller.signal });
+      if (!controller.signal.aborted && ok && Array.isArray(data.wanted)) {
+        setState((current) => {
+          const seen = new Set(current.wanted.map((row) => row.id));
+          return { ...current, wanted: current.wanted.concat(data.wanted.filter((row) => !seen.has(row.id))), more: data.more === true };
+        });
+      }
+    } finally {
+      if (moreRef.current === controller) moreRef.current = null;
+      setLoadingMore(false);
+    }
   }
 
   return h("section", { "data-market-state": state.status, "data-market-view": "wanted" }, [
@@ -94,7 +118,7 @@ export function MarketWantedList({ route }) {
         : h("div", { className: "product-grid market-grid", key: "grid" }, state.wanted.length
           ? state.wanted.map((wanted) => h(WantedCard, { key: wanted.id, wanted }))
           : h("p", { className: "public-state", role: "status" }, q || type ? "No WANTED posts match." : "No WANTED posts right now.")),
-    state.more ? h("button", { className: "shop-filter-reset market-more", key: "more", onClick: loadMore, type: "button" }, "Show more") : null,
+    state.more ? h("button", { className: "shop-filter-reset market-more", disabled: loadingMore, key: "more", onClick: loadMore, type: "button" }, loadingMore ? "Loading…" : "Show more") : null,
   ]);
 }
 
@@ -262,6 +286,9 @@ export function MarketWantedNew() {
     });
   }
 
+  const postRef = React.useRef(post);
+  postRef.current = post;
+
   const field = (key, label, input) => h("div", { className: "market-field", key }, [h("label", { htmlFor: "wanted-" + key, key: "label" }, label), input]);
   const text = (key, extra = {}) => h("input", { id: "wanted-" + key, key: "input", maxLength: LIMITS[key] || 40, onChange: (event) => set(key, event.target.value), type: "text", value: draft[key], ...extra });
 
@@ -271,7 +298,16 @@ export function MarketWantedNew() {
     h(IdentityStrip, { key: "identity", viewer: config.viewer }),
     h("form", {
       "aria-label": "Post a WANTED", className: "my-orders-panel market-panel market-form", key: "form", noValidate: true,
-      onSubmit: (event) => { event.preventDefault(); identity.require("Verify your email to post a WANTED", post); },
+      onSubmit: (event) => {
+        event.preventDefault();
+        const parsed = wantedPayload(draft);
+        if (!parsed.ok) {
+          action.setMessage({ text: parsed.message, tone: "error" });
+          document.getElementById("wanted-" + parsed.field)?.focus();
+          return;
+        }
+        identity.require("Verify your email to post a WANTED", () => postRef.current());
+      },
     }, [
       h(VoiceDiscButton, { example: "Try: “Champion Teebird3.”", fields: ["brand", "mold", "plastic"], key: "voice", onFields: heard }),
       h("div", { className: "market-grid-2", key: "names" }, [

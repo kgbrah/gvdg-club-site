@@ -216,7 +216,7 @@ function discActions(row, workspace, onEdit, setError) {
       title: "Delete this archived disc?",
       message: "The disc can be deleted after its measured throws are removed.",
       confirmText: "Delete disc",
-      danger: true,
+      tone: "danger",
     });
     if (confirmed) setError(workspace.stage("disc", { id: row.id, action: "delete", expectedRevision: row.revision }));
   }
@@ -511,7 +511,7 @@ function PracticeHistory({ kind, workspace }) {
       title: kind === "throw" ? "Delete this throw?" : "Delete this putting session?",
       message: "This removes the record from your practice history.",
       confirmText: "Delete record",
-      danger: true,
+      tone: "danger",
     });
     if (!confirmed) return;
     setError(workspace.stage(kind, { id: row.id, action: "delete", expectedRevision: row.revision }));

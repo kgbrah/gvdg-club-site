@@ -6,13 +6,14 @@ import {
   SELLER_EMAIL_HINT, SELLER_EMAIL_LABEL, sellHeading, validEmail,
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
-import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig, canList, GUEST_TIER_NOTE } from "./market-ui.js";
+import { LoadState, MarketPhoto, Note, StatusLine, useAction, useMarketConfig, canList, GUEST_TIER_NOTE, reloadMarketConfig } from "./market-ui.js";
 import { announceMarketChange } from "./market-listing.js";
 import { PhotoAddButtons } from "./photo-add.js";
 import { BrandPick, ColorPick, MoldInput, PlasticPick, VoiceDiscButton, WeightPick } from "./disc-fields.js";
 import { plasticsFor } from "../shared/disc-catalog.js";
 import { BagPhoto } from "./lf-bag.js";
 import { clearMarketBagHandoff, readMarketBagHandoff } from "./market-bag.js";
+import { memberTokenExpired, readMemberToken } from "../shared/member-session.js";
 
 const h = React.createElement;
 const MAX_PHOTOS = 4;
@@ -109,13 +110,25 @@ function withBrand(current, brand) {
 export function MarketSell({ editId = null, fromBag = false }) {
   const config = useMarketConfig();
   const viewer = config.viewer;
-  const [bag] = React.useState(() => (editId == null && fromBag ? readMarketBagHandoff() : null));
+  const [bag, setBag] = React.useState(() => {
+    if (editId != null || !fromBag) return null;
+    const token = readMemberToken();
+    return token && !memberTokenExpired(token) ? readMarketBagHandoff() : null;
+  });
   const bagItem = bag && viewer.kind === "member" ? bag : null;
   const [draft, setDraft] = React.useState(() => (bag ? {
     ...EMPTY_DRAFT, itemKind: bag.itemKind, gearType: bag.gearType, brand: bag.brand, mold: bag.mold, plastic: bag.plastic, color: bag.color, weightG: bag.weightG,
   } : EMPTY_DRAFT));
   // A bag item's photos start on the listing (the Worker copies them when it's posted); new ones go after them.
   const [photos, setPhotos] = React.useState(() => (bag ? bag.photos.map((id) => ({ bagId: id, key: "bag-" + id })) : []));
+  React.useEffect(() => {
+    if (config.status === "ready" && viewer.kind !== "member" && bag) {
+      setBag(null);
+      setPhotos((current) => current.filter((photo) => !photo.bagId));
+      clearMarketBagHandoff();
+      setDraft(EMPTY_DRAFT);
+    }
+  }, [config.status, viewer.kind, bag]);
   const [loadState, setLoadState] = React.useState(editId ? "loading" : "ready");
   const [settingsMissing, setSettingsMissing] = React.useState(false);
   // A member needs a buyer-alert email before listing; asked for right here when it's missing.
@@ -153,7 +166,25 @@ export function MarketSell({ editId = null, fromBag = false }) {
     return () => controller.abort();
   }, [editId, editing]);
 
-  const set = (key, value) => setDraft((current) => (key === "brand" ? withBrand(current, value) : { ...current, [key]: value }));
+  const set = (key, value) => {
+    if (key === "itemKind") {
+      if (bag && value !== bag.itemKind) {
+        setBag(null);
+        setPhotos((current) => current.filter((photo) => !photo.bagId));
+      }
+      setDraft((current) => ({
+        ...current,
+        itemKind: value,
+        gearType: value === "accessory" ? current.gearType : "",
+        plastic: value === "disc" ? current.plastic : "",
+        discType: value === "disc" ? current.discType : "",
+        weightG: value === "disc" ? current.weightG : "",
+        ...(value === "disc" ? {} : { speed: "", glide: "", turn: "", fade: "" }),
+      }));
+      return;
+    }
+    setDraft((current) => (key === "brand" ? withBrand(current, value) : { ...current, [key]: value }));
+  };
   const heard = (fields) => setDraft((current) => {
     const next = fields.brand ? withBrand(current, fields.brand) : { ...current };
     for (const key of ["mold", "plastic", "color", "weightG"]) if (fields[key]) next[key] = fields[key];
@@ -262,6 +293,7 @@ export function MarketSell({ editId = null, fromBag = false }) {
   ]);
 
   if (config.status === "loading") return shell([h(LoadState, { key: "load", state: "loading" })]);
+  if (config.status === "error") return shell([h(LoadState, { key: "config-error", onRetry: () => { void reloadMarketConfig(); }, state: "error" })]);
   if (viewer.kind === "member" && !canList(viewer)) {
     return shell([h("div", { className: "my-orders-panel market-panel", "data-market-guest-tier": "true", key: "guest" }, [
       h(Note, { key: "note" }, GUEST_TIER_NOTE),

@@ -1,6 +1,6 @@
-import { NAME_KEY, PDGA_KEY, storageGet } from "./api.js";
+import { NAME_KEY, PDGA_KEY, TOKEN_KEY, storageGet } from "./api.js";
 import { setMemberContext } from "./member-context.js";
-import { writeMemberSessionValue } from "../shared/member-session.js";
+import { memberTokenSubject, writeMemberSessionValue } from "../shared/member-session.js";
 
 let memberProfile = {
   isAdmin: false,
@@ -23,7 +23,7 @@ export function memberDashboardContext() {
     name: memberProfile.name || storageGet(NAME_KEY) || null,
     pdgaNo: memberProfile.pdgaNo || storageGet(PDGA_KEY) || null,
     photo: memberProfile.photo || null,
-    sub: memberProfile.sub || null,
+    sub: memberProfile.sub || memberTokenSubject(storageGet(TOKEN_KEY)) || null,
     welcome: memberProfile.welcome === true,
     email: memberProfile.email || null,
     needsEmail: memberProfile.needsEmail === true,
@@ -42,14 +42,14 @@ export function publishMemberProfile(detail = memberDashboardContext()) {
 
 export function applyProfile(data = {}) {
   memberProfile = {
-    isAdmin: data.isAdmin === true,
+    isAdmin: data.isAdmin === undefined ? memberProfile.isAdmin === true : data.isAdmin === true,
     membership: data.membership ? data.membership : memberProfile.membership,
     name: data.name || memberProfile.name || null,
-    pdgaNo: data.pdgaNo || null,
-    photo: data.photo || null,
-    sub: data.sub || memberProfile.sub || null,
-    udisc: data.udisc || null,
-    welcome: data.welcome === true,
+    pdgaNo: data.pdgaNo === undefined ? memberProfile.pdgaNo || null : data.pdgaNo || null,
+    photo: data.photo === undefined ? memberProfile.photo || null : data.photo || null,
+    sub: data.sub || memberProfile.sub || memberTokenSubject(storageGet(TOKEN_KEY)) || null,
+    udisc: data.udisc === undefined ? memberProfile.udisc || null : data.udisc || null,
+    welcome: data.welcome === undefined ? memberProfile.welcome === true : data.welcome === true,
     // Older payloads have no email fields: keep what we knew.
     email: data.email === undefined ? memberProfile.email || null : data.email || null,
     needsEmail: data.needsEmail === undefined ? memberProfile.needsEmail === true : data.needsEmail === true,
@@ -57,8 +57,10 @@ export function applyProfile(data = {}) {
   };
 
   if (data.name) writeMemberSessionValue(NAME_KEY, data.name);
-  if (data.pdgaNo) writeMemberSessionValue(PDGA_KEY, data.pdgaNo);
-  else writeMemberSessionValue(PDGA_KEY, "");
+  if (data.pdgaNo !== undefined) {
+    if (data.pdgaNo) writeMemberSessionValue(PDGA_KEY, data.pdgaNo);
+    else writeMemberSessionValue(PDGA_KEY, "");
+  }
 
   publishMemberProfile();
 }

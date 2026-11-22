@@ -546,7 +546,7 @@ async function checkBagExtras(page) {
   await card.getByRole("button", { name: "I lost this disc" }).click();
   await page.waitForURL(/lost-found\.html#new\/lost\?from=bag$/);
   const handoff = await page.evaluate(() => JSON.parse(sessionStorage.getItem("gvdg_lf_bag_handoff") || "null"));
-  assert.deepEqual(handoff, { discId: saved.id, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Orange", weightG: "172", ink: "QA One 555-0100", photos: [] });
+  assert.deepEqual(handoff, { discId: saved.id, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Orange", weightG: "172", ink: "QA One 555-0100", photos: [], ownerSub: "qa-one" });
   assert.doesNotMatch(page.url(), /555|QA One/, "the private writing never goes in the address");
   await page.unroute(/lost-found\.html/);
   // Reported lost: the card says so and links to the post.
@@ -580,11 +580,11 @@ async function checkBagExtras(page) {
   await card.getByRole("button", { name: "Sell this" }).waitFor();
   if (bagEvidence) await card.screenshot({ path: join(bagEvidence, "bag-disc-actions-390.png") });
   assert.deepEqual(await sellFrom(() => card.getByRole("button", { name: "Sell this" })),
-    { ref: "disc:" + saved.id, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Orange", weightG: "172", photos: [] });
+    { ref: "disc:" + saved.id, brand: "MVP", mold: "Wave", plastic: "Neutron", color: "Orange", weightG: "172", photos: [], ownerSub: "qa-one" });
   assert.doesNotMatch(page.url(), /555|QA One|Wave/, "nothing about the disc goes in the address");
-  assert.deepEqual(await sellFrom(() => page.locator("[data-bag-whole]").getByRole("button", { name: "Sell my bag" })), { ref: "bag", photos: [wholePhoto] });
+  assert.deepEqual(await sellFrom(() => page.locator("[data-bag-whole]").getByRole("button", { name: "Sell my bag" })), { ref: "bag", photos: [wholePhoto], ownerSub: "qa-one" });
   assert.deepEqual(await sellFrom(() => page.locator("[data-bag-accessory='99']").getByRole("button", { name: "Sell this" })),
-    { ref: "accessory:99", gearType: "cart", mold: "Zuca all-terrain cart", photos: [] });
+    { ref: "accessory:99", gearType: "cart", mold: "Zuca all-terrain cart", photos: [], ownerSub: "qa-one" });
   await page.unroute(/pro-shop\.html/);
   // Listed: the card says so and links to the listing instead.
   bag("qa-one").listings = [{ ref: "disc:" + saved.id, listingId: 77, status: "active" }, { ref: "accessory:99", listingId: 78, status: "pending" }];

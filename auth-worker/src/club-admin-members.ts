@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { clearAccountLocks } from "./account-recovery.js";
+import { releaseGuestPromo } from "./guest-accounts.js";
 import { json, readJson } from "./http.js";
 import { asStr } from "./input.js";
 import { generatePin, hashPin } from "./crypto.js";
@@ -87,6 +88,8 @@ export async function handleAdminMembers(
     const tempPin = generatePin();
     const m = await resetMemberPin(env.ROSTER, identifier, await hashPin(tempPin, env.PIN_PEPPER));
     if (!m) return json({ error: "not_found" }, 404, origin);
+    // Clear lockouts alongside issuing a temp PIN so an admin reset lets the member sign in right away.
+    try { await clearAccountLocks(env, m); } catch { /* lockouts are best-effort */ }
     return json({ tempPin, member: pub(m) }, 200, origin);
   }
 
@@ -120,6 +123,9 @@ export async function handleAdminMembers(
     if (was === "admin" && (await countAdmins(env.ROSTER as unknown as KVListLike)) === 0) {
       await setMemberTier(env.ROSTER, memberId, "admin");
       return json({ error: "last_admin" }, 409, origin);
+    }
+    if (was === "guest" && tier !== "guest") {
+      try { await releaseGuestPromo(env, memberId); } catch { /* promo row optional */ }
     }
     console.log(JSON.stringify({ evt: "tier_change", actor: adminId, target: memberId, from: was, to: tier, at: Date.now() }));
     return json({ member: pub(updated) }, 200, origin);
@@ -228,6 +234,7 @@ export async function handleAdminMembers(
       }
     }
     if (await env.ROSTER.get(`wa:creds:${memberId}`)) await env.ROSTER.delete(`wa:creds:${memberId}`);
+    try { await releaseGuestPromo(env, memberId); } catch { /* promo row optional */ }
     try {
       await env.DB.prepare("DELETE FROM member_push_subscriptions WHERE member_id = ?").bind(memberId).run();
     } catch { /* push rows are optional */ }

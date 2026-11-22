@@ -161,7 +161,7 @@ export function MemberAccountPage() {
             h("span", { key: "n" }, context.name || "Club membership"),
             h(KarmaChip, { key: "karma", memberId: context.sub || "" }),
           ])),
-          h("p", { className: "player-card-meta", key: "meta" }, context.pdgaNo ? "PDGA #" + context.pdgaNo : "Greenville DGC member"),
+          h("p", { className: "player-card-meta", key: "meta" }, context.pdgaNo ? "PDGA #" + context.pdgaNo : context.membership?.guest ? "Guest account" : "Greenville DGC member"),
           membershipAccountLine(context.membership)
             ? h("p", { className: "player-card-meta", key: "dues" }, membershipAccountLine(context.membership))
             : null,

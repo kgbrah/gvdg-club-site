@@ -1,9 +1,14 @@
 import { destination, readAppRoute, navigationHref } from "../shared/app-navigation.js";
 import { readMemberContext } from "./member-context.js";
 
-let selected = { tab: "overview", eventId: null, courseId: null };
+let selected = typeof window !== "undefined" ? readAppRoute("member", window.location) : { tab: "overview", eventId: null, courseId: null };
 let routerInstalled = false;
 let dashboardOpen = false;
+let suppressPop = false;
+
+export function suppressNextRouterPop() {
+  suppressPop = true;
+}
 
 function dashboardDetail(route, extra = {}) {
   return { ...readMemberContext(extra), ...route, title: destination("member", route.tab).label, scroll: extra.scroll === true };
@@ -59,7 +64,13 @@ export function installDashboardRouter() {
   window.addEventListener("gvdg:member-shell-view", (event) => {
     if (event.detail?.view !== "members") dashboardOpen = false;
   });
-  const followUrl = () => { if (dashboardOpen) syncDashboardLocation(); };
+  const followUrl = (event) => {
+    if (event?.type === "popstate" && suppressPop) {
+      suppressPop = false;
+      return;
+    }
+    if (dashboardOpen) syncDashboardLocation();
+  };
   window.addEventListener("popstate", followUrl);
   window.addEventListener("hashchange", followUrl);
 }

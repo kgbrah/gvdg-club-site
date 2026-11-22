@@ -1,6 +1,6 @@
 import React from "react";
 import { request } from "./api.js";
-import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
+import { readMemberToken, memberTokenExpired, memberTokenSubject, TOKEN_KEY } from "../shared/member-session.js";
 import { drainRoundJournal, resetJournalRetries } from "../score-app/round-recovery.js";
 import { createPracticeStorage, EMPTY_PRACTICE, isPracticeSnapshot, practiceDraftView } from "./practice-model.js";
 
@@ -28,14 +28,32 @@ export function usePracticeWorkspace(token, open) {
   const activePage = React.useRef(open);
   activePage.current = open;
   const [credentialVersion, credentialChanged] = React.useReducer((version) => version + 1, 0);
+  const verifiedRef = React.useRef("");
   React.useEffect(() => {
-    if (!token || token !== readMemberToken() || owner) return undefined;
+    if (!token || token !== readMemberToken()) return undefined;
     let cancelled = false;
+    const offlineSub = memberTokenSubject(token);
+    if (!owner && !navigator.onLine && offlineSub && !memberTokenExpired(token)) {
+      setIdentity({ token, owner: offlineSub });
+    }
     async function identify() {
-      if (cancelled || token !== readMemberToken() || !navigator.onLine) return;
+      if (cancelled || token !== readMemberToken()) return;
+      if (!navigator.onLine) {
+        const sub = memberTokenSubject(token);
+        if (!owner && sub && !memberTokenExpired(token)) setIdentity({ token, owner: sub });
+        return;
+      }
+      if (verifiedRef.current === token && owner) return;
       const result = await practiceRequest("/me", { token });
+      if (cancelled || token !== readMemberToken()) return;
+      if (result.status === 401) {
+        verifiedRef.current = "";
+        setIdentity(null);
+        return;
+      }
       const sub = result.data?.sub;
-      if (!cancelled && token === readMemberToken() && result.ok && typeof sub === "string" && sub && result.data.mustChangePin !== true) {
+      if (result.ok && typeof sub === "string" && sub && result.data.mustChangePin !== true) {
+        verifiedRef.current = token;
         setIdentity({ token, owner: sub });
       }
     }

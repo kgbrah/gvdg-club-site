@@ -319,6 +319,12 @@ function UdiscRoundRow({ item, onRemove }) {
 }
 
 export function UdiscHistory({ token }) {
+  const context = useMemberContext();
+  if (historyLocked(context)) return h(MembershipNeeded, { what: "UDisc history" });
+  return h(UdiscHistoryBody, { token });
+}
+
+function UdiscHistoryBody({ token }) {
   const [state, setState] = React.useState({ status: "loading", rounds: [], stats: null });
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState("");
@@ -338,7 +344,7 @@ export function UdiscHistory({ token }) {
         });
       })
       .catch((err) => {
-        if (err.name !== "AbortError") setState((prev) => ({ status: "ready", rounds: prev.rounds, stats: prev.stats }));
+        if (err.name !== "AbortError") setState((prev) => ({ status: "error", rounds: prev.rounds, stats: prev.stats }));
       });
     return () => controller.abort();
   }, [token]);
@@ -474,8 +480,8 @@ export function UdiscHistory({ token }) {
           onClick: removeAll,
         }, "Remove all"),
       ])
-      : h("p", { className: "player-card-meta", key: "empty" },
-        state.status === "loading" ? "Checking imported rounds…" : "No UDisc rounds imported yet."),
+      : h("p", { className: state.status === "error" ? "player-card-meta player-play-error" : "player-card-meta", key: "empty", role: state.status === "error" ? "alert" : undefined },
+        state.status === "loading" ? "Checking imported rounds…" : state.status === "error" ? "Could not load UDisc history." : "No UDisc rounds imported yet."),
     ]),
   ]);
 }
@@ -502,7 +508,7 @@ function PlayHistoryBody({ token }) {
         setState({ status: "ready", items: recentPlayRounds(casual), handicaps: myLayoutHandicaps(casual) });
       })
       .catch((error) => {
-        if (error.name !== "AbortError") setState({ status: "ready", items: [], handicaps: [] });
+        if (error.name !== "AbortError") setState({ status: "error", items: [], handicaps: [] });
       });
     return () => controller.abort();
   }, [token]);
@@ -514,16 +520,16 @@ function PlayHistoryBody({ token }) {
       state.handicaps.length
         ? h("div", { className: "handicap-list", key: "list" }, state.handicaps.map((item) =>
           h(HandicapRow, { item, key: item.layoutId })))
-        : h("p", { className: "player-card-meta", key: "empty" },
-          state.status === "loading" ? "Checking finished rounds…" : "No handicap yet."),
+        : h("p", { className: state.status === "error" ? "player-card-meta player-play-error" : "player-card-meta", key: "empty", role: state.status === "error" ? "alert" : undefined },
+          state.status === "loading" ? "Checking finished rounds…" : state.status === "error" ? "Could not load club handicap." : "No handicap yet."),
     ]),
     h("section", { className: "player-card", "data-react-play-recent": state.status, key: "recent" }, [
       h("h3", { key: "title" }, "Recent rounds"),
       state.items.length
         ? h("div", { className: "live-round-list", key: "list" }, state.items.map((item) =>
           h(RecentRoundCard, { item, key: item.code })))
-        : h("p", { className: "player-card-meta", key: "empty" },
-          state.status === "loading" ? "Looking up finished cards…" : "No finished rounds yet."),
+        : h("p", { className: state.status === "error" ? "player-card-meta player-play-error" : "player-card-meta", key: "empty", role: state.status === "error" ? "alert" : undefined },
+          state.status === "loading" ? "Looking up finished cards…" : state.status === "error" ? "Could not load recent rounds." : "No finished rounds yet."),
     ]),
   ]);
 }

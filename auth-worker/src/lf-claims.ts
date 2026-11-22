@@ -17,12 +17,15 @@ import { parseMessage } from "./lf-input.js";
 import { lfUrl, notifyPerson } from "./lf-notify.js";
 import {
   KARMA_PER_RETURN, MATCH_COLUMNS, POST_COLUMNS, getClaimRow, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards,
-  postTitle, strength,
+  postStatus, postTitle, strength,
 } from "./lf-store.js";
 import { requirePerson } from "./lf-posts.js";
 import { emailConfigured, isGuestId, sendMarketEmail, traderEmail } from "./market-notify.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
-import { ensureTrader, num, str, viewerOf, type Actor, type Row } from "./market-store.js";
+import { ensureTrader, num, sellerSettings, str, viewerOf, type Actor, type Row } from "./market-store.js";
+import type { Env } from "./env.js";
+import { getMember } from "./roster.js";
+import { decryptEmail } from "./market-crypto.js";
 import { sendMemberDirectMessage } from "./member-messages.js";
 import { bagDisc, bagDiscLabel } from "./bag-routes.js";
 import { guestLinkUrl } from "./guest-link.js";
@@ -94,12 +97,41 @@ export async function claimPost(c: MarketCtx, postId: number): Promise<Response>
   return openClaim(c, me, postId, match);
 }
 
+async function emailsOfPerson(env: Env, personId: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  const add = (raw: string | null | undefined) => {
+    const clean = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    if (clean) out.add(clean);
+  };
+  if (isGuestId(personId)) {
+    const row = await env.DB.prepare("SELECT email_enc FROM market_guests WHERE id = ?")
+      .bind(Number(personId.slice(3))).first<{ email_enc: string }>();
+    if (row) add(await decryptEmail(env.JWT_SECRET, row.email_enc).catch(() => null));
+  } else {
+    const [member, settings] = await Promise.all([
+      getMember(env.ROSTER, personId).catch(() => null),
+      sellerSettings(env, personId).catch(() => null),
+    ]);
+    add(member?.email);
+    add(settings?.notifyEmail);
+  }
+  return out;
+}
+
+async function sameEmailIdentity(env: Env, finderId: string, ownerId: string): Promise<boolean> {
+  const [a, b] = await Promise.all([emailsOfPerson(env, finderId), emailsOfPerson(env, ownerId)]);
+  for (const email of a) if (b.has(email)) return true;
+  return false;
+}
+
 async function openClaim(c: MarketCtx, me: Actor, postId: number, match: Row | null): Promise<Response> {
   const post = await getPostRow(c.env, postId);
   if (!post || num(post, "hidden") === 1 || str(post, "kind") !== "found") return fail(c, 404, "not_found");
   const finderId = str(post, "owner_id");
   if (finderId === me.id) return fail(c, 403, "own_post");
-  if (!["open", "claimed"].includes(str(post, "status"))) return fail(c, 409, "not_open");
+  const liveStatus = postStatus(post);
+  if (!["open", "claimed"].includes(liveStatus)) return fail(c, 409, "not_open");
+  if (await sameEmailIdentity(c.env, finderId, me.id)) return fail(c, 403, "own_post");
   const body = (await readJson(c.request)) ?? {};
   const typed = body.message == null || body.message === "" ? "" : parseMessage(body.message);
   if (typed == null) return fail(c, 400, "invalid_claim", "message");
@@ -112,13 +144,23 @@ async function openClaim(c: MarketCtx, me: Actor, postId: number, match: Row | n
   let claimId = 0;
   try {
     const inserted = await c.env.DB.prepare(
-      `INSERT INTO lf_claims (found_id, lost_id, match_id, finder_id, owner_id, message) VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
-    ).bind(postId, match?.lost_id ?? null, match ? num(match, "id") : null, finderId, me.id, message).first<{ id: number }>();
+      `INSERT INTO lf_claims (found_id, lost_id, match_id, finder_id, owner_id, message)
+       SELECT ?, ?, ?, ?, ?, ?
+       WHERE EXISTS (
+         SELECT 1 FROM lf_posts WHERE id = ? AND hidden = 0 AND kind = 'found'
+           AND (status = 'claimed' OR (status = 'open' AND expires_at > datetime('now')))
+       )
+       RETURNING id`,
+    ).bind(postId, match?.lost_id ?? null, match ? num(match, "id") : null, finderId, me.id, message, postId).first<{ id: number }>();
     claimId = Number(inserted?.id) || 0;
   } catch {
     claimId = 0;
   }
-  if (!claimId) return fail(c, 409, "already_claimed");
+  if (!claimId) {
+    const dup = await c.env.DB.prepare("SELECT 1 FROM lf_claims WHERE found_id = ? AND owner_id = ? AND status IN ('open', 'returned')")
+      .bind(postId, me.id).first();
+    return fail(c, 409, dup ? "already_claimed" : "not_open");
+  }
   if (match) {
     await c.env.DB.prepare("UPDATE lf_matches SET status = 'claimed', updated_at = datetime('now') WHERE id = ?").bind(num(match, "id")).run();
   }
@@ -337,6 +379,7 @@ export async function claimAction(c: MarketCtx, id: number, action: string): Pro
   } else if (action === "confirm") {
     if (!byOwner) return fail(c, 404, "not_found");
     if (finderId === ownerId) return fail(c, 403, "own_post");
+    if (await sameEmailIdentity(c.env, finderId, ownerId)) return fail(c, 403, "own_post");
     const result = await c.env.DB.prepare(
       "UPDATE lf_claims SET status = 'confirmed', confirmed_at = datetime('now'), closed_at = datetime('now') WHERE id = ? AND owner_id = ? AND status = 'returned'",
     ).bind(id, me.id).run();
@@ -374,13 +417,16 @@ export async function claimAction(c: MarketCtx, id: number, action: string): Pro
   } else if (action === "cancel" || action === "decline") {
     if ((action === "cancel" && !byOwner) || (action === "decline" && !byFinder)) return fail(c, 404, "not_found");
     const next = action === "cancel" ? "cancelled" : "declined";
-    const result = await c.env.DB.prepare(`UPDATE lf_claims SET status = ?, closed_at = datetime('now') WHERE id = ? AND status = 'open'`)
-      .bind(next, id).run();
-    if (!changed(result)) return fail(c, 409, "not_open");
-    const remaining = await c.env.DB.prepare("SELECT 1 AS hit FROM lf_claims WHERE found_id = ? AND status IN ('open', 'returned')").bind(foundId).first();
-    if (!remaining) {
-      await c.env.DB.prepare("UPDATE lf_posts SET status = 'open', updated_at = datetime('now') WHERE id = ? AND status = 'claimed'").bind(foundId).run();
-    }
+    const batchResults = await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE lf_claims SET status = ?, closed_at = datetime('now') WHERE id = ? AND status = 'open'`)
+        .bind(next, id),
+      c.env.DB.prepare(
+        `UPDATE lf_posts SET status = 'open', updated_at = datetime('now')
+         WHERE id = ? AND status = 'claimed'
+           AND NOT EXISTS (SELECT 1 FROM lf_claims WHERE found_id = ? AND status IN ('open', 'returned'))`,
+      ).bind(foundId, foundId),
+    ]);
+    if (!batchResults[0] || !changed(batchResults[0])) return fail(c, 409, "not_open");
     await logClaim(c.env, { claimId: id, postId: foundId, actorId: me.id, action, from: "open", to: next });
     notifyPerson(c.env, c.ctx, byOwner ? finderId : ownerId, {
       title: "Lost & Found claim closed",

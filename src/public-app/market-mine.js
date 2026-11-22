@@ -6,9 +6,9 @@ import {
 } from "../shared/market-model.js";
 import { errorMessage, marketRequest } from "./market-api.js";
 import { FeedbackForm, FeedbackItem } from "./market-feedback.js";
-import { BuyerDealPanel, OfferRow, RelistControl, SellerDealPanel } from "./market-listing.js";
+import { BuyerDealPanel, OfferRow, RelistControl, SellerDealPanel, announceMarketChange } from "./market-listing.js";
 import {
-  GuestGate, IdentityStrip, LoadState, MarketPhoto, Note, StatusChip, StatusLine, TraderLine, useAction, useIdentityVersion, useMarketConfig, canList, GUEST_TIER_NOTE,
+  GuestGate, IdentityStrip, LoadState, MarketPhoto, Note, StatusChip, StatusLine, TraderLine, useAction, useIdentityVersion, useMarketConfig, canList, GUEST_TIER_NOTE, reloadMarketConfig,
 } from "./market-ui.js";
 import { CloseWantedButton, WantedReplies } from "./market-wanted.js";
 
@@ -53,7 +53,7 @@ function FeedbackToLeave({ deal, onDone }) {
   ]);
 }
 
-function RecentDeal({ deal, onChange }) {
+function RecentDeal({ deal, onChange, viewer }) {
   const mine = deal.feedback?.mine;
   const theirs = deal.feedback?.theirs;
   return h("li", { className: "market-deal", "data-market-recent-deal": deal.id }, [
@@ -64,8 +64,8 @@ function RecentDeal({ deal, onChange }) {
       deal.completedAt ? " · " + shortDate(deal.completedAt) : "",
     ]),
     mine || theirs ? h("ul", { className: "market-feedback-list", key: "feedback" }, [
-      mine ? h(FeedbackItem, { feedback: mine, key: "mine", onChange, showSubject: true }) : null,
-      theirs ? h(FeedbackItem, { feedback: theirs, key: "theirs", onChange }) : null,
+      mine ? h(FeedbackItem, { feedback: mine, key: "mine", onChange, showSubject: true, viewer }) : null,
+      theirs ? h(FeedbackItem, { feedback: theirs, key: "theirs", onChange, viewer }) : null,
     ]) : null,
   ]);
 }
@@ -92,8 +92,10 @@ function DonationPanel({ deal, onChange }) {
   async function markSent() {
     await action.run(async () => {
       const { ok, data } = await marketRequest(`/market/deals/${deal.id}/donation`, { body: { amountCents: cents }, method: "POST" });
-      if (ok) onChange();
-      else action.setMessage({ text: errorMessage(data), tone: "error" });
+      if (ok) {
+        announceMarketChange();
+        onChange();
+      } else action.setMessage({ text: errorMessage(data), tone: "error" });
     });
   }
   const form = [
@@ -140,6 +142,7 @@ function SettingsForm({ settings, onSaved }) {
       if (ok && data.settings) {
         setDraft({ paypalMe: data.settings.paypalMe || "", cashtag: data.settings.cashtag || "", zelle: zelleDisplay(data.settings.zelle || ""), notifyEmail: data.settings.notifyEmail || "" });
         action.setMessage({ text: "Payment settings saved.", tone: "success" });
+        announceMarketChange();
         onSaved?.();
       } else if (data.error === "invalid_settings") {
         action.setMessage({ text: "Check the " + ({ paypalMe: "PayPal.me", cashtag: "Cash App", zelle: "Zelle", notifyEmail: "email" }[data.field] || "payment") + " field.", tone: "error" });
@@ -211,6 +214,12 @@ export function MarketMine() {
   ];
   const status = config.status === "loading" ? "loading" : state.status;
 
+  if (config.status === "error") {
+    return h("section", { "data-market-state": "error", "data-market-view": "mine" }, [
+      ...head,
+      h(LoadState, { key: "config-error", onRetry: () => { void reloadMarketConfig(); }, state: "error" }),
+    ]);
+  }
   if (config.status !== "loading" && !signedIn) {
     return h("section", { "data-market-state": "ready", "data-market-view": "mine" }, [
       ...head,
@@ -261,7 +270,7 @@ export function MarketMine() {
     status === "ready" && toLeave.length ? h(Panel, { count: toLeave.length, id: "feedback-to-leave", key: "to-leave", title: "Feedback to leave" },
       h("ul", { className: "market-deals" }, toLeave.map((deal) => h(FeedbackToLeave, { deal, key: deal.id, onDone: reload })))) : null,
     status === "ready" && recent.length ? h(Panel, { id: "recent", key: "recent", title: "Recent deals" },
-      h("ul", { className: "market-deals" }, recent.map((deal) => h(RecentDeal, { deal, key: deal.id, onChange: reload })))) : null,
+      h("ul", { className: "market-deals" }, recent.map((deal) => h(RecentDeal, { deal, key: deal.id, onChange: reload, viewer })))) : null,
     status === "ready" && viewer.kind === "member" ? h(Panel, { id: "listings", key: "listings", title: "My listings" }, listings.length
       ? h("ul", { className: "market-my-listings" }, listings.map((listing) => h(MyListingRow, { key: listing.id, listing, onChange: reload })))
       : canList(viewer) ? h(Note, null, ["You haven't listed a disc yet. ", h("a", { className: "market-link", href: "#market/sell", key: "sell" }, "Sell a disc")])
