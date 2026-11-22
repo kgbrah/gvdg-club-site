@@ -225,4 +225,13 @@ test("Batch 5 UI components preserve hooks order, error retries, navigation clea
 
   const more = readFileSync("src/members-app/more-page.js", "utf8");
   assert.match(more, /Guest account/);
+
+  const authCtrl = readFileSync("src/members-app/member-auth-controller.js", "utf8");
+  assert.match(authCtrl, /function finishApply\(\)[\s\S]*?\bshowLogin\(\)/);
+
+  const memberCtx = readFileSync("src/members-app/member-context.js", "utf8");
+  assert.match(memberCtx, /if\s*\(storageGet\(TOKEN_KEY\) !== token\)\s*return readMemberContext\(\)/);
+
+  const lfForm = readFileSync("src/public-app/lf-form.js", "utf8");
+  assert.match(lfForm, /LF_MAX_PHOTOS\[kind\] - \(fromBag \? bagChosen\.length : 0\)/);
 });

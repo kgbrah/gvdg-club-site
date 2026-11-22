@@ -446,7 +446,7 @@ function RoundTools(props) {
       !props.offline && h(RoundTalk, {
         inline: true,
         key: "talk",
-        live: true,
+        live: props.status !== "final" && !(props.finish && props.finish.status === "final"),
         players: (Array.isArray(props.rows) ? props.rows : []).map((row) => row && row.label).filter(Boolean),
         karmaKeys: Object.fromEntries((Array.isArray(props.rows) ? props.rows : []).filter((row) => row && row.label).map((row) => [row.label, row.karmaKey || ""])),
         viewer: "card",
@@ -587,8 +587,11 @@ function useDeviceFix() {
       shotFixRef.current = next;
       const prev = fixRef.current;
       // Phone GPS jitters a few meters. Repainting on every tick reloads the
-      // hole picture. Keep the last fix until the phone actually moves.
-      if (prev && Math.abs(prev.lat - lat) < 0.00008 && Math.abs(prev.lng - lng) < 0.00008) return;
+      // hole picture. Keep the last fix until the phone moves or accuracy meaningfully improves.
+      const prevAcc = Number.isFinite(prev?.accuracyM) ? prev.accuracyM : Infinity;
+      const nextAcc = Number.isFinite(next.accuracyM) ? next.accuracyM : Infinity;
+      const improvedAccuracy = nextAcc < prevAcc - 1 || (prevAcc > 15 && nextAcc <= 15);
+      if (prev && !improvedAccuracy && Math.abs(prev.lat - lat) < 0.00008 && Math.abs(prev.lng - lng) < 0.00008) return;
       fixRef.current = next;
       setFix(next);
       setStatus("ready");
@@ -1539,8 +1542,9 @@ export function ScorecardView(props) {
     setPinnedFocus((current) => (current === id ? null : id));
   }
   function onMarkLie() {
-    if (gps.fix) {
-      persistThrows((rows) => addThrow(rows, gps.fix, 0));
+    const currentFix = gps.getShotFix() || gps.fix;
+    if (currentFix) {
+      persistThrows((rows) => addThrow(rows, currentFix, 0));
       return;
     }
     gps.enableGps();
@@ -1549,16 +1553,17 @@ export function ScorecardView(props) {
     persistThrows(undoThrow);
   }
   function onMapMark(kind) {
-    if (!gps.fix) {
+    const currentFix = gps.getShotFix() || gps.fix;
+    if (!currentFix) {
       gps.enableGps();
       return;
     }
-    if (Number.isFinite(gps.fix.accuracyM) && gps.fix.accuracyM > 25) {
-      if (typeof props.onMapMark === "function") props.onMapMark(kind, holeNumber, gps.fix, "gps_inaccurate");
+    if (Number.isFinite(currentFix.accuracyM) && currentFix.accuracyM > 25) {
+      if (typeof props.onMapMark === "function") props.onMapMark(kind, holeNumber, currentFix, "gps_inaccurate");
       return;
     }
     if (typeof props.onMapMark === "function") {
-      props.onMapMark(kind, holeNumber, gps.fix);
+      props.onMapMark(kind, holeNumber, currentFix);
     }
   }
   function onScore(source, hole, strokes, step) {

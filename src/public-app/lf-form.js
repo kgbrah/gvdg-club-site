@@ -328,7 +328,7 @@ export function NewPost({ kind, route, edit = null }) {
       }) : null,
       editing ? h(EditPhotos, { key: "edit-photos", onError: (message) => action.setMessage({ text: message, tone: "error" }), photos: remotePhotos, post: edit, setPhotos: setRemotePhotos }) : null,
       editing ? null : h(PhotoPicker, {
-        key: "photos", max: Math.max(0, LF_MAX_PHOTOS[kind] - bagChosen.length), min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
+        key: "photos", max: Math.max(0, LF_MAX_PHOTOS[kind] - (fromBag ? bagChosen.length : 0)), min: found ? 1 : 0, onError: (message) => action.setMessage({ text: message, tone: "error" }), photos, setPhotos,
         hint: found ? "Show the top and the bottom. Photos are resized on your phone and location data is removed." : "Optional: a photo of the same disc or one like it.",
         cameraHint: found ? "The top of the disc, then the bottom. Cover any name or phone number." : "Your disc, or one just like it.",
         legend: found ? "Photos (1 to 3)" : "Photos (optional, up to 2)",

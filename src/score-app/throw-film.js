@@ -750,10 +750,12 @@ function ThrowFilmSheet(props) {
   }, [draft, player.key, player.currentScore, props.par, props.putting]);
 
   React.useEffect(() => () => {
-    window.clearInterval(timerRef.current);
-    if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
     if (clipUrl) URL.revokeObjectURL(clipUrl);
   }, [clipUrl]);
+  React.useEffect(() => () => {
+    window.clearInterval(timerRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+  }, []);
 
   const dropRef = React.useRef(false);
 

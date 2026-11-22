@@ -502,10 +502,11 @@ function PlayHistoryBody({ token }) {
     }
     const controller = new AbortController();
     setState({ status: "loading", items: [], handicaps: [] });
-    requestJson("/my-results", { token, signal: controller.signal })
+    requestJson("/my-results?all=1", { token, signal: controller.signal })
       .then((data) => {
         const casual = data?.casual;
-        setState({ status: "ready", items: recentPlayRounds(casual), handicaps: myLayoutHandicaps(casual) });
+        const combined = [...(Array.isArray(casual) ? casual : []), ...(Array.isArray(data?.results) ? data.results : [])];
+        setState({ status: "ready", items: recentPlayRounds(casual), handicaps: myLayoutHandicaps(combined) });
       })
       .catch((error) => {
         if (error.name !== "AbortError") setState({ status: "error", items: [], handicaps: [] });

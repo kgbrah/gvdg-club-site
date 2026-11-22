@@ -294,6 +294,23 @@ describe("Batch 5: D1KV, ConsistentKV, Promo Pool & UDisc Normalization", () => 
 
     await releaseGuestPromo(env, "none");
   });
+
+  it("clamps code TTL to >= 60s when saving wrong-try recovery state on fallback Workers KV", async () => {
+    const origPut = ratelimit.put.bind(ratelimit);
+    await origPut("acct:pinreset:m_ada", JSON.stringify({ hash: "0".repeat(64), tries: 0, expiresAt: Date.now() + 20_000 }));
+    const seenTtls: number[] = [];
+    ratelimit.put = async (key: string, value: string, opts?: { expirationTtl?: number }) => {
+      if (opts?.expirationTtl != null) {
+        if (opts.expirationTtl < 60) throw new Error("Invalid expiration_ttl");
+        seenTtls.push(opts.expirationTtl);
+      }
+      await origPut(key, value);
+    };
+    const res = await call("/pin-reset/verify", "POST", undefined, { identifier: "101", code: "000000", newPin: "5678" });
+    expect(res.status).toBe(400);
+    expect(res.data.error).toBe("invalid_code");
+    expect(seenTtls.some((ttl) => ttl >= 60)).toBe(true);
+  });
 });
 
 describe("Batch 5: Messages, Practice, Marketplace & Lost-Found Atomicity", () => {

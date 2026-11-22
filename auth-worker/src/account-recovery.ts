@@ -62,7 +62,9 @@ type StoredCode = { hash: string; tries: number; email?: string; expiresAt?: num
 
 async function saveCode(env: Env, key: string, row: StoredCode, expiresAt = Date.now() + CODE_TTL_SEC * 1000): Promise<void> {
   const remainingSec = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
-  await env.RATELIMIT.put(key, JSON.stringify({ ...row, expiresAt }), { expirationTtl: remainingSec });
+  // Workers KV rejects expirationTtl < 60, whereas D1KV honors sub-minute TTLs; row.expiresAt still enforces exact expiry on read.
+  const ttlSec = env.RATELIMIT_BACKEND === "d1" ? remainingSec : Math.max(60, remainingSec);
+  await env.RATELIMIT.put(key, JSON.stringify({ ...row, expiresAt }), { expirationTtl: ttlSec });
 }
 
 async function readCode(env: Env, key: string): Promise<StoredCode | null> {

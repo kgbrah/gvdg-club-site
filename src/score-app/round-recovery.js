@@ -105,13 +105,32 @@ export function createRoundJournal(storage, scope, { now = Date.now, uuid = () =
   };
 }
 
+function recoveryEntryKey(item) {
+  if (!item || !item.body) return "";
+  const body = item.body;
+  if (item.kind === "throws") return "throws:" + (body.scorerIndex ?? "") + ":" + (body.hole ?? "");
+  if (item.kind === "score") return "score:" + (body.scorerIndex ?? "") + ":" + (body.targetId ?? body.index ?? "") + ":" + (body.hole ?? "");
+  return String(item.kind || "");
+}
+
 /** Drain strictly in order, re-reading the journal after each acknowledgement. */
 export async function drainRoundJournal(journal, send, {
   now = Date.now, active = () => true, online = () => true, onResult = () => {},
 } = {}) {
   while (active() && online()) {
     const items = journal.entries();
-    const item = items.find((row) => row.state !== "error");
+    const blockedKeys = new Set();
+    let item = null;
+    for (const row of items) {
+      const key = recoveryEntryKey(row);
+      if (row.state === "error") {
+        if (key) blockedKeys.add(key);
+        continue;
+      }
+      if (key && blockedKeys.has(key)) continue;
+      item = row;
+      break;
+    }
     if (!item || item.state === "auth") return null;
     if (item.nextAt > now()) return item.nextAt;
     const result = await send(item);

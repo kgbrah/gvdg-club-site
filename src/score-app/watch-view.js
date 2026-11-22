@@ -457,7 +457,7 @@ export function WatchView(props) {
           h(LeaderboardTable, {
             clipApi: film.api, clipHoles: props.holes, clipGeneration: props.generation, clips: film.clips,
             isDoubles: props.isDoubles, isMatchplay: props.isMatchplay, isPutting: props.isPutting, key: "table",
-            relClass: props.relClass, relText: props.relText, standings, onHole: focusHole,
+            relClass: props.relClass, relText: props.relText, standings, status: props.status, onHole: focusHole,
           }),
         ]),
         props.roundSharingApi ? h(WatchSharingDetails, { api: props.roundSharingApi, key: "sharing", onCopyWatch: props.onOwnerCopyWatch }) : null,

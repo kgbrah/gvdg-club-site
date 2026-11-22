@@ -90,6 +90,7 @@ export function useMemberContext() {
       if (meInFlight && meInFlight.token === token) return meInFlight.promise;
       const promise = requestJson("/me", { token })
         .then((profile) => {
+          if (storageGet(TOKEN_KEY) !== token) return readMemberContext();
           meTokenLoaded = token;
           if (!profile || typeof profile !== "object") return readMemberContext();
           return setMemberContext({

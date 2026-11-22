@@ -208,6 +208,13 @@ export async function claimChallenge(
   return row != null;
 }
 
+/** Reopens a claimed challenge to pending when post-claim settlement fails. */
+export async function reopenChallenge(db: D1Like, id: number): Promise<void> {
+  await db.prepare(
+    "UPDATE bag_tag_challenges SET status = 'pending', closed_note = NULL, closed_at = NULL WHERE id = ? AND status = 'settled'",
+  ).bind(id).run();
+}
+
 export interface BagRequestRow {
   series_id: number;
   member_id: string;

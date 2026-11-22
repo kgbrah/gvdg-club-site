@@ -123,6 +123,7 @@ export function holePlayStats(hole, throws, score) {
   const reg = par != null && par > 0 ? regulationStrokes(par) : null;
   const putting = [];
   let regulationLie = null;
+  let measuredRegDistance = null;
   if (hasLedgerEntries) {
     if (rows.length !== strokes || !rows.every((row) => row?.kind === "penalty" ||
       (row?.kind === "throw" && row.attempt !== "unknown" && (row.outcome === "missed" || row.outcome === "made")))) return stats;
@@ -138,6 +139,13 @@ export function holePlayStats(hole, throws, score) {
       const step = rows[reg - 1];
       const next = rows[reg];
       regulationLie = step.outOfBounds === true ? null : point(step.landing) ? step.landing : (next?.kind === "throw" ? next.origin : null);
+      if (step.outOfBounds !== true && !regulationLie && next?.kind === "throw") {
+        const measured = finite(next.puttDistanceFt);
+        if (measured != null && measured >= 0) {
+          const meters = measured / 3.28084;
+          measuredRegDistance = { min: meters, max: meters };
+        }
+      }
     }
     for (const row of rows) {
       if (row.kind === "throw" && row.attempt === "putt") {
@@ -160,7 +168,7 @@ export function holePlayStats(hole, throws, score) {
     }
   }
 
-  const regulationDistance = observedRange(regulationLie, hasLedgerEntries ? basketSource : basket);
+  const regulationDistance = measuredRegDistance || observedRange(regulationLie, hasLedgerEntries ? basketSource : basket);
   stats.c1r = within(regulationDistance, CIRCLE1_M);
   stats.c2r = within(regulationDistance, CIRCLE2_M);
   stats.parked = within(regulationDistance, PARKED_FT / 3.28084);

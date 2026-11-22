@@ -26,6 +26,7 @@ export type FinalizeLiveEventInput = {
   readonly force: boolean;
   readonly persist: () => Promise<void>;
   readonly broadcast: () => void;
+  readonly onCommitted?: () => void;
 };
 
 export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<Response> {
@@ -69,14 +70,15 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     forced = incomplete;
     standings = finalizeRoundStandings({ holes, players: input.players, config: scoring.config, targets: scoring.targets });
   }
+  const isPutting = scoring.config.scoringStyle === "putting";
   const shotArchives = new Map<string, Record<number, ArchivedShotLedger>>();
   standings = standings.map((standing) => {
     const merged = mergePartnerPlayInputs(partnersForStanding(standing, input.players));
-    const explicit = input.shotLedgers && finalizedShotLedger(input.shotLedgers, input.players, standing, meta, holes, merged.throws);
+    const explicit = !isPutting && input.shotLedgers ? finalizedShotLedger(input.shotLedgers, input.players, standing, meta, holes, merged.throws) : null;
     if (explicit && standing.memberId) shotArchives.set(standing.memberId, explicit.archive);
     return {
       ...standing,
-      breakdown: explicit ? { ...standing.breakdown, ...explicit.stats } : withPlayBreakdown(standing.breakdown, merged, holes),
+      breakdown: isPutting ? standing.breakdown : (explicit ? { ...standing.breakdown, ...explicit.stats } : withPlayBreakdown(standing.breakdown, merged, holes)),
       holes: attachThrowsToScorecard(standing.holes, merged.throws),
     };
   });
@@ -104,6 +106,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
         throw error;
       }
     }
+    await input.onCommitted?.();
     await input.persist();
     input.broadcast();
     await persistRatingsBestEffort(input.env, meta); // ratings never gate the finalize
@@ -139,6 +142,7 @@ export async function finalizeLiveEvent(input: FinalizeLiveEventInput): Promise<
     meta.status = "live";
     throw error;
   }
+  await input.onCommitted?.();
   await input.persist();
   input.broadcast();
   await persistRatingsBestEffort(input.env, meta); // ratings never gate the finalize
@@ -214,25 +218,30 @@ async function persistCasualResults(
   const roundId = casualRoundId(round);
   if (roundId == null) throw new Error("casual_round_insert_failed");
   // The round row must be inserted first (its id keys the results), then all result rows land atomically.
-  await db.runBatch(
-    env.DB,
-    [...standings.map((standing) =>
-      db.createCasualResultStmt(env.DB, {
-        casual_round_id: roundId,
-        member_id: standing.memberId,
-        name: standing.name,
-        division: standing.division,
-        place: standing.place,
-        total: standing.total,
-        to_par: standing.toPar,
-        breakdown: JSON.stringify(standing.breakdown),
-        scorecard: scorecardForArchive(standing),
-        scoring_group: metadataJson(standing.scoringGroup),
-        match_result: metadataJson(standing.matchResult),
-        live_player_index: standing.livePlayerIndex ?? null,
-      }),
-    ), ...Array.from(shotArchives, ([memberId, archive]) => archiveShotLedgerStmt(env.DB, archive, memberId, { casualRoundId: roundId }))],
-  );
+  try {
+    await db.runBatch(
+      env.DB,
+      [...standings.map((standing) =>
+        db.createCasualResultStmt(env.DB, {
+          casual_round_id: roundId,
+          member_id: standing.memberId,
+          name: standing.name,
+          division: standing.division,
+          place: standing.place,
+          total: standing.total,
+          to_par: standing.toPar,
+          breakdown: JSON.stringify(standing.breakdown),
+          scorecard: scorecardForArchive(standing),
+          scoring_group: metadataJson(standing.scoringGroup),
+          match_result: metadataJson(standing.matchResult),
+          live_player_index: standing.livePlayerIndex ?? null,
+        }),
+      ), ...Array.from(shotArchives, ([memberId, archive]) => archiveShotLedgerStmt(env.DB, archive, memberId, { casualRoundId: roundId }))],
+    );
+  } catch (error) {
+    await db.clearCasualRound(env.DB, meta.roundCode).catch(() => {});
+    throw error;
+  }
 }
 
 function casualRoundId(value: unknown): number | null {

@@ -23,7 +23,7 @@ function parseJson(raw: unknown): unknown {
   }
 }
 
-function parseHoles(raw: unknown): { hole: number; par: number; distance_ft?: number | null }[] {
+function parseHoles(raw: unknown): { hole: number; par: number; distance_ft?: number | null; tee?: unknown; target?: unknown }[] {
   const parsed = parseJson(raw);
   if (!Array.isArray(parsed)) return [];
   return parsed.flatMap((item) => {
@@ -99,7 +99,17 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
   const courseId = asInt(round.course_id);
   const layoutHoles = layoutId != null ? await db.layoutHolesWithCrowdMap(database, layoutId) : [];
   const storedHoles = parseHoles(round.holes);
-  const holes = layoutHoles.length ? layoutHoles : storedHoles;
+  const layoutByHole = new Map(layoutHoles.map((hole) => [hole.hole, hole]));
+  const holes = storedHoles.length
+    ? storedHoles.map((hole) => {
+        const liveHole = layoutByHole.get(hole.hole);
+        return {
+          ...hole,
+          tee: hole.tee ?? liveHole?.tee ?? null,
+          target: hole.target ?? liveHole?.target ?? null,
+        };
+      })
+    : layoutHoles;
   const course = courseId != null
     ? ((await db.getCourse(database, courseId)) as { udisc_course_id?: string | null } | null)
     : null;
@@ -128,28 +138,66 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
   });
 
   const holeCount = holes.length;
-  const standings = results.map((row, index) => {
+  const targets: { type: string; id: string; label: string; playerIndexes: number[]; members: string[] }[] = [];
+  const standings: Record<string, unknown>[] = [];
+  const pairIndex = new Map<string, number>();
+  for (let index = 0; index < results.length; index++) {
+    const row = results[index]!;
+    const player = players[index]!;
     const scorecard = parseScorecard(row.scorecard);
     const total = asInt(row.total);
     const toPar = asInt(row.to_par);
-    const thru = scorecard.length || (total != null && holeCount ? holeCount : 0);
-    const player = players[index]!;
-    return {
+    const thru = scorecard.length || (row.place != null && total != null && total > 0 && holeCount ? holeCount : 0);
+    const group = parseJson(row.scoring_group) as { targetId?: string; targetType?: string; label?: string; members?: string[] } | null;
+    const isPair = group?.targetType === "pair" && typeof group.targetId === "string" && group.targetId !== "";
+    if (isPair) {
+      const existingIdx = pairIndex.get(group!.targetId!);
+      if (existingIdx != null) {
+        targets[existingIdx]!.playerIndexes.push(player.index);
+        if (!targets[existingIdx]!.members.includes(player.name)) targets[existingIdx]!.members.push(player.name);
+        (standings[existingIdx]!.playerIndexes as number[]).push(player.index);
+        if (player.clipPlayerIndex != null) (standings[existingIdx]!.clipPlayerIndexes as number[]).push(player.clipPlayerIndex);
+        if (!(standings[existingIdx]!.members as string[]).includes(player.name)) (standings[existingIdx]!.members as string[]).push(player.name);
+        continue;
+      }
+      const members = Array.isArray(group?.members) && group.members.length ? [...group.members] : [player.name];
+      pairIndex.set(group!.targetId!, standings.length);
+      targets.push({ type: "pair", id: group!.targetId!, label: group?.label || player.name, playerIndexes: [player.index], members: [...members] });
+      standings.push({
+        name: group?.label || player.name,
+        division: null,
+        thru,
+        total: total ?? 0,
+        toPar: toPar ?? 0,
+        targetId: group!.targetId!,
+        targetType: "pair",
+        playerIndexes: [player.index],
+        clipPlayerIndexes: player.clipPlayerIndex == null ? [] : [player.clipPlayerIndex],
+        members,
+        scorecard: scorecard.map((hole) => ({ hole: hole.hole, par: hole.par, strokes: hole.strokes })),
+        scoringGroup: group,
+        match: parseJson(row.match_result),
+      });
+      continue;
+    }
+    const targetId = "p" + player.index;
+    targets.push({ type: "player", id: targetId, label: player.name, playerIndexes: [player.index], members: [player.name] });
+    standings.push({
       name: String(row.name || "Player"),
       division: row.division == null ? null : String(row.division),
       thru,
       total: total ?? 0,
       toPar: toPar ?? 0,
-      targetId: "p" + player.index,
+      targetId,
       targetType: "player",
       playerIndexes: [player.index],
       clipPlayerIndexes: player.clipPlayerIndex == null ? [] : [player.clipPlayerIndex],
       members: [String(row.name || "Player")],
       scorecard: scorecard.map((hole) => ({ hole: hole.hole, par: hole.par, strokes: hole.strokes })),
-      scoringGroup: parseJson(row.scoring_group),
+      scoringGroup: group,
       match: parseJson(row.match_result),
-    };
-  });
+    });
+  }
 
   return {
     status: "final",
@@ -160,13 +208,7 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
     layoutId,
     roundCode,
     roundConfig: roundConfigFrom(round.scoring_config),
-    scoreTargets: players.map((player) => ({
-      type: "player",
-      id: "p" + player.index,
-      label: player.name,
-      playerIndexes: [player.index],
-      members: [player.name],
-    })),
+    scoreTargets: targets,
     scoreTargetError: null,
     scoreTargetErrors: [],
     courseName: round.course_name == null ? null : String(round.course_name),
@@ -178,7 +220,7 @@ export async function buildCasualArchiveSnapshot(database: D1Like, roundCode: st
     conflicts: [],
     missing: [],
     standings,
-    liveCtps: {},
+    liveCtps: [],
     playerLocations: [],
     lockedCardIds: [],
     cardAttestations: {},

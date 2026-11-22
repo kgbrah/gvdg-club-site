@@ -403,7 +403,7 @@ export function installMemberAuthController() {
 
   function finishApply() {
     setAuthFormValues("apply", { submitted: null, name: "", pdgaNo: "", udisc: "", email: "", phone: "", kind: "member" });
-    showLoginShell(passkeysSupported());
+    showLogin();
     setAuthFormState("login", { error: "Application sent. After an admin approves you, log in with this PIN." });
   }
 

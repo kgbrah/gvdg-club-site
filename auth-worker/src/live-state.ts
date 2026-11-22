@@ -147,9 +147,15 @@ export function targetAnchor(players: readonly PlayerState[], target: ScoreTarge
 }
 
 export function findPlayer(body: Pick<ScoreBody, "memberId" | "index" | "name">, players: readonly PlayerState[]): PlayerState | undefined {
-  if (body.memberId) return players.find((player) => player.memberId === body.memberId);
+  if (body.memberId) {
+    return players.find((player) => !player.removed && player.memberId === body.memberId)
+      ?? players.find((player) => player.memberId === body.memberId);
+  }
   if (typeof body.index === "number") return players[body.index];
-  if (body.name) return players.find((player) => player.name === body.name);
+  if (body.name) {
+    return players.find((player) => !player.removed && player.name === body.name)
+      ?? players.find((player) => player.name === body.name);
+  }
   return undefined;
 }
 

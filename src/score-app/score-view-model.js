@@ -475,16 +475,20 @@ export function scoreRows(state) {
 export function throwsByScorer(state, scorerIndex) {
   const player = (state.cardmates || []).find((row) => row.index === scorerIndex);
   const byHole = { ...(player && player.throws) };
-  for (const { kind, body } of state.recoveryItems || []) {
-    if (kind === "throws" && body.scorerIndex === scorerIndex) byHole[body.hole] = body.throws;
+  for (const entry of state.recoveryItems || []) {
+    if (!entry || entry.state === "error") continue;
+    const { kind, body } = entry;
+    if (kind === "throws" && body && body.scorerIndex === scorerIndex) byHole[body.hole] = body.throws;
   }
   return byHole;
 }
 
 export function optimisticScores(items) {
   const scores = new Map();
-  for (const { kind, body } of items) {
-    if (kind === "score") scores.set(scorePendingKey(body.scorerIndex, body.index, body.hole, body.targetId), body.strokes);
+  for (const entry of items || []) {
+    if (!entry || entry.state === "error") continue;
+    const { kind, body } = entry;
+    if (kind === "score" && body) scores.set(scorePendingKey(body.scorerIndex, body.index, body.hole, body.targetId), body.strokes);
   }
   return scores;
 }
@@ -625,10 +629,13 @@ export function applyTeeOrder(state, rows, holeIdx, scorerIndex) {
   const listed = Array.isArray(rows) ? rows.slice() : [];
   const holes = Array.isArray(state && state.holes) ? state.holes : [];
   const currentIdx = Number.isInteger(holeIdx) ? holeIdx : 0;
+  const order = playOrderIndexes(holes, startingHoleForState(state));
+  const currentPos = order.indexOf(currentIdx);
+  const activePos = currentPos >= 0 ? currentPos : 0;
   let ordered = listed;
   let lastApplied = -1;
-  for (let i = 0; i < currentIdx && i < holes.length; i++) {
-    const prev = holes[i];
+  for (let i = 0; i < activePos && i < order.length; i++) {
+    const prev = holes[order[i]];
     if (!prev) break;
     const ranked = ordered.map((row, idx) => ({
       idx,
@@ -639,14 +646,14 @@ export function applyTeeOrder(state, rows, holeIdx, scorerIndex) {
     ordered = ranked.sort((a, b) => a.score - b.score || a.idx - b.idx).map((item) => item.row);
     lastApplied = i;
   }
-  const honorsReady = currentIdx > 0 && lastApplied === currentIdx - 1;
+  const honorsReady = activePos > 0 && lastApplied === activePos - 1;
   const sequence = teeSequenceText(ordered);
   let hint = "";
   if (!listed.length) hint = "";
-  else if (currentIdx <= 0) hint = sequence ? "Tee order: " + sequence : "";
+  else if (activePos <= 0) hint = sequence ? "Tee order: " + sequence : "";
   else if (honorsReady) hint = sequence ? "Honors: " + sequence : "";
   else {
-    const waiting = holes[currentIdx - 1];
+    const waiting = holes[order[activePos - 1]];
     hint = waiting ? "Tee order after hole " + waiting.hole + " scores" : (sequence ? "Tee order: " + sequence : "");
   }
   return { honorsReady, hint, rows: ordered };
@@ -667,7 +674,11 @@ export function holeHasConflict(state, hole) {
 
 export function isMatchDormie(state) {
   if (!isMatchplayScoring(state) || !state.snap || !Array.isArray(state.snap.standings)) return false;
-  return state.snap.standings.some((standing) => standing.match && standing.match.dormie);
+  const cardTargets = scoreRows(state).map((row) => row.targetId || ("player:" + row.index));
+  const standings = cardTargets.length
+    ? state.snap.standings.filter((standing) => standing && cardTargets.includes(standing.targetId))
+    : state.snap.standings;
+  return standings.some((standing) => standing && standing.match && standing.match.dormie);
 }
 
 export function matchStatusText(state) {

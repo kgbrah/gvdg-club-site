@@ -95,10 +95,21 @@ export async function listMemberResults(db: D1Like, memberId: string, opts: { li
   const offset = typeof rawOffset === "number" && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   let sql =
     `SELECT res.*, e.name AS event_name, e.date AS event_date, e.type AS event_type,
+                e.layout_id AS layout_id, c.name AS course_name, l.name AS layout_name,
                 c.udisc_course_id AS udisc_course_id, c.udisc_url AS udisc_url,
+                CASE
+                  WHEN res.match_result IS NOT NULL AND TRIM(res.match_result) != '' AND res.match_result != 'null' THEN 0
+                  WHEN json_extract(res.scoring_group, '$.targetType') = 'pair' THEN 0
+                  WHEN LOWER(COALESCE(e.format, '')) LIKE '%matchplay%' OR LOWER(COALESCE(e.format, '')) LIKE '%doubles%' OR LOWER(COALESCE(e.format, '')) LIKE '%putting%' THEN 0
+                  WHEN LOWER(COALESCE(ec.play_format, '')) IN ('doubles', 'teams') THEN 0
+                  WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') IN ('matchplay', 'putting') THEN 0
+                  WHEN json_extract(ec.live_scoring_config, '$.groupFormat') = 'doubles' THEN 0
+                  ELSE 1
+                END AS stroke_singles,
                 ${COMPETITION_RATING_FIELDS}
          FROM results res JOIN events e ON e.id = res.event_id ${COMPETITION_RATING_JOINS}
          LEFT JOIN courses c ON c.id = e.course_id
+         LEFT JOIN course_layouts l ON l.id = e.layout_id
          WHERE res.member_id = ?
          ORDER BY COALESCE(e.date, res.created_at) DESC, res.created_at DESC, res.id DESC`;
   if (limit != null) {
@@ -188,7 +199,7 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
                 r.started_at, r.scoring_config, r.holes AS layout_holes, ${RATING_EVIDENCE_FIELDS},
                 CASE
                   WHEN cr.match_result IS NOT NULL AND TRIM(cr.match_result) != '' AND cr.match_result != 'null' THEN 0
-                  WHEN json_extract(r.scoring_config, '$.scoringStyle') = 'matchplay' THEN 0
+                  WHEN json_extract(r.scoring_config, '$.scoringStyle') IN ('matchplay', 'putting') THEN 0
                   WHEN json_extract(cr.scoring_group, '$.targetType') = 'pair' THEN 0
                   WHEN json_extract(r.scoring_config, '$.groupFormat') = 'doubles' THEN 0
                   ELSE 1
@@ -296,6 +307,7 @@ export async function listLayoutHandicapRounds(db: D1Like, layoutId: number, cut
                   COALESCE(e.date, res.created_at) AS played_at
            FROM results res
            JOIN events e ON e.id = res.event_id
+           LEFT JOIN event_config ec ON ec.event_id = e.id
            WHERE e.layout_id = ?
              AND res.member_id IS NOT NULL
              AND res.member_id NOT LIKE 'g_%'
@@ -303,7 +315,12 @@ export async function listLayoutHandicapRounds(db: D1Like, layoutId: number, cut
              AND res.place IS NOT NULL
              AND res.to_par IS NOT NULL
              AND (res.match_result IS NULL OR TRIM(res.match_result) = '' OR res.match_result = 'null')
-             AND (e.format IS NULL OR e.format = '' OR (e.format != 'matchplay' AND e.format != 'doubles' AND e.format != 'putting'))
+             AND LOWER(COALESCE(e.format, '')) NOT LIKE '%matchplay%'
+             AND LOWER(COALESCE(e.format, '')) NOT LIKE '%doubles%'
+             AND LOWER(COALESCE(e.format, '')) NOT LIKE '%putting%'
+             AND (ec.play_format IS NULL OR LOWER(ec.play_format) NOT IN ('doubles', 'teams'))
+             AND (json_extract(ec.live_scoring_config, '$.scoringStyle') IS NULL OR json_extract(ec.live_scoring_config, '$.scoringStyle') NOT IN ('matchplay', 'putting'))
+             AND (json_extract(ec.live_scoring_config, '$.groupFormat') IS NULL OR LOWER(json_extract(ec.live_scoring_config, '$.groupFormat')) != 'doubles')
              AND (json_extract(res.scoring_group, '$.targetType') IS NULL OR json_extract(res.scoring_group, '$.targetType') != 'pair')
              AND COALESCE(e.date, res.created_at) >= ?
          )`,

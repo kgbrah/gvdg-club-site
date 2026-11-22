@@ -11,7 +11,7 @@ import { cardHasScoredHole, type JoinRequest } from "./live-join.js";
 import { addWatchReceipt, beginWatchScore, checkWatchScore, readWatchCard, watchActor, watchReceiptKey, type WatchReceipts, type WatchScope, type WatchScoreOperation, type WatchWrite } from "./watch-do.js";
 import { holeMarker } from "./db-courses.js";
 import { normalizeScorecards, playerScorerId, purgeScorerVotes, purgeScoreTargetScorerVotes, recordScoreTargetVote } from "./live-consensus.js";
-import { canCastCtpVote, dropLiveCtp, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
+import { canCastCtpVote, dropLiveCtp, reconcileLiveCtpsAfterRemoval, recordCtpVote, type LiveCtpStore } from "./live-ctp.js";
 import { isLiveFormatError, normalizeLiveScoringConfig, normalizePairLabel, puttingStationPoints, type LiveScoringConfig } from "./live-format.js";
 import { finalizeLiveEvent } from "./live-finalize.js";
 import { isLoggedInMemberId, locationMoved, locationOnCourse, locationsFromRecord, locationsToRecord, parseLocationBody, type LivePlayerLocation } from "./live-locations.js";
@@ -178,9 +178,9 @@ export class LiveEventDO {
     if (action === "pairs") return this.updatePairs(body as PairAssignmentBody, authMember, authAdmin);
     if (action === "cancel") return this.cancel(authAdmin); // admin: scrap a mis-started round, reset to none
     if (action === "weather") return this.ensureWeather(body as WeatherBody); // one-time weather backfill
-    if (action === "override") return this.override(body as OverrideBody);
-    if (action === "finalize") return this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true);
-    if (action === "finish-card") return this.finishCard(body as { playerIndex?: number; recovery?: unknown }, authMember, authAdmin);
+    if (action === "override") return this.override(body as OverrideBody, authAdmin);
+    if (action === "finalize") return this.exclusive(() => this.finalize(authMember, authAdmin, (body as { force?: boolean }).force === true));
+    if (action === "finish-card") return this.exclusive(() => this.finishCard(body as { playerIndex?: number; recovery?: unknown }, authMember, authAdmin));
     return j({ error: "not_found" }, 404);
   }
 
@@ -221,6 +221,10 @@ export class LiveEventDO {
       });
     if (holes.length === 0 || (!b.eventId && !b.casual)) return j({ error: "invalid_start" }, 400);
     if (b.casual && b.roundCode && this.meta) return j({ error: "code_taken" }, 409);
+    if (!b.casual && this.meta) {
+      if (this.meta.status === "final") return j({ error: "round_already_final" }, 409);
+      if (this.meta.status === "live") return j({ error: "already_started" }, 409);
+    }
     let roundConfig: LiveScoringConfig;
     try {
       roundConfig = normalizeLiveScoringConfig(b.liveScoringConfig);
@@ -288,7 +292,7 @@ export class LiveEventDO {
     // JSON null withdraws the vote (hole goes unstarted if nobody else scored it). Narrow with
     // !== null: a `!clear &&` boolean does not narrow `number | null` for the 1–30 range check.
     const strokes = b.strokes === null ? null : Number(b.strokes);
-    const holePar = this.meta.holes.find((candidate) => candidate.hole === hole)?.par;
+    const holePar = resolvedHoles(this.meta).find((candidate) => candidate.hole === hole)?.par;
     const putting = this.meta.roundConfig?.scoringStyle === "putting";
     const minStrokes = putting ? 0 : 1;
     const maxStrokes = putting ? Math.min(10, holePar ?? 5) : 30;
@@ -426,11 +430,18 @@ export class LiveEventDO {
     if (existing) {
       if (input.photo && existing.photo !== input.photo) existing.photo = input.photo;
       if (existing.removed) {
+        const cardKey = existing.cardId ?? null;
+        const teamTakenByPair = Boolean(existing.team) && this.players.filter(
+          (p) => p !== existing && !p.removed && (p.cardId ?? null) === cardKey && p.team === existing.team,
+        ).length >= 2;
         existing.removed = false;
         existing.name = input.name;
         existing.scores = {};
         existing.scorecards = {};
         existing.scoredBy = {};
+        existing.throws = undefined;
+        existing.recoveryOrders = undefined;
+        if (teamTakenByPair) existing.team = null;
       }
       return;
     }
@@ -516,8 +527,8 @@ export class LiveEventDO {
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     let idx = -1;
     if (typeof b.index === "number" && Number.isInteger(b.index)) idx = b.index;
-    else if (b.memberId) idx = this.players.findIndex((p) => p.memberId === b.memberId);
-    else if (b.name) idx = this.players.findIndex((p) => p.name === b.name);
+    else if (b.memberId) idx = this.players.findIndex((p) => !p.removed && p.memberId === b.memberId);
+    else if (b.name) idx = this.players.findIndex((p) => !p.removed && p.name === b.name);
     const target = idx >= 0 ? this.players[idx] : undefined;
     if (!target || target.removed) return j({ error: "no_player" }, 404);
     if (b.name != null && target.name !== b.name) return j({ error: "player_moved" }, 409); // stale index guard
@@ -536,6 +547,7 @@ export class LiveEventDO {
     target.scorecards = {};
     target.scoredBy = {};
     this.locations.delete(idx);
+    this.liveCtps = reconcileLiveCtpsAfterRemoval(this.liveCtps, this.players, idx, target.cardId ?? null, new Date().toISOString());
     const scoring = scoringState(this.meta, this.players);
     if (scoring.error) purgeScorerVotes(this.players, idx, this.meta.holes);
     else purgeScoreTargetScorerVotes(this.players, idx, this.meta.holes, scoring.targets); // drop this player's votes on cardmates + re-derive consensus, so a leaver can't pin a hole in permanent conflict
@@ -559,9 +571,10 @@ export class LiveEventDO {
     return j(mineData(this.meta, this.players, authMember, this.liveCtps, this.cardLocations(authMember), this.ratingBaseline));
   }
 
-  // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker. The layout
-  // is never mutated, so the hole reverts to its verified value once this round ends.
-  private async override(b: OverrideBody): Promise<Response> {
+  // Round-scoped single-use override of a hole's par/distance. Admin-gated at the Worker and enforced here too.
+  // The layout is never mutated, so the hole reverts to its verified value once this round ends.
+  private async override(b: OverrideBody, authAdmin: boolean): Promise<Response> {
+    if (!authAdmin) return j({ error: "forbidden" }, 403);
     if (!this.meta || this.meta.status !== "live") return j({ error: "not_live" }, 409);
     const hole = Number(b.hole);
     if (!this.meta.holes.some((h) => h.hole === hole)) return j({ error: "bad_hole" }, 400);
@@ -604,7 +617,6 @@ export class LiveEventDO {
     const meta = this.meta;
     const ledgers = meta?.status === "live" ? await readShotLedgers(this.state.storage, meta, this.players) : {};
     if (this.meta !== meta) return j({ error: "recovery_scope_changed" }, 409);
-    this.locations = new Map();
     return finalizeLiveEvent({
       meta: this.meta,
       players: this.players,
@@ -616,6 +628,7 @@ export class LiveEventDO {
       force,
       persist: () => this.persist(),
       broadcast: () => this.broadcast(),
+      onCommitted: () => { this.locations = new Map(); },
     });
   }
 
@@ -640,6 +653,8 @@ export class LiveEventDO {
     if (isCardLocked(this.meta.lockedCardIds, cardId)) return j(this.snapshot());
     const scoring = scoringState(this.meta, this.players);
     if (scoring.globalError) return invalidScoreTargetsResponse(scoring.globalError);
+    const cardError = scoring.cardErrors.find((err) => (err.cardId ?? null) === cardId);
+    if (cardError) return invalidScoreTargetsResponse(cardError);
     const issues = issuesForCard(scorecardIssues(this.meta, this.players, this.meta.holes, scoring), cardId);
     if (issues.conflicts.length || issues.missing.length) {
       return j({ error: "scorecard_incomplete", conflicts: issues.conflicts, missing: issues.missing }, 409);
@@ -656,7 +671,12 @@ export class LiveEventDO {
       this.broadcast();
       return j(this.snapshot());
     }
-    if (this.meta.casual) return this.finalize(authMember, authAdmin, false);
+    if (this.meta.casual) {
+      const res = await this.finalize(authMember, authAdmin, false);
+      if (res.status !== 200) return res;
+      const fin = (await res.json().catch(() => ({}))) as { forced?: boolean };
+      return j({ ...this.snapshot(), ...(fin.forced ? { forced: true } : {}) });
+    }
     const locked = Array.isArray(this.meta.lockedCardIds) ? this.meta.lockedCardIds.slice() : [];
     if (!locked.includes(key)) locked.push(key);
     this.meta.lockedCardIds = locked;
@@ -833,8 +853,12 @@ export class LiveEventDO {
   private async sharing(request: Request, code: string, actor: string | null): Promise<Response> {
     if (!actor) return j({ error: "unauthorized" }, 401);
     const settings = async () => {
-      const owner = this.meta ? this.meta.casual === true && this.meta.createdBy === actor : (await archivedRoundActor(this.env.DB, code, actor)).owner;
+      const access = this.meta
+        ? { owner: this.meta.casual === true && this.meta.createdBy === actor, onCard: this.isSocketActor(actor) }
+        : await archivedRoundActor(this.env.DB, code, actor);
+      const { owner, onCard } = access;
       if (request.method === "GET") {
+        if (!owner && !onCard) return j({ error: "not_on_card" }, 403);
         const row = await readRoundSharing(this.env.DB, code);
         return j({ owner, visibility: row?.visibility ?? "public", includeMarked: row ? row.include_marked === 1 : true });
       }
