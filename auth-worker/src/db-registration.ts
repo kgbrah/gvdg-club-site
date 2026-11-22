@@ -126,3 +126,24 @@ export async function adminUpdateRegistration(
       new Date().toISOString(), p.paid_entry ?? null, p.paid_entry ?? null, p.paid_entry ?? null, id)
     .first();
 }
+
+export async function batchUpdateRegistrations(
+  db: D1Like,
+  updates: readonly { id: number; starting_hole?: number | null; team?: string | null }[],
+): Promise<void> {
+  if (!updates.length) return;
+  const stmts = updates.map((u) =>
+    db.prepare(
+      "UPDATE registrations SET starting_hole=CASE WHEN ? THEN ? ELSE starting_hole END, team=CASE WHEN ? THEN ? ELSE team END WHERE id=?",
+    ).bind(
+      u.starting_hole !== undefined ? 1 : 0, u.starting_hole ?? null,
+      u.team !== undefined ? 1 : 0, u.team ?? null,
+      u.id,
+    ),
+  );
+  for (let i = 0; i < stmts.length; i += 45) {
+    const chunk = stmts.slice(i, i + 45);
+    if (typeof db.batch === "function") await db.batch(chunk);
+    else for (const stmt of chunk) await stmt.run();
+  }
+}

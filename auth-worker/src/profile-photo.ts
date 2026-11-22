@@ -1,4 +1,5 @@
 import type { KVLike } from "./ratelimit.js";
+import { base64Bytes } from "./photos.js";
 import { getMember } from "./roster.js";
 
 // Live rounds send each player's photo as a short signed link, not the image itself: the photo (15-35 KB of base64)
@@ -32,11 +33,21 @@ export async function handleMemberPhoto(pathname: string, env: { ROSTER: KVLike;
   if (!match) return null;
   const [, memberId, sig] = match;
   const expected = (await hmacHex(env.JWT_SECRET, "member-photo:" + memberId)).slice(0, 16);
-  if (sig !== expected) return new Response("not found", { status: 404 });
+  if (sig !== expected) {
+    return new Response("not found", {
+      status: 404,
+      headers: { "Access-Control-Allow-Origin": "*", "X-Content-Type-Options": "nosniff" },
+    });
+  }
   const photo = sanitizeProfilePhoto((await getMember(env.ROSTER, memberId!).catch(() => null))?.photo);
-  if (!photo) return new Response("not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  if (!photo) {
+    return new Response("not found", {
+      status: 404,
+      headers: { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*", "X-Content-Type-Options": "nosniff" },
+    });
+  }
   const [, type, data] = /^data:(image\/[a-z]+);base64,(.*)$/.exec(photo)!;
-  const bytes = Uint8Array.from(atob(data!), (char) => char.charCodeAt(0));
+  const bytes = base64Bytes(data!);
   return new Response(bytes, {
     headers: {
       "Content-Type": type!,

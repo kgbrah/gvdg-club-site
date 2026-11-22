@@ -1,7 +1,7 @@
 import type { Env } from "./env.js";
 import { generateReply, type ChatMessage } from "./assistant.js";
 import { assistantProviders } from "./assistant-route.js";
-import { json } from "./http.js";
+import { json, readBytesLimited } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import {
   eventFieldsFromModel,
@@ -11,7 +11,7 @@ import {
   voiceForm,
 } from "./voice-fill.js";
 
-const MAX_AUDIO_BYTES = 8_000_000;
+export const MAX_AUDIO_BYTES = 8_000_000;
 const WHISPER_MODELS = ["@cf/openai/whisper-large-v3-turbo", "@cf/openai/whisper"] as const;
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -74,11 +74,9 @@ export async function handleAdminVoiceFill(
   if (await kvRateLimited(env, "voice:" + adminId, 8, 60)) return json({ error: "rate_limited" }, 429, origin);
   if (!env.AI) return json({ error: "voice_unavailable" }, 503, origin);
 
-  const declared = Number(request.headers.get("content-length") || 0);
-  if (declared > MAX_AUDIO_BYTES) return json({ error: "audio_too_large" }, 413, origin);
-  const bytes = new Uint8Array(await request.arrayBuffer());
+  const bytes = await readBytesLimited(request, MAX_AUDIO_BYTES);
+  if (!bytes) return json({ error: "audio_too_large" }, 413, origin);
   if (bytes.byteLength < 32) return json({ error: "invalid_audio" }, 400, origin);
-  if (bytes.byteLength > MAX_AUDIO_BYTES) return json({ error: "audio_too_large" }, 413, origin);
 
   let transcript = "";
   try {

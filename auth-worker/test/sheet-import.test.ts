@@ -338,4 +338,33 @@ describe("a smooth first import (owner QA run)", () => {
     // Was ~50ms of CPU warm (every new name against every member); the free plan allows ~10ms per request.
     expect(best).toBeLessThan(30);
   });
+
+  it("caps lapsed-to-guest batches at 25 and enforces tag row + KV write limits without partial writes", async () => {
+    for (let i = 0; i < 30; i += 1) {
+      await putMember(roster as never, base(`m_${90000 + i}`, `Lapsed Player ${i}`, { pdgaNo: String(90000 + i), memberThroughYear: 2024 }));
+    }
+    const firstBatch = await call("/admin/members/lapsed-to-guest", {});
+    expect(firstBatch.status).toBe(200);
+    expect(firstBatch.data).toEqual({ moved: 25, remaining: 5 });
+    const secondBatch = await call("/admin/members/lapsed-to-guest", {});
+    expect(secondBatch.status).toBe(200);
+    expect(secondBatch.data).toEqual({ moved: 5 });
+
+    db.raw.exec("INSERT INTO bag_tag_series (id, name, active) VALUES (2, '2026 capped tags', 1)");
+    const tooManyRows = Array.from({ length: 201 }, (_, i) => ({ line: i + 2, name: `Row ${i}`, value: i + 1 }));
+    expect((await call("/admin/sheet-import/apply", { kind: "tags", seriesId: 2, rows: tooManyRows })).status).toBe(413);
+
+    const tooManyNew = Array.from({ length: 26 }, (_, i) => ({ line: i + 2, name: `Brand New Player ${i}`, value: i + 1 }));
+    const refused = await call("/admin/sheet-import/apply", { kind: "tags", seriesId: 2, rows: tooManyNew });
+    expect(refused.status).toBe(413);
+    expect(refused.data.error).toBe("too_many_new_members");
+
+    // Existing members (>25) needing no KV writes are allowed in a single tags import.
+    const existingRows = Array.from({ length: 30 }, (_, i) => ({
+      line: i + 2, name: `Lapsed Player ${i}`, value: i + 1, memberId: `m_${90000 + i}`,
+    }));
+    const ok = await call("/admin/sheet-import/apply", { kind: "tags", seriesId: 2, rows: existingRows });
+    expect(ok.status).toBe(200);
+    expect(ok.data.results).toHaveLength(30);
+  });
 });

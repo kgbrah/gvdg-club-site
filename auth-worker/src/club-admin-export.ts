@@ -103,8 +103,13 @@ function toList(rows: Array<Record<string, unknown> | null>): unknown[] {
 
 async function listByIds(dbLike: db.D1Like, table: string, idField: string, ids: number[], orderBy: string): Promise<unknown[]> {
   if (!ids.length) return [];
-  const sql = `SELECT * FROM ${table} WHERE ${idField} IN (${ids.map(() => "?").join(",")}) ORDER BY ${orderBy}`;
-  return toList((await dbLike.prepare(sql).bind(...ids).all()).results);
+  const out: unknown[] = [];
+  for (let i = 0; i < ids.length; i += 80) {
+    const chunk = ids.slice(i, i + 80);
+    const sql = `SELECT * FROM ${table} WHERE ${idField} IN (${chunk.map(() => "?").join(",")}) ORDER BY ${orderBy}`;
+    out.push(...toList((await dbLike.prepare(sql).bind(...chunk).all()).results));
+  }
+  return out;
 }
 
 async function queryEvents(dbLike: db.D1Like, from: string | null, to: string | null): Promise<unknown[]> {
@@ -155,34 +160,19 @@ async function buildExportSnapshot(
     : [];
 
   const eventConfig: unknown[] = includeEventConfig
-    ? (await Promise.all(
-        eventIds.map(async (id) => {
-          const cfg = await dbLike.prepare("SELECT * FROM event_config WHERE event_id = ?").bind(id).all();
-          // PDGA's API license allows temporary caching only; never copy cached PDGA API payloads into archives/exports.
-          return toList(cfg.results).map((row) => {
-            const { pdga_event: _pdga, ...rest } = row as Record<string, unknown>;
-            return rest;
-          });
-        }),
-      )).flat()
+    ? (await listByIds(dbLike, "event_config", "event_id", eventIds, "event_id")).map((row) => {
+        // PDGA's API license allows temporary caching only; never copy cached PDGA API payloads into archives/exports.
+        const { pdga_event: _pdga, ...rest } = row as Record<string, unknown>;
+        return rest;
+      })
     : [];
 
   const ctps: unknown[] = includeEventConfig
-    ? (await Promise.all(
-        eventIds.map(async (id) => {
-          const cfg = await dbLike.prepare("SELECT * FROM ctps WHERE event_id = ? ORDER BY hole, id").bind(id).all();
-          return toList(cfg.results);
-        }),
-      )).flat()
+    ? await listByIds(dbLike, "ctps", "event_id", eventIds, "event_id, hole, id")
     : [];
 
   const acePots: unknown[] = includeEventConfig
-    ? (await Promise.all(
-        eventIds.map(async (id) => {
-          const cfg = await dbLike.prepare("SELECT * FROM ace_pots WHERE event_id = ?").bind(id).all();
-          return toList(cfg.results);
-        }),
-      )).flat()
+    ? await listByIds(dbLike, "ace_pots", "event_id", eventIds, "event_id")
     : [];
 
   const courseIds = uniqueIds((events as Array<Record<string, unknown>>), "course_id");

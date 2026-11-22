@@ -189,9 +189,7 @@ export async function handleClubShop(
     const order = await shopDb.createStoreOrder(env.DB, { member_id: buyerId, member_name: buyerName, total_cents: priced.total, payment_method: "paypal_redirect", payment_ref: null });
     const orderId = isRecord(order) ? rowNumber(order, "id") : 0;
     if (!orderId) return json({ error: "order_failed" }, 500, origin);
-    for (const line of priced.lines) {
-      await shopDb.createStoreOrderItem(env.DB, { order_id: orderId, product_id: line.product_id, name_snapshot: line.name_snapshot, price_cents: line.price_cents, quantity: line.quantity });
-    }
+    await shopDb.createStoreOrderItems(env.DB, orderId, priced.lines);
     const contact = asStr(body.contact, 120);
     if (contact) await shopDb.updateStoreOrderFulfillment(env.DB, orderId, { admin_note: "Contact: " + contact });
     // No email here: this path is unauthenticated and payment isn't confirmed (paypal.me reconcile-later),
@@ -332,7 +330,7 @@ export async function handleClubShop(
     // member is never left with an unpaid order or stock they didn't pay for.
     const rollback = async () => {
       await shopDb.deleteStoreOrder(env.DB, submitted.orderId);
-      for (const line of priced.lines) await shopDb.incrementStoreProductStock(env.DB, line.product_id, line.quantity);
+      await shopDb.restoreStoreProductStock(env.DB, priced.lines);
     };
     if (!debit.ok) {
       await rollback();

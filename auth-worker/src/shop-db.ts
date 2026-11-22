@@ -268,6 +268,15 @@ export async function createStoreOrderItem(db: D1Like, item: StoreOrderItemInput
     .first();
 }
 
+export async function createStoreOrderItems(db: D1Like, orderId: number, lines: readonly StoreOrderLineInput[]): Promise<void> {
+  for (let i = 0; i < lines.length; i += 15) {
+    const chunk = lines.slice(i, i + 15);
+    await db.prepare(
+      `INSERT INTO store_order_items (order_id, product_id, name_snapshot, price_cents, quantity) VALUES ${chunk.map(() => "(?, ?, ?, ?, ?)").join(", ")}`,
+    ).bind(...chunk.flatMap((line) => [orderId, line.product_id, line.name_snapshot, line.price_cents, line.quantity])).run();
+  }
+}
+
 export async function decrementStoreProductStock(db: D1Like, id: number, quantity: number): Promise<boolean> {
   const result = await db
     .prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ? AND active = 1 AND stock_qty >= ?")
@@ -283,6 +292,18 @@ export async function getStoreOrderById(db: D1Like, id: number) {
 // Restore stock reserved by a decrement — used to roll back an order whose payment/debit failed.
 export async function incrementStoreProductStock(db: D1Like, id: number, quantity: number): Promise<void> {
   await db.prepare("UPDATE store_products SET stock_qty = stock_qty + ?, updated_at = datetime('now') WHERE id = ?").bind(quantity, id).run();
+}
+
+export async function restoreStoreProductStock(db: D1Like, lines: readonly { product_id: number; quantity: number }[]): Promise<void> {
+  if (!lines.length) return;
+  const stmts = lines.map((line) =>
+    db.prepare("UPDATE store_products SET stock_qty = stock_qty + ?, updated_at = datetime('now') WHERE id = ?").bind(line.quantity, line.product_id),
+  );
+  for (let i = 0; i < stmts.length; i += 45) {
+    const chunk = stmts.slice(i, i + 45);
+    if (typeof db.batch === "function") await db.batch(chunk);
+    else for (const stmt of chunk) await stmt.run();
+  }
 }
 
 /** All line items for one order (product_id + quantity + snapshot) — the source of what to restock. */

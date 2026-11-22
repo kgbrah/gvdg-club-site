@@ -5,7 +5,8 @@
 import type { Env } from "./env.js";
 import type { D1Like } from "./db-types.js";
 import { listEvents } from "./db-events.js";
-import { encryptWebPush, fromB64url, loadVapidKeys, vapidAuthorization } from "./web-push.js";
+import { postPush } from "./admin-push.js";
+import { loadVapidKeys } from "./web-push.js";
 
 const FACEBOOK_GROUP_URL = "https://www.facebook.com/groups/243452675724939";
 const DEFAULT_FROM = "Greenville Disc Golf Club <club@gvdgclub.com>";
@@ -155,9 +156,7 @@ export async function sendApprovalPush(env: Env, applicationId: string): Promise
     try {
       const cfg = env as unknown as { VAPID_PUBLIC_KEY?: string; VAPID_PRIVATE_KEY?: string };
       const keys = await loadVapidKeys(cfg.VAPID_PUBLIC_KEY, cfg.VAPID_PRIVATE_KEY);
-      const clientKey = fromB64url(row.p256dh);
-      const auth = fromB64url(row.auth);
-      if (keys && clientKey && clientKey.length === 65 && auth && auth.length === 16) {
+      if (keys) {
         const payload = new TextEncoder().encode(JSON.stringify({
           kind: "member",
           title: "You're approved - welcome to GVDG",
@@ -165,18 +164,7 @@ export async function sendApprovalPush(env: Env, applicationId: string): Promise
           url: "/gvdg-members.html",
           tag: "membership-approved",
         }));
-        const body = await encryptWebPush(payload, clientKey, auth);
-        await fetch(row.endpoint, {
-          method: "POST",
-          redirect: "manual",
-          headers: {
-            Authorization: await vapidAuthorization(row.endpoint, keys),
-            "Content-Encoding": "aes128gcm",
-            "Content-Type": "application/octet-stream",
-            TTL: "86400",
-          },
-          body: body as BodyInit,
-        });
+        await postPush(keys, { ...row, member_id: "" }, payload);
       }
     } finally {
       await env.DB.prepare("DELETE FROM membership_push_subscriptions WHERE application_id = ?").bind(applicationId).run();

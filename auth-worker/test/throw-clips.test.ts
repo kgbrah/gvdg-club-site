@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { RequestBodyTooLargeError } from "../src/http.js";
 import { handleThrowClips } from "../src/throw-clip-routes.js";
-import { cardFromMine, clipTarget, byteRange, sniffVideo } from "../src/throw-clips.js";
+import { cardFromMine, clipTarget, byteRange, MAX_CLIP_BYTES, sniffVideo } from "../src/throw-clips.js";
 import type { Env } from "../src/env.js";
 
 const CARD = {
@@ -253,5 +254,45 @@ describe("throw clip recovery", () => {
     expect((await post("cam")).status).toBe(201);
     expect(db.rows).toHaveLength(2);
     expect(bucket.objects.size).toBe(2);
+  });
+
+  it("caps chunked uploads and highlight JSON bodies without Content-Length", async () => {
+    const used = env();
+    const saved = await handleThrowClips({
+      request: new Request("https://w/rounds/ABCD/live/clips?hole=7&playerIndex=1&playerName=Jane%20Doe", {
+        method: "POST",
+        body: webm().buffer as ArrayBuffer,
+      }),
+      env: used, origin: null, method: "POST", scope: "round", scopeKey: "ABCD", tail: [], authMember: "m_jane", card: CARD,
+    });
+    const { id } = (await saved.json()) as { id: number };
+
+    const oversizeStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const chunk = new Uint8Array(1024 * 1024);
+        for (let total = 0; total <= MAX_CLIP_BYTES; total += chunk.byteLength) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const tooBigClip = await handleThrowClips({
+      request: new Request("https://w/rounds/ABCD/live/clips?hole=7&playerIndex=1&playerName=Jane%20Doe", {
+        method: "POST", body: oversizeStream, duplex: "half",
+      } as RequestInit),
+      env: used, origin: null, method: "POST", scope: "round", scopeKey: "ABCD", tail: [], authMember: "m_jane", card: CARD,
+    });
+    expect(tooBigClip.status).toBe(413);
+
+    const bigJsonStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ highlight: true, pad: "x".repeat(2048) })));
+        controller.close();
+      },
+    });
+    await expect(handleThrowClips({
+      request: new Request(`https://w/rounds/ABCD/live/clips/${id}/highlight`, {
+        method: "POST", body: bigJsonStream, duplex: "half",
+      } as RequestInit),
+      env: used, origin: null, method: "POST", scope: "round", scopeKey: "ABCD", tail: [String(id), "highlight"], authMember: "m_jane", card: CARD,
+    })).rejects.toBeInstanceOf(RequestBodyTooLargeError);
   });
 });

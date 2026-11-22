@@ -26,23 +26,39 @@ async function counts(c: MarketCtx) {
   return { openReports: Number(row?.reports) || 0, karmaFlags: await openKarmaFlagCount(c.env) };
 }
 
+async function fetchReportRows(c: MarketCtx, ids: readonly number[], query: (marks: string) => string): Promise<Map<number, Row>> {
+  const unique = [...new Set(ids.filter((id) => id > 0))];
+  const out = new Map<number, Row>();
+  for (let i = 0; i < unique.length; i += 50) {
+    const chunk = unique.slice(i, i + 50);
+    const rows = (await c.env.DB.prepare(query(chunk.map(() => "?").join(","))).bind(...chunk).all<Row>()).results ?? [];
+    for (const row of rows) out.set(num(row, "id"), row);
+  }
+  return out;
+}
+
 async function reportViews(c: MarketCtx, rows: Row[]) {
+  const postIds = rows.filter((row) => str(row, "target_kind") === "post").map((row) => num(row, "target_id"));
+  const celebrationIds = rows.filter((row) => str(row, "target_kind") !== "post").map((row) => num(row, "target_id"));
+  const [postsById, celebrationsById] = await Promise.all([
+    fetchReportRows(c, postIds, (marks) => `SELECT ${POST_COLUMNS} FROM lf_posts p WHERE p.id IN (${marks})`),
+    fetchReportRows(c, celebrationIds, (marks) => `SELECT e.id, e.author_id, e.caption, e.hidden, c.found_id FROM lf_celebrations e JOIN lf_claims c ON c.id = e.claim_id WHERE e.id IN (${marks})`),
+  ]);
+
   const ownerIds: string[] = [];
   const targets = new Map<number, { title: string; status: string; hidden: boolean; text: string; ownerId: string; postId: number | null } | null>();
   for (const row of rows) {
     const id = num(row, "target_id");
     let target = null;
     if (str(row, "target_kind") === "post") {
-      const post = await getPostRow(c.env, id);
+      const post = postsById.get(id);
       if (post) {
         target = { title: (str(post, "kind") === "found" ? "Found: " : "Lost: ") + postTitle(post), status: str(post, "status"),
           hidden: num(post, "hidden") === 1, text: [str(post, "course_name"), str(post, "area")].filter(Boolean).join(" · "),
           ownerId: str(post, "owner_id"), postId: id };
       }
     } else {
-      const e = await c.env.DB.prepare(
-        `SELECT e.author_id, e.caption, e.hidden, c.found_id FROM lf_celebrations e JOIN lf_claims c ON c.id = e.claim_id WHERE e.id = ?`,
-      ).bind(id).first<Row>();
+      const e = celebrationsById.get(id);
       if (e) target = { title: "Celebration", status: num(e, "hidden") === 1 ? "hidden" : "shown", hidden: num(e, "hidden") === 1,
         text: str(e, "caption"), ownerId: str(e, "author_id"), postId: num(e, "found_id") };
     }

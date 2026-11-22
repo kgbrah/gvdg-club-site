@@ -8,7 +8,7 @@ import { json, readJson, clientIp } from "./http.js";
 import { asStr } from "./input.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { paypalBase, createOrder, captureOrder, isCaptureSettled, type CaptureResult, type PayPalCreds } from "./payments.js";
-import { fromB64url } from "./web-push.js";
+import { endpointOf, keyOf } from "./admin-push.js";
 import type { KVListLike } from "./roster.js";
 import { readApplication, type MembershipApplication } from "./membership-apply.js";
 import { duesCents, duesOnline, membershipConfig, getDues, publicPayment, reserveDues, releaseDues, recordPaypalDues, claimOtherDues } from "./membership-dues-db.js";
@@ -23,21 +23,6 @@ function tokenMatches(app: MembershipApplication, given: string | null): boolean
   let diff = 0;
   for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ given.charCodeAt(i);
   return diff === 0;
-}
-
-function endpointOf(value: unknown): string | null {
-  if (typeof value !== "string" || value.length < 12 || value.length > 2000) return null;
-  try {
-    const u = new URL(value);
-    return u.protocol === "https:" && !u.username && !u.password ? value : null;
-  } catch { return null; }
-}
-function keyOf(value: unknown, bytes: number, uncompressed = false): string | null {
-  if (typeof value !== "string") return null;
-  const raw = fromB64url(value);
-  if (!raw || raw.length !== bytes) return null;
-  if (uncompressed && raw[0] !== 4) return null;
-  return value;
 }
 
 /** Public routes under /membership/ (except POST /membership/apply, handled in membership-apply.ts). */

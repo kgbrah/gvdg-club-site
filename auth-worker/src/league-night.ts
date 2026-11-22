@@ -143,11 +143,15 @@ export async function handleAdminLeagueNight(
     });
     const eventId = eventIdFrom(event);
     if (eventId == null) return json({ error: "create_failed", message: "Could not create a match event." }, 500, origin);
-    for (const name of match.red) {
-      await db.addEventPlayer(env.DB, { event_id: eventId, name, team: "Red" });
-    }
-    for (const name of match.blue) {
-      await db.addEventPlayer(env.DB, { event_id: eventId, name, team: "Blue" });
+    const teamPlayers = [
+      ...match.red.map((name) => ({ name, team: "Red" })),
+      ...match.blue.map((name) => ({ name, team: "Blue" })),
+    ];
+    for (let i = 0; i < teamPlayers.length; i += 25) {
+      const chunk = teamPlayers.slice(i, i + 25);
+      await env.DB.prepare(
+        `INSERT INTO event_players (event_id, name, team) VALUES ${chunk.map(() => "(?, ?, ?)").join(", ")}`,
+      ).bind(...chunk.flatMap((player) => [eventId, player.name, player.team])).run();
     }
     await db.upsertEventConfig(env.DB, eventId, {
       play_format: plan.format,

@@ -138,5 +138,22 @@ describe("voice disc entry (Whisper via OpenRouter)", () => {
     expect((await post(clip(), "audio/webm", "198.51.100.2")).status).toBe(200);
     expect(await post(clip(), "audio/webm", "198.51.100.3")).toMatchObject({ status: 429, data: { error: "voice_resting" } });
     expect(voiceDailyBudget(makeEnv({ VOICE_DAILY_BUDGET: "nope" }))).toBe(300);
+
+    const beforeStream = calls.length;
+    const oversizeStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const chunk = new Uint8Array(512 * 1024);
+        for (let total = 0; total <= MAX_VOICE_BYTES; total += chunk.byteLength) controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const streamed = await worker.fetch(new Request("https://worker.example/voice/disc", {
+      method: "POST",
+      headers: { Origin: ORIGIN, "CF-Connecting-IP": "198.51.100.4", "Content-Type": "audio/webm" },
+      body: oversizeStream,
+      duplex: "half",
+    } as RequestInit), env, { waitUntil: () => {} } as unknown as ExecutionContext);
+    expect(streamed.status).toBe(413);
+    expect(calls).toHaveLength(beforeStream);
   });
 });

@@ -34,12 +34,24 @@ export async function saveUdiscLeague(
   }
   const planned = mergeEvents(input.events, [...past.values()]).slice(0, MAX_EVENTS);
   const currentUrl = [...past.values()].sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]?.externalUrl || null;
+  const externalUrls = [...new Set(planned.map((event) => event.external_url).filter((url): url is string => Boolean(url)))];
+  const existingByUrl = new Map<string, ExistingUdiscEvent>();
+  for (let i = 0; i < externalUrls.length; i += 80) {
+    const chunk = externalUrls.slice(i, i + 80);
+    const rows = (await env.DB.prepare(
+      `SELECT id, status, external_url, league_id, date, notes FROM events WHERE external_url IN (${chunk.map(() => "?").join(",")}) ORDER BY id`,
+    ).bind(...chunk).all<ExistingUdiscEvent>()).results ?? [];
+    for (const row of rows) {
+      if (row.external_url && !existingByUrl.has(row.external_url)) existingByUrl.set(row.external_url, row);
+    }
+  }
   let events = 0;
   let results = 0;
   let skipped = 0;
   for (const event of planned) {
     const scored = event.external_url ? past.get(event.external_url) : null;
-    const outcome = await saveEvent(env, adminId, leagueId, event, scored, input.standings, scored?.externalUrl === currentUrl);
+    const existing = event.external_url ? existingByUrl.get(event.external_url) ?? null : null;
+    const outcome = await saveEvent(env, adminId, leagueId, event, scored, input.standings, scored?.externalUrl === currentUrl, existing, existingByUrl);
     if (outcome === "skipped") skipped += 1;
     else {
       events += 1;
@@ -88,6 +100,15 @@ function resultBreakdown(points: number | null, standings: UdiscStandings | null
   });
 }
 
+type ExistingUdiscEvent = {
+  id: number;
+  status: string;
+  external_url: string;
+  league_id: number | null;
+  date: string | null;
+  notes: string | null;
+};
+
 async function saveEvent(
   env: Env,
   adminId: string,
@@ -96,11 +117,10 @@ async function saveEvent(
   scored: UdiscPastEvent | null | undefined,
   standings: UdiscStandings | null,
   current: boolean,
+  existing: ExistingUdiscEvent | null,
+  existingByUrl: Map<string, ExistingUdiscEvent>,
 ): Promise<number | "skipped"> {
   const url = event.external_url;
-  const existing = url
-    ? await env.DB.prepare("SELECT id, status FROM events WHERE external_url = ? LIMIT 1").bind(url).first<{ id: number; status: string }>()
-    : null;
   if (existing?.status === "live") return "skipped";
   const status = scored && scored.results.length ? "final" : "scheduled";
   let eventId = existing?.id ?? null;
@@ -118,10 +138,21 @@ async function saveEvent(
       created_by: adminId,
     }) as { id?: number } | null;
     eventId = created?.id ?? null;
+    if (url && eventId != null) {
+      existingByUrl.set(url, { id: eventId, status, external_url: url, league_id: leagueId, date: event.date ?? null, notes: event.notes ?? null });
+    }
   } else if (scored && scored.results.length) {
-    await db.updateEvent(env.DB, eventId, { status: "final", league_id: leagueId, date: event.date || undefined, notes: event.notes || undefined });
-  } else {
+    const needsUpdate = existing!.status !== "final"
+      || existing!.league_id !== leagueId
+      || (event.date ? existing!.date !== event.date : false)
+      || (event.notes ? existing!.notes !== event.notes : false);
+    if (needsUpdate) {
+      await db.updateEvent(env.DB, eventId, { status: "final", league_id: leagueId, date: event.date || undefined, notes: event.notes || undefined });
+      if (url) existingByUrl.set(url, { ...existing!, status: "final", league_id: leagueId, date: event.date || existing!.date, notes: event.notes || existing!.notes });
+    }
+  } else if (existing!.league_id !== leagueId) {
     await db.updateEvent(env.DB, eventId, { league_id: leagueId });
+    if (url) existingByUrl.set(url, { ...existing!, league_id: leagueId });
   }
   if (eventId == null || !scored?.results.length) return 0;
   const statements = [db.clearResultsStmt(env.DB, eventId)];

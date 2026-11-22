@@ -21,7 +21,7 @@ vi.mock("../src/admin-push.js", async (importOriginal) => {
 
 /** Public trader keys are random hex, so they can contain "555", "0199" or "ada" by chance. Blank them before
  * asserting that ink, phone digits or private text never reach a payload. */
-const scrubKeys = (raw: string) => raw.replace(/"key":"[0-9a-f]+"/g, '"key":"-"');
+const scrubKeys = (raw: string) => raw.replace(/"key":"[0-9a-f]+"/g, '"key":"-"').replace(/(\?gl=)[A-Za-z0-9_-]+/g, "$1-");
 
 
 const SECRET = "x".repeat(40);
@@ -743,7 +743,7 @@ describe("lost & found matching, claims, returns and karma", () => {
     expect(notice).toMatchObject({ title: "Is this your disc?", href: "/gvdg-members.html#lost-found" });
     expect(notice.body).toContain("A disc that may be yours was found at Elm Street Park");
     const finderMail = mail.find((row) => row.to === "finn@example.test" && row.subject === "Someone may own the disc you found");
-    expect(finderMail?.text).not.toMatch(/young|cy\b/i);
+    expect(scrubKeys(finderMail?.text ?? "")).not.toMatch(/young|cy\b/i);
     const finderView = await call("/lost-found/posts/" + post.id, "GET", finder.token);
     expect(scrubKeys(finderView.raw)).not.toMatch(/young/i);
     const summary = await call("/me/messages/summary", "GET", await token("m_cy"));

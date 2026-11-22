@@ -6,6 +6,7 @@
 // enforced here for live sockets so a visibility change also cuts off already-connected viewers.
 
 import { getLayoutRatingBaseline } from "./rating-store.js";
+import { readJson, RequestBodyTooLargeError } from "./http.js";
 import { cardHasScoredHole, type JoinRequest } from "./live-join.js";
 import { addWatchReceipt, beginWatchScore, checkWatchScore, readWatchCard, watchActor, watchReceiptKey, type WatchReceipts, type WatchScope, type WatchScoreOperation, type WatchWrite } from "./watch-do.js";
 import { holeMarker } from "./db-courses.js";
@@ -838,7 +839,14 @@ export class LiveEventDO {
         return j({ owner, visibility: row?.visibility ?? "public", includeMarked: row ? row.include_marked === 1 : true });
       }
       if (!owner) return j({ error: "forbidden" }, 403);
-      const { visibility, includeMarked } = await request.json().catch(() => ({})) as { visibility?: unknown; includeMarked?: unknown };
+      let body: Record<string, unknown> | null;
+      try {
+        body = await readJson(request, 1024);
+      } catch (e) {
+        if (e instanceof RequestBodyTooLargeError) return j({ error: "request_too_large" }, 413);
+        throw e;
+      }
+      const { visibility, includeMarked } = (body ?? {}) as { visibility?: unknown; includeMarked?: unknown };
       if (!isRoundVisibility(visibility) || typeof includeMarked !== "boolean") return j({ error: "invalid_visibility" }, 400);
       const result = await updateRoundSharing(this.env.DB, code, visibility, includeMarked);
       for (const socket of this.state.getWebSockets()) {

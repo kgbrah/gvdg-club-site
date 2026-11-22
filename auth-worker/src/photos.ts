@@ -28,15 +28,15 @@ const EXT: Record<DecodedImage["contentType"], DecodedImage["ext"]> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
 };
 
-type FromBase64 = (text: string) => Uint8Array;
+type FromBase64 = (text: string) => Uint8Array<ArrayBuffer>;
 
 /** Native base64 decode where the runtime has it (about 10x cheaper in CPU than a char-by-char loop over atob,
  *  which matters on the Workers Free plan's 10 ms budget); the loop otherwise. */
-export function base64Bytes(text: string): Uint8Array {
+export function base64Bytes(text: string): Uint8Array<ArrayBuffer> {
   const native = (Uint8Array as unknown as { fromBase64?: FromBase64 }).fromBase64;
   if (typeof native === "function") return native(text);
   const bin = atob(text);
-  const bytes = new Uint8Array(bin.length);
+  const bytes = new Uint8Array(new ArrayBuffer(bin.length));
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
 }

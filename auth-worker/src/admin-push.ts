@@ -4,6 +4,7 @@
 import type { Env } from "./env.js";
 import type { D1Like } from "./db-types.js";
 import { json, readJson } from "./http.js";
+import { isPublicHttpsUrl } from "./imports/fetch.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { encryptWebPush, fromB64url, loadVapidKeys, vapidAuthorization, type PushCryptoKeys } from "./web-push.js";
 
@@ -38,13 +39,7 @@ function adminUrl(url: string): string {
 
 export function endpointOf(value: unknown): string | null {
   if (typeof value !== "string" || value.length < 12 || value.length > 2000) return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" || url.username || url.password) return null;
-    return value;
-  } catch {
-    return null;
-  }
+  return isPublicHttpsUrl(value) ? value : null;
 }
 
 export function keyOf(value: unknown, bytes: number, uncompressed = false): string | null {
@@ -112,6 +107,7 @@ export async function sendAdminPush(env: Env, note: AdminPushNote): Promise<void
 }
 
 export async function postPush(keys: PushCryptoKeys, row: PushRow, payload: Uint8Array): Promise<number> {
+  if (!endpointOf(row.endpoint)) return 410;
   const clientKey = fromB64url(row.p256dh);
   const auth = fromB64url(row.auth);
   if (!clientKey || clientKey.length !== 65 || clientKey[0] !== 4 || !auth || auth.length !== 16) {

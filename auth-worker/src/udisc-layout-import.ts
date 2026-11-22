@@ -315,33 +315,84 @@ export function pickUdiscSearchMatch(
   return top.url;
 }
 
+interface MappedIndexEntry {
+  order: number;
+  course: ImportCourse;
+  url: string;
+  tokens: Set<string>;
+  city: string;
+  geo: string | null;
+}
+
+interface MappedCourseIndex {
+  byToken: Map<string, MappedIndexEntry[]>;
+}
+
+function buildMappedIndex(catalog: ImportCourse[]): MappedCourseIndex {
+  const byToken = new Map<string, MappedIndexEntry[]>();
+  for (let order = 0; order < catalog.length; order += 1) {
+    const other = catalog[order]!;
+    const url = normalizeUdiscCourseUrl(other.udisc_url);
+    if (!url || !isMapped(other)) continue;
+    const tokens = distinctiveTokens(other.name);
+    if (!tokens.size) continue;
+    const entry: MappedIndexEntry = {
+      order,
+      course: other,
+      url,
+      tokens,
+      city: cityKey(other.location),
+      geo: geoLabel(other.location || ""),
+    };
+    for (const token of tokens) {
+      let bucket = byToken.get(token);
+      if (!bucket) {
+        bucket = [];
+        byToken.set(token, bucket);
+      }
+      bucket.push(entry);
+    }
+  }
+  return { byToken };
+}
+
+function inheritFromIndex(
+  course: ImportCourse,
+  index: MappedCourseIndex,
+): string | null {
+  const want = distinctiveTokens(course.name);
+  if (!want.size) return null;
+  const candidates = new Set<MappedIndexEntry>();
+  for (const token of want) {
+    for (const entry of index.byToken.get(token) ?? []) candidates.add(entry);
+  }
+  if (!candidates.size) return null;
+  const city = cityKey(course.location);
+  const locGeo = geoLabel(course.location || "");
+  let best: { url: string; score: number; order: number } | null = null;
+  for (const entry of candidates) {
+    if (entry.course.id === course.id) continue;
+    if (locGeo && entry.geo && locGeo !== entry.geo) continue;
+    let shared = 0;
+    for (const token of want) if (entry.tokens.has(token)) shared += 1;
+    if (!shared) continue;
+    const sameCity = Boolean(city && city === entry.city);
+    const miles = pairMiles(course, entry.course);
+    const near = miles != null && miles <= UDISC_INHERIT_MILES;
+    if (!sameCity && !near) continue;
+    const score = shared + (sameCity ? 0.5 : 0) + (near ? 0.3 : 0);
+    if (!best || score > best.score || (score === best.score && entry.order < best.order)) {
+      best = { url: entry.url, score, order: entry.order };
+    }
+  }
+  return best?.url ?? null;
+}
+
 export function inheritMappedUdiscUrl(
   course: ImportCourse,
   catalog: ImportCourse[],
 ): string | null {
-  const want = distinctiveTokens(course.name);
-  if (!want.size) return null;
-  const city = cityKey(course.location);
-  let best: { url: string; score: number } | null = null;
-  for (const other of catalog) {
-    if (other.id === course.id) continue;
-    const url = normalizeUdiscCourseUrl(other.udisc_url);
-    if (!url || !isMapped(other)) continue;
-    const otherTokens = distinctiveTokens(other.name);
-    let shared = 0;
-    for (const token of want) if (otherTokens.has(token)) shared += 1;
-    if (!shared) continue;
-    const sameCity = Boolean(city && city === cityKey(other.location));
-    const miles = pairMiles(course, other);
-    const near = miles != null && miles <= UDISC_INHERIT_MILES;
-    if (!sameCity && !near) continue;
-    const locGeo = geoLabel(course.location || "");
-    const otherGeo = geoLabel(other.location || "");
-    if (locGeo && otherGeo && locGeo !== otherGeo) continue;
-    const score = shared + (sameCity ? 0.5 : 0) + (near ? 0.3 : 0);
-    if (!best || score > best.score) best = { url, score };
-  }
-  return best?.url ?? null;
+  return inheritFromIndex(course, buildMappedIndex(catalog));
 }
 
 export function attachUdiscUrlsFromIndex(
@@ -350,12 +401,13 @@ export function attachUdiscUrlsFromIndex(
 ): { id: number; udisc_url: string }[] {
   const attached: { id: number; udisc_url: string }[] = [];
   const taken = new Set<string>();
+  const mappedIndex = buildMappedIndex(courses);
   for (const course of courses) {
     const existing = normalizeUdiscCourseUrl(course.udisc_url);
     if (existing && (isMapped(course) || urlMatchesCourse(course, existing))) continue;
-    const known = knownUdiscUrl(course);
-    const inherited = inheritMappedUdiscUrl(course, courses);
-    const match = known || inherited || pickUdiscSearchMatch(course, urls.filter((url) => !taken.has(url)));
+    const match = knownUdiscUrl(course)
+      || inheritFromIndex(course, mappedIndex)
+      || pickUdiscSearchMatch(course, taken.size ? urls.filter((url) => !taken.has(url)) : urls);
     if (!match || match === existing) continue;
     taken.add(match);
     attached.push({ id: course.id, udisc_url: match });
@@ -797,9 +849,7 @@ async function finish(env: Env, now: number, tick: UdiscLayoutImportTick): Promi
 }
 
 async function persistAttachedUrls(env: Env, rows: { id: number; udisc_url: string }[]): Promise<number> {
-  for (const row of rows) {
-    await db.updateCourse(env.DB, row.id, { udisc_url: row.udisc_url });
-  }
+  await db.updateCourseUdiscUrls(env.DB, rows);
   return rows.length;
 }
 

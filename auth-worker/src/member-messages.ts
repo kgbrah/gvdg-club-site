@@ -2,6 +2,7 @@
 
 import type { Env } from "./env.js";
 import { requireMember } from "./authz.js";
+import { D1KV, ROSTER_RECENT_NS } from "./d1kv.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { notifyMembers } from "./member-push.js";
@@ -61,17 +62,17 @@ export async function recordMemberNotices(
 ): Promise<void> {
   const ids = [...new Set(memberIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
   if (!ids.length) return;
-  await Promise.all(ids.map((memberId) => env.DB.prepare(
-    `INSERT OR IGNORE INTO member_notices (member_id, kind, title, body, href, ref_key)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    memberId,
-    notice.kind.slice(0, 24),
-    notice.title.slice(0, 80),
-    notice.body.slice(0, 180),
-    notice.href.slice(0, 180),
-    notice.refKey.slice(0, 80),
-  ).run()));
+  const kind = notice.kind.slice(0, 24);
+  const title = notice.title.slice(0, 80);
+  const body = notice.body.slice(0, 180);
+  const href = notice.href.slice(0, 180);
+  const refKey = notice.refKey.slice(0, 80);
+  for (let i = 0; i < ids.length; i += 15) {
+    const chunk = ids.slice(i, i + 15);
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO member_notices (member_id, kind, title, body, href, ref_key) VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?)").join(", ")}`,
+    ).bind(...chunk.flatMap((memberId) => [memberId, kind, title, body, href, refKey])).run();
+  }
 }
 
 async function counts(env: Env, memberId: string): Promise<{ unread: number; unseen: number }> {
@@ -183,6 +184,47 @@ async function markThreadRead(env: Env, memberId: string, threadId: number) {
   ).bind(memberId, `msg:${threadId}:%`).run();
 }
 
+const PEOPLE_CACHE_NS = "people_cache";
+const PEOPLE_CACHE_KEY = "v1";
+const PEOPLE_CACHE_TTL_MS = 300_000;
+
+async function cachedPeopleDirectory(env: Env): Promise<{ memberId: string; name: string }[]> {
+  if (env.ROSTER instanceof D1KV) {
+    return (await listMembers(env.ROSTER))
+      .filter((person) => person.held !== true)
+      .map((person) => ({ memberId: person.memberId, name: person.name }));
+  }
+  const now = Date.now();
+  let stamp = "0:0";
+  try {
+    const cached = await env.DB.prepare(
+      `SELECT
+         (SELECT value FROM kv_store WHERE ns = ?1 AND key = ?2) AS raw,
+         (SELECT expires_at FROM kv_store WHERE ns = ?1 AND key = ?2) AS expires_at,
+         (SELECT COALESCE(MAX(expires_at), 0) || ':' || COUNT(*) FROM kv_store WHERE ns = ?4 AND expires_at > ?3) AS stamp`,
+    ).bind(PEOPLE_CACHE_NS, PEOPLE_CACHE_KEY, now, ROSTER_RECENT_NS).first<{ raw: string | null; expires_at: number | null; stamp: string | null }>();
+    stamp = cached?.stamp ?? "0:0";
+    if (cached?.raw && cached.expires_at != null && cached.expires_at > now) {
+      const parsed = JSON.parse(cached.raw) as { rosterStamp?: unknown; people?: { memberId: string; name: string }[] };
+      if (parsed.rosterStamp === stamp && Array.isArray(parsed.people)) return parsed.people;
+    }
+  } catch {
+    /* D1 unavailable or mock DB without kv_store */
+  }
+  const people = (await listMembers(env.ROSTER))
+    .filter((person) => person.held !== true)
+    .map((person) => ({ memberId: person.memberId, name: person.name }));
+  try {
+    await env.DB.prepare(
+      `INSERT INTO kv_store (ns, key, value, expires_at) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(ns, key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
+    ).bind(PEOPLE_CACHE_NS, PEOPLE_CACHE_KEY, JSON.stringify({ rosterStamp: stamp, people }), now + PEOPLE_CACHE_TTL_MS).run();
+  } catch {
+    /* best-effort D1 cache */
+  }
+  return people;
+}
+
 export async function handleMemberMessages(
   request: Request,
   env: Env,
@@ -242,12 +284,12 @@ export async function handleMemberMessages(
   }
 
   if (pathname === "/me/messages/people" && method === "GET") {
+    if (await kvRateLimited(env, "dmpeople:" + self, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const query = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || "";
     if (query.length > 40) return json({ error: "invalid_query" }, 400, origin);
-    const people = (await listMembers(env.ROSTER))
-      .filter((person) => person.memberId !== self && person.held !== true && (!query || person.name.toLowerCase().includes(query)))
-      .slice(0, 8)
-      .map((person) => ({ memberId: person.memberId, name: person.name }));
+    const people = (await cachedPeopleDirectory(env))
+      .filter((person) => person.memberId !== self && (!query || person.name.toLowerCase().includes(query)))
+      .slice(0, 8);
     return json({ people }, 200, origin);
   }
 

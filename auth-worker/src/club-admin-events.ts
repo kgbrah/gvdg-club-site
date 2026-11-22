@@ -365,11 +365,11 @@ export async function handleAdminEvents(
       let holes = (await db.getLayoutHoles(env.DB, ev?.layout_id)).map((h) => h.hole);
       if (!holes.length) holes = Array.from({ length: asInt(b.holeCount) || 18 }, (_, i) => i + 1);
       const assigned = assignShotgun(order.map(String), holes, asInt(b.groupSize) || 4);
-      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, rid, { starting_hole: assigned[i]!.hole })));
+      await db.batchUpdateRegistrations(env.DB, order.map((rid, i) => ({ id: rid, starting_hole: assigned[i]!.hole })));
     } else {
       const opts = asInt(b.size) ? { size: asInt(b.size)! } : { count: asInt(b.count) || 2 };
       const assigned = assignTeams(order.map(String), opts);
-      await Promise.all(order.map((rid, i) => db.adminUpdateRegistration(env.DB, rid, { team: assigned[i]!.team })));
+      await db.batchUpdateRegistrations(env.DB, order.map((rid, i) => ({ id: rid, team: assigned[i]!.team })));
     }
     return json({ registrations: await db.listRegistrations(env.DB, id) }, 200, origin);
   }

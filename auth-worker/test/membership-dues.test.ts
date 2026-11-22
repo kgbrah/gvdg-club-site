@@ -335,6 +335,28 @@ describe("welcome email + push + in-app flag", () => {
     expect(m.html).toContain("Welcome to the club");
     expect(m.text).not.toMatch(/PIN: \d/);
   });
+  it("blocks private/loopback/metadata push endpoints on application push subscribe and approval send", async () => {
+    const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign"]);
+    const pubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
+    const privRaw = new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey));
+    const env = await makeEnv({ VAPID_PUBLIC_KEY: b64url(pubRaw), VAPID_PRIVATE_KEY: b64url(privRaw) });
+    const sub = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+    const subRaw = new Uint8Array(await crypto.subtle.exportKey("raw", sub.publicKey));
+    const keys = { p256dh: b64url(subRaw), auth: b64url(crypto.getRandomValues(new Uint8Array(16))) };
+    const { data } = await apply(env);
+    for (const endpoint of ["https://127.0.0.1/p", "https://169.254.169.254/p", "https://localhost/p", "https://foo.local/p"]) {
+      const res = await worker.fetch(req(`/membership/apply/${data.application.id}/push`, "POST", { endpoint, keys, payToken: data.payToken }), env);
+      expect(res.status, endpoint).toBe(400);
+      expect((await jsonOf(res)).error).toBe("invalid_subscription");
+    }
+    await env.DB.raw.prepare("INSERT INTO membership_push_subscriptions (application_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)")
+      .run(data.application.id, "https://127.0.0.1/ssrf", keys.p256dh, keys.auth);
+    const a = ctx();
+    await approve(env, data.application.id, a.c);
+    await Promise.all(a.jobs);
+    expect(calls.filter((c) => c.url.includes("127.0.0.1"))).toHaveLength(0);
+    expect(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM membership_push_subscriptions").get()).toEqual({ n: 0 });
+  });
 });
 
 describe("email preview", () => {
