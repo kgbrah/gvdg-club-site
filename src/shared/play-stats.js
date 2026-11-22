@@ -404,7 +404,7 @@ export function playStatsKindPayload(rows, memberId) {
     for (const style of PLAY_STYLES) {
       const filtered = (Array.isArray(rows) ? rows : []).filter((row) => (
         (group === "all" || playRowGroup(row) === group) &&
-        (style === "all" || playRowStyle(row) === style)
+        (style === "all" ? playRowStyle(row) !== "putting" : playRowStyle(row) === style)
       ));
       views[playViewKey(group, style)] = playStatsBucket(filtered, memberId);
     }

@@ -64,8 +64,10 @@ export async function startLiveEvent(
   startBody: Record<string, unknown> = {},
 ): Promise<Response> {
   const stub = env.LIVE.get(env.LIVE.idFromName("event:" + eid));
-  const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
+  const ev = (await db.getEvent(env.DB, eid)) as (Record<string, unknown> & { status?: string | null; layout_id?: number | null; players?: Record<string, unknown>[] }) | null;
   if (!ev) return json({ error: "not_found" }, 404, origin);
+  if (ev.status === "final") return json({ error: "round_already_final" }, 409, origin);
+  if (ev.status === "live") return json({ error: "already_started" }, 409, origin);
   const eventConfig = (await db.getEventConfig(env.DB, eid)) as { live_scoring_config?: unknown; play_format?: unknown; ctp_fee_cents?: number | null } | null;
   let liveScoringConfig: LiveScoringConfig;
   try {
@@ -284,6 +286,7 @@ export async function handleClubLive(
     const mineRes = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": memberId } });
     const mine = await mineRes.json().catch(() => ({})) as Record<string, unknown>;
     if (mineRes.status !== 200) return json(mine, mineRes.status, origin);
+    if (mine.cardId == null || !Number.isInteger(mine.playerIndex)) return json({ error: "not_on_card" }, 403, origin);
     return submitLiveMapMark({
       env,
       origin,
@@ -331,7 +334,8 @@ export async function handleClubLive(
       const id = await scoreIdentity(request, env, null);
       if (id.authMember) {
         const mineRes = await stub.fetch("https://do/mine", { headers: { "X-Auth-Member": id.authMember } });
-        onCard = mineRes.status === 200;
+        const mine = mineRes.status === 200 ? await mineRes.json().catch(() => ({})) as Record<string, unknown> : {};
+        onCard = mineRes.status === 200 && mine.cardId != null && Number.isInteger(mine.playerIndex);
         if (!id.authMember.startsWith("g_")) {
           const member = await getMember(env.ROSTER, id.authMember);
           serverName = member?.name || "";
@@ -391,7 +395,7 @@ export async function handleClubLive(
       if (r.status === 200) await dropLiveRound(env, "event:" + eid);
       return json(data, r.status, origin);
     }
-    return liveProxy(stub, "/" + sub, { method: "POST", body: JSON.stringify(body) }, origin);
+    return liveProxy(stub, "/" + sub, { method: "POST", headers: { "X-Auth-Admin": "true" }, body: JSON.stringify(body) }, origin);
   }
   return json({ error: "not_found" }, 404, origin);
 }

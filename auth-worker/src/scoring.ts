@@ -179,8 +179,13 @@ function bagTag(breakdown: string | null | undefined): { current: boolean } | nu
 function parseOutcome(matchResult: string | null | undefined): string | null {
   if (!matchResult) return null;
   try {
-    const m = JSON.parse(matchResult) as { outcome?: unknown };
-    return typeof m?.outcome === "string" ? m.outcome : null;
+    const m = JSON.parse(matchResult) as { outcome?: unknown; holesWon?: unknown; holesLost?: unknown; holesTied?: unknown };
+    if (typeof m?.outcome !== "string") return null;
+    if (m.holesWon != null || m.holesLost != null || m.holesTied != null) {
+      const played = (Number(m.holesWon) || 0) + (Number(m.holesLost) || 0) + (Number(m.holesTied) || 0);
+      if (played === 0) return null;
+    }
+    return m.outcome;
   } catch {
     return null;
   }
@@ -286,6 +291,14 @@ export interface TeamStanding {
  *  on a tie / 0 to the loser, counted ONCE per (event, team) — so a doubles match's several result rows per
  *  team count as one team result. Rows lacking a team scoring_group + match outcome (stroke rounds) are
  *  ignored. Returns [] when the league has no matchplay team rounds. */
+function matchDedupeKey(eventId: number | null | undefined, team: string, group: { targetId?: unknown; members?: unknown } | null): string {
+  const members = Array.isArray(group?.members)
+    ? group.members.filter((m): m is string => typeof m === "string" && m.trim() !== "").slice().sort().join(",")
+    : "";
+  const idPart = members || (typeof group?.targetId === "string" && group.targetId ? group.targetId : "");
+  return idPart ? `${String(eventId ?? "")}|${team}|${idPart}` : `${String(eventId ?? "")}|${team}`;
+}
+
 export function computeTeamStandings(
   rows: { event_id?: number | null; scoring_group?: string | null; match_result?: string | null }[],
 ): TeamStanding[] {
@@ -294,7 +307,7 @@ export function computeTeamStandings(
   for (const r of rows) {
     const outcome = parseOutcome(r.match_result);
     if (!outcome || !r.scoring_group) continue;
-    let group: { label?: unknown; teamName?: unknown } | null = null;
+    let group: { label?: unknown; teamName?: unknown; targetId?: unknown; members?: unknown } | null = null;
     try {
       group = JSON.parse(r.scoring_group);
     } catch {
@@ -302,8 +315,8 @@ export function computeTeamStandings(
     }
     const team = typeof group?.label === "string" ? group.label : null;
     if (!team) continue;
-    const dedup = String(r.event_id ?? "") + "|" + team;
-    if (seen.has(dedup)) continue; // count each match once per team
+    const dedup = matchDedupeKey(r.event_id, team, group);
+    if (seen.has(dedup)) continue; // count each match side once per card/pair in an event
     seen.add(dedup);
     let t = map.get(team);
     if (!t) {
@@ -335,24 +348,30 @@ function teamSide(label: unknown): "red" | "blue" | null {
 export function computeRoundWinners(
   rows: { event_id?: number | null; scoring_group?: string | null; match_result?: string | null }[],
 ): Record<number, "red" | "blue" | "tie"> {
-  const out: Record<number, "red" | "blue" | "tie"> = {};
+  const seen = new Set<string>();
+  const totals = new Map<number, { red: number; blue: number }>();
   for (const r of rows) {
     const outcome = parseOutcome(r.match_result);
-    if (!outcome || r.event_id == null) continue;
-    if (isTieOutcome(outcome)) {
-      out[r.event_id] = "tie";
-      continue;
-    }
-    if (out[r.event_id] === "tie") continue; // a recorded tie wins over stragglers
-    if (!isWinOutcome(outcome) || !r.scoring_group) continue;
-    let label: unknown = null;
+    if (!outcome || r.event_id == null || !r.scoring_group) continue;
+    let group: { label?: unknown; targetId?: unknown; members?: unknown } | null = null;
     try {
-      label = (JSON.parse(r.scoring_group) as { label?: unknown }).label;
+      group = JSON.parse(r.scoring_group) as { label?: unknown; targetId?: unknown; members?: unknown };
     } catch {
-      label = null;
+      group = null;
     }
+    const label = typeof group?.label === "string" ? group.label : "";
     const side = teamSide(label);
-    if (side) out[r.event_id] = side;
+    if (!side) continue;
+    const dedup = matchDedupeKey(r.event_id, side, group);
+    if (seen.has(dedup)) continue;
+    seen.add(dedup);
+    const cur = totals.get(r.event_id) ?? { red: 0, blue: 0 };
+    cur[side] += matchplayPoints(outcome);
+    totals.set(r.event_id, cur);
+  }
+  const out: Record<number, "red" | "blue" | "tie"> = {};
+  for (const [eventId, score] of totals) {
+    out[eventId] = score.red > score.blue ? "red" : score.blue > score.red ? "blue" : "tie";
   }
   return out;
 }

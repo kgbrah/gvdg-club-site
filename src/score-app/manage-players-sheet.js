@@ -15,7 +15,7 @@ function PairEditor({ players, onSavePairs }) {
 
   React.useEffect(() => {
     setLabels(pairLabels(players));
-  }, [players]);
+  }, [(Array.isArray(players) ? players : []).map((p) => `${p?.index ?? ""}:${p?.team ?? ""}`).join("|")]);
 
   return h("div", { className: "card stack manage-pairs" }, [
     h("label", { className: "lbl", key: "label" }, "Doubles pairs"),

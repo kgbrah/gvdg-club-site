@@ -393,8 +393,17 @@ export async function handleBagTags(
         return json({ error: "stale_tags" }, 409, origin);
       }
       if (!await tags.claimChallenge(env.DB, challenge.id, "settled")) return json({ error: "not_found" }, 404, origin);
-      const done = await settleLeagueChallenge(env, challenge, member.memberId);
-      if ("error" in done) return json({ error: done.error }, done.status, origin);
+      let done;
+      try {
+        done = await settleLeagueChallenge(env, challenge, member.memberId);
+      } catch (error) {
+        await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
+        throw error;
+      }
+      if ("error" in done) {
+        await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
+        return json({ error: done.error }, done.status, origin);
+      }
       notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: done.changes > 0 });
       return json({ ok: true, changes: done.changes }, 200, origin);
     }
@@ -411,11 +420,20 @@ export async function handleBagTags(
     }
     const claimed = await tags.claimChallenge(env.DB, challenge.id, "settled");
     if (!claimed) return json({ error: "not_found" }, 404, origin);
-    const settled = await settlePlayers(env, challenge.series_id, [
-      { memberId: challenge.challenger_id, score: challenge.challenger_score },
-      { memberId: challenge.defender_id, score: challenge.defender_score },
-    ], "challenge", member.memberId);
-    if ("error" in settled) return json({ error: settled.error }, settled.status, origin);
+    let settled;
+    try {
+      settled = await settlePlayers(env, challenge.series_id, [
+        { memberId: challenge.challenger_id, score: challenge.challenger_score },
+        { memberId: challenge.defender_id, score: challenge.defender_score },
+      ], "challenge", member.memberId);
+    } catch (error) {
+      await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
+      throw error;
+    }
+    if ("error" in settled) {
+      await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
+      return json({ error: settled.error }, settled.status, origin);
+    }
     notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: settled.changes > 0 });
     return json({ ok: true, changes: settled.changes }, 200, origin);
   }

@@ -19,7 +19,8 @@ function pairingError(result) {
 }
 
 export function WatchPairing({ api, roundCode, eventId }) {
-  const round = roundCode ? { roundCode } : { eventId };
+  const normalizedCode = typeof roundCode === "string" ? roundCode.trim().toUpperCase() : "";
+  const round = normalizedCode ? { roundCode: normalizedCode } : { eventId };
   const query = new URLSearchParams(round).toString();
   return h(PairingForm, { api, round, query, key: query });
 }

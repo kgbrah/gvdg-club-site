@@ -13,7 +13,7 @@ import { withMemberPhotos } from "./profile-photo.js";
 import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { asInt, asStr } from "./input.js";
-import { isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
+import { holesForPutting, isLiveFormatError, normalizeLiveScoringConfig, type LiveScoringConfig } from "./live-format.js";
 import { mintOpenPlaySession } from "./open-play.js";
 import { weatherLocationForCourse } from "./weather.js";
 import { buildCasualArchiveSnapshot, shouldUseCasualArchive } from "./casual-archive.js";
@@ -135,7 +135,9 @@ export async function handleCasualRounds(
     if (await kvRateLimited(env, createKey, createLimit, createWindow)) return json({ error: "rate_limited" }, 429, origin);
     const b = (await readJson(request)) ?? {};
     const layoutId = asInt(b.layout_id);
-    if (layoutId == null) return json({ error: "invalid_request" }, 400, origin);
+    if (layoutId == null && (b.liveScoringConfig as { scoringStyle?: unknown } | undefined)?.scoringStyle !== "putting" && (b.live_scoring_config as { scoringStyle?: unknown } | undefined)?.scoringStyle !== "putting") {
+      return json({ error: "invalid_request" }, 400, origin);
+    }
     let liveScoringConfig: LiveScoringConfig;
     try {
       liveScoringConfig = normalizeLiveScoringConfig(b.liveScoringConfig ?? b.live_scoring_config);
@@ -143,7 +145,10 @@ export async function handleCasualRounds(
       if (isLiveFormatError(error)) return json({ error: "invalid_live_scoring_config" }, 400, origin);
       throw error;
     }
-    const holes = await liveHolesWithPins(env, layoutId);
+    if (layoutId == null && liveScoringConfig.scoringStyle !== "putting") return json({ error: "invalid_request" }, 400, origin);
+    const holes = liveScoringConfig.scoringStyle === "putting"
+      ? holesForPutting(liveScoringConfig)
+      : await liveHolesWithPins(env, layoutId);
     if (!holes.length) return json({ error: "no_layout_holes" }, 400, origin);
     const requested = normalizeRoundCode(b.code ?? b.round_code);
     if (requested && "error" in requested) return json({ error: "invalid_code" }, 400, origin);
@@ -157,7 +162,9 @@ export async function handleCasualRounds(
       }
       if (!code) return json({ error: "start_failed" }, 503, origin);
     }
-    const layout = (await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null;
+    const layout = layoutId != null
+      ? ((await db.getLayout(env.DB, layoutId)) as { name?: string | null; course_id?: number | null } | null)
+      : null;
     const course = layout?.course_id != null ? ((await db.getCourse(env.DB, layout.course_id)) as { name?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null } | null) : null;
     const weatherLocation = weatherLocationForCourse(course, layout); // null unless the course has coords
     const pairLabel = asStr(b.pairLabel, 40) ?? asStr(b.pair_label, 40) ?? asStr(b.team, 40);
@@ -331,7 +338,9 @@ export async function handleCasualRounds(
     if (await kvRateLimited(env, "live-finish:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
     const b = (await readJson(request)) ?? {};
     const r = await stub.fetch("https://do/finish-card", { method: "POST", headers: hdr, body: JSON.stringify({ playerIndex: b.playerIndex, recovery: b.recovery }) });
-    return json(await r.json().catch(() => ({})), r.status, origin);
+    const data = (await r.json().catch(() => ({}))) as { status?: unknown };
+    if (r.status === 200 && data?.status === "final") await dropLiveRound(env, "round:" + code);
+    return json(data, r.status, origin);
   }
   if (sub === "live" && method === "POST" && seg[3] === "location") {
     if (await kvRateLimited(env, "live-loc:" + actor.sub, 30, 60)) return json({ error: "rate_limited" }, 429, origin);
@@ -351,6 +360,7 @@ export async function handleCasualRounds(
     const mineRes = await stub.fetch("https://do/mine", { headers: hdr });
     const mine = await mineRes.json().catch(() => ({})) as Record<string, unknown>;
     if (mineRes.status !== 200) return json(mine, mineRes.status, origin);
+    if (mine.cardId == null || !Number.isInteger(mine.playerIndex)) return json({ error: "not_on_card" }, 403, origin);
     return submitLiveMapMark({
       env,
       origin,

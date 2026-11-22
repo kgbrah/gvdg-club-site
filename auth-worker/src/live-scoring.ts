@@ -106,7 +106,7 @@ function rankedPuttingTargets(input: LiveScoringInput): RankedTargetRow[] {
 
 function strokeTargetRows(input: LiveScoringInput): TargetStrokeRow[] {
   const rows = input.targets.map((target) => targetStrokeRow(input.holes, input.players, target, input.config.scoringStyle));
-  rows.sort((a, b) => a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
+  rows.sort((a, b) => (a.thru > 0 ? 0 : 1) - (b.thru > 0 ? 0 : 1) || a.toPar - b.toPar || a.total - b.total || a.name.localeCompare(b.name));
   return rows;
 }
 
@@ -186,7 +186,7 @@ function targetStrokeRow(
   return {
     memberId: target.memberIds[0] ?? null,
     name: target.label,
-    division: null,
+    division: target.type === "player" ? (playerAt(players, target.playerIndexes[0])?.division ?? null) : null,
     thru,
     total,
     toPar,

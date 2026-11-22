@@ -1,3 +1,4 @@
+import { matchPlayStartHole } from "../../src/shared/match-play-order.js";
 import type { ScoreTarget } from "./live-format.js";
 import type { PlayerState } from "./scoring.js";
 
@@ -40,15 +41,26 @@ export function summarizeMatchplay(input: {
   let rightWins = 0;
   let tied = 0;
   let played = 0;
+  let gapSeen = false;
+  const activePlayers = [leftTarget, rightTarget].flatMap((target) =>
+    target.playerIndexes.map((index) => input.players[index]).filter((p): p is PlayerState => Boolean(p && !p.removed)),
+  );
+  const start = matchPlayStartHole(input.holes, activePlayers);
+  const startIdx = start == null ? -1 : input.holes.findIndex((hole) => hole.hole === start);
+  const orderedHoles = startIdx > 0 ? input.holes.slice(startIdx).concat(input.holes.slice(0, startIdx)) : input.holes;
 
-  for (const hole of input.holes) {
+  for (const hole of orderedHoles) {
     const leftScore = input.scoreForTarget(input.players, leftTarget, hole.hole);
     const rightScore = input.scoreForTarget(input.players, rightTarget, hole.hole);
-    if (leftScore == null || rightScore == null) continue;
+    if (leftScore == null || rightScore == null) {
+      gapSeen = true;
+      continue;
+    }
     played++;
     if (leftScore < rightScore) leftWins++;
     else if (rightScore < leftScore) rightWins++;
     else tied++;
+    if (!gapSeen && Math.abs(leftWins - rightWins) > orderedHoles.length - played) break;
   }
 
   const holesRemaining = Math.max(0, input.holes.length - played);

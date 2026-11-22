@@ -65,8 +65,12 @@ const WIND_GUST_BASELINE_MPH = 18;
 const GUST_SSA_STROKES_PER_MPH = 0.035;
 const MAX_GUST_SSA_ADJUSTMENT = 1.5;
 
-export function pointsPerThrow(ssa: number): number {
-  return ssa > HIGH_SSA_BREAKPOINT ? -0.225067 * ssa + 21.3858 : -0.487095 * ssa + 34.5734;
+export function pointsPerThrow(ssa: number, holeCount = 18): number {
+  const holes = Number.isFinite(holeCount) && holeCount > 0 ? holeCount : 18;
+  const ssa18 = holes === 18 ? ssa : ssa * (18 / holes);
+  const raw = ssa18 > HIGH_SSA_BREAKPOINT ? -0.225067 * ssa18 + 21.3858 : -0.487095 * ssa18 + 34.5734;
+  const clamped = Math.max(0.5, raw);
+  return holes === 18 ? clamped : clamped * (18 / holes);
 }
 
 export function roundRatingForScore(score: number, ssa: number, ppt: number): number {
@@ -120,21 +124,22 @@ export function aggregatePlayerRating(input: { readonly rounds: readonly RatingR
     .map((round) => normalizedRound(round, usableNow))
     .filter((round) => round != null)
     .sort((a, b) => b.dateMs - a.dateMs);
-  const filtered = eligible.length >= 7 ? dropLowOutliers(eligible) : eligible;
-  if (filtered.length < MIN_OVERALL_ROUNDS) {
-    return { rating: null, ratedRounds: filtered.length, weightedRounds: filtered.length };
+  if (eligible.length < MIN_OVERALL_ROUNDS) {
+    return { rating: null, ratedRounds: eligible.length, weightedRounds: eligible.length };
   }
-  const weightedRatings = filtered.map((round) => round.rating);
-  if (filtered.length >= RECENT_WEIGHT_ROUNDS) {
-    const recentCount = Math.ceil(filtered.length * 0.25);
+  const filtered = dropLowOutliers(eligible);
+  const kept = filtered.length ? filtered : eligible;
+  const weightedRatings = kept.map((round) => round.rating);
+  if (kept.length >= RECENT_WEIGHT_ROUNDS) {
+    const recentCount = Math.ceil(kept.length * 0.25);
     for (let i = 0; i < recentCount; i++) {
-      const round = filtered[i];
+      const round = kept[i];
       if (round) weightedRatings.push(round.rating);
     }
   }
   return {
     rating: Math.round(mean(weightedRatings)),
-    ratedRounds: filtered.length,
+    ratedRounds: kept.length,
     weightedRounds: weightedRatings.length,
   };
 }

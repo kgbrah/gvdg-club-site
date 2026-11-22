@@ -51,7 +51,8 @@ function normalizedCode(value: unknown): string | null {
 }
 
 function roundKey(code: unknown, event: unknown): string | null {
-  if (typeof code === "string" && /^[A-Z0-9]{4,12}$/.test(code) && !event) return "round:" + code;
+  const normalizedCode = typeof code === "string" ? code.trim().toUpperCase() : "";
+  if (normalizedCode && /^[A-Z0-9]{4,12}$/.test(normalizedCode) && !event) return "round:" + normalizedCode;
   if (code || (typeof event !== "number" && (typeof event !== "string" || !/^\d{1,15}$/.test(event)))) return null;
   const id = Number(event);
   return Number.isSafeInteger(id) && id > 0 ? "event:" + id : null;
@@ -170,9 +171,14 @@ async function watchDevices(request: Request, env: Env, origin: string | null): 
   if (!key) return json({ error: "invalid_round" }, 400, origin);
   const actor = await phoneActor(request, env, key);
   if (!actor) return json({ error: "unauthorized" }, 401, origin);
+  const cardRes = await proxy(env, key, "watch-card", actor.id, {}).catch(() => null);
+  if (!cardRes || !cardRes.ok) return json({ devices: [] }, 200, origin);
+  const cardData = await cardRes.json<{ scope?: WatchScope }>().catch(() => null);
+  const roundId = cardData?.scope?.roundId;
+  if (!roundId) return json({ devices: [] }, 200, origin);
   const rows = await env.DB.prepare(`SELECT id, approved_at, expires_at FROM watch_pairings
-    WHERE actor_id = ? AND round_key = ? AND expires_at > ? AND revoked_at IS NULL ORDER BY approved_at DESC`)
-    .bind(actor.id, key, Date.now()).all<Pairing>();
+    WHERE actor_id = ? AND round_key = ? AND round_id = ? AND expires_at > ? AND revoked_at IS NULL ORDER BY approved_at DESC`)
+    .bind(actor.id, key, roundId, Date.now()).all<Pairing>();
   return json({ devices: rows.results.map((row) => ({ deviceId: row.id, approvedAt: row.approved_at, expiresAt: row.expires_at })) }, 200, origin);
 }
 

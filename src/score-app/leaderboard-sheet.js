@@ -98,7 +98,41 @@ export function soloKarmaKey(standing) {
   return keys.length === 1 && keys[0] ? keys[0] : "";
 }
 
-export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded }) {
+function standingMetric(standing, { handicapped, isMatchplay, isPutting }) {
+  if (isPutting) return Number(standing.total) || 0;
+  if (isMatchplay) {
+    const match = standing.match || {};
+    return String(match.outcome || "") + ":" + String(match.lead ?? "") + ":" + String(match.status || "");
+  }
+  if (handicapped) {
+    return standing.handicapStart != null ? "net:" + (Number(standing.net) || 0) : "gross:" + (Number(standing.toPar) || 0);
+  }
+  return Number(standing.toPar) || 0;
+}
+
+function standingRankLabels(standings, { handicapped, isMatchplay, isPutting, status }) {
+  let scoredPos = 0;
+  let lastRank = 0;
+  let lastMetric = Symbol("none");
+  return standings.map((standing) => {
+    if (!standing || !standing.thru) return "—";
+    if (!isMatchplay && status === "final" && standing.place === null) return "DNF";
+    if (Number.isInteger(standing.place) && standing.place > 0) {
+      scoredPos += 1;
+      lastRank = standing.place;
+      lastMetric = standingMetric(standing, { handicapped, isMatchplay, isPutting });
+      return String(standing.place);
+    }
+    scoredPos += 1;
+    const metric = standingMetric(standing, { handicapped, isMatchplay, isPutting });
+    const rank = metric === lastMetric ? lastRank : scoredPos;
+    lastRank = rank;
+    lastMetric = metric;
+    return String(rank);
+  });
+}
+
+export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, isDoubles, isMatchplay, isPutting, onHole, relClass, relText, standings, startExpanded, status }) {
   const [toggled, setToggled] = React.useState(() => new Set());
   function isOpen(id, hasCard) {
     if (!hasCard) return false;
@@ -115,6 +149,7 @@ export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, is
   }
   if (!standings.length) return h("p", { className: "muted" }, "No scores in yet.");
   const handicapped = !isMatchplay && handicapOn(standings);
+  const rankLabels = standingRankLabels(standings, { handicapped, isMatchplay, isPutting, status });
   const resultHead = isMatchplay ? "Match" : isPutting ? "Points" : handicapped ? "Net" : "To par";
   const columns = [
     h("th", { key: "rank" }, ""),
@@ -156,7 +191,7 @@ export function LeaderboardTable({ clipApi, clipGeneration, clipHoles, clips, is
         : h("span", { className: "lb-name-text", key: "label" }, [standingName(standing), h(KarmaChip, { karmaKey: soloKarmaKey(standing), key: "karma" })]);
       return h(React.Fragment, { key: id }, [
         h("tr", { key: "row" }, [
-          h("td", { className: "pos", key: "pos" }, String(index + 1)),
+          h("td", { className: "pos", key: "pos" }, rankLabels[index]),
           h("td", { className: "name", key: "name" }, [label, startLine(standing)]),
           h("td", { key: "thru" }, String(standing.thru || 0)),
           resultCell(standing, isMatchplay, isPutting, handicapped, relClass, relText),
@@ -227,6 +262,7 @@ function LeaderboardSheet(props) {
           relClass: props.relClass,
           relText: props.relText,
           standings: props.standings,
+          status: props.status,
         }),
         props.exportData ? h("div", { className: "udisc-export-section", key: "udisc" },
           h(UDiscExportDetails, { courseId: props.exportData.courseId, scorecard: props.exportData.scorecard }),

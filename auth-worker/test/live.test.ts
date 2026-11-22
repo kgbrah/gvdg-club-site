@@ -1910,7 +1910,7 @@ describe("LiveEventDO finish-card", () => {
     const finished = await act(live, "finish-card", "m_a");
     expect(finished.status).toBe(200);
     await expect(finished.json()).resolves.toMatchObject({ status: "live", lockedCardIds: ["h4"], missing: [],
-      standings: expect.arrayContaining([expect.objectContaining({ name: "A", match: expect.objectContaining({ lead: 6, holesRemaining: 3 }) })]),
+      standings: expect.arrayContaining([expect.objectContaining({ name: "A", match: expect.objectContaining({ lead: 5, holesRemaining: 4, status: "won 5&4" }) })]),
     });
   });
 
@@ -2663,6 +2663,7 @@ describe("durable phone score and lie recovery", () => {
     const snapshot = await replay.json() as { players: { scores: Record<number, number>; recoveryOrders?: unknown }[] };
     expect(snapshot.players[0]?.scores[1]).toBe(4);
     expect(snapshot.players.every((row) => row.recoveryOrders === undefined)).toBe(true);
+    expect((await live.fetch(new Request("https://do/cancel", { method: "POST", headers: { "X-Auth-Admin": "true" } }))).status).toBe(200);
     await send(live, "start", "ana", { eventId: 42, holes: [hole], players: [player, cardmate, guest] });
     expect((await send(live, "score", "ana", first)).status).toBe(409);
   });

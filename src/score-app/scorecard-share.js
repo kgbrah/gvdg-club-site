@@ -1,4 +1,4 @@
-import { isMatchplayScoring, matchStatusText, relText, scoreRows, strokesForRow } from "./score-view-model.js";
+import { isMatchplayScoring, isPuttingScoring, matchStatusText, relText, scoreRows, strokesForRow } from "./score-view-model.js";
 
 const EASTERN = "America/New_York";
 export const SHARE_CARD_WIDTH = 1080;
@@ -74,27 +74,36 @@ export function shareCardDate(now = new Date()) {
 
 export function buildShareCard(state, options = {}) {
   const scorerIndex = options.scorerIndex ?? (state && state.scorerIndex) ?? (state && state.myIndex);
+  const putting = isPuttingScoring(state || {});
   const holes = Array.isArray(state && state.holes) ? state.holes : [];
   const rows = scoreRows(state || {});
   const players = rows.map((row) => {
     const scores = holes.map((hole) => strokesForRow(state, row, hole.hole, scorerIndex));
     const pars = holes.map((hole) => hole.par);
     let total = 0;
+    let makes = 0;
     let toPar = 0;
     let thru = 0;
     scores.forEach((strokes, index) => {
       if (typeof strokes !== "number") return;
       thru += 1;
-      total += strokes;
-      toPar += strokes - (typeof pars[index] === "number" ? pars[index] : 0);
+      if (putting) {
+        makes += strokes;
+        const pts = Number(holes[index]?.points);
+        total += strokes * (Number.isInteger(pts) && pts > 0 ? pts : 1);
+      } else {
+        total += strokes;
+        toPar += strokes - (typeof pars[index] === "number" ? pars[index] : 0);
+      }
     });
     return {
       label: displayName(row.label),
-      mix: scoreMix(scores, pars),
+      mix: putting ? { aces: 0, eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0 } : scoreMix(scores, pars),
       scores,
       thru,
+      ...(putting ? { makes: thru ? makes : null } : {}),
       total: thru ? total : null,
-      toPar: thru ? toPar : null,
+      toPar: putting ? null : (thru ? toPar : null),
     };
   });
   const when = shareCardDate(options.now);
@@ -107,9 +116,11 @@ export function buildShareCard(state, options = {}) {
     date: when.display,
     dateIso: when.iso,
     roundCode: String(options.roundCode || "").trim(),
+    putting,
     matchplay,
     matchStatus: matchplay ? String(matchStatusText(state || {}) || "").replace(/^Match:\s*/, "") : "",
     holes: holes.map((hole) => hole.hole),
+    distances: holes.map((hole) => hole.distance_ft ?? null),
     pars: holes.map((hole) => hole.par),
     players,
     scored: players.some((player) => player.thru > 0),
@@ -138,7 +149,9 @@ export function shareCardSize(model) {
   const holes = (model && model.holes) || [];
   const players = Math.max(1, ((model && model.players) || []).length);
   const banks = Math.max(1, Math.ceil(holes.length / 9) || 1);
-  const mixCount = ((model && model.players) || []).filter((player) => player && player.thru && player.mix).length;
+  const mixCount = model && model.putting
+    ? 0
+    : ((model && model.players) || []).filter((player) => player && player.thru && player.mix).length;
   const mixBand = mixCount ? 16 + mixCount * MIX_H : 0;
   const height = HEADER_H + banks * (BANK_HEAD + players * ROW_H) + Math.max(0, banks - 1) * BANK_GAP + mixBand + FOOTER_H;
   return { width: SHARE_CARD_WIDTH, height: Math.max(MIN_HEIGHT, height) };
@@ -244,13 +257,18 @@ export function drawShareCard(ctx, model, size) {
       ctx.fillText(String(card.holes[bank.start + i]), PAD + NAME_W + cellW * i + cellW / 2, y);
     }
     ctx.textAlign = "right";
-    ctx.fillText("TOT", width - PAD - REL_W - 8, y);
-    ctx.fillText("PAR", width - PAD, y);
+    ctx.fillText(card.putting ? "MK" : "TOT", width - PAD - REL_W - 8, y);
+    ctx.fillText(card.putting ? "PTS" : "PAR", width - PAD, y);
     ctx.textAlign = "center";
     ctx.font = "700 16px Archivo, system-ui, sans-serif";
     for (let i = 0; i < bank.count; i += 1) {
-      const par = card.pars[bank.start + i];
-      ctx.fillText(typeof par === "number" ? "par " + par : "", PAD + NAME_W + cellW * i + cellW / 2, y + 22);
+      if (card.putting) {
+        const dist = card.distances && card.distances[bank.start + i];
+        ctx.fillText(typeof dist === "number" && dist > 0 ? dist + " ft" : "", PAD + NAME_W + cellW * i + cellW / 2, y + 22);
+      } else {
+        const par = card.pars[bank.start + i];
+        ctx.fillText(typeof par === "number" ? "par " + par : "", PAD + NAME_W + cellW * i + cellW / 2, y + 22);
+      }
     }
 
     y += BANK_HEAD;
@@ -270,7 +288,7 @@ export function drawShareCard(ctx, model, size) {
       ctx.font = "800 26px Archivo, system-ui, sans-serif";
       for (let i = 0; i < bank.count; i += 1) {
         const strokes = player.scores[bank.start + i];
-        ctx.fillStyle = scoreColor(strokes, card.pars[bank.start + i]);
+        ctx.fillStyle = card.putting ? LIGHT : scoreColor(strokes, card.pars[bank.start + i]);
         ctx.fillText(
           typeof strokes === "number" ? String(strokes) : "–",
           PAD + NAME_W + cellW * i + cellW / 2,
@@ -281,15 +299,22 @@ export function drawShareCard(ctx, model, size) {
       ctx.textAlign = "right";
       ctx.fillStyle = LIGHT;
       ctx.font = "800 26px Archivo, system-ui, sans-serif";
-      ctx.fillText(player.total == null ? "–" : String(player.total), width - PAD - REL_W - 8, mid);
-      ctx.fillStyle = relColor(player.toPar);
-      ctx.font = "800 22px Archivo, system-ui, sans-serif";
-      ctx.fillText(player.toPar == null ? "–" : relText(player.toPar), width - PAD, mid);
+      if (card.putting) {
+        ctx.fillText(player.makes == null ? "–" : String(player.makes), width - PAD - REL_W - 8, mid);
+        ctx.fillStyle = GOLD;
+        ctx.font = "800 22px Archivo, system-ui, sans-serif";
+        ctx.fillText(player.total == null ? "–" : String(player.total), width - PAD, mid);
+      } else {
+        ctx.fillText(player.total == null ? "–" : String(player.total), width - PAD - REL_W - 8, mid);
+        ctx.fillStyle = relColor(player.toPar);
+        ctx.font = "800 22px Archivo, system-ui, sans-serif";
+        ctx.fillText(player.toPar == null ? "–" : relText(player.toPar), width - PAD, mid);
+      }
       y += ROW_H;
     });
   });
 
-  const mixed = players.filter((player) => player && player.thru && player.mix);
+  const mixed = card.putting ? [] : players.filter((player) => player && player.thru && player.mix);
   if (mixed.length) {
     y += 18;
     mixed.forEach((player) => {

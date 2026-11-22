@@ -79,14 +79,22 @@ function uploadNotice(round, account) {
 }
 
 function useArchiveSync(rounds, { account, online }, onRound, onError) {
+  const retriedAuth = React.useRef(new Set());
+  const authRetryKey = account?.active ? (account.token || account.id || "active") : "";
   const candidates = rounds.filter((row) => row.finishedAt && !row.receipt && sameOfflineOwner(row.owner, account));
-  const next = candidates.filter((row) => !row.uploadError || row.retryAt).sort((a, b) => (a.retryAt || 0) - (b.retryAt || 0))[0];
+  const next = candidates
+    .filter((row) => !row.uploadError || row.retryAt
+      || (row.uploadError === "unauthorized" && authRetryKey && !retriedAuth.current.has(row.localId + ":" + authRetryKey)))
+    .sort((a, b) => (a.retryAt || 0) - (b.retryAt || 0))[0];
   const running = React.useRef(null);
   const [tick, wake] = React.useReducer((count) => count + 1, 0);
   const send = React.useCallback(async (row) => {
     if (running.current || !navigator.onLine) return;
     let actor = offlineAccount();
     if (sameOfflineOwner(actor, row.owner)) {
+      if (row.uploadError === "unauthorized" && actor.active) {
+        retriedAuth.current.add(row.localId + ":" + (actor.token || actor.id || "active"));
+      }
       running.current = row.localId;
       try {
         if (actor.active && actor.kind === "open" && !actor.openArchive) actor = await extendOpenArchive(actor) || actor;
@@ -230,7 +238,7 @@ function OfflineHub({ route, connection }) {
     setRounds((rows) => rows.map((item) => item.localId === row.localId ? row : item));
     if (row.receipt) refresh();
   }, []);
-  useArchiveSync(visible, connection, onRound, setNotice);
+  const retryUpload = useArchiveSync(visible, connection, onRound, setNotice);
   React.useEffect(() => {
     let current = true;
     offlineRoundStore.list(account).then((items) => { if (current) setRounds(items); },
@@ -246,7 +254,9 @@ function OfflineHub({ route, connection }) {
       h("h3", { className: "section" }, "On this device"),
       visible.map((row) => h("div", { className: "stack", key: row.localId },
         h("a", { className: "btn secondary", style: { textDecoration: "none" }, href: hrefFor(row.localId) }, row.source.courseName + " · " + row.source.layoutName),
-        h("p", { className: "muted" }, coursePackDate(row.startedAt) + " · " + (row.finishedAt ? uploadNotice(row, account) : "In progress"))))),
+        h("p", { className: "muted" }, coursePackDate(row.startedAt) + " · " + (row.finishedAt ? uploadNotice(row, account) : "In progress")),
+        row.finishedAt && !row.receipt && row.uploadError && account?.active
+          && h("button", { className: "btn ghost small", type: "button", onClick: () => { void retryUpload(row); } }, "Retry upload")))),
     loading ? h("p", { role: "status" }, "Reading saved course layouts…")
       : error ? h("p", { role: "alert" }, "Saved course layouts could not be read. Check device storage and try again.")
       : h(RosterSetup, { key: ownerKey, packs: packs.filter((row) => row.quality.scorable), preferredKey: route.packKey, account }),
@@ -482,9 +492,17 @@ function ActiveRound({ round, edit, busy, notice }) {
       onFullScorecard: () => setReview(true), onOpenFinish: () => setFinish(true), onCloseFinish: () => setFinish(false),
       onAgreeFinish: complete, onSaveShots: saveShots,
       onThrows: (holeNumber, change) => {
-        void edit((current) => current.finishedAt ? current : ({
-          ...current, marks: { ...current.marks, [holeNumber]: change(current.marks[holeNumber] || []) },
-        }));
+        void edit((current) => {
+          if (current.finishedAt) return current;
+          const nextMarks = change(current.marks[holeNumber] || []);
+          if (nextMarks.length > 18) {
+            queueMicrotask(() => setNotice("This hole already has 18 marked lies"));
+            return current;
+          }
+          return {
+            ...current, marks: { ...current.marks, [holeNumber]: nextMarks },
+          };
+        });
       },
     }));
 }
