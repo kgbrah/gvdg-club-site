@@ -267,6 +267,56 @@ describe("Batch 5: D1KV, ConsistentKV, Promo Pool & UDisc Normalization", () => 
     expect(pB2.keys[0]!.name).toBe("member:m_2");
   });
 
+  it("ConsistentKV uses indexed point-reads for <= 2 distinct keys then promotes to overlay to keep batch D1 queries <= 50", async () => {
+    const backing = kv();
+    const sqlLog: string[] = [];
+    const countingDb = {
+      prepare(sql: string) {
+        const inner = db.prepare(sql);
+        const wrapped = {
+          bind(...args: unknown[]) {
+            inner.bind(...args);
+            return wrapped;
+          },
+          async all() {
+            sqlLog.push(sql);
+            return inner.all();
+          },
+          async first() {
+            sqlLog.push(sql);
+            return inner.first();
+          },
+          async run() {
+            sqlLog.push(sql);
+            return inner.run();
+          },
+        };
+        return wrapped;
+      },
+    };
+    const ckv = new ConsistentKV(backing as any, countingDb as any, "roster_recent");
+
+    // First 2 distinct get() calls execute indexed point-reads without scanning the namespace.
+    expect(await ckv.get("member:req_auth_1")).toBeNull();
+    expect(await ckv.get("member:req_auth_2")).toBeNull();
+    expect(sqlLog.length).toBe(2);
+    expect(sqlLog.every((s) => s.includes("WHERE ns = ?1 AND key = ?2"))).toBe(true);
+    expect(sqlLog.some((s) => s.includes("SELECT key, value"))).toBe(false);
+
+    // 25 more distinct get() + put() pairs (total 27 gets + 25 puts, mirroring requireAuth + 25-row sheet-import/apply):
+    // 3rd distinct get() promotes to a single SELECT key, value overlay load, keeping total queries <= 30.
+    for (let i = 0; i < 25; i++) {
+      const k = `member:batch_${i}`;
+      expect(await ckv.get(k)).toBeNull();
+      await ckv.put(k, `v_${i}`);
+      expect(await ckv.get(k)).toBe(`v_${i}`);
+    }
+    const overlayLoads = sqlLog.filter((s) => s.includes("SELECT key, value"));
+    expect(overlayLoads.length).toBe(1);
+    expect(sqlLog.length).toBeLessThanOrEqual(30);
+    expect(await ckv.get("member:batch_24")).toBe("v_24");
+  });
+
   it("admin tier promotion/removal releases guest_promo, reset-pin clears locks, and UDisc normalizes @ prefix", async () => {
     db.raw.prepare("INSERT INTO guest_promo (member_id, approved_by) VALUES ('m_guest', 'm_admin')").run();
     const adminToken = await tok("m_admin");

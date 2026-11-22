@@ -83,6 +83,7 @@ export async function purgeExpired(db: D1Database, ns: string, now = Date.now())
 
 export const ROSTER_RECENT_NS = "roster_recent";
 const RECENT_TTL_MS = 180_000; // 3x Cloudflare Workers KV's 60s eventual-consistency window
+const POINT_READ_LIMIT = 2;
 
 type OverlayEntry = { op: "put"; value: string } | { op: "del" };
 
@@ -94,13 +95,16 @@ type OverlayEntry = { op: "put"; value: string } | { op: "del" };
  * eventually. Removing a member and immediately re-adding them (or signing in with a brand-new
  * temporary PIN) can otherwise hit the stale cached record and fail with `member_exists` or 401.
  *
- * Every `put()`/`delete()` mirrors a 3-minute row in D1; each request loads unexpired rows in
- * ONE D1 query on first read so `listMembers()` stays well within D1's per-request query budget.
+ * Every `put()`/`delete()` mirrors a 3-minute row in D1; the first `POINT_READ_LIMIT` (2) distinct
+ * `get()` calls use indexed D1 point-reads (avoiding full-namespace scans on single-member routes
+ * like `/me` and `/login`), and the 3rd distinct `get()` or any `list()` promotes to the single-query
+ * overlay so batch handlers (`sheet-import/apply`, `listMembers`) stay well within D1's 50-query free-plan budget.
  */
 export class ConsistentKV implements KVListLike {
   private overlay: Map<string, OverlayEntry> | null = null;
   private loading: Promise<Map<string, OverlayEntry>> | null = null;
   private pointCache = new Map<string, OverlayEntry | null>();
+  private pointReads = 0;
   private listed = new Map<string, Set<string>>();
 
   constructor(
@@ -165,18 +169,24 @@ export class ConsistentKV implements KVListLike {
     }
   }
 
+  private async fromOverlay(map: Map<string, OverlayEntry>, key: string): Promise<string | null> {
+    const hit = map.get(key);
+    if (hit) return hit.op === "del" ? null : hit.value;
+    return this.kv.get(key);
+  }
+
   async get(key: string): Promise<string | null> {
     if (this.loading && !this.overlay) await this.loading;
-    if (this.overlay) {
-      const hit = this.overlay.get(key);
-      if (hit) return hit.op === "del" ? null : hit.value;
-      return this.kv.get(key);
-    }
+    if (this.overlay) return this.fromOverlay(this.overlay, key);
     if (this.pointCache.has(key)) {
       const hit = this.pointCache.get(key);
       if (hit) return hit.op === "del" ? null : hit.value;
       return this.kv.get(key);
     }
+    if (this.pointReads >= POINT_READ_LIMIT) {
+      return this.fromOverlay(await this.loadOverlay(), key);
+    }
+    this.pointReads += 1;
     let entry: OverlayEntry | null = null;
     try {
       const row = await this.db
@@ -188,6 +198,13 @@ export class ConsistentKV implements KVListLike {
       if (row) entry = this.parseEntry(row.value);
     } catch {
       /* D1 unavailable or unit-test mock without kv_store — fall through to KV directly */
+    }
+    const postAwaitOverlay = this.overlay as Map<string, OverlayEntry> | null;
+    if (postAwaitOverlay) return this.fromOverlay(postAwaitOverlay, key);
+    if (this.pointCache.has(key)) {
+      const hit = this.pointCache.get(key);
+      if (hit) return hit.op === "del" ? null : hit.value;
+      return this.kv.get(key);
     }
     this.pointCache.set(key, entry);
     if (entry) return entry.op === "del" ? null : entry.value;
