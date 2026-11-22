@@ -230,7 +230,7 @@ try {
     await row.getByRole("button", { name: "Zelle received" }).click();
     await page.getByText("Registered and paid (1 of 72)").waitFor();
     const csv = decodeURIComponent((await page.getByRole("link", { name: "Download the list (CSV)" }).getAttribute("href")).split(",").slice(1).join(","));
-    assert.match(csv, /^List,Order,Name,PDGA #,Division,Rating,Membership,Paid at,Method\nRegistered,1,Ada Lovelace,80024,MPO,,current,/);
+    assert.match(csv, /^List,Order,Name,PDGA #,Division,Paid at,Method\nRegistered,1,Ada Lovelace,80024,MPO,[^,]+,zelle\n$/);
     await page.getByLabel("MA3").fill("850");
     await page.getByRole("button", { name: "Save tournament settings" }).click();
     await page.getByText("Saved.").waitFor();
