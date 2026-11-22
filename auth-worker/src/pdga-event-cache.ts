@@ -39,7 +39,8 @@ export function freshPdgaEventCopy(raw: string | null | undefined, now = Date.no
 export async function refreshClubPdgaEventCopies(env: { DB: D1Like } & Partial<PdgaApiEnv>, now = Date.now()) {
   const keepFrom = new Date(now - PDGA_EVENT_KEEP_DAYS * DAY_MS).toISOString().slice(0, 10);
   const past = await env.DB.prepare(`SELECT ec.event_id FROM event_config ec JOIN events e ON e.id = ec.event_id
-      WHERE e.date IS NOT NULL AND substr(e.date, 1, 10) < ?
+      WHERE (e.status = 'cancelled' OR (COALESCE(substr(e.date, 1, 10), substr(e.starts_at, 1, 10)) IS NOT NULL
+          AND COALESCE(substr(e.date, 1, 10), substr(e.starts_at, 1, 10)) < ?))
         AND (ec.pdga_event IS NOT NULL OR EXISTS (SELECT 1 FROM registrations r WHERE r.event_id = ec.event_id
           AND (r.pdga_status IS NOT NULL OR r.pdga_rating IS NOT NULL)))`).bind(keepFrom).all<{ event_id: number }>();
   const pastIds = (past.results ?? []).map((row) => Number(row.event_id));
@@ -51,10 +52,14 @@ export async function refreshClubPdgaEventCopies(env: { DB: D1Like } & Partial<P
   let refreshed = 0;
   let cleared = 0;
   const current = await env.DB.prepare(`SELECT ec.event_id, ec.pdga_event_id, ec.pdga_event FROM event_config ec JOIN events e ON e.id = ec.event_id
-      WHERE ec.pdga_event_id IS NOT NULL AND (e.date IS NULL OR substr(e.date, 1, 10) >= ?) ORDER BY ec.event_id LIMIT ?`)
+      WHERE ec.pdga_event_id IS NOT NULL AND e.status != 'cancelled'
+        AND (COALESCE(substr(e.date, 1, 10), substr(e.starts_at, 1, 10)) IS NULL OR COALESCE(substr(e.date, 1, 10), substr(e.starts_at, 1, 10)) >= ?)
+      ORDER BY ec.event_id LIMIT ?`)
     .bind(keepFrom, MAX_REFRESH).all<{ event_id: number; pdga_event_id: number; pdga_event: string | null }>();
   const apiEnv = env as PdgaApiEnv;
+  const handled = new Set<number>();
   for (const row of current.results ?? []) {
+    handled.add(Number(row.event_id));
     let info: PdgaEventInfo | null = null;
     if (pdgaApiConfigured(apiEnv)) {
       try { info = await lookupPdgaEvent(apiEnv, Number(row.pdga_event_id)); } catch { info = null; }
@@ -63,6 +68,16 @@ export async function refreshClubPdgaEventCopies(env: { DB: D1Like } & Partial<P
       await env.DB.prepare("UPDATE event_config SET pdga_event = ? WHERE event_id = ?").bind(stampPdgaEvent(info, now), row.event_id).run();
       refreshed += 1;
     } else if (row.pdga_event && !freshPdgaEventCopy(row.pdga_event, now)) {
+      await env.DB.prepare("UPDATE event_config SET pdga_event = NULL WHERE event_id = ?").bind(row.event_id).run();
+      cleared += 1;
+    }
+  }
+  // Never leave expired copies cached past PDGA_EVENT_COPY_MAX_MS even beyond MAX_REFRESH.
+  const remaining = await env.DB.prepare("SELECT event_id, pdga_event FROM event_config WHERE pdga_event IS NOT NULL")
+    .all<{ event_id: number; pdga_event: string | null }>();
+  for (const row of remaining.results ?? []) {
+    if (handled.has(Number(row.event_id))) continue;
+    if (row.pdga_event && !freshPdgaEventCopy(row.pdga_event, now)) {
       await env.DB.prepare("UPDATE event_config SET pdga_event = NULL WHERE event_id = ?").bind(row.event_id).run();
       cleared += 1;
     }

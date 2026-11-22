@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import * as db from "./db.js";
-import { safeFetch, normalizeDgs, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscSchedulePageUrl, parseUdiscStandings, parseUdiscLeaderboard, tagStandingsFromBoards } from "./imports.js";
+import { safeFetch, normalizeCsvEvents, parseCsvRows, parseUdiscLayouts, ImportError, mergeUdiscCalendars, normalizeUdiscEventsUrl, parseUdiscCalendar, udiscSchedulePageUrl, parseUdiscStandings, parseUdiscLeaderboard, tagStandingsFromBoards } from "./imports.js";
 import {
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,
@@ -22,20 +22,12 @@ import { saveUdiscLeague } from "./udisc-league-save.js";
 import type { UdiscImportCandidate } from "./imports/udisc-events.js";
 import type { UdiscStandings } from "./imports/udisc-standings.js";
 
-const DEFAULT_DGS_FEED = "https://raw.githubusercontent.com/mostlysober252/GVDG-DGS-Scraper-2.0/main/tournaments.json";
 const IMPORT_BODY_BYTES = 600_000;
 
 export async function handleAdminImport(request: Request, env: Env, origin: string | null, adminId = "admin"): Promise<Response> {
   const kind = new URL(request.url).pathname.split("/").filter(Boolean)[2];
   const b = (await readJson(request, IMPORT_BODY_BYTES)) ?? {};
   try {
-    if (kind === "dgs") {
-      const url = asStr(b.feedUrl, 500) ?? DEFAULT_DGS_FEED;
-      const text = await safeFetch(url, ["raw.githubusercontent.com", "discgolfscene.com"]);
-      let feed: unknown;
-      try { feed = JSON.parse(text); } catch { return json({ error: "import_parse_failed" }, 422, origin); }
-      return json({ source: "dgs", candidates: normalizeDgs(feed) }, 200, origin);
-    }
     if (kind === "csv") {
       let csvText = typeof b.csv === "string" ? b.csv : null;
       if (csvText && csvText.length > 500_000) return json({ error: "csv_too_large" }, 413, origin);

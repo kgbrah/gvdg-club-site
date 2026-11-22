@@ -17,7 +17,7 @@ Set `GVDG_MEMBER_SURFACE_IMAGES` to change the evidence directory. When previewi
 | Practice and My bag | Equal-width Putting, Fieldwork and My bag navigation, session and throw forms, record groups, draft and sync feedback, destructive action confirmation and cancel, private export |
 | Events | Registered and open events, stable event deep link, fee and schedule, field, division/team and add-on selection, wallet and payment entry points, PDGA links and casual post form |
 | League schedule and Event results | League route and season controls, results rows, season links, score and spectator destinations |
-| Stats | Season summary, club estimates and evidence, personal history and filters, date error feedback, JSON/CSV downloads, PDGA rows |
+| Stats | Season summary, official PDGA rating, club estimates and evidence, personal history and filters, date error feedback, JSON/CSV downloads |
 | Imported history | Keyboard-accessible CSV picker, imported score rows, remove actions, and confirmation |
 | Club | Tool finder, grouped navigation, pro shop and club site links |
 | Club directory | Member search and recognition, course-condition form and history, meeting minutes, active league information |

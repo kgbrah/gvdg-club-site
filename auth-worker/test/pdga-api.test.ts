@@ -317,4 +317,80 @@ describe("features using the official API when the club's login is set", () => {
       expect([401, 403, 404]).toContain(response.status);
     }
   });
+
+  it("chunks >100 cached PDGA player reads past D1's variable limit and enforces the 60/10s outbound limit + 429 cooldown", async () => {
+    const many = Array.from({ length: 125 }, (_, i) => String(10000 + i));
+    const pdga = fakePdga({ players: Object.fromEntries(many.map((n) => [n, player(n, 925)])) });
+    vi.stubGlobal("fetch", pdga.handler);
+    const first = await lookupPdgaPlayers(apiEnv(), many, NOW);
+    expect(first.size).toBe(125);
+    const second = await lookupPdgaPlayers(apiEnv(), many, NOW);
+    expect(second.size).toBe(125);
+    expect(pdga.calls.filter((c) => c.url.includes("/players"))).toHaveLength(1);
+
+    // Global 60 req/10s outbound cap blocks request 61 without calling fetch.
+    resetPdgaApiSession();
+    ratelimit = kv();
+    const budgetDb = await sqliteDb();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(NOW);
+    try {
+      const calls: string[] = [];
+      vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.endsWith("/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
+        return Response.json({ players: [] });
+      });
+      const budgetEnv = { ...apiEnv(), DB: budgetDb as never };
+      for (let i = 0; i < 59; i += 1) {
+        await lookupPdgaPlayer(budgetEnv, String(50000 + i));
+      }
+      await expect(lookupPdgaPlayer(budgetEnv, "59999")).rejects.toMatchObject({ code: "rate_limited" });
+      expect(calls).toHaveLength(60); // 1 login + 59 lookups, blocked before 61st fetch
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    // 429 with Retry-After stores a cooldown and short-circuits immediate retries.
+    resetPdgaApiSession();
+    ratelimit = kv();
+    let hits = 0;
+    vi.stubGlobal("fetch", async () => {
+      hits += 1;
+      return new Response("slow down", { status: 429, headers: { "Retry-After": "30" } });
+    });
+    await expect(lookupPdgaPlayer(apiEnv(), "80024")).rejects.toMatchObject({ code: "rate_limited" });
+    await expect(lookupPdgaPlayer(apiEnv(), "80024")).rejects.toMatchObject({ code: "rate_limited" });
+    expect(hits).toBe(1);
+  });
+
+  it("never falls back to DiscGolfScene HTML scraping when the PDGA API is unavailable", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      return new Response("down", { status: 503 });
+    });
+    const env = { ...apiEnv(), PDGA_API_USERNAME: "" } as unknown as Env;
+    expect(await listNearbyPdgaEvents(env, { lat: 35.6127, lng: -77.3664 }, NOW)).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it("clears cancelled events, NULL-date past starts_at events, and expired >25th copies", async () => {
+    const pdga = fakePdga({ events: [{ tournament_id: "702", tournament_name: "Greenville Open", tier: "B", start_date: "2026-12-05", end_date: "2026-12-06" }] });
+    vi.stubGlobal("fetch", pdga.handler);
+    db.raw.exec(`INSERT INTO events (id, name, type, status, date, starts_at) VALUES
+      (10, 'Cancelled', 'tournament', 'cancelled', '2026-12-20', NULL),
+      (11, 'StartsAt Past', 'tournament', 'final', NULL, '2026-01-01T14:00:00Z')`);
+    db.raw.exec(`INSERT INTO event_config (event_id, pdga_event_id, pdga_event) VALUES
+      (10, 710, '{"name":"cancelled"}'),
+      (11, 711, '{"name":"old starts_at"}')`);
+    for (let id = 20; id < 50; id += 1) {
+      db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (${id}, 'Bulk ${id}', 'tournament', 'scheduled', '2027-01-01')`);
+      db.raw.exec(`INSERT INTO event_config (event_id, pdga_event_id, pdga_event) VALUES (${id}, ${800 + id}, '${stampPdgaEvent({ id: 800 + id, name: "Bulk", tier: "C", status: "", startDate: "", endDate: "", city: null, state: null, director: null, registrationUrl: null, url: "" }, NOW - 30 * 3_600_000)}')`);
+    }
+    const downEnv = { DB: db as never };
+    const summary = await refreshClubPdgaEventCopies(downEnv, NOW);
+    expect(summary.pastCleared).toBe(2);
+    expect(summary.cleared).toBe(30); // all 30 expired copies cleared, even past MAX_REFRESH=25
+  });
 });

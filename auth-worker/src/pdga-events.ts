@@ -1,7 +1,5 @@
 import type { Env } from "./env.js";
-import * as db from "./db.js";
 import { haversineMiles } from "./distance.js";
-import { safeFetch } from "./imports.js";
 import { D1KV } from "./d1kv.js";
 import { pdgaApiConfigured, searchPdgaEvents, type PdgaApiEnv } from "./pdga-api.js";
 
@@ -115,42 +113,6 @@ async function apiPlacedPdgaEvents(env: Env, origin: { lat: number; lng: number 
   }
 }
 
-export function discGolfSceneSearchUrl(lat: number, lng: number, miles = PDGA_EVENT_MILES): string {
-  const params = new URLSearchParams();
-  params.set("filter[location][country]", "USA");
-  params.set("filter[location][latitude]", lat.toFixed(4));
-  params.set("filter[location][longitude]", lng.toFixed(4));
-  params.set("filter[location][distance]", String(miles));
-  params.set("filter[location][units]", "mi");
-  return `https://www.discgolfscene.com/tournaments/search?${params.toString()}`;
-}
-
-function decodeText(value: string): string {
-  return value
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&middot;/gi, "·")
-    .replace(/&/gi, "&")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&#0*39;|'/gi, "'")
-    .replace(/"/gi, '"')
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function registrationUrl(raw: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "https:") return null;
-  if (parsed.hostname !== "www.discgolfscene.com" && parsed.hostname !== "discgolfscene.com") return null;
-  const match = parsed.pathname.match(/^\/tournaments\/([A-Za-z0-9][A-Za-z0-9_-]{2,})$/);
-  if (!match || /^[A-Z]{2}$/.test(match[1]!)) return null;
-  return `https://www.discgolfscene.com/tournaments/${match[1]}`;
-}
-
 function civilToday(now: number): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: CLUB_TIME_ZONE,
@@ -164,44 +126,12 @@ function civilToday(now: number): number {
   return year * 10000 + month * 100 + day;
 }
 
-function tierLabel(value: string): string {
-  const text = value.replace(/\s+/g, " ").trim();
-  if (!text || text.length > 48 || !/tier|flex|league/i.test(text)) return "";
-  if (/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/.test(text) && !/tier/i.test(text)) return "";
-  return text;
-}
-
 function eventDay(date: string): number | null {
   const match = date.match(/\b([A-Za-z]{3})\s+(\d{1,2})(?:-\d{1,2})?,\s+(\d{4})\b/);
   if (!match) return null;
   const month = MONTHS[match[1]!.toLowerCase()];
   if (month == null) return null;
   return Number(match[3]) * 10000 + (month + 1) * 100 + Number(match[2]);
-}
-
-export function parseDiscGolfSceneSearch(html: string, now = Date.now()): Omit<PdgaEvent, "lat" | "lng" | "miles">[] {
-  const today = civilToday(now);
-  const out: Omit<PdgaEvent, "lat" | "lng" | "miles">[] = [];
-  const seen = new Set<string>();
-  for (const chunk of html.split('class="tournament-list list-record').slice(1)) {
-    const href = chunk.match(/href="(https?:\/\/(?:www\.)?discgolfscene\.com\/tournaments\/[^"]+)"/i);
-    const url = href ? registrationUrl(href[1]!) : null;
-    if (!url || seen.has(url)) continue;
-    const name = decodeText(chunk.match(/<span class="name">([\s\S]*?)<\/span>/i)?.[1] || "");
-    if (!name) continue;
-    const info = decodeText(chunk.match(/<span class="info">([\s\S]*?)<\/span>/i)?.[1] || "");
-    const bolds = [...chunk.matchAll(/<b>([^<]+)<\/b>/gi)].map((match) => decodeText(match[1] || "")).filter(Boolean);
-    const place = bolds.find((value) => /,\s*[A-Z]{2}\b/.test(value)) || "";
-    const course = bolds.find((value) => value !== place) || "";
-    const badge = decodeText(chunk.match(/list-tier[\s\S]*?<br\s*\/?>\s*([^<]+)/i)?.[1] || "");
-    const tier = tierLabel(badge) || tierLabel(info.split("·")[0] || "") || "";
-    const dated = info.match(/\b[A-Za-z]{3}\s+\d{1,2}(?:-\d{1,2})?,\s+\d{4}\b/)?.[0] || info;
-    const day = eventDay(dated);
-    if (day != null && day < today) continue;
-    seen.add(url);
-    out.push({ name, date: dated, tier, course, place, url });
-  }
-  return out;
 }
 
 export function normalizePlaceText(value: string): string {
@@ -303,14 +233,7 @@ async function fetchPlacedPdgaEvents(
   origin: { lat: number; lng: number },
   now: number,
 ): Promise<PdgaEvent[]> {
-  const fromApi = await apiPlacedPdgaEvents(env, origin, now);
-  if (fromApi) return fromApi;
-  const html = await safeFetch(discGolfSceneSearchUrl(origin.lat, origin.lng), ["discgolfscene.com"], {
-    maxBytes: 2_000_000,
-    timeoutMs: 12000,
-  });
-  const courses = (await db.listCourses(env.DB).catch(() => [])) as PdgaEventCourse[];
-  return placePdgaEvents(parseDiscGolfSceneSearch(html, now), courses, origin);
+  return (await apiPlacedPdgaEvents(env, origin, now)) ?? [];
 }
 
 export async function listNearbyPdgaEvents(

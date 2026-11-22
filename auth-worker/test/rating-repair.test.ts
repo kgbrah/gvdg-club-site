@@ -404,4 +404,28 @@ describe("versioned, transactional rating repair", () => {
       .toBe(0);
     expect(sqlite.prepare("SELECT after_id FROM rating_repair_checkpoints WHERE stream='competition'").get()).toEqual({ after_id: 0 });
   });
+
+  it("keeps casual 'layout' ratings and baselines valid after 7-day PDGA anchor deletion while still invalidating on event changes", async () => {
+    const { db, sqlite } = await fixture();
+    await repairRatingSource(db, "competition", 1);
+    await repairRatingSource(db, "casual", 1, 38);
+    expect((await getMemberRatings(db, ALPHA)).casual.rounds.find((row) => row.round_code === "OLDPIN")).toMatchObject({
+      rating_method: "layout",
+      baseline_event_id: 1,
+      rating: expect.any(Number),
+    });
+    // Simulate the daily PDGA anchor purge removing all historical anchors 7+ days later.
+    sqlite.exec("DELETE FROM rating_anchor_snapshots");
+    expect((await getMemberRatings(db, ALPHA)).casual.rounds.find((row) => row.round_code === "OLDPIN")).toMatchObject({
+      rating_method: "layout",
+      baseline_event_id: 1,
+      rating: expect.any(Number),
+    });
+    await expect(getLayoutRatingBaseline(db, LAYOUT, positions(OLD), "2026-06-12")).resolves.toMatchObject({ eventId: 1 });
+    // Even without anchors, modifying a calibration competition score immediately withholds the casual rating.
+    sqlite.prepare("UPDATE results SET total=11, to_par=2, scorecard=? WHERE event_id=1 AND member_id=?").run(card(OLD, 11), BETA);
+    expect((await getMemberRatings(db, ALPHA)).casual.rounds.find((row) => row.round_code === "OLDPIN"))
+      .toMatchObject({ rating: null, unrated_reason: "rating-source-changed" });
+    await expect(getLayoutRatingBaseline(db, LAYOUT, positions(OLD), "2026-06-12")).resolves.toBeNull();
+  });
 });

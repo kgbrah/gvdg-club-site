@@ -19,6 +19,7 @@ import { MemberNotificationsPanel } from "./notifications-panel.js";
 import { fieldTestUsed } from "../shared/field-test-gate.js";
 import { FieldTestSwitch, useFieldTestMode } from "../shared/field-test-ui.js";
 import { KarmaChip } from "../shared/karma.js";
+import { shownProfilePhoto } from "../shared/profile-photo.js";
 import { PdgaMembershipCard } from "../shared/pdga-membership.js";
 import { ClubMembershipCard } from "./club-membership-card.js";
 import { checkPdgaMembershipAgain, usePdgaMembership } from "./pdga-membership.js";
@@ -149,11 +150,12 @@ function AdminPortalBanner() {
 
 export function MemberAccountPage() {
   const context = useMemberContext();
+  const photo = shownProfilePhoto(context.photo);
   return h("div", { className: "react-more-page member-subpage member-account-page", "data-react-member-account": "ready" }, [
     context.isAdmin ? h(AdminPortalBanner, { key: "admin" }) : null,
     h("section", { className: "member-link-section", "aria-label": "Membership", key: "membership" }, [
       h("div", { className: "member-settings-profile", key: "profile" }, [
-        context.photo ? h("img", { src: context.photo, alt: "", key: "photo" }) : h(UserRound, { size: 25, "aria-hidden": true, key: "icon" }),
+        photo ? h("img", { src: photo, alt: "", key: "photo" }) : h(UserRound, { size: 25, "aria-hidden": true, key: "icon" }),
         h("div", { key: "body" }, [
           h("h2", { key: "name" }, h("span", { className: "karma-line" }, [
             h("span", { key: "n" }, context.name || "Club membership"),

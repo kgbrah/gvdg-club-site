@@ -103,7 +103,8 @@ describe("the Worker's PDGA sources", () => {
     const offenders = files.flatMap((name) => {
       const text = readFileSync(new URL(name, dir), "utf8");
       return [/pdga\.com\/api\/v1/, /feat\/members/, /rating-detail/, /apps\/tournament\/live-api/, /live_results_fetch/,
-        /fetch\([^)]*pdga\.com\/(?:player|tour)/].flatMap((pattern) => pattern.test(text) ? [name + " " + pattern] : []);
+        /fetch\([^)]*pdga\.com\/(?:player|tour)/, /GVDG-DGS-Scraper/, /discgolfscene\.com\/tournaments\/search/,
+        /parseDiscGolfScene/, /safeFetch\([^)]*discgolfscene/].flatMap((pattern) => pattern.test(text) ? [name + " " + pattern] : []);
     });
     expect(offenders).toEqual([]);
   });

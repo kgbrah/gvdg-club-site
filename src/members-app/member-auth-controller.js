@@ -3,6 +3,7 @@ import { clearAuthError, setAuthBusy, setAuthFormState, setAuthFormValues, showA
 import { applyProfile, markEmailSaved, memberAuthProfile, memberDashboardContext, resetMemberProfile } from "./member-auth-state.js";
 import { createPasskeyController, passkeysSupported } from "./member-passkeys.js";
 import { createProfileController } from "./member-profile-controller.js";
+import { resetPdgaMembershipCache } from "./pdga-membership.js";
 import { clearMemberSession, memberTokenSubject, writeMemberSessionValue } from "../shared/member-session.js";
 
 let installed = false;
@@ -27,6 +28,8 @@ export function installMemberAuthController() {
     if (sessionExpiredShown) return;
     sessionExpiredShown = true;
     clearMemberSession();
+    resetMemberProfile();
+    resetPdgaMembershipCache();
     showLogin();
     showAuthError("login", "Your session expired - please sign in again.");
     setTimeout(() => {
@@ -302,6 +305,7 @@ export function installMemberAuthController() {
   function logout() {
     clearMemberSession();
     resetMemberProfile();
+    resetPdgaMembershipCache();
     setAuthFormValues("login", { pin: "" });
     showLogin();
   }

@@ -210,8 +210,7 @@ export default {
     }
   },
   // Daily ratings recompute (08:17 UTC), the 15-minute UDisc layout importer,
-  // an hourly PDGA event refresh (plus the PDGA layout-baseline ingest tick), and a Sunday 3pm
-  // Eastern UDisc league refresh.
+  // an hourly PDGA event refresh, and a Sunday 3pm Eastern UDisc league refresh.
   // Cron only — never reachable from the public fetch path.
   async scheduled(controller: ScheduledController, rawEnv: RawEnv, ctx: ExecutionContext): Promise<void> {
     const env = withKvFallback(rawEnv);

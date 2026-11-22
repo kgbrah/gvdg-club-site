@@ -12,7 +12,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { getMember } from "./roster.js";
 import { deadlinePassed } from "./event-deadlines.js";
 import {
-  lookupPdgaEvent, lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, pdgaEventUrl, PdgaApiError, PDGA_ATTRIBUTION, type PdgaApiEnv, type PdgaPlayer,
+  lookupPdgaEvent, lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, pdgaEventUrl, PdgaApiError, PDGA_ATTRIBUTION, PDGA_PLAYER_CACHE_MAX_MS, type PdgaApiEnv, type PdgaPlayer,
 } from "./pdga-api.js";
 import { freshPdgaEventCopy, stampPdgaEvent } from "./pdga-event-cache.js";
 import {
@@ -252,17 +252,22 @@ export async function handleTournamentPay(request: Request, env: Env, origin: st
 
 /** Admin: /admin/events/:id/tournament (GET, PUT), /admin/events/:id/registrations/:rid/{zelle-received,offer}, /admin/pdga-events/:id. */
 /** PDGA's own first and last names for these PDGA numbers, from the stored PDGA player records (no PDGA call). */
-async function storedPdgaNames(env: Env, raw: unknown[]): Promise<PdgaNames> {
+async function storedPdgaNames(env: Env, raw: unknown[], now = Date.now()): Promise<PdgaNames> {
   const numbers = [...new Set(raw.map((value) => normalPdgaNumber(value)).filter((n): n is string => Boolean(n)))];
   const names: PdgaNames = new Map();
   if (!numbers.length) return names;
-  const stored = await env.DB.prepare(`SELECT pdga_number, data FROM pdga_api_players WHERE pdga_number IN (${numbers.map(() => "?").join(", ")})`)
-    .bind(...numbers).all<{ pdga_number: string; data: string | null }>();
-  for (const row of stored.results ?? []) {
-    try {
-      const player = row.data ? JSON.parse(row.data) as { first_name?: unknown; last_name?: unknown } : null;
-      if (player && typeof player.first_name === "string" && typeof player.last_name === "string") names.set(row.pdga_number, { first: player.first_name.trim(), last: player.last_name.trim() });
-    } catch { /* the first word is the first name */ }
+  const freshAfter = now - PDGA_PLAYER_CACHE_MAX_MS;
+  for (let offset = 0; offset < numbers.length; offset += 80) {
+    const group = numbers.slice(offset, offset + 80);
+    const stored = await env.DB.prepare(
+      `SELECT pdga_number, data FROM pdga_api_players WHERE pdga_number IN (${group.map(() => "?").join(", ")}) AND fetched_at >= ?`,
+    ).bind(...group, freshAfter).all<{ pdga_number: string; data: string | null }>();
+    for (const row of stored.results ?? []) {
+      try {
+        const player = row.data ? JSON.parse(row.data) as { first_name?: unknown; last_name?: unknown } : null;
+        if (player && typeof player.first_name === "string" && typeof player.last_name === "string") names.set(row.pdga_number, { first: player.first_name.trim(), last: player.last_name.trim() });
+      } catch { /* the first word is the first name */ }
+    }
   }
   return names;
 }
@@ -326,7 +331,12 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
     }
     const row = await env.DB.prepare(`INSERT INTO event_config (event_id, pdga_event_id, pdga_event) VALUES (?, ?, ?)
         ON CONFLICT(event_id) DO UPDATE SET pdga_event_id = excluded.pdga_event_id,
-          pdga_event = CASE WHEN excluded.pdga_event_id IS NULL THEN NULL ELSE COALESCE(excluded.pdga_event, event_config.pdga_event) END
+          pdga_event = CASE
+            WHEN excluded.pdga_event_id IS NULL THEN NULL
+            WHEN excluded.pdga_event IS NOT NULL THEN excluded.pdga_event
+            WHEN excluded.pdga_event_id = event_config.pdga_event_id THEN event_config.pdga_event
+            ELSE NULL
+          END
         RETURNING pdga_event_id, pdga_event`).bind(eventId, pdgaEventId, pdgaEvent).first<{ pdga_event_id: number | null; pdga_event: string | null }>();
     return json({ pdgaEventId: row?.pdga_event_id ?? null, pdgaEvent: freshPdgaEventCopy(row?.pdga_event) }, 200, origin);
   }

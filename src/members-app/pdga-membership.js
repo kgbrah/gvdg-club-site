@@ -10,6 +10,12 @@ const listeners = new Set();
 let latest = null;
 const inflight = new Map();
 
+export function resetPdgaMembershipCache() {
+  latest = null;
+  inflight.clear();
+  listeners.forEach((listener) => listener(null));
+}
+
 /** Ask the server (fresh: ask PDGA now, not the stored answer); every card using the hook updates. */
 export function refreshPdgaMembership({ fresh = false } = {}) {
   const token = storageGet(TOKEN_KEY);
@@ -18,6 +24,7 @@ export function refreshPdgaMembership({ fresh = false } = {}) {
   if (inflight.has(key)) return inflight.get(key);
   const pending = requestJson("/pdga/membership" + (fresh ? "?fresh=1" : ""), { token })
     .then((data) => {
+      if (storageGet(TOKEN_KEY) !== token) return null;
       latest = data;
       listeners.forEach((listener) => listener(data));
       if (fresh && !pdgaMembershipNeedsAttention(data)) clearPdgaRenewStarted();

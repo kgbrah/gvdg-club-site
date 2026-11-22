@@ -10,30 +10,6 @@ function showImportCandidates(candidates, extra) {
   dispatchAdminEvent('gvdg:admin-import-candidates', detail);
 }
 
-export async function adminDgsImportFromReact(detail, { adminApi, adminMsg }) {
-  const requestId = detail.requestId;
-  if (!requestId) return;
-  adminMsg('Importing from DiscGolfScene…', true);
-  dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'loading', candidates: [] });
-  let r;
-  try {
-    r = await adminApi('/admin/import/dgs', { method: 'POST', body: {} });
-  } catch (err) {
-    adminMsg('DGS import failed', false);
-    dispatchAdminEvent('gvdg:admin-dgs-import-result', { ok: false, requestId });
-    return;
-  }
-  if (r.ok) {
-    const d = await r.json();
-    showImportCandidates(d.candidates);
-    adminMsg((d.candidates || []).length + ' candidates loaded', true);
-    dispatchAdminEvent('gvdg:admin-dgs-import-result', { ok: true, requestId });
-  } else {
-    adminMsg('DGS import failed (' + r.status + ')', false);
-    dispatchAdminEvent('gvdg:admin-dgs-import-result', { ok: false, requestId });
-  }
-}
-
 export async function adminCsvImportFromReact(detail, { adminApi, adminMsg }) {
   const requestId = detail.requestId;
   if (!requestId) return;
@@ -122,9 +98,6 @@ export async function adminUdiscSaveFromReact(detail, { adminApi, adminMsg }) {
 }
 
 export function installImportController(deps) {
-  window.addEventListener('gvdg:admin-dgs-import-request', async (event) => {
-    await adminDgsImportFromReact(event.detail || {}, deps);
-  });
   window.addEventListener('gvdg:admin-csv-import-request', async (event) => {
     await adminCsvImportFromReact(event.detail || {}, deps);
   });

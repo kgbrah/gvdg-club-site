@@ -361,8 +361,8 @@ export function startScoreApp(options) {
             const baseline = snap && snap.ratingBaseline;
             const baselineChanged = Boolean(baseline && Number.isFinite(baseline.ssa) && Number.isFinite(baseline.ppt)
                 && (!S.ratingBaseline || S.ratingBaseline.ssa !== baseline.ssa || S.ratingBaseline.ppt !== baseline.ppt
-                    || S.ratingBaseline.source !== (baseline.source === 'pdga' ? 'pdga' : '')));
-            if (baselineChanged) S.ratingBaseline = { ssa: baseline.ssa, ppt: baseline.ppt, source: baseline.source === 'pdga' ? 'pdga' : '' };
+                    || S.ratingBaseline.source !== ''));
+            if (baselineChanged) S.ratingBaseline = { ssa: baseline.ssa, ppt: baseline.ppt, source: '' };
             return weatherChanged || locationsChanged || baselineChanged;
         }
 

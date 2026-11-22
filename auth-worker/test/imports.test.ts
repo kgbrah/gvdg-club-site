@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { isAllowedUrl, isPublicHttpsUrl, parseCsvRows, normalizeDgs, safeFetch } from "../src/imports.js";
+import { isAllowedUrl, isPublicHttpsUrl, parseCsvRows, safeFetch } from "../src/imports.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -167,24 +167,5 @@ describe("safeFetch", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("should not be fetched")));
 
     await expect(safeFetch("https://evil.example/x", ["udisc.com"])).rejects.toThrow("url_not_allowed");
-  });
-});
-
-describe("normalizeDgs", () => {
-  it("maps a tournaments.json feed into event candidates", () => {
-    const feed = {
-      tournaments: [
-        { name: "The Hangover 6", date: "2026-01-01", venue: "West Meadowbrook", city: "Greenville, NC", tier: "C", url: "https://www.discgolfscene.com/tournaments/The_Hangover_6_2026" },
-      ],
-    };
-    const cands = normalizeDgs(feed);
-    expect(cands).toHaveLength(1);
-    expect(cands[0]).toMatchObject({ type: "tournament", name: "The Hangover 6", date: "2026-01-01", source: "dgs" });
-    expect(cands[0]!.external_url).toMatch(/discgolfscene\.com/);
-  });
-  it("tolerates a bare array and skips nameless rows", () => {
-    const cands = normalizeDgs([{ name: "X", date: "2026-02-02" }, { date: "2026-03-03" }]);
-    expect(cands).toHaveLength(1);
-    expect(cands[0]!.name).toBe("X");
   });
 });

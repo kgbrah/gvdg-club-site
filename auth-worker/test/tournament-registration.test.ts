@@ -250,6 +250,15 @@ describe("marking an event as a PDGA event from the event form", () => {
     expect(((await call("/events")).data.events as { id: number; pdga_event_id: number | null }[]).find((event) => event.id === 7)).toMatchObject({ pdga_event_id: 104547 });
     expect((await call("/admin/events/7/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: "abc" } })).data.error).toBe("invalid_pdga_event");
     expect((await call("/admin/events/99/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 1 } })).status).toBe(404);
+
+    // GET /events/:id/registration strips raw pdga_event from config; switching pdgaEventId while PDGA is down clears old pdga_event.
+    expect((await call("/events/7/registration")).data.config.pdga_event).toBeUndefined();
+    fakeServices({ pdgaDown: true });
+    resetPdgaApiSession();
+    const switched = await call("/admin/events/7/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 204547 } });
+    expect(switched.data).toEqual({ pdgaEventId: 204547, pdgaEvent: null });
+    fakeServices();
+    resetPdgaApiSession();
   });
 });
 
@@ -279,6 +288,12 @@ describe("results for PDGA Tournament Manager", () => {
     db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (9, 'League night', 'league', 'final', '2099-12-14')`);
     db.raw.exec(`INSERT INTO event_config (event_id) VALUES (9)`);
     expect((await call("/admin/events/9/pdga-results", { token: adminToken })).data.error).toBe("not_pdga_event");
+
+    // Expired cached PDGA player records (>6h) are ignored when building results.
+    db.raw.prepare("UPDATE pdga_api_players SET fetched_at = ? WHERE pdga_number = ?").run(Date.now() - 7 * 3_600_000, "80024");
+    db.raw.prepare("UPDATE registrations SET name = ? WHERE event_id = 7 AND member_id = ?").run("A. Lovelace", "m_ada");
+    const staleIgnored = await call("/admin/events/8/pdga-results", { token: adminToken });
+    expect(staleIgnored.data.rows.find((r: string[]) => r[5] === "80024")?.slice(3, 5)).toEqual(["A.", "Lovelace"]);
   });
 });
 
@@ -299,5 +314,15 @@ describe("the player list for PDGA Tournament Manager", () => {
     db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (9, 'League night', 'league', 'scheduled', '2099-12-14')`);
     db.raw.exec(`INSERT INTO event_config (event_id) VALUES (9)`);
     expect((await call("/admin/events/9/pdga-players", { token: adminToken })).data.error).toBe("not_pdga_event");
+  });
+
+  it("strips pdga_event from admin snapshot exports and rejects removed /admin/import/dgs", async () => {
+    await setup();
+    const exp = await call("/admin/export", { method: "POST", token: adminToken, body: { dry_run: true, includeEventConfig: true } });
+    expect(exp.status).toBe(200);
+    const configs = exp.data.exportData.tables.event_config as Record<string, unknown>[];
+    expect(configs.length).toBeGreaterThan(0);
+    expect(configs.every((row) => !("pdga_event" in row))).toBe(true);
+    expect((await call("/admin/import/dgs", { method: "POST", token: adminToken, body: {} })).status).toBe(404);
   });
 });

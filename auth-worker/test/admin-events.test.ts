@@ -330,7 +330,7 @@ describe("admin event management", () => {
     expect(state.openRegistrationSql).toMatch(/ORDER BY CASE WHEN e\.status = 'live' THEN 0 ELSE 1 END, e\.date, e\.id/);
   });
 
-  it("includes the registered field grouped for open events, without PDGA ratings", async () => {
+  it("includes the registered field grouped for open events, without PDGA ratings or clubmates' PDGA numbers", async () => {
     const state: Parameters<typeof db>[0] = {
       fieldRegs: [{ event_id: 5, member_id: "m_jane", name: "Jane", division: "MA1", team: null }],
       fieldWalkons: [{ event_id: 5, member_id: null, name: "Pat Guest", pdga_no: "12345", division: "MA2", team: null }],
@@ -343,9 +343,9 @@ describe("admin event management", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { events: { field?: { name: string; division: string | null; rating: number | null }[] }[] };
     expect(body.events[0]?.field).toEqual([
-      // A member carries the karma directory's anonymous key (never the member id); a guest has none.
-      { name: "Jane", karmaKey: expect.stringMatching(/^[0-9a-f]{16}$/), division: "MA1", team: null, pdga_no: "273070", rating: null },
-      { name: "Pat Guest", karmaKey: "", division: "MA2", team: null, pdga_no: "12345", rating: null },
+      // A member carries the karma directory's anonymous key (never the member id); clubmates' PDGA numbers stay private.
+      { name: "Jane", karmaKey: expect.stringMatching(/^[0-9a-f]{16}$/), division: "MA1", team: null, pdga_no: null, rating: null },
+      { name: "Pat Guest", karmaKey: "", division: "MA2", team: null, pdga_no: null, rating: null },
     ]);
   });
 
