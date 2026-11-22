@@ -3,6 +3,7 @@ import { KarmaChip } from "../shared/karma.js";
 import { ChevronLeft, Search } from "lucide-react";
 
 import { requestJson } from "./api.js";
+import { dashboardShowing } from "./dashboard-router.js";
 import { selectDashboardTab } from "./dashboard-shell.js";
 import { announceInboxChanged } from "./inbox-summary.js";
 import { formatClubListTime } from "../shared/events-model.js";
@@ -75,16 +76,14 @@ function PeopleSearch({ token, onPick }) {
       }),
     ]),
     status === "error" ? h("p", { className: "player-card-meta", role: "status", key: "error" }, "Could not load members.") : null,
-    people.length ? h("div", { className: "member-list-rows", role: "list", key: "list" }, people.map((person) => h("button", {
+    people.length ? h("ul", { className: "member-list-rows", key: "list", style: { listStyle: "none", margin: 0, padding: 0 } }, people.map((person) => h("li", { key: person.memberId }, h("button", {
       type: "button",
       className: "member-list-row",
-      role: "listitem",
-      key: person.memberId,
       onClick: () => onPick(person),
     }, h("span", { className: "member-list-copy" }, h("span", { className: "karma-line" }, [
       h("span", { className: "member-list-name", key: "name" }, person.name || "Member"),
       h(KarmaChip, { key: "karma", memberId: person.memberId }),
-    ]))))) : null,
+    ])))))) : null,
     status === "ready" && !people.length ? h("p", { className: "player-card-meta", key: "empty" }, query.trim() ? "No member matches that name." : "No other members to message yet.") : null,
   ]);
 }
@@ -149,20 +148,28 @@ function ThreadView({ token, threadId, onBack }) {
   const [error, setError] = React.useState("");
   const log = React.useRef(null);
 
-  const load = React.useCallback((quiet) => requestJson("/me/messages/" + threadId, { token }).then((data) => {
+  const load = React.useCallback((quiet, signal) => requestJson("/me/messages/" + threadId, { token, signal }).then((data) => {
+    if (signal?.aborted) return;
     setThread(data.thread || null);
     setMessages(Array.isArray(data.messages) ? data.messages : []);
     setMissing(false);
     announceInboxChanged();
   }).catch((caught) => {
+    if (caught?.name === "AbortError" || signal?.aborted) return;
     if (caught?.status === 404) setMissing(true);
     else if (!quiet) setError("Could not load this conversation.");
   }), [threadId, token]);
 
   React.useEffect(() => {
-    load(false);
-    const timer = window.setInterval(() => load(true), 8000);
-    return () => window.clearInterval(timer);
+    const controller = new AbortController();
+    load(false, controller.signal);
+    const timer = window.setInterval(() => {
+      if (!document.hidden && dashboardShowing("messages")) load(true, controller.signal);
+    }, 8000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
   }, [load]);
 
   React.useEffect(() => {
@@ -216,27 +223,33 @@ function InboxView({ token, onOpen }) {
   const [composing, setComposing] = React.useState(false);
   const [status, setStatus] = React.useState("loading");
 
-  const loadThreads = React.useCallback(() => requestJson("/me/messages", { token }).then((data) => {
+  const loadThreads = React.useCallback((signal) => requestJson("/me/messages", { token, signal }).then((data) => {
+    if (signal?.aborted) return;
     setThreads(Array.isArray(data?.threads) ? data.threads : []);
     setStatus("ready");
-  }).catch(() => setStatus("error")), [token]);
+  }).catch((caught) => {
+    if (caught?.name === "AbortError" || signal?.aborted) return;
+    setStatus("error");
+  }), [token]);
 
   React.useEffect(() => {
-    let live = true;
-    loadThreads();
-    requestJson("/me/notices", { token }).then((data) => {
-      if (!live) return;
+    const controller = new AbortController();
+    loadThreads(controller.signal);
+    requestJson("/me/notices", { token, signal: controller.signal }).then((data) => {
+      if (controller.signal.aborted) return;
       const rows = Array.isArray(data?.notices) ? data.notices : [];
       setNotices(rows);
       if (rows.some((row) => !row.seen)) {
-        requestJson("/me/notices/seen", { token, method: "POST", body: {} })
+        requestJson("/me/notices/seen", { token, method: "POST", body: {}, signal: controller.signal })
           .then(() => announceInboxChanged())
           .catch(() => {});
       }
     }).catch(() => {});
-    const timer = window.setInterval(loadThreads, 20000);
+    const timer = window.setInterval(() => {
+      if (!document.hidden && dashboardShowing("messages")) loadThreads(controller.signal);
+    }, 20000);
     return () => {
-      live = false;
+      controller.abort();
       window.clearInterval(timer);
     };
   }, [loadThreads, token]);

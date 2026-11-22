@@ -15,10 +15,8 @@ import {
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { KVLike } from "./ratelimit.js";
 import { getMember } from "./roster.js";
-import { publicMembership } from "./membership-year.js";
 import type { SessionClaims } from "./jwt.js";
-import { emailRequired } from "./member-routes.js";
-import { sanitizeProfilePhoto } from "./profile-photo.js";
+import { memberSessionBody } from "./member-routes.js";
 
 export interface StoredCredential {
   id: string; // base64url credential ID
@@ -105,7 +103,7 @@ export async function registrationOptions(env: WebAuthnEnv, memberId: string): P
     userDisplayName: member.name,
     attestationType: "none",
     excludeCredentials: existing.map((c) => ({ id: c.id, transports: c.transports as never })),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
   });
   await putChallenge(env.RATELIMIT, `reg:${memberId}`, options.challenge);
   return { status: 200, data: options };
@@ -170,7 +168,13 @@ export async function authenticationVerify(
 
   const userHandle = response.response?.userHandle;
   if (!userHandle) return { status: 400, data: { error: "no_user_handle" } };
-  const memberId = isoBase64URL.toUTF8String(userHandle);
+  let memberId = "";
+  try {
+    memberId = isoBase64URL.toUTF8String(userHandle);
+  } catch {
+    return { status: 400, data: { error: "invalid_user_handle" } };
+  }
+  if (!memberId) return { status: 400, data: { error: "invalid_user_handle" } };
 
   const member = await getMember(env.ROSTER, memberId);
   if (!member || member.held === true) return { status: 401, data: { error: "unknown_credential" } };
@@ -207,16 +211,7 @@ export async function authenticationVerify(
     status: 200,
     data: {
       token,
-      mustChangePin: member.mustChangePin,
-      email: member.email ?? null,
-      needsEmail: !member.email,
-      emailRequired: emailRequired(member),
-      name: member.name,
-      pdgaNo: member.pdgaNo ?? null,
-      udisc: member.udisc ?? null,
-      photo: sanitizeProfilePhoto(member.photo),
-      isAdmin: member.isAdmin === true, // so the admin portal link shows immediately after a passkey login
-      membership: publicMembership(member),
+      ...memberSessionBody(member),
     },
   };
 }

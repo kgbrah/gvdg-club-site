@@ -128,7 +128,10 @@ export async function setMemberTier(kv: KVLike, memberId: string, tier: MemberTi
   if (tier === "admin") m.isAdmin = true;
   else delete m.isAdmin;
   if (tier === "guest") m.guest = true;
-  else delete m.guest;
+  else {
+    delete m.guest;
+    delete m.guestPromo;
+  }
   await kv.put(RECORD(memberId), JSON.stringify(m));
   return m;
 }
@@ -138,7 +141,8 @@ export type UpdateResult = { ok: true; member: Member } | { ok: false; conflict:
 
 const RECORD = (id: string) => `member:${id}`;
 const IDX_PDGA = (n: string) => `idx:pdga:${normPdga(n)}`;
-const IDX_UDISC = (u: string) => `idx:udisc:${normUdisc(u)}`;
+const IDX_UDISC = (u: string) => `idx:udisc:${bareUdisc(u)}`;
+const LEGACY_IDX_UDISC = (u: string) => `idx:udisc:@${bareUdisc(u)}`;
 const IDX_EMAIL = (e: string) => `idx:email:${normEmail(e)}`;
 
 function normEmail(s: string): string {
@@ -243,7 +247,8 @@ export async function resolveMember(kv: KVLike, identifier: string): Promise<Mem
     const memberId = await kv.get(IDX_PDGA(pdgaDigits));
     if (memberId) return getMember(kv, memberId);
   }
-  const memberId = await kv.get(IDX_UDISC(id)) ?? (bareUdisc(id) !== normUdisc(id) ? await kv.get(IDX_UDISC(bareUdisc(id))) : null);
+  const bare = bareUdisc(id);
+  const memberId = (bare ? await kv.get(IDX_UDISC(bare)) : null) ?? (bare ? await kv.get(LEGACY_IDX_UDISC(bare)) : null);
   if (memberId) return getMember(kv, memberId);
 
   return null;
@@ -302,7 +307,7 @@ export async function updateProfile(kv: KVLike, memberId: string, patch: Profile
     if (owner && owner !== memberId && (await getMember(kv, owner))) return { ok: false, conflict: "pdga" };
   }
   if (newUdisc) {
-    const owner = await kv.get(IDX_UDISC(newUdisc));
+    const owner = (await kv.get(IDX_UDISC(newUdisc))) ?? (await kv.get(LEGACY_IDX_UDISC(newUdisc)));
     if (owner && owner !== memberId && (await getMember(kv, owner))) return { ok: false, conflict: "udisc" };
   }
 
@@ -316,8 +321,12 @@ export async function updateProfile(kv: KVLike, memberId: string, patch: Profile
     }
   }
   if (newUdisc !== undefined) {
-    if (m.udisc && normUdisc(m.udisc) !== normUdisc(newUdisc ?? "")) await kv.delete(IDX_UDISC(m.udisc));
+    if (m.udisc && bareUdisc(m.udisc) !== (newUdisc ? bareUdisc(newUdisc) : "")) {
+      await kv.delete(IDX_UDISC(m.udisc));
+      if ((await kv.get(LEGACY_IDX_UDISC(m.udisc))) === memberId) await kv.delete(LEGACY_IDX_UDISC(m.udisc));
+    }
     if (newUdisc) {
+      if ((await kv.get(LEGACY_IDX_UDISC(newUdisc))) === memberId) await kv.delete(LEGACY_IDX_UDISC(newUdisc));
       m.udisc = newUdisc;
       await kv.put(IDX_UDISC(newUdisc), memberId);
     } else {
@@ -344,7 +353,7 @@ export interface KVListLike extends KVLike {
 export function memberIdFor(input: { pdgaNo?: string | null; udisc?: string | null; email?: string | null }): string | null {
   const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
   if (pdga) return `m_${pdga}`;
-  const udisc = input.udisc ? normUdisc(input.udisc) : "";
+  const udisc = input.udisc ? bareUdisc(input.udisc) : "";
   if (udisc) return `m_u_${udisc}`;
   const email = input.email ? normEmail(input.email) : "";
   if (email) return `m_e_${fnv64(email)}`;
@@ -368,9 +377,12 @@ export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash
   if (!memberId || !input.name?.trim()) return { ok: false, reason: "invalid" };
   if (await getMember(kv, memberId)) return { ok: false, reason: "exists" };
   const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
-  const udisc = input.udisc ? normUdisc(input.udisc) : "";
+  const udisc = input.udisc ? bareUdisc(input.udisc) : "";
   if (pdga) { const o = await kv.get(IDX_PDGA(pdga)); if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" }; }
-  if (udisc) { const o = await kv.get(IDX_UDISC(udisc)); if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" }; }
+  if (udisc) {
+    const o = (await kv.get(IDX_UDISC(udisc))) ?? (await kv.get(LEGACY_IDX_UDISC(udisc)));
+    if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" };
+  }
   const email = input.email ? normEmail(input.email) : "";
   if (email) { const o = await kv.get(IDX_EMAIL(email)); if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" }; }
   const m: Member = {
@@ -441,7 +453,10 @@ export async function deleteMember(kv: KVLike, memberId: string): Promise<Member
   if (!m) return null;
   await kv.delete(RECORD(m.memberId));
   if (m.pdgaNo && (await kv.get(IDX_PDGA(m.pdgaNo))) === m.memberId) await kv.delete(IDX_PDGA(m.pdgaNo));
-  if (m.udisc && (await kv.get(IDX_UDISC(m.udisc))) === m.memberId) await kv.delete(IDX_UDISC(m.udisc));
+  if (m.udisc) {
+    if ((await kv.get(IDX_UDISC(m.udisc))) === m.memberId) await kv.delete(IDX_UDISC(m.udisc));
+    if ((await kv.get(LEGACY_IDX_UDISC(m.udisc))) === m.memberId) await kv.delete(LEGACY_IDX_UDISC(m.udisc));
+  }
   if (m.email && (await kv.get(IDX_EMAIL(m.email))) === m.memberId) await kv.delete(IDX_EMAIL(m.email));
   return m;
 }

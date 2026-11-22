@@ -8,6 +8,7 @@ import { selectDashboardTab } from "./dashboard-shell.js";
 import { dollars, formatEventDay, formatToPar } from "./format.js";
 import { HomeJobs } from "./home-jobs.js";
 import { useMemberContext } from "./member-context.js";
+import { historyLocked } from "./membership-needed.js";
 import { membershipHomeHint } from "../shared/membership-status.js";
 import { usePdgaStats } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
@@ -182,7 +183,13 @@ function NextPdgaCard() {
   ]);
 }
 
-function LastRoundCard({ token, onCasualHistory }) {
+function LastRoundCard(props) {
+  const context = useMemberContext();
+  if (historyLocked(context)) return null;
+  return h(LastRoundCardBody, props);
+}
+
+function LastRoundCardBody({ token, onCasualHistory }) {
   const [state, setState] = React.useState({ status: "idle", row: null });
 
   React.useEffect(() => {
@@ -199,7 +206,7 @@ function LastRoundCard({ token, onCasualHistory }) {
         setState({ status: "ready", row: latestHomeRound(payload?.results, payload?.casual) });
       })
       .catch((error) => {
-        if (error.name !== "AbortError") setState({ status: "ready", row: null });
+        if (error.name !== "AbortError") setState({ status: "error", row: null });
       });
     return () => controller.abort();
   }, [token, onCasualHistory]);
@@ -231,7 +238,8 @@ function LastRoundCard({ token, onCasualHistory }) {
           row.rating != null ? h("span", { className: "round-rating", key: "rating", "aria-label": `Round rating ${row.rating}` }, String(row.rating)) : null,
         ]),
       ])
-      : h("p", { className: "player-card-meta", key: "empty" }, state.status === "loading" ? "Loading last round…" : "No finished round yet."),
+      : h("p", { className: "player-card-meta", key: "empty", role: state.status === "error" ? "alert" : undefined },
+        state.status === "loading" ? "Loading last round…" : state.status === "error" ? "Could not load your last round." : "No finished round yet."),
   ]);
 }
 

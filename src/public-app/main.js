@@ -24,7 +24,7 @@ import { renewMemberSession } from "../shared/member-session.js";
 import { resolveApiBase } from "../shared/api-base.js";
 
 // Keep a signed-in member signed in while they use the app (a fresh 30-day session once a day).
-void renewMemberSession({ apiBase: resolveApiBase() });
+void renewMemberSession({ apiBase: resolveApiBase({ datasetKeys: ["authBase"] }) });
 
 // Sign-up links (PDGA join/renew, event registration, Disc Golf Scene, PayPal) leave the installed app and in-app
 // browsers (Facebook, Instagram…) for the phone's own browser, where people are already signed in.

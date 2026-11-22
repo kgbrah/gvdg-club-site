@@ -104,7 +104,7 @@ export function FeedbackItem({ feedback, onChange, viewer = null, showSubject = 
       feedback.canEdit ? h("button", { className: "shop-filter-reset", key: "edit", onClick: () => setMode("edit"), type: "button" }, "Edit feedback") : null,
       feedback.canReply ? h("button", { className: "shop-filter-reset", key: "reply", onClick: () => setMode("reply"), type: "button" }, "Reply") : null,
     ]) : null,
-    viewer && viewer.kind !== "public" && viewer.key && feedback.author?.key !== viewer.key && feedback.subject?.key !== viewer.key
+    viewer && viewer.kind !== "public" && viewer.key && feedback.author?.key !== viewer.key
       ? h(ReportControl, { id: feedback.id, key: "report", kind: "feedback", label: "Report feedback", viewer }) : null,
   ]);
 }

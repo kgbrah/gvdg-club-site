@@ -18,22 +18,20 @@ export function isOpenPlayId(id: string | null | undefined): boolean {
   return typeof id === "string" && id.startsWith(OPEN_PLAY_PREFIX);
 }
 
-/** Verify the session token AND that it hasn't been revoked by a PIN change/reset. Returns the
- *  claims plus the resolved member (or null member if the sub no longer exists — the roster read is
- *  reused by adminGate so it costs one KV get, not two). Returns null on bad/expired token,
- *  forced-change lockout, or a pinVer mismatch (the member's PIN was changed after this token was
- *  issued, invalidating every older token). A missing member is NOT itself a rejection, preserving
- *  the prior "a valid token is sufficient" contract for routes that don't require a roster record.
+/** Verify the session token AND that it hasn't been revoked by a PIN change/reset or removed/held account.
+ *  Returns the claims plus the resolved non-held member. Returns null on bad/expired token, forced-change
+ *  lockout, missing or held roster record, or a pinVer mismatch (the member's PIN was changed after this
+ *  token was issued, invalidating every older token).
  *  Open-play tokens (`play: true`) are always rejected here — they may only score casual rounds. */
 export async function requireAuth(
   request: Request,
   env: Env,
-): Promise<(SessionClaims & { member: Member | null }) | null> {
+): Promise<(SessionClaims & { member: Member }) | null> {
   const token = bearer(request);
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
   if (!claims || claims.mustChangePin || claims.play) return null;
   const member = await getMember(env.ROSTER, claims.sub);
-  if (member && (member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return null;
+  if (!member || member.held === true || (member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return null;
   return { ...claims, member };
 }
 
@@ -47,8 +45,7 @@ export async function requireMember(request: Request, env: Env, origin: string |
 export async function historyGate(request: Request, env: Env, origin: string | null): Promise<Response | null> {
   const claims = await requireAuth(request, env);
   if (!claims) return null; // the handler's own auth check answers
-  const member = claims.member ?? await getMember(env.ROSTER, claims.sub);
-  return hasHistoryAccess(member) ? null : json({ error: "membership_required" }, 403, origin);
+  return hasHistoryAccess(claims.member) ? null : json({ error: "membership_required" }, 403, origin);
 }
 
 export async function adminGate(request: Request, env: Env, origin: string | null): Promise<{ adminId: string } | Response> {
@@ -77,6 +74,6 @@ export async function requireRoundActor(request: Request, env: Env): Promise<Rou
   }
   if (claims.mustChangePin) return null;
   const member = await getMember(env.ROSTER, claims.sub);
-  if (member && (member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return null;
-  return { sub: claims.sub, name: (member?.name || "Player").slice(0, 60), kind: "member" };
+  if (!member || member.held === true || (member.pinVer ?? 0) !== (claims.pinVer ?? 0)) return null;
+  return { sub: claims.sub, name: (member.name || "Player").slice(0, 60), kind: "member" };
 }

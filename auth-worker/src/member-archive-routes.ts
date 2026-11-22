@@ -7,6 +7,7 @@ import {
   archiveBytes, archiveObject, parseArchiveEntry, type ArchiveEntry,
 } from "./member-archive.js";
 import { archiveCursor, exportArchivePage, readArchiveLibrary, removeArchiveEntry, restoreArchiveEntries } from "./member-archive-store.js";
+import { hasHistoryAccess } from "./roster.js";
 
 const BASE = "/me/archive";
 
@@ -21,8 +22,11 @@ export async function handleMemberArchiveRoute(
   const owner = actor.sub;
   const params = new URL(request.url).searchParams;
   if (pathname === BASE && method === "GET") {
-    const cursor = archiveCursor(params.get("cursor"));
+    const hasHistory = hasHistoryAccess(actor.member);
+    const rawCursor = params.get("cursor");
+    const cursor = archiveCursor(rawCursor ?? (hasHistory ? "play:0:0" : "practice:"));
     if (!cursor) return respond({ error: "invalid_cursor" }, 400);
+    if (!hasHistory && cursor.section === "play") return respond({ error: "membership_required" }, 403);
     const page = await exportArchivePage(env.DB, owner, cursor);
     return respond({ schemaVersion: ARCHIVE_VERSION, memberId: owner, exportedAt: new Date().toISOString(), definitions: ARCHIVE_MANIFEST, ...page });
   }

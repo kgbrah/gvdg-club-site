@@ -87,7 +87,7 @@ async function overview(c: MarketCtx): Promise<Response> {
     "SELECT id, target_kind, target_id, reporter_id, reason, details, created_at FROM lf_reports WHERE status = 'open' ORDER BY created_at, id LIMIT 50",
   ).all<Row>()).results ?? [];
   const matchRows = (await env.DB.prepare(
-    `SELECT m.id, m.found_id, m.lost_id, m.candidate_id, m.score, m.reasons, m.ai_verdict, m.status, m.created_at, f.owner_id AS finder_id
+    `SELECT m.id, m.found_id, m.lost_id, m.bag_disc_id, m.candidate_id, m.score, m.reasons, m.ai_verdict, m.status, m.created_at, f.owner_id AS finder_id
      FROM lf_matches m JOIN lf_posts f ON f.id = m.found_id
      WHERE m.status IN ('suggested', 'notified') AND f.status IN ('open', 'claimed')
      ORDER BY m.score DESC, m.id DESC LIMIT 30`,
@@ -132,7 +132,7 @@ async function overview(c: MarketCtx): Promise<Response> {
         found: found ? { id: num(found, "id"), title: title(found), course: str(found, "course_name") } : null,
         lost: lost ? { id: num(lost, "id"), title: title(lost), course: str(lost, "course_name") } : null,
         finder: person(str(row, "finder_id")), candidate: person(str(row, "candidate_id")),
-        via: row.lost_id == null ? "roster_name" : "lost_post",
+        via: row.lost_id != null ? "lost_post" : row.bag_disc_id ? "bag" : "roster_name",
       };
     }),
     hidden: { posts: await postCards(env, hiddenPosts, null), celebrations: await celebrationCards(env, hiddenCelebrations, null) },

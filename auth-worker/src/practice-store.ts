@@ -160,11 +160,21 @@ export async function writePractice(db: D1Like, owner: string, mutation: Practic
     `UPDATE member_practice_operations SET result = CASE
       WHEN EXISTS (SELECT 1 FROM member_practice_records WHERE owner = ? AND id = ? AND kind = ? AND last_op = ? AND revision = ?) THEN 'saved'
       WHEN NOT ${HAS_DISC} THEN 'disc_unavailable'
-      WHEN ? = 1 THEN 'disc_in_use'
+      WHEN ? = 1 AND EXISTS (
+        SELECT 1 FROM member_practice_records cur
+        WHERE cur.owner = ? AND cur.id = ? AND cur.kind = 'disc' AND cur.revision = ? AND cur.payload IS NOT NULL
+          AND (
+            COALESCE(json_extract(cur.payload, '$.archived'), 0) != 1
+            OR EXISTS (
+              SELECT 1 FROM member_practice_records AS used
+              WHERE used.owner = ? AND used.kind = 'throw' AND used.payload IS NOT NULL AND json_extract(used.payload, '$.discId') = ?
+            )
+          )
+      ) THEN 'disc_in_use'
       WHEN ? = 0 AND (SELECT count(*) FROM member_practice_records WHERE owner = ? AND kind = ? AND payload IS NOT NULL) >= ? THEN 'record_limit'
       ELSE 'record_changed' END
       WHERE owner = ? AND op_id = ? AND claim = ?`,
-  ).bind(owner, id, kind, opId, expectedRevision + 1, disc, owner, disc, deleteDisc, expectedRevision, owner, kind, limit, owner, opId, claim);
+  ).bind(owner, id, kind, opId, expectedRevision + 1, disc, owner, disc, deleteDisc, owner, id, expectedRevision, owner, id, expectedRevision, owner, kind, limit, owner, opId, claim);
   const check = db.prepare("SELECT fingerprint, result FROM member_practice_operations WHERE owner = ? AND op_id = ?").bind(owner, opId);
   const results = await db.batch([wipe, trim, claimRow, change, complete, check]);
   const receipt = results.at(-1)?.results[0];

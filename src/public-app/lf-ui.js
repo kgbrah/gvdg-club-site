@@ -47,7 +47,7 @@ export function useLfConfig() {
   React.useEffect(() => {
     listeners.add(setState);
     setState(configState);
-    if (configState.status === "loading" && !configPending) void reloadLfConfig();
+    if ((configState.status === "loading" || configState.status === "error") && !configPending) void reloadLfConfig();
     return () => listeners.delete(setState);
   }, []);
   return state;
@@ -154,12 +154,23 @@ export function LfReportControl({ kind, id, viewer, label = "Report" }) {
     });
   }
 
+  const sendRef = React.useRef(send);
+  sendRef.current = send;
+
   if (sent) return h(StatusLine, { message: action.message });
   if (!open) return h("button", { className: "market-text-btn market-report-toggle", onClick: () => setOpen(true), type: "button" }, label);
   return h("div", { className: "market-report", "data-lf-report": kind }, [
     h("form", {
       className: "market-form", key: "form", noValidate: true,
-      onSubmit: (event) => { event.preventDefault(); identity.require("Verify your email to send a report", send); },
+      onSubmit: (event) => {
+        event.preventDefault();
+        if (!reason) {
+          action.setMessage({ text: "Choose a reason.", tone: "error" });
+          document.getElementById(fieldId + "-reason")?.focus();
+          return;
+        }
+        identity.require("Verify your email to send a report", () => sendRef.current());
+      },
     }, [
       h("label", { htmlFor: fieldId + "-reason", key: "reason-label" }, "Why are you reporting this?"),
       h("select", { id: fieldId + "-reason", key: "reason", onChange: (event) => setReason(event.target.value), value: reason }, [

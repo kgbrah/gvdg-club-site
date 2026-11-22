@@ -84,7 +84,7 @@ export async function eligibleRatingSource(row: Row, stream: RatingStream, curre
   const place = ratingNumber(row.place);
   const total = ratingNumber(row.total);
   const toPar = ratingNumber(row.to_par);
-  if ((stream === "competition" && row.event_status !== "final") || id == null || !/^m_[A-Za-z0-9_:-]+$/.test(memberId) || place == null || place <= 0 ||
+  if ((stream === "competition" && row.event_status !== "final") || id == null || !/^m_[A-Za-z0-9_.:-]+$/.test(memberId) || place == null || place <= 0 ||
     total == null || toPar == null || typeof row.scorecard !== "string" || !singlesStrokeEvidence(row, stream)) return null;
   const scoreboard = readArchivedRatingHoles(row.scorecard, true);
   // Legacy aggregates and scorecards lacking an as-played snapshot remain visible as archived data.

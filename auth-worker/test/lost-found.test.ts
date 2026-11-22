@@ -75,11 +75,27 @@ async function sqliteDb() {
         async all() { return { results: db.prepare(sql).all(...(bound as never[])), success: true }; },
         async first() { return db.prepare(sql).get(...(bound as never[])) ?? null; },
         async run() {
+          if (/\bRETURNING\b/i.test(sql) || /^\s*(?:SELECT|WITH)\b/i.test(sql)) {
+            const rows = db.prepare(sql).all(...(bound as never[]));
+            return { results: rows, success: true, meta: { changes: rows.length } };
+          }
           const info = db.prepare(sql).run(...(bound as never[]));
           return { results: [], success: true, meta: { changes: Number(info.changes) } };
         },
       };
       return stmt;
+    },
+    async batch(list: Array<{ run(): Promise<unknown> }>) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const out = [];
+        for (const s of list) out.push(await s.run());
+        db.exec("COMMIT");
+        return out;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
     },
   };
 }

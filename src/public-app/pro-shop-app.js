@@ -774,7 +774,7 @@ export function ProShopApp() {
       h("p", { className: "page-subtitle", key: "subtitle" }, SECTION_COPY[section]),
     ]),
     marketSection
-      ? h(MarketBoundary, { key: "identity" }, h(React.Suspense, {
+      ? h(MarketBoundary, { key: "identity-" + section }, h(React.Suspense, {
         fallback: h("aside", { className: "wallet-panel", "aria-busy": "true" }, h("div", { className: "wallet-label" }, "Marketplace")),
       }, h(MarketIdentityPanel)))
       : h(WalletPanel, { key: "wallet", wallet }),
@@ -784,7 +784,7 @@ export function ProShopApp() {
     return h("main", { "data-react-pro-shop": productsStatus, "data-shop-section": section }, [
       head,
       h(ShopSections, { key: "sections", section }),
-      h(MarketBoundary, { key: "market" }, h(React.Suspense, {
+      h(MarketBoundary, { key: "market-" + section }, h(React.Suspense, {
         fallback: h("p", { className: "public-state", role: "status" }, "Loading the marketplace…"),
       }, h(MarketplaceView, { hash }))),
     ]);

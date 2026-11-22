@@ -46,7 +46,8 @@ function ClaimForm({ post, viewer, match }) {
   const [message, setMessage] = React.useState("");
   const action = useAction();
   const identity = useLfIdentityGate(viewer);
-  async function send() {
+  const sendRef = React.useRef(null);
+  sendRef.current = async function send() {
     await action.run(async () => {
       const path = match ? `/lost-found/matches/${match.id}/mine` : `/lost-found/posts/${post.id}/claim`;
       const { ok, data } = await lfRequest(path, { body: { message: message.trim() }, method: "POST" });
@@ -55,11 +56,19 @@ function ClaimForm({ post, viewer, match }) {
         window.location.hash = claimHref(data.claim.id).slice(1);
       } else action.setMessage({ text: lfErrorMessage(data), tone: "error" });
     });
-  }
+  };
   if (!open) return h("button", { className: "shop-btn market-buy", "data-lf-claim-open": "true", onClick: () => setOpen(true), type: "button" }, "This is mine");
   return h("div", { className: "market-trade-form lf-claim-form" }, [
     h("form", { className: "market-form", key: "form", noValidate: true,
-      onSubmit: (event) => { event.preventDefault(); identity.require("Verify your email to claim this disc", send); } }, [
+      onSubmit: (event) => {
+        event.preventDefault();
+        if (!match && message.trim().length < 8) {
+          action.setMessage({ text: lfErrorMessage({ error: "invalid_claim" }), tone: "error" });
+          return;
+        }
+        action.setMessage(null);
+        identity.require("Verify your email to claim this disc", () => sendRef.current?.());
+      } }, [
       h("label", { key: "message" }, ["How will the finder know it's yours?", h("textarea", {
         key: "input", maxLength: 500, onChange: (event) => setMessage(event.target.value), placeholder: "What's written on it, a mark or dent, where you lost it…", rows: 3, value: message,
       })]),
@@ -111,12 +120,16 @@ function PosterTools({ post, reload }) {
       h("p", { className: "market-deal-who", key: "who" }, match.strength === "strong" ? "Strong match: a found disc looks like yours" : "Possible match: a found disc may be yours"),
       h("a", { className: "shop-btn", href: matchHref(match.id), key: "open" }, "Is this yours?"),
     ]))) : null,
-    post.photos?.length ? h("div", { className: "lf-photo-tools", key: "photo-tools" }, [
+    post.canEdit && post.photos?.length ? h("div", { className: "lf-photo-tools", key: "photo-tools" }, [
       h(Note, { key: "n" }, "Anyone can see these photos. Take one down if it shows a name or phone number."),
-      h("div", { className: "market-actions", key: "a" }, post.photos.map((photo, index) => h("button", {
-        className: "shop-filter-reset", disabled: action.busy, key: photo.id,
-        onClick: () => act("photos/" + photo.id + "/remove", {}, "Photo removed."), type: "button",
-      }, post.photos.length > 1 ? `Remove photo ${index + 1}` : "Remove photo"))),
+      h("div", { className: "market-actions", key: "a" }, post.photos.map((photo, index) => {
+        const lastFoundPhoto = post.kind === "found" && post.photos.length <= 1;
+        return h("button", {
+          className: "shop-filter-reset", disabled: action.busy || lastFoundPhoto, key: photo.id,
+          title: lastFoundPhoto ? "Found discs keep at least one photo." : undefined,
+          onClick: () => act("photos/" + photo.id + "/remove", {}, "Photo removed."), type: "button",
+        }, post.photos.length > 1 ? `Remove photo ${index + 1}` : "Remove photo");
+      })),
     ]) : null,
     post.canTurnIn ? (binOpen
       ? h("form", { className: "market-form", key: "bin", noValidate: true, onSubmit: (event) => { event.preventDefault(); void act("turn-in", { binNote: bin.trim() }, "Marked as turned in."); } }, [
@@ -166,7 +179,7 @@ export function PostDetail({ id }) {
         post.mine ? null : post.myClaim ? h("a", { className: "shop-btn market-buy", href: claimHref(post.myClaim.id), key: "my-claim" }, "Your claim: " + (CLAIM_STATUS_LABELS[post.myClaim.status] || "open"))
           : post.myMatch ? h("a", { className: "shop-btn market-buy", href: matchHref(post.myMatch.id), key: "my-match" }, "We think this may be yours")
             : found && post.canClaim ? h(ClaimForm, { key: "claim", post, viewer })
-              : !found ? h("a", { className: "shop-btn secondary", href: "#new/found", key: "found-it" }, "Found it? Post a found disc") : null,
+              : !found && (post.status === "open" || post.status === "claimed") ? h("a", { className: "shop-btn secondary", href: "#new/found", key: "found-it" }, "Found it? Post a found disc") : null,
         found && !post.mine ? h(PrivacyNote, { key: "privacy" }, "The club reads writing on found discs privately to find the owner. It's never shown here as text.") : null,
         post.canReport ? h(LfReportControl, { id: post.id, key: "report", kind: "post", label: "Report this post", viewer }) : null,
       ]),

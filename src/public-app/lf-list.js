@@ -45,7 +45,10 @@ export function useCourses() {
   React.useEffect(() => {
     let live = true;
     if (!coursesPromise) {
-      coursesPromise = lfRequest("/courses").then(({ ok, data }) => (ok && Array.isArray(data.courses) ? data.courses : []))
+      coursesPromise = lfRequest("/courses").then(({ ok, data }) => {
+        if (!ok) { coursesPromise = null; return []; }
+        return Array.isArray(data.courses) ? data.courses : [];
+      })
         .then((rows) => rows.filter((row) => row && Number(row.id) > 0 && typeof row.name === "string")
           .map((row) => ({ id: Number(row.id), name: row.name, location: typeof row.location === "string" ? row.location : "", lat: row.lat ?? null, lng: row.lng ?? null }))
           .sort((a, b) => a.name.localeCompare(b.name)))
@@ -65,10 +68,15 @@ export function PostList({ kind, route }) {
   const search = useDebounced(q.trim(), 250);
   const query = new URLSearchParams({ kind, ...(search ? { q: search } : {}), ...(course ? { course } : {}) }).toString();
   const [state, setState] = React.useState({ status: "loading", posts: [], more: false, code: 0 });
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
   const version = useLfVersion();
+  const moreRef = React.useRef(null);
 
   React.useEffect(() => {
+    moreRef.current?.abort();
+    moreRef.current = null;
+    setLoadingMore(false);
     const controller = new AbortController();
     setState((current) => ({ ...current, status: "loading" }));
     lfRequest("/lost-found/posts?" + query, { signal: controller.signal }).then(({ ok, status, data }) => {
@@ -76,12 +84,31 @@ export function PostList({ kind, route }) {
         ? { status: "ready", posts: data.posts, more: data.more === true, code: status }
         : { status: "error", posts: [], more: false, code: status });
     }).catch(() => {});
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      moreRef.current?.abort();
+      moreRef.current = null;
+    };
   }, [query, attempt, version]);
 
   async function loadMore() {
-    const { ok, data } = await lfRequest(`/lost-found/posts?${query}&offset=${state.posts.length}`);
-    if (ok && Array.isArray(data.posts)) setState((current) => ({ ...current, posts: current.posts.concat(data.posts), more: data.more === true }));
+    if (loadingMore) return;
+    moreRef.current?.abort();
+    const controller = new AbortController();
+    moreRef.current = controller;
+    setLoadingMore(true);
+    try {
+      const { ok, data } = await lfRequest(`/lost-found/posts?${query}&offset=${state.posts.length}`, { signal: controller.signal });
+      if (!controller.signal.aborted && ok && Array.isArray(data.posts)) {
+        setState((current) => {
+          const seen = new Set(current.posts.map((row) => row.id));
+          return { ...current, posts: current.posts.concat(data.posts.filter((row) => !seen.has(row.id))), more: data.more === true };
+        });
+      }
+    } finally {
+      if (moreRef.current === controller) moreRef.current = null;
+      setLoadingMore(false);
+    }
   }
 
   const posts = state.posts;
@@ -111,6 +138,6 @@ export function PostList({ kind, route }) {
         : h("p", { className: "public-state", role: "status" }, search || course
           ? "Nothing matches that search."
           : found ? "No found discs are posted right now. Found one? Post it and we'll help it get home." : "No lost discs are posted right now.")),
-    state.more ? h("button", { className: "shop-filter-reset market-more", key: "more", onClick: loadMore, type: "button" }, "Show more") : null,
+    state.more ? h("button", { className: "shop-filter-reset market-more", disabled: loadingMore, key: "more", onClick: loadMore, type: "button" }, loadingMore ? "Loading…" : "Show more") : null,
   ]);
 }

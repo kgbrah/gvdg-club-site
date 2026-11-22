@@ -247,18 +247,32 @@ export async function celebrationCards(env: Env, rows: Row[], viewerId: string |
   });
 }
 
-/** Most karma first. Reversed returns drop out because their ledger rows cancel. */
+/** Most karma first (using full karmaOf breakdown). Reversed returns drop out. */
 export async function topFinders(env: Env, limit = 5) {
+  const max = Math.max(1, Math.min(20, limit));
   const rows = (await env.DB.prepare(
-    `SELECT person_id, SUM(delta) AS karma,
+    `SELECT person_id,
             SUM(CASE WHEN reason = 'return_confirmed' THEN 1 WHEN reason = 'admin_reversal' THEN -1 ELSE 0 END) AS returned
-     FROM lf_karma GROUP BY person_id HAVING SUM(delta) > 0 ORDER BY karma DESC, MAX(id) DESC LIMIT ?`,
-  ).bind(Math.max(1, Math.min(20, limit))).all<{ person_id: string; karma: number; returned: number }>()).results ?? [];
-  const traders = await tradersByOwner(env, rows.map((row) => row.person_id));
-  return rows.map((row) => {
-    const lite = liteOf(traders, row.person_id);
-    return { key: lite.key, name: lite.name, kind: lite.kind, karma: Number(row.karma) || 0, returned: Math.max(0, Number(row.returned) || 0) };
-  });
+     FROM lf_karma GROUP BY person_id
+     HAVING SUM(CASE WHEN reason = 'return_confirmed' THEN 1 WHEN reason = 'admin_reversal' THEN -1 ELSE 0 END) > 0`,
+  ).all<{ person_id: string; returned: number }>()).results ?? [];
+  const ids = rows.map((row) => row.person_id);
+  const [traders, karmaMap] = await Promise.all([tradersByOwner(env, ids), karmaOf(env, ids)]);
+  return rows
+    .map((row) => {
+      const lite = liteOf(traders, row.person_id);
+      const totals = karmaMap.get(row.person_id);
+      return {
+        key: lite.key,
+        name: lite.name,
+        kind: lite.kind,
+        karma: totals?.karma ?? 0,
+        returned: Math.max(0, totals?.returned ?? Number(row.returned) ?? 0),
+      };
+    })
+    .filter((row) => row.karma > 0)
+    .sort((a, b) => b.karma - a.karma || b.returned - a.returned)
+    .slice(0, max);
 }
 
 /** Recently returned discs (confirmed claims), newest first, for the wall, member Home and the homepage. */

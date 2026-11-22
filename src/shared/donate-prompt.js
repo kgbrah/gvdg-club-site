@@ -6,6 +6,7 @@
 // The PayPal link is a paypal.me link, which the sign-up hand-off sends to the PayPal app (outside-link.js).
 import React from "react";
 import { resolveApiBase } from "./api-base.js";
+import { readMemberToken } from "./member-session.js";
 import { SIGNUP_LINK } from "./outside-link.js";
 
 const h = React.createElement;
@@ -62,14 +63,9 @@ export function dismissPrompt(promptKey, storage = local()) {
 // PayPal.me can't tell the app who gave (owner: "Let's make ALL donations reward +10 karma per dollar"; an admin
 // confirms each one): after giving, a signed-in member taps "I donated $X" (POST /me/donations).
 export const KARMA_PER_DOLLAR = 10;
-const TOKEN_KEY = "gvdg_member_token";
-
-function memberToken() {
-  try { return (typeof localStorage !== "undefined" && localStorage.getItem(TOKEN_KEY)) || ""; } catch { return ""; }
-}
 
 /** Report a donation: { ok, donation } or { ok: false, error }. */
-export async function reportDonation(cents, source, { token = memberToken(), base = resolveApiBase(), fetchImpl = globalThis.fetch } = {}) {
+export async function reportDonation(cents, source, { token = readMemberToken(), base = resolveApiBase(), fetchImpl = globalThis.fetch } = {}) {
   if (!token) return { ok: false, error: "signed_out" };
   try {
     const response = await fetchImpl(`${base}/me/donations`, {
@@ -94,7 +90,7 @@ const REPORT_ERRORS = {
 /** "Sent it? Tell the club": a set amount (the $1 prompts) or one the donor types. */
 export function DonationReport({ source, cents = null, onDone }) {
   const [amount, setAmount] = React.useState("");
-  const [state, setState] = React.useState(() => ({ status: memberToken() ? "idle" : "signed_out", message: "" }));
+  const [state, setState] = React.useState(() => ({ status: readMemberToken() ? "idle" : "signed_out", message: "" }));
   async function send() {
     const value = cents ?? Math.round(Number(String(amount).replace(/[^0-9.]/g, "")) * 100);
     if (!Number.isFinite(value) || value < 100 || value > 100_000) {

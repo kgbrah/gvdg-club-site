@@ -46,9 +46,10 @@ export async function buyListing(c: MarketCtx, listingId: number): Promise<Respo
   const blocked = await limited(c, "mktbuy:" + buyer.id, 20, 3600);
   if (blocked) return blocked;
   await ensureTrader(c.env, buyer);
+  const priceCents = num(row, "price_cents");
   const claimed = await c.env.DB.prepare(
-    "UPDATE market_listings SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND status = 'active' AND hidden = 0",
-  ).bind(listingId).run();
+    "UPDATE market_listings SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND status = 'active' AND hidden = 0 AND price_cents = ?",
+  ).bind(listingId, priceCents).run();
   if (!changed(claimed)) return fail(c, 409, "not_available");
   const title = titleOf(row);
   let dealId = 0;
@@ -56,7 +57,7 @@ export async function buyListing(c: MarketCtx, listingId: number): Promise<Respo
     const inserted = await c.env.DB.prepare(
       `INSERT INTO market_deals (listing_id, seller_id, buyer_id, kind, price_cents, listing_title)
        VALUES (?, ?, ?, 'buy', ?, ?) RETURNING id`,
-    ).bind(listingId, sellerId, buyer.id, num(row, "price_cents"), title).first<{ id: number }>();
+    ).bind(listingId, sellerId, buyer.id, priceCents, title).first<{ id: number }>();
     dealId = Number(inserted?.id) || 0;
   } catch {
     dealId = 0;
@@ -159,26 +160,30 @@ export async function offerAction(c: MarketCtx, offerId: number, action: string)
   }
   if (action !== "accept") return fail(c, 404, "not_found");
   if (await isSuspended(c.env, buyerId)) return fail(c, 409, "buyer_suspended");
-  const claimed = await c.env.DB.prepare(
-    "UPDATE market_listings SET status = 'pending', updated_at = datetime('now') WHERE id = ? AND seller_id = ? AND status = 'active' AND hidden = 0",
-  ).bind(listingId, seller.id).run();
-  if (!changed(claimed)) return fail(c, 409, "not_available");
-  let dealId = 0;
-  try {
-    const inserted = await c.env.DB.prepare(
+  const batchResults = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE market_offers SET status = 'accepted', responded_at = datetime('now')
+       WHERE id = ? AND listing_id = ? AND status = 'open'
+         AND EXISTS (SELECT 1 FROM market_listings WHERE id = ? AND seller_id = ? AND status = 'active' AND hidden = 0)`,
+    ).bind(offerId, listingId, listingId, seller.id),
+    c.env.DB.prepare(
+      `UPDATE market_listings SET status = 'pending', updated_at = datetime('now')
+       WHERE id = ? AND seller_id = ? AND status = 'active' AND hidden = 0
+         AND EXISTS (SELECT 1 FROM market_offers WHERE id = ? AND status = 'accepted')
+         AND NOT EXISTS (SELECT 1 FROM market_deals WHERE offer_id = ?)`,
+    ).bind(listingId, seller.id, offerId, offerId),
+    c.env.DB.prepare(
       `INSERT INTO market_deals (listing_id, seller_id, buyer_id, kind, offer_id, price_cents, listing_title)
-       VALUES (?, ?, ?, 'trade', ?, NULL, ?) RETURNING id`,
-    ).bind(listingId, seller.id, buyerId, offerId, title).first<{ id: number }>();
-    dealId = Number(inserted?.id) || 0;
-  } catch {
-    dealId = 0;
-  }
-  if (!dealId) {
-    await c.env.DB.prepare("UPDATE market_listings SET status = 'active' WHERE id = ? AND status = 'pending' AND NOT EXISTS (SELECT 1 FROM market_deals WHERE listing_id = ? AND status = 'pending')")
-      .bind(listingId, listingId).run();
-    return fail(c, 409, "not_available");
-  }
-  await c.env.DB.prepare("UPDATE market_offers SET status = 'accepted', responded_at = datetime('now') WHERE id = ?").bind(offerId).run();
+       SELECT ?, ?, ?, 'trade', ?, NULL, ?
+       WHERE EXISTS (SELECT 1 FROM market_offers WHERE id = ? AND status = 'accepted')
+         AND EXISTS (SELECT 1 FROM market_listings WHERE id = ? AND status = 'pending')
+         AND NOT EXISTS (SELECT 1 FROM market_deals WHERE offer_id = ?)
+       RETURNING id`,
+    ).bind(listingId, seller.id, buyerId, offerId, title, offerId, listingId, offerId),
+  ]);
+  const insertedRow = batchResults[2]?.results?.[0] as { id?: number } | undefined;
+  const dealId = Number(insertedRow?.id) || 0;
+  if (!batchResults[0] || !changed(batchResults[0]) || !batchResults[1] || !changed(batchResults[1]) || !dealId) return fail(c, 409, "not_available");
   await logDeal(c.env, { listingId, offerId, dealId, actorId: seller.id, action: "offer_accept", from: "active", to: "pending" });
   notifyTrader(c.env, c.ctx, buyerId, {
     title: "Trade accepted: " + title,
@@ -214,12 +219,16 @@ export async function dealAction(c: MarketCtx, dealId: number, action: string): 
 
   if (action === "release" || action === "cancel") {
     const next = action === "release" ? "released" : "cancelled";
-    const result = await c.env.DB.prepare(
-      "UPDATE market_deals SET status = ?, closed_at = datetime('now') WHERE id = ? AND status = 'pending'",
-    ).bind(next, dealId).run();
-    if (!changed(result)) return fail(c, 409, "not_pending");
-    await c.env.DB.prepare("UPDATE market_listings SET status = 'active', updated_at = datetime('now') WHERE id = ? AND status = 'pending'")
-      .bind(listingId).run();
+    const batchResults = await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE market_deals SET status = ?, closed_at = datetime('now') WHERE id = ? AND status = 'pending'")
+        .bind(next, dealId),
+      c.env.DB.prepare(
+        `UPDATE market_listings SET status = 'active', updated_at = datetime('now')
+         WHERE id = ? AND status = 'pending'
+           AND NOT EXISTS (SELECT 1 FROM market_deals WHERE listing_id = ? AND status = 'pending')`,
+      ).bind(listingId, listingId),
+    ]);
+    if (!batchResults[0] || !changed(batchResults[0])) return fail(c, 409, "not_pending");
     await logDeal(c.env, { listingId, dealId, actorId: who.id, action, from: "pending", to: next, note: "listing pending -> active" });
     notifyTrader(c.env, c.ctx, action === "release" ? buyerId : sellerId, action === "release"
       ? { title: "Released: " + title, body: `${who.name} released ${title}. It's back on the marketplace.`, refKey: "mkt:deal:" + dealId + ":released", hash: "market/listing/" + listingId }
@@ -230,21 +239,28 @@ export async function dealAction(c: MarketCtx, dealId: number, action: string): 
   if (action !== "complete") return fail(c, 404, "not_found");
   const body = (await readJson(c.request)) ?? {};
   const outcome = body.outcome === "sold" || body.outcome === "traded" ? body.outcome : str(deal, "kind") === "trade" ? "traded" : "sold";
-  const result = await c.env.DB.prepare(
-    "UPDATE market_deals SET status = 'completed', outcome = ?, completed_at = datetime('now'), closed_at = datetime('now') WHERE id = ? AND status = 'pending'",
-  ).bind(outcome, dealId).run();
-  if (!changed(result)) return fail(c, 409, "not_pending");
-  const listing = await getListingRow(c.env, listingId);
-  const remaining = listing ? num(listing, "quantity") - 1 : 0;
-  if (remaining >= 1) {
-    await c.env.DB.prepare("UPDATE market_listings SET status = 'active', quantity = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'")
-      .bind(remaining, listingId).run();
-  } else {
-    await c.env.DB.prepare("UPDATE market_listings SET status = ?, updated_at = datetime('now') WHERE id = ? AND status = 'pending'")
-      .bind(outcome, listingId).run();
-    await c.env.DB.prepare("UPDATE market_offers SET status = 'declined', responded_at = datetime('now') WHERE listing_id = ? AND status = 'open'")
-      .bind(listingId).run();
-  }
+  const batchResults = await c.env.DB.batch([
+    c.env.DB.prepare(
+      "UPDATE market_deals SET status = 'completed', outcome = ?, completed_at = datetime('now'), closed_at = datetime('now') WHERE id = ? AND status = 'pending'",
+    ).bind(outcome, dealId),
+    c.env.DB.prepare(
+      `UPDATE market_listings
+       SET status = CASE WHEN quantity > 1 THEN 'active' ELSE ? END,
+           quantity = CASE WHEN quantity > 1 THEN quantity - 1 ELSE quantity END,
+           updated_at = datetime('now')
+       WHERE id = ? AND status = 'pending'
+         AND NOT EXISTS (SELECT 1 FROM market_deals WHERE listing_id = ? AND status = 'pending')`,
+    ).bind(outcome, listingId, listingId),
+    c.env.DB.prepare(
+      `UPDATE market_offers SET status = 'declined', responded_at = datetime('now')
+       WHERE listing_id = ? AND status = 'open'
+         AND (SELECT status FROM market_listings WHERE id = ?) <> 'active'`,
+    ).bind(listingId, listingId),
+    c.env.DB.prepare("SELECT status, quantity FROM market_listings WHERE id = ?").bind(listingId),
+  ]);
+  if (!batchResults[0] || !changed(batchResults[0])) return fail(c, 409, "not_pending");
+  const listingAfter = batchResults[3]?.results?.[0] as { status?: string; quantity?: number } | undefined;
+  const remaining = listingAfter?.status === "active" ? Number(listingAfter.quantity) || 1 : 0;
   await logDeal(c.env, { listingId, dealId, actorId: who.id, action: "complete", from: "pending", to: outcome,
     note: remaining >= 1 ? `listing back to active, ${remaining} left` : "listing " + outcome });
   notifyTrader(c.env, c.ctx, buyerId, {

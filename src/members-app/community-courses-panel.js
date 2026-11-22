@@ -113,8 +113,13 @@ function CourseReviews({ courseId, token, favorite, toggleFavorite }) {
   const [version, reload] = React.useReducer((value) => value + 1, 0);
   const [offset, setOffset] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const valid = () => readMemberToken() === token;
+  React.useEffect(() => {
+    setOffset(0);
+    setLoadingMore(false);
+  }, [courseId, token]);
   React.useEffect(() => {
     const controller = new AbortController();
     communityRequest(`/community/courses/${courseId}/reviews?offset=${offset}`, { token, signal: controller.signal })
@@ -122,7 +127,8 @@ function CourseReviews({ courseId, token, favorite, toggleFavorite }) {
         if (controller.signal.aborted || !valid()) return;
         setData((prior) => offset && prior ? { ...rows, reviews: [...prior.reviews, ...rows.reviews.filter((row) => !prior.reviews.some((previous) => previous.id === row.id))] } : rows);
       })
-      .catch(() => { if (!controller.signal.aborted) setMessage("Course details couldn’t load."); });
+      .catch(() => { if (!controller.signal.aborted) setMessage("Course details couldn’t load."); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingMore(false); });
     return () => controller.abort();
   }, [courseId, token, version, offset]);
 
@@ -149,7 +155,7 @@ function CourseReviews({ courseId, token, favorite, toggleFavorite }) {
     const agreed = await memberConfirm({
       title: "Remove your course review?",
       message: "The rating and text will be removed from the course.",
-      confirmText: "Remove review", danger: true,
+      confirmText: "Remove review", tone: "danger",
     });
     if (agreed) await update(reviewRoute, "DELETE", { revision: mine.revision }, "Review removed.");
   };
@@ -167,7 +173,7 @@ function CourseReviews({ courseId, token, favorite, toggleFavorite }) {
       data.reviews.length ? h("ul", { className: "community-list", key: "list" }, data.reviews.map((row) => h(PublishedReview, {
         row, busy, key: row.id, report: (item, reason) => update("/me/community/reviews/" + item.id + "/report", "PUT", { revision: item.revision, reason }, "Report sent to moderation."),
       }))) : status("No published reviews yet."),
-      data.more ? action("More reviews", { key: "more", onClick: () => setOffset(offset + 20) }) : null,
+      data.more ? action(loadingMore ? "Loading…" : "More reviews", { key: "more", disabled: busy || loadingMore, onClick: () => { if (!loadingMore) { setLoadingMore(true); setOffset((current) => current + 20); } } }) : null,
     ]),
   ]);
 }
@@ -178,10 +184,14 @@ export function MemberCourseDiscovery({ courseId, token }) {
   const [page, setPage] = React.useState({ courses: [], more: false, offset: 0, loading: true });
   const [favorites, setFavorites] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const [version, reload] = React.useReducer((value) => value + 1, 0);
   const [courseNames, setCourseNames] = React.useState([]);
+  const moreControllerRef = React.useRef(null);
   const valid = () => token === readMemberToken();
+
+  React.useEffect(() => () => moreControllerRef.current?.abort(), []);
 
   // Course names (and their towns) for the search field's autocomplete.
   React.useEffect(() => {
@@ -213,6 +223,9 @@ export function MemberCourseDiscovery({ courseId, token }) {
   }
 
   React.useEffect(() => {
+    moreControllerRef.current?.abort();
+    moreControllerRef.current = null;
+    setLoadingMore(false);
     if (courseId) return undefined;
     const controller = new AbortController();
     setPage((current) => ({ ...current, loading: true }));
@@ -241,13 +254,28 @@ export function MemberCourseDiscovery({ courseId, token }) {
   }
 
   async function older() {
-    setBusy(true);
+    if (busy || loadingMore || !valid()) return;
+    moreControllerRef.current?.abort();
+    const controller = new AbortController();
+    moreControllerRef.current = controller;
+    setLoadingMore(true);
     try {
       const offset = page.offset + 25;
-      const result = await communityRequest("/community/courses?" + query(offset), { token });
-      if (valid()) setPage({ courses: page.courses.concat(result.courses), more: result.more, offset, loading: false });
-    } catch { setMessage("More courses couldn’t load."); }
-    finally { setBusy(false); }
+      const result = await communityRequest("/community/courses?" + query(offset), { token, signal: controller.signal });
+      if (controller.signal.aborted || !valid()) return;
+      setPage((current) => {
+        const seen = new Set(current.courses.map((course) => course.id));
+        const extra = (result.courses || []).filter((course) => !seen.has(course.id));
+        return { ...current, courses: current.courses.concat(extra), more: result.more, offset, loading: false };
+      });
+    } catch (error) {
+      if (error?.name !== "AbortError" && valid()) setMessage("More courses couldn’t load.");
+    } finally {
+      if (moreControllerRef.current === controller) {
+        moreControllerRef.current = null;
+        setLoadingMore(false);
+      }
+    }
   }
 
   if (!valid()) return null;
@@ -316,6 +344,6 @@ export function MemberCourseDiscovery({ courseId, token }) {
         }, h(Bookmark, { size: 19, fill: favorite ? "currentColor" : "none", "aria-hidden": true })),
       ]);
     })),
-    page.more ? action("More courses", { key: "more", disabled: busy, onClick: () => { void older(); } }) : null,
+    page.more ? action(loadingMore ? "Loading…" : "More courses", { key: "more", disabled: busy || loadingMore, onClick: () => { void older(); } }) : null,
   ]);
 }

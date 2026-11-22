@@ -37,6 +37,11 @@ export async function grantGuestPromo(env: Env, memberId: string, adminId: strin
   return Number(result.meta?.changes) > 0;
 }
 
+/** Release any promo spot held by a removed or promoted guest so the capped pool stays accurate. */
+export async function releaseGuestPromo(env: Env, memberId: string): Promise<void> {
+  await env.DB.prepare("DELETE FROM guest_promo WHERE member_id = ?").bind(memberId).run();
+}
+
 export async function handleGuestSpots(env: Env, origin: string | null): Promise<Response> {
   const { limit, left } = await guestSpots(env);
   return json({ limit, left }, 200, origin, { "Cache-Control": "public, max-age=60" });

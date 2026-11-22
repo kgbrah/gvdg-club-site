@@ -31,20 +31,45 @@ export function photosFrom(value: unknown, min: number, max: number): DecodedIma
 export interface PhotoOwner { ownerId: string; postId?: number; celebrationId?: number }
 
 /** Store photos under server-chosen keys and record them (read_state 'pending' for the private AI read). Returns the
- *  R2 keys written, for rollback. */
-export async function storePhotos(c: MarketCtx, owner: PhotoOwner, images: DecodedImage[], firstSort = 0): Promise<{ keys: string[]; ids: number[] }> {
+ *  R2 keys written, for rollback. When `maxPostPhotos` is given on an existing post, checks openness and capacity
+ *  atomically inside D1 so concurrent uploads cannot exceed the cap. */
+export async function storePhotos(
+  c: MarketCtx,
+  owner: PhotoOwner,
+  images: DecodedImage[],
+  firstSort = 0,
+  maxPostPhotos?: number,
+): Promise<{ keys: string[]; ids: number[]; rejected?: boolean }> {
   const keys: string[] = [];
   const ids: number[] = [];
   const folder = owner.postId ? "post-" + owner.postId : "celebration-" + owner.celebrationId;
   for (const [index, image] of images.entries()) {
     const key = `lost-found/${folder}/${crypto.randomUUID()}.${image.ext}`;
     await c.env.PHOTOS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
+    let row: { id: number } | null = null;
+    if (owner.postId != null && maxPostPhotos != null) {
+      row = await c.env.DB.prepare(
+        `INSERT INTO lf_photos (post_id, celebration_id, owner_id, photo_key, photo_type, photo_bytes, sort_order)
+         SELECT ?, NULL, ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM lf_photos WHERE post_id = ?), ?)
+         WHERE EXISTS (SELECT 1 FROM lf_posts WHERE id = ? AND status IN ('open', 'claimed') AND (status <> 'open' OR expires_at > datetime('now')))
+           AND (SELECT COUNT(*) FROM lf_photos WHERE post_id = ? AND status <> 'removed') < ?
+         RETURNING id`,
+      ).bind(
+        owner.postId, owner.ownerId, key, image.contentType, image.bytes.length, owner.postId, firstSort + index,
+        owner.postId, owner.postId, maxPostPhotos,
+      ).first<{ id: number }>();
+      if (!row?.id) {
+        await c.env.PHOTOS.delete(key).catch(() => {});
+        return { keys, ids, rejected: true };
+      }
+    } else {
+      row = await c.env.DB.prepare(
+        `INSERT INTO lf_photos (post_id, celebration_id, owner_id, photo_key, photo_type, photo_bytes, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      ).bind(owner.postId ?? null, owner.celebrationId ?? null, owner.ownerId, key, image.contentType, image.bytes.length, firstSort + index)
+        .first<{ id: number }>();
+    }
     keys.push(key);
-    const row = await c.env.DB.prepare(
-      `INSERT INTO lf_photos (post_id, celebration_id, owner_id, photo_key, photo_type, photo_bytes, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-    ).bind(owner.postId ?? null, owner.celebrationId ?? null, owner.ownerId, key, image.contentType, image.bytes.length, firstSort + index)
-      .first<{ id: number }>();
     ids.push(Number(row?.id) || 0);
   }
   return { keys, ids };
@@ -67,7 +92,8 @@ async function ownPhoto(c: MarketCtx, photoId: number): Promise<OwnPhotoRow | nu
   if (!c.actor) return null;
   return c.env.DB.prepare(
     `SELECT ph.id, ph.post_id, ph.celebration_id, ph.photo_key, ph.nudge, ph.sort_order FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id
-     WHERE ph.id = ? AND ph.owner_id = ? AND ph.status = 'public' AND (ph.post_id IS NULL OR p.status IN ('open', 'claimed', 'returned'))`,
+     WHERE ph.id = ? AND ph.owner_id = ? AND ph.status = 'public'
+       AND (ph.post_id IS NULL OR (p.status IN ('open', 'claimed', 'returned') AND (p.status <> 'open' OR p.expires_at > datetime('now'))))`,
   ).bind(photoId, c.actor.id).first<OwnPhotoRow>();
 }
 
@@ -83,8 +109,22 @@ export async function keepPhoto(c: MarketCtx, photoId: number): Promise<Response
 export async function removeOwnPhoto(c: MarketCtx, photoId: number, postId?: number): Promise<Response> {
   const photo = await ownPhoto(c, photoId);
   if (!photo || (postId != null && photo.post_id !== postId)) return fail(c, 404, "not_found");
-  const result = await c.env.DB.prepare("UPDATE lf_photos SET status = 'removed', photo_key = NULL WHERE id = ? AND status = 'public'").bind(photoId).run();
-  if (!changed(result)) return fail(c, 404, "not_found");
+  const result = photo.post_id != null
+    ? await c.env.DB.prepare(
+      `UPDATE lf_photos SET status = 'removed', photo_key = NULL
+       WHERE id = ? AND status = 'public'
+         AND ((SELECT kind FROM lf_posts WHERE id = ?) <> 'found'
+           OR (SELECT COUNT(*) FROM lf_photos WHERE post_id = ? AND status = 'public') > 1)`,
+    ).bind(photoId, photo.post_id, photo.post_id).run()
+    : await c.env.DB.prepare("UPDATE lf_photos SET status = 'removed', photo_key = NULL WHERE id = ? AND status = 'public'")
+      .bind(photoId).run();
+  if (!changed(result)) {
+    if (photo.post_id != null) {
+      const stillUp = await c.env.DB.prepare("SELECT 1 FROM lf_photos WHERE id = ? AND status = 'public'").bind(photoId).first();
+      if (stillUp) return fail(c, 409, "photo_required");
+    }
+    return fail(c, 404, "not_found");
+  }
   if (photo.photo_key) await c.env.PHOTOS?.delete(photo.photo_key);
   await logClaim(c.env, { postId: photo.post_id, actorId: c.actor!.id, action: "photo_remove", note: "photo " + photoId });
   return ok(c, { ok: true });

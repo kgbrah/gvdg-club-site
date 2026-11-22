@@ -139,7 +139,7 @@ export async function listingDetail(c: MarketCtx, row: Row) {
     photos: await listingPhotos(env, id),
     seller: { ...card!.seller, photo: await publicPhoto(env, sellerId) },
     payLocked: !actor,
-    pay: actor && live && priced && !card!.hidden ? await payInfo(env, sellerId, card!.priceCents) : null,
+    pay: actor && status === "active" && priced && !card!.hidden ? await payInfo(env, sellerId, card!.priceCents) : null,
     canBuy: status === "active" && priced && !isSeller && !suspendedViewer && !card!.hidden,
     canOffer: status === "active" && card!.openToTrade && !isSeller && !suspendedViewer && !myOfferRow && !card!.hidden,
     canEdit: isSeller && status === "active",
@@ -308,20 +308,26 @@ export async function addListingPhoto(c: MarketCtx, id: number): Promise<Respons
   const body = (await readJson(c.request, PHOTO_BODY_BYTES)) ?? {};
   const image = decodeListingPhoto(body.image);
   if (!image) return fail(c, 400, "invalid_photo");
-  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(sort_order), -1) AS last FROM market_listing_photos WHERE listing_id = ?")
-    .bind(id).first<{ n: number; last: number }>();
-  if (Number(count?.n) >= MAX_PHOTOS) return fail(c, 409, "too_many_photos");
   const blocked = await limited(c, "mktphoto:" + seller.id, 30, 3600);
   if (blocked) return blocked;
   const key = listingPhotoKey(id, image.ext, crypto.randomUUID());
   await c.env.PHOTOS.put(key, image.bytes, { httpMetadata: { contentType: image.contentType } });
+  let ins;
   try {
-    await c.env.DB.prepare(
-      "INSERT INTO market_listing_photos (listing_id, r2_key, content_type, bytes, sort_order) VALUES (?, ?, ?, ?, ?)",
-    ).bind(id, key, image.contentType, image.bytes.length, Number(count?.last ?? -1) + 1).run();
+    ins = await c.env.DB.prepare(
+      `INSERT INTO market_listing_photos (listing_id, r2_key, content_type, bytes, sort_order)
+       SELECT ?, ?, ?, ?, COALESCE((SELECT MAX(sort_order) + 1 FROM market_listing_photos WHERE listing_id = ?), 0)
+       WHERE EXISTS (SELECT 1 FROM market_listings WHERE id = ? AND seller_id = ? AND status = 'active')
+         AND (SELECT COUNT(*) FROM market_listing_photos WHERE listing_id = ?) < ?`,
+    ).bind(id, key, image.contentType, image.bytes.length, id, id, seller.id, id, MAX_PHOTOS).run();
   } catch (error) {
     await c.env.PHOTOS.delete(key).catch(() => {});
     throw error;
+  }
+  if (!changed(ins)) {
+    await c.env.PHOTOS.delete(key).catch(() => {});
+    const latest = await getListingRow(c.env, id);
+    return fail(c, 409, latest && str(latest, "status") !== "active" ? "not_active" : "too_many_photos");
   }
   return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }
@@ -335,9 +341,19 @@ export async function deleteListingPhoto(c: MarketCtx, id: number, photoId: numb
   const photo = await c.env.DB.prepare("SELECT id, r2_key FROM market_listing_photos WHERE id = ? AND listing_id = ?")
     .bind(photoId, id).first<{ id: number; r2_key: string }>();
   if (!photo) return fail(c, 404, "not_found");
-  const count = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM market_listing_photos WHERE listing_id = ?").bind(id).first<{ n: number }>();
-  if (Number(count?.n) <= 1) return fail(c, 409, "photo_required");
-  await c.env.DB.prepare("DELETE FROM market_listing_photos WHERE id = ? AND listing_id = ?").bind(photoId, id).run();
+  const del = await c.env.DB.prepare(
+    `DELETE FROM market_listing_photos
+     WHERE id = ? AND listing_id = ?
+       AND EXISTS (SELECT 1 FROM market_listings WHERE id = ? AND seller_id = ? AND status = 'active')
+       AND (SELECT COUNT(*) FROM market_listing_photos WHERE listing_id = ?) > 1`,
+  ).bind(photoId, id, id, seller.id, id).run();
+  if (!changed(del)) {
+    const stillHere = await c.env.DB.prepare("SELECT 1 FROM market_listing_photos WHERE id = ? AND listing_id = ?").bind(photoId, id).first();
+    if (!stillHere) return fail(c, 404, "not_found");
+    const latest = await getListingRow(c.env, id);
+    if (latest && str(latest, "status") !== "active") return fail(c, 409, "not_active");
+    return fail(c, 409, "photo_required");
+  }
   await c.env.PHOTOS?.delete(photo.r2_key).catch(() => {});
   return ok(c, { listing: await listingDetail(c, (await getListingRow(c.env, id))!) });
 }

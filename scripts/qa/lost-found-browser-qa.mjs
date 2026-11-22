@@ -74,9 +74,28 @@ async function memoryD1() {
         bind(...args) { bound = args; return stmt; },
         async all() { return { results: db.prepare(sql).all(...bound), success: true }; },
         async first() { return db.prepare(sql).get(...bound) ?? null; },
-        async run() { const info = db.prepare(sql).run(...bound); return { results: [], success: true, meta: { changes: Number(info.changes) } }; },
+        async run() {
+          if (/\bRETURNING\b/i.test(sql) || /^\s*(?:SELECT|WITH)\b/i.test(sql)) {
+            const rows = db.prepare(sql).all(...bound);
+            return { results: rows, success: true, meta: { changes: rows.length } };
+          }
+          const info = db.prepare(sql).run(...bound);
+          return { results: [], success: true, meta: { changes: Number(info.changes) } };
+        },
       };
       return stmt;
+    },
+    async batch(list) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const out = [];
+        for (const s of list) out.push(await s.run());
+        db.exec("COMMIT");
+        return out;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
     },
   };
 }

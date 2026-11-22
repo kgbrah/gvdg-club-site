@@ -76,7 +76,7 @@ export function PersonProfile({ personKey }) {
     h("a", { className: "market-back", href: "#returned", key: "back" }, "Back to returned discs"),
     h("div", { className: "market-panel market-trader-head", key: "head" }, [
       h("h2", { className: "market-title", key: "name" }, [person.name, " ", h(KarmaBadge, { key: "k", person })]),
-      h(Note, { key: "n" }, karmaLabel(person) ? "Karma comes from discs returned to their owners: +10 for each confirmed return." : "No returns yet."),
+      h(Note, { key: "n" }, karmaLabel(person) ? "Karma comes from returning discs (+10 each), casual or bag-tag rounds (+1), and club donations (+10 per dollar)." : "No karma yet."),
     ]),
     celebrations.length ? h("div", { className: "product-grid market-grid lf-grid", key: "celebrations" },
       celebrations.map((row) => h(CelebrationCard, { celebration: row, key: row.id, viewer }))) : null,

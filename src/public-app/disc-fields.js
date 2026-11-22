@@ -23,16 +23,30 @@ export function PickList({ id, label, value, options, onChange, placeholder, all
   const listed = rows.find(([optionValue]) => choiceKey(optionValue) === choiceKey(text));
   const [typing, setTyping] = React.useState(() => Boolean(text) && !listed);
   const otherRef = React.useRef(null);
+  const choosingOtherRef = React.useRef(false);
+  const prevTextRef = React.useRef(text);
+  React.useEffect(() => {
+    const hadText = Boolean(prevTextRef.current);
+    prevTextRef.current = text;
+    if (!text && choosingOtherRef.current) {
+      choosingOtherRef.current = false;
+      return;
+    }
+    choosingOtherRef.current = false;
+    if (typing && (listed || (hadText && !text))) setTyping(false);
+  }, [text, listed, typing]);
   const showOther = allowOther && !listed && (typing || Boolean(text));
   const selectValue = listed ? listed[0] : showOther ? OTHER : "";
   function choose(event) {
     const next = event.target.value;
     if (next === OTHER) {
+      choosingOtherRef.current = true;
       setTyping(true);
       onChange("");
       requestAnimationFrame(() => otherRef.current?.focus());
       return;
     }
+    choosingOtherRef.current = false;
     setTyping(false);
     onChange(next);
   }
@@ -125,22 +139,28 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
   const [note, setNote] = React.useState(null);
   const [seconds, setSeconds] = React.useState(0);
   const job = React.useRef(null);
+  const mountedRef = React.useRef(true);
   const supported = React.useMemo(() => voiceSupported(), []);
 
-  React.useEffect(() => () => {
-    const current = job.current;
-    job.current = null;
-    if (!current) return;
-    clearInterval(current.tick);
-    current.cancelled = true;
-    current.stream?.getTracks().forEach((track) => track.stop());
-    if (current.recorder?.state === "recording") current.recorder.stop();
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const current = job.current;
+      job.current = null;
+      if (!current) return;
+      clearInterval(current.tick);
+      current.cancelled = true;
+      current.stream?.getTracks().forEach((track) => track.stop());
+      if (current.recorder?.state === "recording") current.recorder.stop();
+    };
   }, []);
 
-  async function send(blob, type) {
-    setPhase("sending");
+  async function send(blob, type, current) {
+    if (mountedRef.current) setPhase("sending");
     const result = await transcribeClip(blob, type);
-    if (!job.current?.cancelled) job.current = null;
+    if (!current?.cancelled && job.current === current) job.current = null;
+    if (!mountedRef.current || current?.cancelled) return;
     if (!result.ok) {
       setNote({ tone: "error", text: voiceError(result.status === 200 ? 422 : result.status, result.code) });
       setPhase("idle");
@@ -164,41 +184,54 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
   async function start() {
     if (phase !== "idle") return;
     setNote(null);
+    setPhase("starting");
+    const current = { recorder: null, stream: null, tick: 0, cancelled: false, started: Date.now() };
+    job.current = current;
     const mime = voiceRecorderMime();
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (error) {
+      if (job.current === current) job.current = null;
+      if (!mountedRef.current || current.cancelled) return;
+      setPhase("idle");
       setNote({ tone: "error", text: error?.name === "NotAllowedError"
         ? "The microphone is blocked for this site. Allow it in your browser settings, or pick from the lists."
         : "The microphone didn't start. Pick from the lists instead." });
       return;
     }
+    if (!mountedRef.current || current.cancelled) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    current.stream = stream;
     const chunks = [];
     let recorder;
     try {
       recorder = new MediaRecorder(stream, { mimeType: mime });
     } catch {
       stream.getTracks().forEach((track) => track.stop());
+      if (job.current === current) job.current = null;
+      if (!mountedRef.current || current.cancelled) return;
+      setPhase("idle");
       setNote({ tone: "error", text: "This browser can't record here. Pick from the lists instead." });
       return;
     }
-    const current = { recorder, stream, tick: 0, cancelled: false, started: Date.now() };
-    job.current = current;
+    current.recorder = recorder;
     recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
     recorder.onstop = () => {
       clearInterval(current.tick);
       stream.getTracks().forEach((track) => track.stop());
-      if (current.cancelled) return;
+      if (current.cancelled || !mountedRef.current) return;
       const type = mime.split(";")[0];
       const blob = new Blob(chunks, { type });
       if (blob.size < 256) {
-        job.current = null;
+        if (job.current === current) job.current = null;
         setNote({ tone: "error", text: "That recording was empty. Tap Say it and talk, then tap Stop." });
         setPhase("idle");
         return;
       }
-      void send(blob, type);
+      void send(blob, type, current);
     };
     recorder.start();
     setSeconds(0);
@@ -219,11 +252,11 @@ export function VoiceDiscButton({ onFields, holes = 27, example, fields = DISC_V
   const recording = phase === "recording";
   return h("div", { className: "disc-voice", "data-disc-voice": phase }, [
     h("button", {
-      "aria-label": recording ? "Stop recording" : "Say the disc details", className: "shop-btn secondary disc-voice-button", disabled: phase === "sending",
+      "aria-label": recording ? "Stop recording" : "Say the disc details", className: "shop-btn secondary disc-voice-button", disabled: phase === "starting" || phase === "sending",
       key: "button", onClick: recording ? stop : () => { void start(); }, type: "button",
     }, recording
       ? [h(Square, { "aria-hidden": true, key: "icon", size: 16 }), "Stop", h("span", { "aria-hidden": true, className: "disc-voice-time", key: "time" }, clockSeconds(seconds) + " / " + clockSeconds(VOICE_MAX_SECONDS))]
-      : [h(Mic, { "aria-hidden": true, key: "icon", size: 18 }), phase === "sending" ? "Listening back…" : "Say it"]),
+      : [h(Mic, { "aria-hidden": true, key: "icon", size: 18 }), phase === "sending" ? "Listening back…" : phase === "starting" ? "Starting mic…" : "Say it"]),
     h("p", { className: "market-hint disc-voice-example", key: "example" }, recording ? "Listening… take your time and tap Stop when you're done." : example || "Try: “Orange Star Destroyer, 175 grams.”"),
     h("div", { "aria-live": "polite", className: "disc-voice-result", key: "result", role: "status" }, note ? [
       note.heard ? h("p", { className: "disc-voice-heard", key: "heard" }, "Heard: “" + note.heard + "”") : null,

@@ -175,7 +175,8 @@ export async function myLostFound(c: MarketCtx): Promise<Response> {
             COALESCE(p.brand, cp.brand) AS brand, COALESCE(p.mold, cp.mold) AS mold, COALESCE(p.plastic, cp.plastic) AS plastic, COALESCE(p.color, cp.color) AS color
      FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id
        LEFT JOIN lf_celebrations e ON e.id = ph.celebration_id LEFT JOIN lf_claims cc ON cc.id = e.claim_id LEFT JOIN lf_posts cp ON cp.id = cc.found_id
-     WHERE ph.owner_id = ? AND ph.status = 'public' AND ph.nudge = 'shown' AND (p.id IS NULL OR p.status IN ('open', 'claimed', 'returned'))
+     WHERE ph.owner_id = ? AND ph.status = 'public' AND ph.nudge = 'shown'
+       AND (p.id IS NULL OR (p.status IN ('open', 'claimed', 'returned') AND (p.status <> 'open' OR p.expires_at > datetime('now'))))
      ORDER BY ph.id DESC LIMIT 24`,
   ).bind(me.id).all<Row>()).results ?? [];
   return ok(c, {
@@ -200,10 +201,14 @@ export async function lostFoundSummary(env: Env, memberId: string) {
   const row = await env.DB.prepare(
     `SELECT
        (SELECT COUNT(*) FROM lf_matches m JOIN lf_posts f ON f.id = m.found_id
-          WHERE m.candidate_id = ? AND m.status = 'notified' AND f.status IN ('open', 'claimed') AND f.hidden = 0) +
+          WHERE m.candidate_id = ? AND m.status = 'notified' AND f.status IN ('open', 'claimed') AND f.hidden = 0
+            AND f.expires_at > datetime('now')
+            AND NOT EXISTS (SELECT 1 FROM lf_claims x WHERE x.found_id = m.found_id AND x.owner_id = m.candidate_id AND x.status IN ('open', 'returned', 'confirmed'))) +
        (SELECT COUNT(*) FROM lf_claims WHERE finder_id = ? AND status = 'open') +
        (SELECT COUNT(*) FROM lf_claims WHERE owner_id = ? AND status = 'returned') +
-       (SELECT COUNT(*) FROM lf_photos WHERE owner_id = ? AND status = 'public' AND nudge = 'shown') AS n`,
+       (SELECT COUNT(*) FROM lf_photos ph LEFT JOIN lf_posts p ON p.id = ph.post_id
+          WHERE ph.owner_id = ? AND ph.status = 'public' AND ph.nudge = 'shown'
+            AND (ph.post_id IS NULL OR (p.status IN ('open', 'claimed', 'returned') AND (p.status <> 'open' OR p.expires_at > datetime('now'))))) AS n`,
   ).bind(memberId, memberId, memberId, memberId).first<{ n: number }>();
   const recent = (await recentReturns(env, 3, 30)).map((item) => ({
     disc: item.disc, finder: { name: item.finder.name, karma: item.finder.karma, returned: item.finder.returned },

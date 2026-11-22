@@ -60,6 +60,10 @@ export function clearMemberSession(stores) {
     storeRemove(persistent, key);
     storeRemove(session, key);
   }
+  for (const key of ["gvdg_lf_bag_handoff", "gvdg_market_bag_handoff"]) {
+    storeRemove(session, key);
+    storeRemove(persistent, key);
+  }
 }
 
 export function readMemberToken(stores) {
@@ -92,6 +96,12 @@ function tokenClaims(token) {
 export function memberTokenSubject(token) {
   const sub = tokenClaims(token).sub;
   return typeof sub === "string" ? sub : "";
+}
+
+/** True when the JWT carries a finite `exp` that has already passed (unverified client check for offline fallback). */
+export function memberTokenExpired(token, nowMs = Date.now()) {
+  const exp = tokenClaims(token).exp;
+  return Number.isFinite(exp) && exp <= nowMs / 1000;
 }
 
 /** The token's issue time (epoch seconds), read without verifying it (the server does that); 0 if unreadable. */

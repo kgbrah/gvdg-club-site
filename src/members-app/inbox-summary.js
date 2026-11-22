@@ -59,7 +59,7 @@ export function useInboxSummary(token) {
     };
     listeners.add(apply);
     refreshInbox(token);
-    const timer = window.setInterval(() => refreshInbox(token, true), 45000);
+    const timer = window.setInterval(() => { if (!document.hidden) refreshInbox(token, true); }, 45000);
     const onChange = () => refreshInbox(token, true);
     window.addEventListener("gvdg:inbox-changed", onChange);
     window.addEventListener("focus", onChange);

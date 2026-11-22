@@ -28,6 +28,7 @@ function ResultsLink({ event }) {
 }
 
 function RegisteredEventActions({ event, registration, token, onReload }) {
+  const [busy, setBusy] = React.useState(false);
   const manageable = event.status === "scheduled" || event.status === "live";
   const actions = [];
 
@@ -40,14 +41,26 @@ function RegisteredEventActions({ event, registration, token, onReload }) {
     actions.push(h("button", {
       type: "button",
       className: "passkey-btn",
+      disabled: busy,
       key: "checkin",
       onClick: async () => {
-        const response = await request(`/events/${encodeURIComponent(event.id)}/checkin`, { method: "POST", token });
-        if (response.ok) onReload();
-        else await memberAlert({
-          message: "Check-in failed. Please try again or see an admin.",
-          title: "Check-in failed",
-        });
+        if (busy) return;
+        setBusy(true);
+        try {
+          const response = await request(`/events/${encodeURIComponent(event.id)}/checkin`, { method: "POST", token });
+          if (response.ok) onReload();
+          else await memberAlert({
+            message: "Check-in failed. Please try again or see an admin.",
+            title: "Check-in failed",
+          });
+        } catch {
+          await memberAlert({
+            message: "Check-in failed. Please try again or see an admin.",
+            title: "Check-in failed",
+          });
+        } finally {
+          setBusy(false);
+        }
       },
     }, "Check in"));
   }
@@ -55,30 +68,42 @@ function RegisteredEventActions({ event, registration, token, onReload }) {
     actions.push(h("button", {
       type: "button",
       className: "board-link danger",
+      disabled: busy,
       key: "withdraw",
       onClick: async () => {
-        const confirmed = await memberConfirm({
-          cancelText: "Stay registered",
-          confirmText: "Withdraw",
-          message: `Withdraw from ${event.name}?`,
-          title: "Withdraw from event?",
-          tone: "danger",
-        });
-        if (!confirmed) return;
-        const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "DELETE", token });
-        if (response.ok) {
-          onReload();
-          return;
+        if (busy) return;
+        setBusy(true);
+        try {
+          const confirmed = await memberConfirm({
+            cancelText: "Stay registered",
+            confirmText: "Withdraw",
+            message: `Withdraw from ${event.name}?`,
+            title: "Withdraw from event?",
+            tone: "danger",
+          });
+          if (!confirmed) return;
+          const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "DELETE", token });
+          if (response.ok) {
+            onReload();
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          await memberAlert({
+            message: data.error === "paid_contact_admin"
+              ? "You've already paid. Please contact an admin to withdraw and arrange a refund."
+              : data.error === "event_started"
+                ? "This event has already started. Please see an admin to withdraw."
+                : "Withdraw failed. Please try again.",
+            title: "Withdraw failed",
+          });
+        } catch {
+          await memberAlert({
+            message: "Withdraw failed. Please try again.",
+            title: "Withdraw failed",
+          });
+        } finally {
+          setBusy(false);
         }
-        const data = await response.json().catch(() => ({}));
-        await memberAlert({
-          message: data.error === "paid_contact_admin"
-            ? "You've already paid. Please contact an admin to withdraw and arrange a refund."
-            : data.error === "event_started"
-              ? "This event has already started. Please see an admin to withdraw."
-              : "Withdraw failed. Please try again.",
-          title: "Withdraw failed",
-        });
       },
     }, "Withdraw"));
   }
@@ -92,11 +117,13 @@ function OpenEventForm({ event, token, onReload }) {
   const [division, setDivision] = React.useState(divisions[0] || "");
   const [team, setTeam] = React.useState("");
   const [addons, setAddons] = React.useState({ ctp: false, ace: false });
+  const [busy, setBusy] = React.useState(false);
   // A partner's name autocompletes from club members (doubles events only).
   const partnerNames = useMemberNameSuggestions(team, { token, request: requestJson, enabled: isDoublesRegistration(event) });
 
   async function submit(eventSubmit) {
     eventSubmit.preventDefault();
+    if (busy) return;
     if (teamEvent && teams.length && !team) {
       await memberAlert({ message: "Please pick a team.", title: "Registration failed" });
       return;
@@ -107,20 +134,30 @@ function OpenEventForm({ event, token, onReload }) {
     };
     if (teamEvent && teams.length) body.team = team;
     if (isDoublesRegistration(event)) body.team = team.trim();
-    const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "POST", token, body });
-    if (response.ok) onReload();
-    else {
-      const payload = await response.json().catch(() => ({}));
+    setBusy(true);
+    try {
+      const response = await request(`/events/${encodeURIComponent(event.id)}/register`, { method: "POST", token, body });
+      if (response.ok) onReload();
+      else {
+        const payload = await response.json().catch(() => ({}));
+        await memberAlert({
+          message: payload.error === "invalid_team"
+            ? "Please pick a team."
+            : payload.error === "invalid_division"
+              ? "Please pick a division."
+              : payload.error === "membership_lapsed"
+                ? "Your membership lapsed on January 1. Ask a club admin to renew it before you register."
+                : "Registration could not be completed.",
+          title: "Registration failed",
+        });
+      }
+    } catch {
       await memberAlert({
-        message: payload.error === "invalid_team"
-          ? "Please pick a team."
-          : payload.error === "invalid_division"
-            ? "Please pick a division."
-            : payload.error === "membership_lapsed"
-              ? "Your membership lapsed on January 1. Ask a club admin to renew it before you register."
-              : "Registration could not be completed.",
+        message: "Registration could not be completed.",
         title: "Registration failed",
       });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -159,7 +196,7 @@ function OpenEventForm({ event, token, onReload }) {
       h("input", { type: "checkbox", checked: addons.ace, onChange: (change) => setAddons({ ...addons, ace: change.target.checked }) }),
       ` Ace pot ${dollars(event.ace_fee_cents)}`,
     ]) : null,
-    h("button", { type: "submit", className: "passkey-btn", key: "submit" }, "Register"),
+    h("button", { type: "submit", className: "passkey-btn", disabled: busy, key: "submit" }, busy ? "Registering…" : "Register"),
   ]);
 }
 

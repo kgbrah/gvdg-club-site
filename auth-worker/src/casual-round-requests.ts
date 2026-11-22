@@ -11,6 +11,11 @@ export interface CasualRoundRequestInput {
   notes?: string | null;
 }
 
+export interface CasualRoundPlayerEntry {
+  memberId: string;
+  name: string;
+}
+
 export interface CasualRoundRequest {
   id: number;
   course_id: number;
@@ -28,6 +33,7 @@ export interface CasualRoundRequest {
   layout_name: string | null;
   player_count: number;
   players: string[];
+  player_entries: CasualRoundPlayerEntry[];
   committed: boolean;
 }
 
@@ -48,10 +54,12 @@ type RequestRow = {
   layout_name?: string | null;
   player_count?: number | string | null;
   player_names?: string | null;
+  player_entries?: string | null;
   committed?: number | string | null;
 };
 
 const PLAYER_SEP = "\u001f";
+const PLAYER_FIELD_SEP = "\u001e";
 
 const SELECT_REQUESTS = `
   SELECT
@@ -60,6 +68,7 @@ const SELECT_REQUESTS = `
     c.name AS course_name, c.location AS course_location, l.name AS layout_name,
     COUNT(j.id) AS player_count,
     GROUP_CONCAT(j.member_name, char(31)) AS player_names,
+    GROUP_CONCAT(j.member_id || char(30) || j.member_name, char(31)) AS player_entries,
     MAX(CASE WHEN j.member_id = ? THEN 1 ELSE 0 END) AS committed
   FROM casual_round_requests r
   JOIN courses c ON c.id = r.course_id
@@ -94,6 +103,15 @@ function hydrate(row: RequestRow): CasualRoundRequest {
     layout_name: row.layout_name ?? null,
     player_count: asCount(row.player_count),
     players: row.player_names ? row.player_names.split(PLAYER_SEP).filter(Boolean) : [],
+    player_entries: row.player_entries
+      ? row.player_entries.split(PLAYER_SEP).filter(Boolean).flatMap((raw) => {
+          const split = raw.indexOf(PLAYER_FIELD_SEP);
+          if (split <= 0) return [];
+          const memberId = raw.slice(0, split);
+          const name = raw.slice(split + 1);
+          return memberId && name ? [{ memberId, name }] : [];
+        })
+      : [],
     committed: row.committed === 1 || row.committed === "1",
   };
 }

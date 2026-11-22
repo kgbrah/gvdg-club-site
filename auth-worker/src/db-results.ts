@@ -247,6 +247,7 @@ export async function listSeasonPlayRows(db: D1Like, year: number) {
          LEFT JOIN event_config ec ON ec.event_id = e.id
          WHERE r.member_id IS NOT NULL
            AND r.member_id NOT LIKE 'g_%'
+           AND r.member_id NOT LIKE 'op_%'
            AND COALESCE(e.date, r.created_at) >= ?
            AND COALESCE(e.date, r.created_at) < ?`,
       )
@@ -271,6 +272,7 @@ export async function listSeasonPlayRows(db: D1Like, year: number) {
          FROM casual_results cr JOIN casual_rounds r ON r.id = cr.casual_round_id
          WHERE cr.member_id IS NOT NULL
            AND cr.member_id NOT LIKE 'g_%'
+           AND cr.member_id NOT LIKE 'op_%'
            AND COALESCE(r.finalized_at, cr.created_at) >= ?
            AND COALESCE(r.finalized_at, cr.created_at) < ?`,
       )

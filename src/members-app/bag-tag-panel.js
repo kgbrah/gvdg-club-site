@@ -141,8 +141,11 @@ function ChallengeArea({ token, compact, leagueId, leagueName, mine, holders, ch
       "data-league-id": leagueId || undefined,
       key: "in-" + challenge.id,
     }, [
-      h("p", { className: "player-card-meta", key: "text" },
-        `${leagueName ? leagueName + ": " : ""}${challenge.challengerName} called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`),
+      h("p", { className: "player-card-meta", key: "text" }, [
+        `${leagueName ? leagueName + ": " : ""}${challenge.challengerName}`,
+        challenge.challengerId ? h(KarmaChip, { key: "karma", memberId: challenge.challengerId }) : null,
+        ` called out your #${challenge.defenderTag}. They shot ${challenge.challengerScore}, you shot ${challenge.defenderScore}.`,
+      ]),
       h("div", { className: "member-action-grid", key: "actions" }, [
         h("button", {
           className: "player-btn primary",
@@ -160,8 +163,11 @@ function ChallengeArea({ token, compact, leagueId, leagueName, mine, holders, ch
         }, "Decline"),
       ]),
     ])),
-    outgoing.map((challenge) => h("p", { className: "player-card-meta member-tag-detail", key: "out-" + challenge.id },
-      `${leagueName ? leagueName + ": " : ""}Waiting on ${challenge.defenderName} (#${challenge.defenderTag}) to confirm your scores.`)),
+    outgoing.map((challenge) => h("p", { className: "player-card-meta member-tag-detail", key: "out-" + challenge.id }, [
+      `${leagueName ? leagueName + ": " : ""}Waiting on ${challenge.defenderName}`,
+      challenge.defenderId ? h(KarmaChip, { key: "karma", memberId: challenge.defenderId }) : null,
+      ` (#${challenge.defenderTag}) to confirm your scores.`,
+    ])),
     closed.map((challenge) => h("p", {
       className: "player-card-meta member-tag-detail tag-closed",
       key: "closed-" + challenge.id,
@@ -266,6 +272,7 @@ export function BagTagPanel({ token, compact = false }) {
 
   const load = React.useCallback(async () => {
     if (!token) return;
+    setMessage("");
     try {
       setBoard(await send("/bag-tags/mine", token, "GET"));
     } catch (error) {
@@ -279,6 +286,12 @@ export function BagTagPanel({ token, compact = false }) {
 
   const leagues = board && Array.isArray(board.leagues) ? board.leagues : [];
   const hasClub = Boolean(board && board.series);
+  if (!board && message) {
+    return h("div", { className: "member-subactions", "data-bag-tag-state": "error" }, [
+      h("p", { className: "dash-note", key: "msg", role: "alert" }, message),
+      h("button", { className: "dashboard-action", key: "retry", onClick: () => { void load(); }, type: "button" }, "Try again"),
+    ]);
+  }
   if (!board || (!hasClub && !leagues.length)) {
     return h(React.Fragment, null, [
       board && !compact ? h("p", { className: "dash-note", key: "hint", "data-bag-tag-hint": "no-tag" }, NO_TAG_HINT) : null,

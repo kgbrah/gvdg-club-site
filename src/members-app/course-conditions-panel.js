@@ -56,18 +56,26 @@ export function CourseConditionsPanel() {
   const [status, setStatus] = React.useState("playable");
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
   const [message, setMessage] = React.useState({ text: "", tone: "" });
 
   const reload = React.useCallback((signal) => {
+    let coursesFailed = false;
+    let reportsFailed = false;
     return Promise.all([
-      requestJson("/courses", { signal }).catch((error) => fallbackUnlessAborted(error, { courses: [] })),
-      requestJson("/course-conditions", { signal }).catch((error) => fallbackUnlessAborted(error, { reports: [] })),
+      requestJson("/courses", { signal }).catch((error) => { fallbackUnlessAborted(error, null); coursesFailed = true; return { courses: [] }; }),
+      requestJson("/course-conditions", { signal }).catch((error) => { fallbackUnlessAborted(error, null); reportsFailed = true; return { reports: [] }; }),
     ]).then(([courseData, reportData]) => {
+      if (signal?.aborted) return;
       const list = Array.isArray(courseData?.courses) ? courseData.courses : [];
       setCourses(list.filter((course) => course && course.id != null && course.name).sort((a, b) => String(a.name).localeCompare(String(b.name))));
       setReports(latestConditionsByCourse(reportData?.reports));
+      const hadError = coursesFailed || reportsFailed;
+      setFailed(hadError);
+      if (hadError) setMessage({ text: "Couldn't load course conditions.", tone: "error" });
     }).catch((error) => {
       if (error?.name === "AbortError") return;
+      setFailed(true);
       setMessage({ text: "Couldn't load course conditions.", tone: "error" });
     });
   }, []);
@@ -161,6 +169,10 @@ export function CourseConditionsPanel() {
     ]),
     reports.length
       ? h("div", { className: "course-conditions-list", key: "list" }, reports.map((report) => h(ReportRow, { report, key: report.id || report.courseName })))
-      : h("p", { className: "dash-note", key: "empty" }, "No course reports yet."),
+      : failed
+        ? h("div", { className: "member-subactions", key: "error" }, [
+          h("button", { type: "button", className: "dashboard-action", key: "retry", onClick: () => { setMessage({ text: "", tone: "" }); setFailed(false); void reload(); } }, "Try again"),
+        ])
+        : h("p", { className: "dash-note", key: "empty" }, "No course reports yet."),
   ]);
 }

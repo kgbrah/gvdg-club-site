@@ -250,7 +250,15 @@ describe("admin member removal and renewal", () => {
             }
             return { results: [], success: true };
           },
-          first: async () => null,
+          first: async () => {
+            if (/SELECT value FROM kv_store/i.test(sql)) {
+              const [ns, key, now] = args as [string, string, number];
+              const row = kvStore.get(`${ns}:${key}`);
+              if (row && (row.expires_at === null || row.expires_at > now)) return { value: row.value };
+              return null;
+            }
+            return null;
+          },
           run: async () => {
             if (/INSERT INTO kv_store/i.test(sql)) {
               const [ns, key, value, expires_at] = args as [string, string, string, number | null];

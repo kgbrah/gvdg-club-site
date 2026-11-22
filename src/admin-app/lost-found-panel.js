@@ -206,7 +206,7 @@ export function AdminLostFoundPanel() {
       actions: [["Dismiss suggestion", `/admin/lost-found/matches/${match.id}/dismiss`, {}, "Suggestion dismissed."]],
       data: { "data-admin-lf-match": match.id }, key: match.id, reasonId: "lf-match-" + match.id, reload: load,
       meta: [`Score ${match.score}`, match.status === "notified" ? "owner notified" : "not notified", match.aiVerdict ? "photo check: " + match.aiVerdict : "",
-        match.via === "roster_name" ? "member's name on the disc" : ""].filter(Boolean).join(" · "),
+        match.via === "bag" ? "disc in their bag" : match.via === "roster_name" ? "member's name on the disc" : ""].filter(Boolean).join(" · "),
       text: (match.reasons || []).join(" · "),
       title: `${match.found?.title || "Found disc"} → ${match.lost ? match.lost.title + " (lost post)" : who(match.candidate)}`,
     }), "matches"),

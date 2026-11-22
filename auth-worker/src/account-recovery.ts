@@ -58,16 +58,21 @@ export async function clearAccountLocks(env: Env, member: Pick<Member, "memberId
   return cleared;
 }
 
-type StoredCode = { hash: string; tries: number; email?: string };
+type StoredCode = { hash: string; tries: number; email?: string; expiresAt?: number };
 
-async function saveCode(env: Env, key: string, row: StoredCode): Promise<void> {
-  await env.RATELIMIT.put(key, JSON.stringify(row), { expirationTtl: CODE_TTL_SEC });
+async function saveCode(env: Env, key: string, row: StoredCode, expiresAt = Date.now() + CODE_TTL_SEC * 1000): Promise<void> {
+  const remainingSec = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
+  // Workers KV rejects expirationTtl < 60, whereas D1KV honors sub-minute TTLs; row.expiresAt still enforces exact expiry on read.
+  const ttlSec = env.RATELIMIT_BACKEND === "d1" ? remainingSec : Math.max(60, remainingSec);
+  await env.RATELIMIT.put(key, JSON.stringify({ ...row, expiresAt }), { expirationTtl: ttlSec });
 }
 
 async function readCode(env: Env, key: string): Promise<StoredCode | null> {
   try {
     const row = JSON.parse((await env.RATELIMIT.get(key)) || "null") as StoredCode | null;
-    return row && typeof row.hash === "string" ? row : null;
+    if (!row || typeof row.hash !== "string") return null;
+    if (typeof row.expiresAt === "number" && row.expiresAt <= Date.now()) return null;
+    return row;
   } catch {
     return null;
   }
@@ -86,7 +91,7 @@ async function takeCode(env: Env, key: string, scope: string, code: unknown): Pr
     await env.RATELIMIT.delete(key);
     return { result: "gone" };
   }
-  await saveCode(env, key, { ...row, tries: row.tries + 1 });
+  await saveCode(env, key, { ...row, tries: row.tries + 1 }, row.expiresAt ?? Date.now() + CODE_TTL_SEC * 1000);
   return { result: "bad" };
 }
 
@@ -131,7 +136,7 @@ export async function handleEmailStart(request: Request, env: Env, origin: strin
   }
 
   const owner = await emailOwner(env.ROSTER, email);
-  if (owner && owner !== member.memberId) return json({ error: "email_in_use" }, 409, origin);
+  if (owner && owner !== member.memberId && (await getMember(env.ROSTER, owner))) return json({ error: "email_in_use" }, 409, origin);
   if (!emailConfigured(env)) return json({ error: "email_unavailable" }, 503, origin);
   // Only codes actually sent count (a PIN prompt or a wrong PIN has its own lockout), 6 an hour.
   if (await kvRateLimited(env, ACCOUNT_SENDS(member.memberId), 6, 3600)) return json({ error: "rate_limited" }, 429, origin);
@@ -159,10 +164,15 @@ export async function handleEmailVerify(request: Request, env: Env, origin: stri
   if (saved === "missing") return json({ error: "unauthorized" }, 401, origin);
   // Tell the old address it moved (a heads-up if it wasn't them); best effort.
   if (previous && previous.toLowerCase() !== pending.email) {
+    const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const text = [`Hi ${member.name.split(/\s+/)[0] || member.name},`, "",
       "The email on your Greenville Disc Golf Club account was just changed, so PIN reset codes now go to the new address.", "",
       "If that wasn't you, contact a club admin.", "", "- Greenville Disc Golf Club"].join("\n");
-    await sendMail(env, previous, { subject: "Your GVDG account email was changed", text, html: text.split("\n").map((l) => l ? `<p>${l}</p>` : "").join("") }).catch(() => false);
+    await sendMail(env, previous, {
+      subject: "Your GVDG account email was changed",
+      text,
+      html: text.split("\n").map((l) => l ? `<p>${escapeHtml(l)}</p>` : "").join(""),
+    }).catch(() => false);
   }
   return json({ email: pending.email, needsEmail: false, emailRequired: false }, 200, origin);
 }
