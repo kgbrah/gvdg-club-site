@@ -8,7 +8,7 @@ import { getMember } from "./roster.js";
 import { matchReasonLabels, parseReasons, postTitle as lfPostTitle } from "./lf-store.js";
 import { cleanLine, dollars, listingTitle, wantedTitle } from "./market-input.js";
 import {
-  LISTING_COLUMNS, WANTED_COLUMNS, isSuspended, listingCards, liteOf, logModeration, num, ownerByKey, relistUntil, str, tradersByOwner,
+  LISTING_COLUMNS, WANTED_COLUMNS, isSuspended, listingCards, liteOf, logModeration, num, ownerByKey, relistUntil, str, suspendedOwners, tradersByOwner,
   wantedViews, type Row,
 } from "./market-store.js";
 import { changed, fail, idOf, ok, type MarketCtx } from "./market-http.js";
@@ -30,7 +30,34 @@ async function openReports(c: MarketCtx): Promise<number> {
   return Number(row?.n) || 0;
 }
 
+async function fetchRowsByIds(c: MarketCtx, ids: readonly number[], query: (marks: string) => string): Promise<Map<number, Row>> {
+  const unique = [...new Set(ids.filter((id) => id > 0))];
+  const out = new Map<number, Row>();
+  for (let i = 0; i < unique.length; i += 50) {
+    const chunk = unique.slice(i, i + 50);
+    const rows = (await c.env.DB.prepare(query(chunk.map(() => "?").join(","))).bind(...chunk).all<Row>()).results ?? [];
+    for (const row of rows) out.set(num(row, "id"), row);
+  }
+  return out;
+}
+
 async function reportTargets(c: MarketCtx, rows: Row[]) {
+  const listingIds: number[] = [];
+  const wantedIds: number[] = [];
+  const feedbackIds: number[] = [];
+  for (const row of rows) {
+    const kind = str(row, "target_kind");
+    const id = num(row, "target_id");
+    if (kind === "listing") listingIds.push(id);
+    else if (kind === "wanted") wantedIds.push(id);
+    else feedbackIds.push(id);
+  }
+  const [listingsById, wantedById, feedbackById] = await Promise.all([
+    fetchRowsByIds(c, listingIds, (marks) => `SELECT id, seller_id, brand, plastic, mold, status, hidden, condition, condition_notes, price_cents, open_to_trade, location, withdrawn_at, withdrawal_final FROM market_listings WHERE id IN (${marks})`),
+    fetchRowsByIds(c, wantedIds, (marks) => `SELECT id, poster_id, brand, plastic, mold, disc_type, status, hidden, notes FROM market_wanted WHERE id IN (${marks})`),
+    fetchRowsByIds(c, feedbackIds, (marks) => `SELECT f.id, f.author_id, f.rating, f.comment, f.removed_at, d.listing_title FROM market_feedback f JOIN market_deals d ON d.id = f.deal_id WHERE f.id IN (${marks})`),
+  ]);
+
   const ownerIds: string[] = [];
   const targets = new Map<number, { title: string; status: string; hidden: boolean; text: string; ownerId: string } | null>();
   for (const row of rows) {
@@ -38,9 +65,7 @@ async function reportTargets(c: MarketCtx, rows: Row[]) {
     const id = num(row, "target_id");
     let target: { title: string; status: string; hidden: boolean; text: string; ownerId: string } | null = null;
     if (kind === "listing") {
-      const l = await c.env.DB.prepare(
-        "SELECT seller_id, brand, plastic, mold, status, hidden, condition, condition_notes, price_cents, open_to_trade, location, withdrawn_at, withdrawal_final FROM market_listings WHERE id = ?",
-      ).bind(id).first<Row>();
+      const l = listingsById.get(id);
       if (l) {
         const price = l.price_cents != null ? "$" + dollars(num(l, "price_cents")) : "Trade only";
         const text = [price + (l.price_cents != null && num(l, "open_to_trade") === 1 ? " or trade" : ""), `Condition ${num(l, "condition")}/10`,
@@ -51,23 +76,21 @@ async function reportTargets(c: MarketCtx, rows: Row[]) {
           hidden: num(l, "hidden") === 1, text, ownerId: str(l, "seller_id") };
       }
     } else if (kind === "wanted") {
-      const w = await c.env.DB.prepare("SELECT poster_id, brand, plastic, mold, disc_type, status, hidden, notes FROM market_wanted WHERE id = ?")
-        .bind(id).first<Row>();
+      const w = wantedById.get(id);
       if (w) target = { title: "WANTED: " + wantedTitle({ brand: str(w, "brand"), plastic: str(w, "plastic"), mold: str(w, "mold"), disc_type: str(w, "disc_type") }),
         status: str(w, "status"), hidden: num(w, "hidden") === 1, text: str(w, "notes"), ownerId: str(w, "poster_id") };
     } else {
-      const f = await c.env.DB.prepare(
-        `SELECT f.author_id, f.rating, f.comment, f.removed_at, d.listing_title FROM market_feedback f JOIN market_deals d ON d.id = f.deal_id WHERE f.id = ?`,
-      ).bind(id).first<Row>();
+      const f = feedbackById.get(id);
       if (f) target = { title: `Feedback (${str(f, "rating")}) on ${str(f, "listing_title")}`, status: f.removed_at ? "removed" : "shown",
         hidden: Boolean(f.removed_at), text: str(f, "comment"), ownerId: str(f, "author_id") };
     }
     if (target) ownerIds.push(target.ownerId);
     targets.set(num(row, "id"), target);
   }
-  const traders = await tradersByOwner(c.env, [...ownerIds, ...rows.map((row) => str(row, "reporter_id"))]);
-  const suspended = new Map<string, boolean>();
-  for (const ownerId of new Set(ownerIds)) suspended.set(ownerId, await isSuspended(c.env, ownerId));
+  const [traders, suspended] = await Promise.all([
+    tradersByOwner(c.env, [...ownerIds, ...rows.map((row) => str(row, "reporter_id"))]),
+    suspendedOwners(c.env, ownerIds),
+  ]);
   return rows.map((row) => {
     const target = targets.get(num(row, "id"));
     return {
@@ -81,7 +104,7 @@ async function reportTargets(c: MarketCtx, rows: Row[]) {
       reporter: liteOf(traders, str(row, "reporter_id")),
       target: target ? {
         title: target.title, status: target.status, hidden: target.hidden, text: target.text,
-        owner: { ...liteOf(traders, target.ownerId), suspended: suspended.get(target.ownerId) === true },
+        owner: { ...liteOf(traders, target.ownerId), suspended: suspended.has(target.ownerId) },
       } : null,
     };
   });

@@ -125,13 +125,16 @@ export async function handleAdminMembers(
     return json({ member: pub(updated) }, 200, origin);
   }
 
-  // POST /admin/members/lapsed-to-guest — move every lapsed member (not admins, not held accounts) to the Guest tier.
+  // POST /admin/members/lapsed-to-guest — move lapsed members (not admins, not held accounts) to the Guest tier, bounded per call.
   if (method === "POST" && seg.length === 3 && seg[2] === "lapsed-to-guest") {
+    const LAPSED_BATCH = 25;
     const lapsed = (await listMembers(env.ROSTER as unknown as KVListLike))
       .filter((m) => m.isAdmin !== true && m.held !== true && m.guest !== true && membershipStatus(m).lapsed);
-    for (const m of lapsed) await setMemberTier(env.ROSTER, m.memberId, "guest");
-    console.log(JSON.stringify({ evt: "lapsed_to_guest", actor: adminId, count: lapsed.length, at: Date.now() }));
-    return json({ moved: lapsed.length }, 200, origin);
+    const batch = lapsed.slice(0, LAPSED_BATCH);
+    for (const m of batch) await setMemberTier(env.ROSTER, m.memberId, "guest");
+    const remaining = lapsed.length - batch.length;
+    console.log(JSON.stringify({ evt: "lapsed_to_guest", actor: adminId, count: batch.length, remaining, at: Date.now() }));
+    return json(remaining > 0 ? { moved: batch.length, remaining } : { moved: batch.length }, 200, origin);
   }
 
   // POST /admin/members/link-held — a held account (from the sheets) is a member already in the app under another

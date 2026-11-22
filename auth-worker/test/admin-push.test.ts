@@ -301,4 +301,33 @@ describe("admin push routes", () => {
     const third = JSON.parse(decode((await decryptPush(seen[2]!.body, sub.pair.privateKey, sub.publicRaw, sub.auth)).clear));
     expect(third).toMatchObject({ title: "New shop order", url: "/admin.html?tab=orders", tag: "shop-order-9" });
   });
+
+  it("rejects private/loopback/metadata push endpoints on subscribe and skips them when sending", async () => {
+    const db = await sqliteDb();
+    const sub = await subscriber();
+    const keys = await vapidPair();
+    const env = envOf(db, { VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey });
+    const admin = await token("m_admin");
+    for (const badEndpoint of [
+      "https://127.0.0.1/push",
+      "https://169.254.169.254/latest/meta-data",
+      "https://localhost/push",
+      "https://[::1]/push",
+      "https://internal/push",
+      "https://push.local/push",
+    ]) {
+      const res = await call(env, "/admin/push", "POST", admin, { endpoint: badEndpoint, keys: { p256dh: sub.p256dh, auth: sub.authKey } });
+      expect(res.status, badEndpoint).toBe(400);
+      expect(res.data.error, badEndpoint).toBe("invalid_subscription");
+    }
+    await env.DB.prepare(
+      "INSERT INTO admin_push_subscriptions (endpoint, member_id, p256dh, auth) VALUES (?, ?, ?, ?)",
+    ).bind("https://169.254.169.254/latest", "m_admin", sub.p256dh, sub.authKey).run();
+    const fetched = vi.fn(async () => new Response(null, { status: 201 }));
+    vi.stubGlobal("fetch", fetched);
+    await notifyNewOrder(env, { id: 10, member_name: "Ada", total_cents: 500 }, []);
+    expect(fetched).not.toHaveBeenCalled();
+    const remaining = await env.DB.prepare("SELECT endpoint FROM admin_push_subscriptions").all<{ endpoint: string }>();
+    expect(remaining.results).toEqual([]);
+  });
 });

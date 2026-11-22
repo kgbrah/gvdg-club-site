@@ -138,6 +138,33 @@ describe("member messages and notices", () => {
     expect(JSON.stringify(found.data)).not.toContain("pin");
   });
 
+  it("caches /me/messages/people in D1, invalidates when roster_recent changes, and rate-limits bursts", async () => {
+    const db = await sqliteDb();
+    const env = makeEnv(db);
+    let listCalls = 0;
+    const realList = env.ROSTER.list.bind(env.ROSTER);
+    env.ROSTER.list = async (opts) => { listCalls += 1; return realList(opts); };
+
+    const bo = await token("m_bo");
+    expect((await call(env, "/me/messages/people?q=ada", "GET", bo)).data.people).toHaveLength(1);
+    expect(listCalls).toBe(1);
+    expect((await call(env, "/me/messages/people?q=cy", "GET", bo)).data.people).toHaveLength(1);
+    expect(listCalls).toBe(1);
+
+    // Updating a member via ConsistentKV updates roster_recent and busts people_cache.
+    db.raw.prepare("INSERT INTO kv_store (ns, key, value, expires_at) VALUES ('roster_recent', 'member:m_new', ?, ?)")
+      .run(JSON.stringify({ op: "put", value: JSON.stringify({ memberId: "m_new", name: "New Member", pinVer: 0 }) }), Date.now() + 180_000);
+    expect((await call(env, "/me/messages/people?q=ada", "GET", bo)).status).toBe(200);
+    expect(listCalls).toBe(2);
+
+    // Rate limits past 30 calls/min.
+    let limited = 0;
+    for (let i = 0; i < 30; i += 1) {
+      if ((await call(env, "/me/messages/people?q=ada", "GET", bo)).status === 429) { limited = 429; break; }
+    }
+    expect(limited).toBe(429);
+  });
+
   it("keeps a bag-tag update in the notice list until the member marks it seen", async () => {
     const db = await sqliteDb();
     const env = makeEnv(db);

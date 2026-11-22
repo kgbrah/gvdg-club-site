@@ -75,10 +75,39 @@ async function readTextLimited(request: Request, maxBytes: number): Promise<stri
     const next = await reader.read();
     if (next.done) break;
     total += next.value.byteLength;
-    if (total > maxBytes) throw new RequestBodyTooLargeError();
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new RequestBodyTooLargeError();
+    }
     text += decoder.decode(next.value, { stream: true });
   }
   return text + decoder.decode();
+}
+
+export async function readBytesLimited(request: Request, maxBytes: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  const declared = declaredBodyLength(request);
+  if (declared != null && declared > maxBytes) return null;
+  if (!request.body) return new Uint8Array(new ArrayBuffer(0));
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const next = await reader.read();
+    if (next.done) break;
+    total += next.value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(next.value);
+  }
+  const out = new Uint8Array(new ArrayBuffer(total));
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 function isJsonRecord(v: unknown): v is Record<string, unknown> {

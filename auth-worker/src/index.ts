@@ -222,7 +222,10 @@ export default {
             try {
               const purged = await purgeExpired(env.DB, "ratelimit");
               const rosterPurged = await purgeExpired(env.DB, ROSTER_RECENT_NS);
-              if (purged || rosterPurged) console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged }));
+              const peoplePurged = await purgeExpired(env.DB, "people_cache");
+              if (purged || rosterPurged || peoplePurged) {
+                console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged, peopleCache: peoplePurged }));
+              }
             } catch (error) {
               console.error(JSON.stringify({ message: "ratelimit_purge_failed", error: error instanceof Error ? error.message : String(error) }));
             }
@@ -233,19 +236,19 @@ export default {
             } catch (error) {
               console.error(JSON.stringify({ message: "market_sweep_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
-            let importError: unknown = null;
-            try {
-              const result = await runUdiscLayoutImportTick(env);
-              console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
-            } catch (error) {
-              importError = error;
-            }
             // Round karma watch: flag anyone past 3 finished rounds in a day for an admin (a few small reads).
             try {
               const watch = await runKarmaWatch(env, Date.now(), ctx);
               if (watch.flagged) console.log(JSON.stringify({ message: "karma_watch", ...watch }));
             } catch (error) {
               console.error(JSON.stringify({ message: "karma_watch_failed", error: error instanceof Error ? error.stack : String(error) }));
+            }
+            let importError: unknown = null;
+            try {
+              const result = await runUdiscLayoutImportTick(env);
+              console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
+            } catch (error) {
+              importError = error;
             }
             // Lost & Found runs LAST in this branch, so however long its Gemini waits take it can never starve the
             // market sweep or the UDisc import above. It does I/O only (no image work); expiry and purges first.
@@ -263,15 +266,32 @@ export default {
             try {
               const purged = await purgePdgaCaches(env, Date.now());
               if (purged.players || purged.events) console.log(JSON.stringify({ message: "pdga_cache_purged", ...purged }));
-              const copies = await refreshClubPdgaEventCopies(env, Date.now());
-              console.log(JSON.stringify({ message: "pdga_event_copies", ...copies }));
             } catch (error) {
               console.error(JSON.stringify({ message: "pdga_cache_purge_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
-            const result = await refreshClubPdgaEvents(env);
-            console.log(JSON.stringify({ message: "pdga_events_refresh", cron: controller.cron, ...result }));
-            const leagues = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
-            if (!leagues.skipped) console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...leagues }));
+            try {
+              const copies = await refreshClubPdgaEventCopies(env, Date.now());
+              console.log(JSON.stringify({ message: "pdga_event_copies", ...copies }));
+            } catch (error) {
+              console.error(JSON.stringify({ message: "pdga_event_copies_failed", error: error instanceof Error ? error.stack : String(error) }));
+            }
+            let pdgaError: unknown = null;
+            try {
+              const result = await refreshClubPdgaEvents(env);
+              console.log(JSON.stringify({ message: "pdga_events_refresh", cron: controller.cron, ...result }));
+            } catch (error) {
+              pdgaError = error;
+              console.error(JSON.stringify({ message: "pdga_events_refresh_failed", cron: controller.cron, error: error instanceof Error ? error.stack : String(error) }));
+            }
+            let leagueError: unknown = null;
+            try {
+              const leagues = await refreshImportedUdiscLeagues(env, new Date(controller.scheduledTime));
+              if (!leagues.skipped) console.log(JSON.stringify({ message: "udisc_league_refresh", cron: controller.cron, ...leagues }));
+            } catch (error) {
+              leagueError = error;
+              console.error(JSON.stringify({ message: "udisc_league_refresh_failed", cron: controller.cron, error: error instanceof Error ? error.stack : String(error) }));
+            }
+            if (pdgaError || leagueError) throw pdgaError ?? leagueError;
             return;
           }
           if (isUdiscLeagueRefreshCron(controller.cron)) {

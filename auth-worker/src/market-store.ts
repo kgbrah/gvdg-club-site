@@ -172,6 +172,19 @@ export function summaryOf(map: Map<string, FeedbackSummary>, ownerId: string): F
   return map.get(ownerId) ?? { ...EMPTY_SUMMARY };
 }
 
+export async function suspendedOwners(env: Env, ownerIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(ownerIds.filter(Boolean))];
+  const out = new Set<string>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const rows = (await env.DB.prepare(
+      `SELECT DISTINCT owner_id FROM market_suspensions WHERE lifted_at IS NULL AND owner_id IN (${chunk.map(() => "?").join(",")})`,
+    ).bind(...chunk).all<{ owner_id: string }>()).results ?? [];
+    for (const row of rows) out.add(row.owner_id);
+  }
+  return out;
+}
+
 export async function isSuspended(env: Env, ownerId: string): Promise<boolean> {
   const row = await env.DB.prepare("SELECT 1 AS hit FROM market_suspensions WHERE owner_id = ? AND lifted_at IS NULL LIMIT 1")
     .bind(ownerId).first<{ hit: number }>();

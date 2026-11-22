@@ -2,7 +2,7 @@ import type { Env } from "./env.js";
 import { hashPin, verifyPin, pinHashNeedsUpgrade } from "./crypto.js";
 import { signSession, verifySession } from "./jwt.js";
 import { checkLockout, clearAttempts, recordFailure } from "./ratelimit.js";
-import { canonicalLoginKey, getMember, putMember, rehashPin, resolveMember, setPin, updateProfile, type Member, type ProfilePatch } from "./roster.js";
+import { canonicalLoginKey, getMember, rehashPin, resolveMember, saveMemberRecord, setPin, updateProfile, type Member, type ProfilePatch } from "./roster.js";
 import * as db from "./db.js";
 import { bearer, clientIp, json, readJson } from "./http.js";
 import { requireAuth, ttl } from "./authz.js";
@@ -252,7 +252,7 @@ export async function handleProfile(request: Request, env: Env, origin: string |
 export async function handleSetPin(request: Request, env: Env, origin: string | null): Promise<Response> {
   const token = bearer(request);
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
-  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  if (!claims || claims.play) return json({ error: "unauthorized" }, 401, origin);
 
   // Rate-limit the change-PIN path per member so a stolen token can't be used to grind PINs.
   if (await kvRateLimited(env, "setpin:" + claims.sub, SETPIN_LIMIT, 60)) {
@@ -263,12 +263,18 @@ export async function handleSetPin(request: Request, env: Env, origin: string | 
   const newPin = typeof body?.newPin === "string" ? body.newPin : "";
   if (!/^\d{4}$/.test(newPin)) return json({ error: "invalid_pin_format" }, 400, origin);
 
+  const member = await getMember(env.ROSTER, claims.sub);
+  if (!member || member.held === true || (member.pinVer ?? 0) !== (claims.pinVer ?? 0)) {
+    return json({ error: "unauthorized" }, 401, origin);
+  }
+  if (claims.mustChangePin && !member.mustChangePin) {
+    return json({ error: "unauthorized" }, 401, origin);
+  }
+
   // An established member (not on a forced first-login change) must prove the CURRENT PIN before
   // setting a new one, so a transiently-stolen 15-minute session token can't be turned into a
   // permanent account takeover. The forced-change flow has no current PIN to verify, so it is exempt.
   if (!claims.mustChangePin) {
-    const member = await getMember(env.ROSTER, claims.sub);
-    if (!member) return json({ error: "unauthorized" }, 401, origin);
     const currentPin = typeof body?.currentPin === "string" ? body.currentPin : "";
     if (!(await verifyPin(currentPin, member.pinHash, env.PIN_PEPPER))) {
       return json({ error: "invalid_credentials" }, 401, origin);
@@ -286,10 +292,12 @@ export async function handleWelcomeSeen(request: Request, env: Env, origin: stri
   const claims = token ? await verifySession(token, env.JWT_SECRET) : null;
   if (!claims || claims.play) return json({ error: "unauthorized" }, 401, origin);
   const member = await getMember(env.ROSTER, claims.sub);
-  if (!member) return json({ error: "unauthorized" }, 401, origin);
+  if (!member || member.held === true || (member.pinVer ?? 0) !== (claims.pinVer ?? 0)) {
+    return json({ error: "unauthorized" }, 401, origin);
+  }
   if (member.welcomePending) {
     delete member.welcomePending;
-    await putMember(env.ROSTER, member);
+    await saveMemberRecord(env.ROSTER, member);
   }
   return json({ ok: true }, 200, origin);
 }

@@ -377,4 +377,28 @@ describe("bag tag challenge pushes", () => {
     await call(t.env, `/admin/bag-tags/challenges/${made.data.challenge.id}/confirm`, "POST", t.admin, {});
     expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.di.endpoint].sort());
   });
+
+  it("rejects private/loopback/metadata push endpoints on subscribe and skips them when sending", async () => {
+    const t = await setup();
+    const d = await device("ssrf");
+    for (const badEndpoint of [
+      "https://127.0.0.1/push",
+      "https://169.254.169.254/latest/meta-data",
+      "https://localhost/push",
+      "https://[::1]/push",
+      "https://internal/push",
+      "https://phone.local/push",
+    ]) {
+      const res = await call(t.env, "/me/push-subscription", "PUT", t.bo, { endpoint: badEndpoint, keys: d.keys });
+      expect(res.status, badEndpoint).toBe(400);
+      expect(res.data.error, badEndpoint).toBe("invalid_subscription");
+    }
+    await t.db.raw.prepare(
+      "INSERT INTO member_push_subscriptions (endpoint, member_id, p256dh, auth, bag_tags, messages) VALUES (?, 'm_ada', ?, ?, 1, 1)",
+    ).run("https://127.0.0.1/ssrf", d.keys.p256dh, d.keys.auth);
+    const svc = pushService([]);
+    const { sendMemberPush } = await import("../src/member-push.js");
+    await sendMemberPush(t.env, ["m_ada"], "bagTags", { title: "Hi", body: "Test", url: "/gvdg-members.html", tag: "test" });
+    expect(svc.fn).not.toHaveBeenCalled();
+  });
 });

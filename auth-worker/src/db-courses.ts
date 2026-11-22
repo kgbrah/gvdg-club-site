@@ -212,6 +212,18 @@ export async function updateCourse(db: D1Like, id: number, c: CoursePatch) {
     .first());
 }
 
+export async function updateCourseUdiscUrls(db: D1Like, rows: readonly { id: number; udisc_url: string }[]): Promise<void> {
+  if (!rows.length) return;
+  const stmts = rows.map((row) => db.prepare("UPDATE courses SET udisc_url = ? WHERE id = ?").bind(row.udisc_url, row.id));
+  await afterCatalogWrite((async () => {
+    for (let i = 0; i < stmts.length; i += 45) {
+      const chunk = stmts.slice(i, i + 45);
+      if (typeof db.batch === "function") await db.batch(chunk);
+      else for (const stmt of chunk) await stmt.run();
+    }
+  })());
+}
+
 export async function deleteCourse(db: D1Like, id: number) {
   await afterCatalogWrite(db.prepare("DELETE FROM courses WHERE id = ?").bind(id).run());
 }
@@ -433,12 +445,19 @@ export async function deletePosition(db: D1Like, courseId: number, id: number) {
 }
 
 export async function replacePositions(db: D1Like, courseId: number, positions: PositionInput[]) {
-  await db.prepare("DELETE FROM course_positions WHERE course_id = ?").bind(courseId).run();
-  for (const p of positions) {
-    await db
-      .prepare("INSERT INTO course_positions (course_id, kind, label, lat, lng) VALUES (?, ?, ?, ?, ?)")
-      .bind(courseId, p.kind, p.label, p.lat ?? null, p.lng ?? null)
-      .run();
+  const statements = [db.prepare("DELETE FROM course_positions WHERE course_id = ?").bind(courseId)];
+  for (let i = 0; i < positions.length; i += 18) {
+    const chunk = positions.slice(i, i + 18);
+    statements.push(
+      db.prepare(
+        `INSERT INTO course_positions (course_id, kind, label, lat, lng) VALUES ${chunk.map(() => "(?, ?, ?, ?, ?)").join(", ")}`,
+      ).bind(...chunk.flatMap((p) => [courseId, p.kind, p.label, p.lat ?? null, p.lng ?? null])),
+    );
+  }
+  for (let i = 0; i < statements.length; i += 45) {
+    const chunk = statements.slice(i, i + 45);
+    if (typeof db.batch === "function") await db.batch(chunk);
+    else for (const stmt of chunk) await stmt.run();
   }
   return listPositions(db, courseId);
 }

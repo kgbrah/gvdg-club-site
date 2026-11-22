@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sanitizeProfilePhoto, withMemberPhotos } from "../src/profile-photo.js";
+import { handleMemberPhoto, sanitizeProfilePhoto, withMemberPhotos } from "../src/profile-photo.js";
 
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -28,5 +28,17 @@ describe("profile photos on live maps", () => {
     ]);
     expect(players[0]?.photo).toBe(PNG);
     expect(players[1]?.photo).toBeUndefined();
+  });
+
+  it("sets CORS and nosniff headers on 404 responses from handleMemberPhoto", async () => {
+    const kv = {
+      async get() { return null; },
+      async put() {},
+      async delete() {},
+    };
+    const badSig = await handleMemberPhoto("/member-photos/m_a/0000000000000000", { ROSTER: kv, JWT_SECRET: "x".repeat(40) });
+    expect(badSig?.status).toBe(404);
+    expect(badSig?.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(badSig?.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 });

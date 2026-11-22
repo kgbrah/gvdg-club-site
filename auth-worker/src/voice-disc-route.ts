@@ -8,7 +8,7 @@
 // daily budget (VOICE_DAILY_BUDGET, default 300 clips; Groq's free plan allows about 2,000 requests a day). The audio
 // is forwarded as is (multipart, no re-encoding) and never stored. Free-plan friendly: no CPU work beyond copying bytes.
 import type { Env } from "./env.js";
-import { clientIp, json } from "./http.js";
+import { clientIp, json, readBytesLimited } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions";
@@ -70,13 +70,11 @@ export async function handleVoiceDisc(request: Request, env: Env, origin: string
   const type = (String(request.headers.get("content-type") || "").split(";")[0] ?? "").trim().toLowerCase();
   const format = audioFormat(type);
   if (!format) return json({ error: "invalid_audio" }, 415, origin);
-  const declared = Number(request.headers.get("content-length") || 0);
-  if (declared > MAX_VOICE_BYTES) return json({ error: "audio_too_large" }, 413, origin);
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (bytes.byteLength > MAX_VOICE_BYTES) return json({ error: "audio_too_large" }, 413, origin);
+  if (await kvRateLimited(env, "voicedisc:m:" + clientIp(request), PER_MINUTE, 60)) return json({ error: "rate_limited" }, 429, origin);
+  const bytes = await readBytesLimited(request, MAX_VOICE_BYTES);
+  if (!bytes) return json({ error: "audio_too_large" }, 413, origin);
   if (bytes.byteLength < 256) return json({ error: "invalid_audio" }, 400, origin);
 
-  if (await kvRateLimited(env, "voicedisc:m:" + clientIp(request), PER_MINUTE, 60)) return json({ error: "rate_limited" }, 429, origin);
   if (await kvRateLimited(env, "voicedisc:" + new Date().toISOString().slice(0, 10), voiceDailyBudget(env), 2 * 86_400)) {
     return json({ error: "voice_resting" }, 429, origin);
   }

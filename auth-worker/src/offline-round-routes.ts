@@ -1,7 +1,7 @@
 import { OFFLINE_ID, offlineRoundOutcome, parseOfflineRound, type OfflineOwner } from "../../src/shared/offline-round.js";
 import { requireRoundActor } from "./authz.js";
 import type { Env } from "./env.js";
-import { json, corsHeaders, readJson } from "./http.js";
+import { json, corsHeaders, readBytesLimited, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { offlineRoundActor, signOfflineOpenSession } from "./offline-round-auth.js";
 import { byteRange, clipMoment, MAX_CLIP_BYTES, MAX_CLIPS_PER_ROUND, sniffVideo } from "./throw-clips.js";
@@ -81,25 +81,6 @@ async function roundClips(env: Env, roundId: number) {
   return rows.results.map(clipReceipt);
 }
 
-async function clipBytes(request: Request) {
-  if (!request.body) return new Uint8Array(0);
-  let total = 0;
-  const tooLarge = new Error("clip_too_large");
-  try {
-    const stream = request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-      transform(chunk, controller) {
-        total += chunk.byteLength;
-        if (total > MAX_CLIP_BYTES) throw tooLarge;
-        controller.enqueue(chunk);
-      },
-    }));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
-  } catch (error) {
-    if (error === tooLarge) return null;
-    throw error;
-  }
-}
-
 async function uploadClip(request: Request, env: Env, origin: string | null, stored: RoundRow, owner: OfflineOwner) {
   if (!env.PHOTOS) return json({ error: "storage_unavailable" }, 503, origin);
   const params = new URL(request.url).searchParams;
@@ -111,9 +92,7 @@ async function uploadClip(request: Request, env: Env, origin: string | null, sto
   const player = round?.players[playerIndex];
   if (!player || !round?.source.holes.some((candidate) => candidate.hole === hole)) return json({ error: "invalid_clip_target" }, 400, origin);
   if (await kvRateLimited(env, "offline-clip:" + owner.id, 8, 60)) return json({ error: "rate_limited" }, 429, origin);
-  const declared = Number(request.headers.get("Content-Length"));
-  if (declared > MAX_CLIP_BYTES) return json({ error: "clip_too_large" }, 413, origin);
-  const bytes = await clipBytes(request);
+  const bytes = await readBytesLimited(request, MAX_CLIP_BYTES);
   if (!bytes) return json({ error: "clip_too_large" }, 413, origin);
   const video = bytes.length >= 32 ? sniffVideo(bytes) : null;
   if (!video) return json({ error: "invalid_video" }, 400, origin);

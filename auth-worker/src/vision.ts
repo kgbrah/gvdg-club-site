@@ -1,3 +1,4 @@
+import { base64Of } from "./lf-vision.js";
 import { EMPTY_PRODUCT_LABEL, parseProductLabel, PRODUCT_VISION_PROMPT, productLabelHasText, type ProductLabel } from "./product-vision.js";
 // assistant.ts's provider-chain pattern. parseVisionJson is PURE (unit-tested); the providers do I/O.
 // Output is ONLY a suggestion — an admin confirms before anything reaches scoring.
@@ -69,12 +70,6 @@ export interface VisionEnv {
 const DEFAULT_GEMINI_VISION = "gemini-2.5-flash";
 const DEFAULT_OR_VISION = "nvidia/nemotron-nano-12b-v2-vl:free";
 const DEFAULT_WAI_VISION = "@cf/meta/llama-3.2-11b-vision-instruct";
-
-function base64Of(bytes: Uint8Array): string {
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
-  return btoa(bin);
-}
 
 function dataUrlOf(bytes: Uint8Array, contentType: string): string {
   return `data:${contentType};base64,${base64Of(bytes)}`;

@@ -15,7 +15,7 @@ import type { Env } from "./env.js";
 import { json, readJson } from "./http.js";
 import { easternCalendarYear, throughYearOf } from "./membership-year.js";
 import {
-  createHeldMember, getMember, listMembers, memberTier, normalizePersonName, saveMemberRecord, setMemberThroughYear, setMemberTier,
+  createHeldMember, getMember, heldMemberIdFor, listMembers, memberTier, normalizePersonName, saveMemberRecord, setMemberThroughYear, setMemberTier,
   updateProfile, type AdminMember, type KVListLike, type Member,
 } from "./roster.js";
 
@@ -23,6 +23,7 @@ export const SHEET_KINDS = ["people", "balances", "dues", "tags"] as const;
 export type SheetKind = (typeof SHEET_KINDS)[number];
 type Tier = "member" | "guest";
 export const MAX_ROWS = 500;
+export const MAX_TAG_ROWS = 200;
 export const APPLY_BATCH = 25;
 
 export interface SheetRow {
@@ -374,31 +375,85 @@ async function applyRows(env: Env, kind: SheetKind, rows: SheetRow[], defaultTie
   return results;
 }
 
+function willRememberAlias(member: Pick<Member, "held" | "name" | "pdgaNo" | "udisc" | "sheetNames">, row: SheetRow): boolean {
+  if (!row.memberId || !row.name || member.held === true) return false;
+  const alias = normalizePersonName(row.name);
+  const own = normalizePersonName(member.name);
+  const samePdga = Boolean(row.pdga && String(member.pdgaNo ?? "").replace(/\D/g, "") === row.pdga);
+  const sameUdisc = Boolean(row.udisc && member.udisc && member.udisc.toLowerCase() === row.udisc.toLowerCase());
+  return Boolean(alias && alias !== own && !samePdga && !sameUdisc && !(member.sheetNames ?? []).includes(alias));
+}
+
+function willChangeTier(member: Pick<Member, "isAdmin" | "guest">, row: SheetRow): boolean {
+  return Boolean(row.tier && memberTier(member) !== "admin" && memberTier(member) !== row.tier);
+}
+
 /** Bag tags: the series becomes exactly the sheet, in one batch. */
 async function applyTags(env: Env, seriesId: number, rows: SheetRow[], defaultTier: Tier, adminId: string) {
   const tags = rows.filter((row) => row.value != null && !row.problem);
   if (new Set(tags.map((row) => row.value)).size !== tags.length) return { error: "duplicate_tag" as const };
-  const holders: { tag: number; member: Member }[] = [];
+  const existingById = new Map((await listMembers(env.ROSTER as unknown as KVListLike)).map((m) => [m.memberId, m]));
+  let plannedKvWrites = 0;
+  const newHeldSeen = new Set<string>();
+  const seenIds = new Set<string>();
   for (const row of tags) {
-    let member = await target(env, row, defaultTier);
+    if (row.memberId) {
+      if (seenIds.has(row.memberId)) return { error: "duplicate_member" as const };
+      seenIds.add(row.memberId);
+      const existing = existingById.get(row.memberId);
+      if (existing) {
+        if (willRememberAlias(existing, row)) plannedKvWrites += 1;
+        if (willChangeTier(existing, row)) plannedKvWrites += 1;
+      }
+    } else if (row.name) {
+      const heldId = heldMemberIdFor({ name: row.name, pdgaNo: row.pdga || null, udisc: row.udisc || null });
+      if (seenIds.has(heldId)) return { error: "duplicate_member" as const };
+      seenIds.add(heldId);
+      const existing = existingById.get(heldId);
+      if (!existing) {
+        if (!newHeldSeen.has(heldId)) {
+          newHeldSeen.add(heldId);
+          plannedKvWrites += 1;
+        }
+      } else if (willChangeTier(existing, row)) {
+        plannedKvWrites += 1;
+      }
+    }
+  }
+  if (plannedKvWrites > APPLY_BATCH) return { error: "too_many_new_members" as const, max: APPLY_BATCH };
+
+  const holders: { tag: number; memberId: string; name: string }[] = [];
+  for (const row of tags) {
+    const listed = row.memberId
+      ? existingById.get(row.memberId)
+      : row.name
+        ? existingById.get(heldMemberIdFor({ name: row.name, pdgaNo: row.pdga || null, udisc: row.udisc || null }))
+        : undefined;
+    let member: Member | null = null;
+    if (listed && !willRememberAlias(listed, row) && !willChangeTier(listed, row)) {
+      if (holders.some((holder) => holder.memberId === listed.memberId)) return { error: "duplicate_member" as const };
+      holders.push({ tag: row.value!, memberId: listed.memberId, name: listed.name });
+      continue;
+    }
+    member = await target(env, row, defaultTier);
     if (!member) continue;
     member = await rememberSheetName(env, member, row);
     member = await applyTier(env, member, row);
-    if (holders.some((holder) => holder.member.memberId === member!.memberId)) return { error: "duplicate_member" as const };
-    holders.push({ tag: row.value!, member });
+    if (holders.some((holder) => holder.memberId === member!.memberId)) return { error: "duplicate_member" as const };
+    holders.push({ tag: row.value!, memberId: member.memberId, name: member.name });
   }
   const statements = [env.DB.prepare("DELETE FROM bag_tag_holders WHERE series_id = ?").bind(seriesId)];
   for (let i = 0; i < holders.length; i += 20) {
     const chunk = holders.slice(i, i + 20);
     statements.push(env.DB.prepare(
       `INSERT INTO bag_tag_holders (series_id, tag_number, member_id, member_name) VALUES ${chunk.map(() => "(?, ?, ?, ?)").join(", ")}`,
-    ).bind(...chunk.flatMap((holder) => [seriesId, holder.tag, holder.member.memberId, holder.member.name])));
+    ).bind(...chunk.flatMap((holder) => [seriesId, holder.tag, holder.memberId, holder.name])));
   }
   statements.push(env.DB.prepare("INSERT INTO bag_tag_moves (series_id, kind, summary, actor_id) VALUES (?, 'assign', ?, ?)")
     .bind(seriesId, `Standings set from the club's Google Sheet (${holders.length} tags)`, adminId));
   if (env.DB.batch) await env.DB.batch(statements);
   else for (const statement of statements) await statement.run();
-  return { results: holders.map((holder) => ({ tag: holder.tag, memberId: holder.member.memberId })) };
+  return { results: holders.map((holder) => ({ tag: holder.tag, memberId: holder.memberId })) };
 }
 
 export async function handleSheetImport(request: Request, env: Env, origin: string | null, method: string, seg: string[], adminId: string): Promise<Response | null> {
@@ -417,8 +472,15 @@ export async function handleSheetImport(request: Request, env: Env, origin: stri
   }
   if (action === "plan") return json(await plan(env, kind, rows, seriesId, defaultTier), 200, origin);
   if (kind === "tags") {
+    if (rows.length > MAX_TAG_ROWS) return json({ error: "too_many_rows", max: MAX_TAG_ROWS }, 413, origin);
     const result = await applyTags(env, seriesId!, rows, defaultTier, adminId);
-    if ("error" in result) return json({ error: result.error }, 409, origin);
+    if ("error" in result) {
+      return json(
+        "max" in result ? { error: result.error, max: result.max } : { error: result.error },
+        result.error === "too_many_new_members" ? 413 : 409,
+        origin,
+      );
+    }
     console.log(JSON.stringify({ evt: "sheet_import", kind, actor: adminId, rows: rows.length, at: Date.now() }));
     return json(result, 200, origin);
   }

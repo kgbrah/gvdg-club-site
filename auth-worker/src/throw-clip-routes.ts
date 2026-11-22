@@ -1,5 +1,5 @@
 import type { Env } from "./env.js";
-import { json, readJson } from "./http.js";
+import { json, readBytesLimited, readJson } from "./http.js";
 import { asInt, asStr } from "./input.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import {
@@ -167,12 +167,9 @@ export async function handleThrowClips(opts: {
     const target = clipTarget(card, hole, playerIndex, playerName);
     if (!target.ok) return json({ error: target.error }, target.error === "round_not_live" ? 409 : 400, origin);
 
-    const declared = Number(request.headers.get("content-length") || 0);
-    if (declared > MAX_CLIP_BYTES) return json({ error: "clip_too_large" }, 413, origin);
-    const bytes = new Uint8Array(await request.arrayBuffer());
-    if (bytes.byteLength < 32 || bytes.byteLength > MAX_CLIP_BYTES) {
-      return json({ error: bytes.byteLength > MAX_CLIP_BYTES ? "clip_too_large" : "invalid_video" }, bytes.byteLength > MAX_CLIP_BYTES ? 413 : 400, origin);
-    }
+    const bytes = await readBytesLimited(request, MAX_CLIP_BYTES);
+    if (!bytes) return json({ error: "clip_too_large" }, 413, origin);
+    if (bytes.byteLength < 32) return json({ error: "invalid_video" }, 400, origin);
     const video = sniffVideo(bytes);
     if (!video) return json({ error: "invalid_video" }, 400, origin);
 
@@ -242,14 +239,9 @@ export async function handleThrowClips(opts: {
     if (!owns && !(row.visibility !== "private" && card && (card.status === "live" || card.status === "final") && card.cardmates.length)) {
       return json({ error: "forbidden" }, 403, origin);
     }
-    const bodyText = await request.text();
-    let want = true;
-    try {
-      const parsed = JSON.parse(bodyText) as { highlight?: unknown };
-      if (typeof parsed.highlight === "boolean") want = parsed.highlight;
-    } catch {
-      return json({ error: "invalid_request" }, 400, origin);
-    }
+    const parsed = await readJson(request, 1024);
+    if (!parsed) return json({ error: "invalid_request" }, 400, origin);
+    const want = typeof parsed.highlight === "boolean" ? parsed.highlight : true;
     if (want && row.highlight !== 1) {
       const stars = await env.DB.prepare(
         "SELECT COUNT(*) AS n FROM throw_clips WHERE scope = ? AND scope_key = ? AND highlight = 1",

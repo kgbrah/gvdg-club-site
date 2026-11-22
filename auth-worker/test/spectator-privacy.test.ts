@@ -108,15 +108,16 @@ async function fixture() {
     },
   } as unknown as Env;
   const tokens = new Map(await Promise.all([OWNER, MATE, STAFF].map(async (actor) => [actor, await signSession({ sub: actor, mustChangePin: false }, SECRET, 900)] as const)));
-  function api(path: string, options: { actor?: string; key?: string; method?: string; data?: unknown; token?: string; headers?: HeadersInit; video?: Uint8Array } = {}) {
+  function api(path: string, options: { actor?: string; key?: string; method?: string; data?: unknown; token?: string; headers?: HeadersInit; video?: Uint8Array; body?: BodyInit } = {}) {
     const headers = new Headers(options.headers);
     const tok = options.token ?? (options.actor ? tokens.get(options.actor) : null);
     if (tok) headers.set("Authorization", "Bearer " + tok);
     if (options.key) headers.set("Authorization", "Watch " + options.key);
     const request = new Request("https://worker.test" + path, {
       method: options.method ?? "GET", headers,
-      body: options.video ? options.video.buffer as ArrayBuffer : options.data ? JSON.stringify(options.data) : undefined,
-    });
+      body: options.body ?? (options.video ? options.video.buffer as ArrayBuffer : options.data ? JSON.stringify(options.data) : undefined),
+      ...(options.body ? { duplex: "half" } : {}),
+    } as RequestInit);
     return worker.fetch(request, env);
   }
   function internal(path: string, data?: unknown, actor = OWNER, id = "round:SAFE44") {
@@ -303,5 +304,20 @@ describe("spectator authorization with SQLite and the live DO", () => {
     expect(await (await f.api(heatmap)).json()).toMatchObject({ samples: 3 });
     await f.share("public", false);
     expect(await (await f.api(heatmap)).json()).toEqual(legacy);
+
+    const bigShareStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ visibility: "public", includeMarked: true, pad: "x".repeat(2048) })));
+        controller.close();
+      },
+    });
+    const res = await f.api(ROUND + "/sharing", {
+      actor: OWNER,
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: bigShareStream,
+      duplex: "half",
+    } as never);
+    expect(res.status).toBe(413);
   });
 });

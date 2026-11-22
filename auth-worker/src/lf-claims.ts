@@ -16,7 +16,7 @@ import { readJson } from "./http.js";
 import { parseMessage } from "./lf-input.js";
 import { lfUrl, notifyPerson } from "./lf-notify.js";
 import {
-  KARMA_PER_RETURN, MATCH_COLUMNS, getClaimRow, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards,
+  KARMA_PER_RETURN, MATCH_COLUMNS, POST_COLUMNS, getClaimRow, getPostRow, logClaim, matchReasonLabels, parseReasons, people, postCards,
   postTitle, strength,
 } from "./lf-store.js";
 import { requirePerson } from "./lf-posts.js";
@@ -147,43 +147,98 @@ async function messagesOf(c: MarketCtx, claimId: number, me: Actor) {
   return rows.map((row) => ({ id: num(row, "id"), body: str(row, "body"), mine: str(row, "sender_id") === me.id, at: str(row, "created_at") }));
 }
 
+export async function claimViews(c: MarketCtx, rows: Row[], me: Actor) {
+  if (!rows.length) return [];
+  const postIds = [...new Set(rows.map((row) => num(row, "found_id")).filter((id) => id > 0))];
+  const postRows: Row[] = [];
+  for (let i = 0; i < postIds.length; i += 50) {
+    const chunk = postIds.slice(i, i + 50);
+    const listed = (await c.env.DB.prepare(`SELECT ${POST_COLUMNS} FROM lf_posts p WHERE p.id IN (${chunk.map(() => "?").join(",")})`)
+      .bind(...chunk).all<Row>()).results ?? [];
+    postRows.push(...listed);
+  }
+  const [cards, person] = await Promise.all([
+    postCards(c.env, postRows, me.id),
+    people(c.env, rows.flatMap((row) => [str(row, "finder_id"), str(row, "owner_id")])),
+  ]);
+  const cardMap = new Map(cards.map((card) => [card.id, card]));
+
+  const claimIds = [...new Set(rows.map((row) => num(row, "id")).filter((id) => id > 0))];
+  const reversedIds = new Set<number>();
+  const celebratedByMe = new Set<number>();
+  for (let i = 0; i < claimIds.length; i += 50) {
+    const chunk = claimIds.slice(i, i + 50);
+    const marks = chunk.map(() => "?").join(",");
+    const [rev, cel] = await Promise.all([
+      c.env.DB.prepare(`SELECT DISTINCT claim_id FROM lf_karma WHERE reason = 'admin_reversal' AND claim_id IN (${marks})`)
+        .bind(...chunk).all<{ claim_id: number }>(),
+      c.env.DB.prepare(`SELECT claim_id, author_id FROM lf_celebrations WHERE claim_id IN (${marks})`)
+        .bind(...chunk).all<{ claim_id: number; author_id: string }>(),
+    ]);
+    for (const r of rev.results ?? []) reversedIds.add(Number(r.claim_id));
+    for (const e of cel.results ?? []) if (e.author_id === me.id) celebratedByMe.add(Number(e.claim_id));
+  }
+
+  const relayIds = [...new Set(
+    rows
+      .filter((row) => row.dm_thread_id == null && (me.id === str(row, "finder_id") || me.id === str(row, "owner_id")))
+      .map((row) => num(row, "id")),
+  )];
+  const msgMap = new Map<number, { id: number; body: string; mine: boolean; at: string }[]>();
+  for (let i = 0; i < relayIds.length; i += 50) {
+    const chunk = relayIds.slice(i, i + 50);
+    const msgRows = (await c.env.DB.prepare(
+      `SELECT id, claim_id, sender_id, body, created_at FROM (SELECT id, claim_id, sender_id, body, created_at, ROW_NUMBER() OVER (PARTITION BY claim_id ORDER BY id ASC) AS rn FROM lf_messages WHERE claim_id IN (${chunk.map(() => "?").join(",")})) WHERE rn <= 200 ORDER BY claim_id, id`,
+    ).bind(...chunk).all<Row>()).results ?? [];
+    for (const m of msgRows) {
+      const cid = num(m, "claim_id");
+      const list = msgMap.get(cid) ?? [];
+      if (list.length < 200) {
+        list.push({ id: num(m, "id"), body: str(m, "body"), mine: str(m, "sender_id") === me.id, at: str(m, "created_at") });
+        msgMap.set(cid, list);
+      }
+    }
+  }
+
+  return rows.map((row) => {
+    const id = num(row, "id");
+    const finderId = str(row, "finder_id");
+    const ownerId = str(row, "owner_id");
+    const role = me.id === finderId ? "finder" : me.id === ownerId ? "owner" : "admin";
+    const card = cardMap.get(num(row, "found_id")) ?? null;
+    const status = str(row, "status");
+    const reversed = reversedIds.has(id);
+    const mineCelebrated = celebratedByMe.has(id);
+    const dm = row.dm_thread_id != null;
+    return {
+      id,
+      status,
+      role,
+      found: card,
+      message: str(row, "message"),
+      finder: person(finderId),
+      owner: person(ownerId),
+      createdAt: str(row, "created_at"),
+      returnedAt: row.returned_at ? str(row, "returned_at") : null,
+      confirmedAt: row.confirmed_at ? str(row, "confirmed_at") : null,
+      contact: dm
+        ? { kind: "dm", href: `gvdg-members.html#messages?thread=${num(row, "dm_thread_id")}` }
+        : { kind: "relay", messages: role === "admin" ? [] : (msgMap.get(id) ?? []) },
+      karma: status === "confirmed" ? { awarded: !reversed, points: reversed ? 0 : KARMA_PER_RETURN } : null,
+      canReturn: role === "finder" && status === "open",
+      canDecline: role === "finder" && status === "open",
+      canConfirm: role === "owner" && status === "returned",
+      canDispute: role === "owner" && status === "returned",
+      canCancel: role === "owner" && status === "open",
+      canMessage: !dm && (role === "finder" || role === "owner") && (status === "open" || status === "returned" || status === "confirmed"),
+      canCelebrate: (role === "finder" || role === "owner") && status === "confirmed" && !reversed && !mineCelebrated,
+      celebrated: mineCelebrated,
+    };
+  });
+}
+
 export async function claimView(c: MarketCtx, row: Row, me: Actor) {
-  const id = num(row, "id");
-  const finderId = str(row, "finder_id");
-  const ownerId = str(row, "owner_id");
-  const role = me.id === finderId ? "finder" : me.id === ownerId ? "owner" : "admin";
-  const post = await getPostRow(c.env, num(row, "found_id"));
-  const [card] = post ? await postCards(c.env, [post], me.id) : [null];
-  const person = await people(c.env, [finderId, ownerId]);
-  const status = str(row, "status");
-  const reversed = await c.env.DB.prepare("SELECT 1 AS hit FROM lf_karma WHERE claim_id = ? AND reason = 'admin_reversal'").bind(id).first();
-  const celebrated = await c.env.DB.prepare("SELECT id, author_id FROM lf_celebrations WHERE claim_id = ?").bind(id).all<{ id: number; author_id: string }>();
-  const mineCelebrated = (celebrated.results ?? []).some((row2) => row2.author_id === me.id);
-  const dm = row.dm_thread_id != null;
-  return {
-    id,
-    status,
-    role,
-    found: card,
-    message: str(row, "message"),
-    finder: person(finderId),
-    owner: person(ownerId),
-    createdAt: str(row, "created_at"),
-    returnedAt: row.returned_at ? str(row, "returned_at") : null,
-    confirmedAt: row.confirmed_at ? str(row, "confirmed_at") : null,
-    contact: dm
-      ? { kind: "dm", href: `gvdg-members.html#messages?thread=${num(row, "dm_thread_id")}` }
-      : { kind: "relay", messages: role === "admin" ? [] : await messagesOf(c, id, me) },
-    karma: status === "confirmed" ? { awarded: !reversed, points: reversed ? 0 : KARMA_PER_RETURN } : null,
-    canReturn: role === "finder" && status === "open",
-    canDecline: role === "finder" && status === "open",
-    canConfirm: role === "owner" && status === "returned",
-    canDispute: role === "owner" && status === "returned",
-    canCancel: role === "owner" && status === "open",
-    canMessage: !dm && (role === "finder" || role === "owner") && (status === "open" || status === "returned" || status === "confirmed"),
-    canCelebrate: (role === "finder" || role === "owner") && status === "confirmed" && !reversed && !mineCelebrated,
-    celebrated: mineCelebrated,
-  };
+  return (await claimViews(c, [row], me))[0]!;
 }
 
 async function partyClaim(c: MarketCtx, id: number): Promise<{ me: Actor; row: Row } | Response> {

@@ -13,7 +13,7 @@ import {
 } from "./lf-store.js";
 import { LF_BODY_BYTES, requirePerson } from "./lf-posts.js";
 import { ownPhotos, photosFrom, storePhotos } from "./lf-photos.js";
-import { claimView } from "./lf-claims.js";
+import { claimViews } from "./lf-claims.js";
 import { cleanText } from "./market-input.js";
 import { changed, fail, limited, ok, type MarketCtx } from "./market-http.js";
 import { ensureTrader, num, ownerByKey, str, viewerOf, type Row } from "./market-store.js";
@@ -167,8 +167,7 @@ export async function myLostFound(c: MarketCtx): Promise<Response> {
        AND (c.status IN ('open', 'returned') OR (c.status = 'confirmed' AND c.confirmed_at >= datetime('now', '-60 days')))
      ORDER BY CASE c.status WHEN 'returned' THEN 0 WHEN 'open' THEN 1 ELSE 2 END, c.id DESC LIMIT 40`,
   ).bind(me.id, me.id).all<Row>()).results ?? [];
-  const claims = [];
-  for (const row of claimRows) claims.push(await claimView(c, row, me));
+  const claims = await claimViews(c, claimRows, me);
   const karma = (await karmaOf(env, [me.id])).get(me.id) ?? { karma: 0, returned: 0 };
   // My photos the private read thinks may show a name or phone number (the nudge; never what was read).
   const nudgeRows = (await env.DB.prepare(

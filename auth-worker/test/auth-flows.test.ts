@@ -679,4 +679,44 @@ describe("the email step is required only for accounts created from now on (owne
     const withEmail = await createMember(roster as never, { name: "Gail Guest", email: "gail@example.com", guest: true }, "hash");
     expect(withEmail.ok && withEmail.member).toMatchObject({ email: "gail@example.com", emailRequired: true });
   });
+
+  it("rejects revoked mustChangePin/open-play tokens on /set-pin, checks pinVer on /me/welcome-seen without rewriting indexes, and rejects held accounts on passkey verify", async () => {
+    const created = await call("/admin/members", { method: "POST", token: await admin(), body: { name: "Temp User", pdgaNo: "71717" } });
+    const tempLogin = await login("71717", created.data.tempPin);
+    const stolenMustChange = tempLogin.data.token as string;
+    expect((await call("/set-pin", { method: "POST", token: stolenMustChange, body: { newPin: "2468" } })).status).toBe(200);
+    // Old mustChangePin JWT cannot overwrite the newly chosen PIN after pinVer bumped.
+    expect((await call("/set-pin", { method: "POST", token: stolenMustChange, body: { newPin: "9999" } })).status).toBe(401);
+
+    const play = await call("/rounds/open-play", { method: "POST", body: { name: "Park Player" } });
+    expect((await call("/set-pin", { method: "POST", token: play.data.token, body: { newPin: "1111" } })).status).toBe(401);
+
+    // /me/welcome-seen honors pinVer and uses single-key saveMemberRecord.
+    await member({ memberId: "m_welcome", name: "Wendy Welcome", pdgaNo: "72727", udisc: "wendyw", email: "wendy@example.com", welcomePending: true });
+    const wToken = (await login("72727")).data.token as string;
+    const putKeys: string[] = [];
+    const realPut = roster.put;
+    roster.put = async (key: string, value: string) => { putKeys.push(key); return realPut(key, value); };
+    try {
+      expect((await call("/me/welcome-seen", { method: "POST", token: wToken })).status).toBe(200);
+      expect(putKeys).toEqual(["member:m_welcome"]);
+    } finally {
+      roster.put = realPut;
+    }
+    await call("/admin/members/reset-pin", { method: "POST", token: await admin(), body: { identifier: "72727" } });
+    expect((await call("/me/welcome-seen", { method: "POST", token: wToken })).status).toBe(401);
+
+    // Held member cannot sign in via passkey even if a credential exists.
+    await putMember(roster as never, { memberId: "m_h_73737", name: "Held Person", pdgaNo: "73737", held: true, pinHash: "", mustChangePin: true });
+    roster.rows.set("wa:creds:m_h_73737", JSON.stringify([{ id: "cred-held", publicKey: "AQID", counter: 0 }]));
+    const opts = await call("/webauthn/auth/options", { method: "POST", body: {} });
+    const heldRes = await call("/webauthn/auth/verify", {
+      method: "POST",
+      body: {
+        flowId: opts.data.flowId,
+        response: { id: "cred-held", rawId: "cred-held", type: "public-key", response: { userHandle: btoa("m_h_73737").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_"), clientDataJSON: "", authenticatorData: "", signature: "" }, clientExtensionResults: {} },
+      },
+    });
+    expect(heldRes.status).toBe(401);
+  });
 });

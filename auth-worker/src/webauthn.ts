@@ -173,7 +173,7 @@ export async function authenticationVerify(
   const memberId = isoBase64URL.toUTF8String(userHandle);
 
   const member = await getMember(env.ROSTER, memberId);
-  if (!member) return { status: 401, data: { error: "unknown_credential" } };
+  if (!member || member.held === true) return { status: 401, data: { error: "unknown_credential" } };
   const stored = (await getCredentials(env.ROSTER, memberId)).find((c) => c.id === response.id);
   if (!stored) return { status: 401, data: { error: "unknown_credential" } };
 
