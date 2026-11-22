@@ -59,7 +59,9 @@ export function WristScore(props) {
     h("div", { className: "wrist-top", key: "top" }, [
       h("div", { key: "hole" }, [
         h("p", { className: "wrist-kicker", key: "k" }, props.courseName || "Wrist score"),
-        h("h2", { key: "h" }, "Hole " + (props.hole && props.hole.hole ? props.hole.hole : "")),
+        h("h2", { key: "h" }, props.putting
+          ? (props.hole && props.hole.distance_ft ? props.hole.distance_ft + " ft" : "Station " + (props.hole && props.hole.hole ? props.hole.hole : ""))
+          : "Hole " + (props.hole && props.hole.hole ? props.hole.hole : "")),
         h("p", { className: "wrist-meta", key: "m" }, props.holeMeta || ""),
       ]),
       h("button", { className: "wrist-exit", key: "exit", type: "button", onClick: props.onExit }, "Phone"),

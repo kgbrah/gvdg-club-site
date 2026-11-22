@@ -84,10 +84,14 @@ export function startScoreApp(options) {
         const scoreBody = options && options.body;
         const scoreShell = options && options.shell;
         const POTS_REFRESH_MS = 30 * 1000;
-        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], joinRequests: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false, handicaps: null, handicapLayoutId: null, handicapLoading: false, handicapTicket: 0 };
+        const S = { holes: [], cardId: null, myIndex: null, scorerIndex: null, cardmates: [], joinRequests: [], snap: null, holeIdx: 0, ws: null, wsTimer: null, status: null, conflicts: [], missing: [], courseName: null, layoutName: null, lastRev: -1, liveWriteSeen: false, udiscCourseId: null, roundConfig: null, scoreTargets: [], scoreTargetError: null, weather: null, pots: null, playerLocations: [], cardLocked: false, cardAttestation: { agreedIndexes: [], neededIndexes: [], complete: false }, finishConfirmOpen: false, handicaps: null, handicapLayoutId: null, handicapLoading: false, handicapTicket: 0 };
         let potsTimer = null;
         let spectator = null;
         let watchState = { phase: "connecting", snapshot: null };
+        let wsWatchdog = null;
+        let wsLastContact = 0;
+        let wsWasConnected = false;
+        function stopWsWatchdog() { clearInterval(wsWatchdog); wsWatchdog = null; }
         let locWatchId = null;
         let locRetryTimer = null;
         let locLastSent = 0;
@@ -386,6 +390,9 @@ export function startScoreApp(options) {
             recovery = null;
             S.lastSavedLie = null;
             S.shotLedgers = {};
+            stopWsWatchdog();
+            wsLastContact = 0;
+            wsWasConnected = false;
             if (S.ws) { const ws = S.ws; S.ws = null; ws.close(); }
             clearTimeout(S.wsTimer);
             S.wsTimer = null;
@@ -496,6 +503,7 @@ export function startScoreApp(options) {
                             persistMineCache();
                         }
                         if (state === 'saved') {
+                            S.liveWriteSeen = true;
                             if (item.kind === 'throws') S.lastSavedLie = { hole: item.body.hole, scorerIndex: item.body.scorerIndex };
                             const snap = item.kind === 'score' ? result.data : result.data && result.data.snapshot;
                             if (snap && snap.recoveryRoundId === context.scope.roundId && (snap.rev == null || snap.rev > S.lastRev)) {
@@ -600,11 +608,22 @@ export function startScoreApp(options) {
             return people.map((row) => row && row.name)
                 .concat(targets.flatMap((target) => [target && target.label].concat(Array.isArray(target?.members) ? target.members : [])));
         }
+        function ensureLiveSync() {
+            if (WATCH || !isCurrentRecovery(recovery)) return;
+            if (S.ws && S.ws.readyState === WebSocket.OPEN && Date.now() - wsLastContact >= 25_000) {
+                const old = S.ws;
+                S.ws = null;
+                stopWsWatchdog();
+                try { old.close(); } catch (e) {}
+            }
+            connectWs();
+            if (S.status === 'live') void loadMine();
+        }
         window.addEventListener('online', function () {
             setOnline(true);
             void flushRecovery('online');
             if (WATCH) spectator?.resume();
-            else if (isCurrentRecovery(recovery)) connectWs();
+            else ensureLiveSync();
         });
         window.addEventListener('offline', function () { setOnline(false); spectator?.offline(); });
         window.addEventListener('pageshow', function () { spectator?.resume(); });
@@ -616,7 +635,11 @@ export function startScoreApp(options) {
             if (context.journal.hasStorageKey(event.key)) { readRecovery(context); renderHole(); void flushRecovery(); }
         });
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) { spectator?.resume(); void flushRecovery(); }
+            if (!document.hidden) {
+                spectator?.resume();
+                void flushRecovery();
+                ensureLiveSync();
+            }
         });
 
         // ---------- score state access ----------
@@ -877,11 +900,28 @@ export function startScoreApp(options) {
         function connectWs() {
             if (MODE === 'home' || WATCH || !isCurrentRecovery(recovery)) return;
             if (S.ws && (S.ws.readyState === WebSocket.OPEN || S.ws.readyState === WebSocket.CONNECTING)) return;
+            clearTimeout(S.wsTimer);
+            S.wsTimer = null;
             let ws;
             try { ws = fieldWatchSocket(new WebSocket(API_BASE.replace(/^http/, 'ws') + LIVE + '/ws', scorerSocketProtocols(scoringCredential())), 'scorer'); }
             catch (e) { return; }
             S.ws = ws;
+            wsLastContact = Date.now();
+            ws.addEventListener('open', function () {
+                if (S.ws !== ws) return;
+                wsLastContact = Date.now();
+                stopWsWatchdog();
+                wsWatchdog = setInterval(function () {
+                    if (S.ws !== ws || ws.readyState !== WebSocket.OPEN) { stopWsWatchdog(); return; }
+                    if (Date.now() - wsLastContact >= 25_000) { try { ws.close(); } catch (e) {} return; }
+                    try { ws.send('ping'); } catch (e) {}
+                }, 10_000);
+                if (wsWasConnected) void loadMine();
+                wsWasConnected = true;
+            });
             ws.addEventListener('message', function (ev) {
+                wsLastContact = Date.now();
+                if (ev.data === 'pong') return;
                 let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 // Two scorers on the same card disagreed on a hole — alert this card immediately to reconcile.
                 if (msg && msg.type === 'conflict') {
@@ -902,6 +942,7 @@ export function startScoreApp(options) {
             });
             ws.addEventListener('close', function (event) {
                 if (S.ws !== ws) return;
+                stopWsWatchdog();
                 S.ws = null;
                 if (event.code === 4403) { void loadMine(); return; }
                 if (S.wsTimer) return;
@@ -1294,12 +1335,15 @@ export function startScoreApp(options) {
             }
             if (!sameCredential(credential)) return;
             if (r.ok) {
+                S.liveWriteSeen = true;
                 S.snap = r.data || S.snap;
                 if (r.data && r.data.status === 'final') {
                     S.status = 'final';
                     S.cardLocked = true;
                     S.finishConfirmOpen = false;
                     stopLiveLocation();
+                    if (Array.isArray(r.data.players)) mergeFromSnap();
+                    persistMineCache();
                     toast('Round finished');
                 } else if (r.data && Array.isArray(r.data.lockedCardIds) && r.data.lockedCardIds.indexOf(String(S.cardId ?? 'c0')) >= 0) {
                     S.cardLocked = true;
@@ -1363,8 +1407,10 @@ export function startScoreApp(options) {
             const { offline, cached, credential, cacheKey } = options;
             const scope = roundRecoveryScope({ roundCode: ROUND_CODE, eventId: EVENT_ID, roundId: d.recoveryRoundId, cardId: d.cardId, playerIndex: d.playerIndex });
             const sameScope = scope && recovery && scope.key === recovery.scope.key;
-            if (sameScope && !offline && !S.cardPreview && d.rev != null && d.rev < S.lastRev && S.snap?.players) return;
+            if (sameScope && !offline && !cached && !S.cardPreview && d.rev != null && d.rev < S.lastRev && (S.snap?.players || S.liveWriteSeen)) return;
             S.cardPreview = Boolean(cached);
+            if (!sameScope) S.liveWriteSeen = false;
+            else if (!offline && !cached) S.liveWriteSeen = true;
             bindRecovery(scope, credential, cacheKey);
             if (fieldTestOn()) fieldRedactNames(fieldRoundNames(d));
             S.snap = d;
@@ -1487,10 +1533,12 @@ export function startScoreApp(options) {
             if (!r.ok || !r.data) {
                 const cached = isTransientMineFailure(r) ? readMineCache(cacheKey) : null;
                 if (cached) { applyMinePayload(cached, { offline: true, credential, cacheKey }); return; }
+                stopRecovery();
                 renderMessage('Couldn’t load your card', 'Check your connection and try again.', true); return;
             }
             const d = r.data;
             if (d.cardId == null || !Array.isArray(d.cardmates) || !d.cardmates.length) {
+                stopRecovery();
                 if (MODE === 'round') {
                     forgetRecentRound(ROUND_CODE);
                     renderMessage('Round not found', 'That round code isn’t active. Double-check it, or start a new round.', true);
@@ -1718,7 +1766,7 @@ export function startScoreApp(options) {
                 if (!team) { toast('Doubles needs a pair label for each player'); return; }
             }
             const r = await api('/rounds/' + ROUND_CODE + '/guest', { method: 'POST', body: team ? { name: name, team: team } : { name: name } });
-            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { S.cardmates = r.data.cardmates; currentScorerIndex(); renderHole(); toast(name + ' added'); }
+            if (r.ok && r.data && Array.isArray(r.data.cardmates)) { syncCardRosterUpdate(r.data); renderHole(); toast(name + ' added'); }
             else toast('Could not add player');
         }
         // Manage players: remove someone who joined by accident, had to leave, or no-showed (casual round).
@@ -1735,6 +1783,19 @@ export function startScoreApp(options) {
                 players: S.cardmates || [],
             });
         }
+        function syncCardRosterUpdate(data) {
+            if (!data) return;
+            if (data.cardId != null) S.cardId = data.cardId;
+            if (data.playerIndex != null) S.myIndex = data.playerIndex;
+            if (Array.isArray(data.cardmates)) S.cardmates = data.cardmates;
+            if (data.roundConfig) S.roundConfig = data.roundConfig;
+            if (Array.isArray(data.scoreTargets)) S.scoreTargets = data.scoreTargets;
+            S.scoreTargetError = data.scoreTargetError || null;
+            if (Array.isArray(data.conflicts)) setConflicts(data.conflicts);
+            if (Array.isArray(data.missing)) setMissing(data.missing);
+            currentScorerIndex();
+            persistMineCache();
+        }
         async function savePairLabels(assignments) {
             const r = await api('/rounds/' + ROUND_CODE + '/pairs', { method: 'POST', body: { assignments: assignments } });
             if (!r.ok) {
@@ -1744,14 +1805,7 @@ export function startScoreApp(options) {
                 return;
             }
             closeManagePlayers();
-            if (r.data) {
-                S.cardId = r.data.cardId || S.cardId;
-                S.myIndex = r.data.playerIndex == null ? S.myIndex : r.data.playerIndex;
-                S.cardmates = Array.isArray(r.data.cardmates) ? r.data.cardmates : S.cardmates;
-                S.roundConfig = r.data.roundConfig || S.roundConfig;
-                S.scoreTargets = Array.isArray(r.data.scoreTargets) ? r.data.scoreTargets : S.scoreTargets;
-                S.scoreTargetError = r.data.scoreTargetError || null;
-            }
+            syncCardRosterUpdate(r.data);
             renderHole();
             toast('Pairs saved');
         }
@@ -1773,7 +1827,7 @@ export function startScoreApp(options) {
                 location.href = location.pathname;
                 return;
             } // I left the round → back to home
-            S.cardId = r.data.cardId; S.myIndex = r.data.playerIndex; S.cardmates = Array.isArray(r.data.cardmates) ? r.data.cardmates : S.cardmates;
+            syncCardRosterUpdate(r.data);
             renderHole();
             toast(p.name + ' removed');
         }

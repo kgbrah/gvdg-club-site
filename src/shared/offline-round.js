@@ -94,13 +94,15 @@ export function offlineRoundOutcome(round) {
     const [left, right] = targets;
     let lead = 0;
     let played = 0;
-    for (const [index, hole] of holes.entries()) {
+    const scoredHoles = [];
+    for (const hole of holes) {
       const a = round.scores[left.id]?.[hole.hole];
       const b = round.scores[right.id]?.[hole.hole];
-      if (a == null || b == null) break;
+      if (a == null || b == null) continue;
       lead += Math.sign(b - a);
-      played = index + 1;
-      if (Math.abs(lead) > holes.length - played) { required = holes.slice(0, played); break; }
+      played += 1;
+      scoredHoles.push(hole);
+      if (Math.abs(lead) > holes.length - played) { required = scoredHoles; break; }
     }
     const remaining = holes.length - played;
     const final = played === holes.length || Math.abs(lead) > remaining;

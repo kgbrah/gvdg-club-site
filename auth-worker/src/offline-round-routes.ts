@@ -122,7 +122,7 @@ async function uploadClip(request: Request, env: Env, origin: string | null, sto
   } catch (error) {
     const replay = await previous().catch(() => undefined);
     if (replay?.r2_key === key) return ack(replay);
-    if (replay) await env.PHOTOS.delete(key).catch(() => {});
+    await env.PHOTOS.delete(key).catch(() => {});
     if (replay) return ack(replay);
     throw error;
   }

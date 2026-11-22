@@ -293,3 +293,57 @@ export function recordCtpVote(input: RecordCtpVoteInput): RecordCtpVoteResult {
   const store = { ...input.store, [key]: state };
   return { ok: true, store, leader: currentCtpLeader(state, input.players) };
 }
+
+/** Purge a departed cardmate's CTP votes/claims and promote unanimous agreement among remaining cardmates. */
+export function reconcileLiveCtpsAfterRemoval(
+  store: LiveCtpStore,
+  players: readonly PlayerState[],
+  removedIndex: number,
+  cardId: string | null,
+  now: string,
+): LiveCtpStore {
+  const card = cardKey(cardId);
+  const scorer = playerScorerId(removedIndex);
+  const mates = activeCardPlayers(players, cardId);
+  let changed = false;
+  const nextStore: LiveCtpStore = { ...store };
+  for (const [key, state] of Object.entries(store)) {
+    const prevVotes = state.votes[card];
+    const prevConfirmed = state.confirmed[card];
+    if (!prevVotes && !prevConfirmed) continue;
+    const cardVotes: Record<string, number> = {};
+    let stateChanged = false;
+    if (prevVotes) {
+      for (const [voterId, nomineeIdx] of Object.entries(prevVotes)) {
+        if (voterId === scorer || nomineeIdx === removedIndex) {
+          stateChanged = true;
+          continue;
+        }
+        cardVotes[voterId] = nomineeIdx;
+      }
+    }
+    const nextConfirmed = { ...state.confirmed };
+    let nextSeq = state.nextSeq ?? 0;
+    const agreed = agreedNominee(cardVotes, mates);
+    const nominee = agreed == null ? null : players[agreed];
+    const valid = agreed != null && playerCtpEligible(nominee) && divisionMatches(state.division, nominee?.division);
+    if (valid && agreed != null) {
+      const current = nextConfirmed[card];
+      if (!current || current.playerIndex !== agreed) {
+        nextSeq += 1;
+        nextConfirmed[card] = { playerIndex: agreed, at: now, seq: nextSeq };
+        stateChanged = true;
+      }
+    } else if (nextConfirmed[card]) {
+      delete nextConfirmed[card];
+      stateChanged = true;
+    }
+    if (!stateChanged) continue;
+    changed = true;
+    const nextVotes = { ...state.votes };
+    if (Object.keys(cardVotes).length) nextVotes[card] = cardVotes;
+    else delete nextVotes[card];
+    nextStore[key] = { ...state, votes: nextVotes, confirmed: nextConfirmed, nextSeq };
+  }
+  return changed ? nextStore : store;
+}

@@ -11,7 +11,7 @@ export const HANDICAP_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 const ALLOWANCE = { 1: 0.5, 2: 0.75 };
 
 export function handicapScoringEnabled(config) {
-  return Boolean(config && config.handicap === true && config.scoringStyle !== "matchplay");
+  return Boolean(config && config.handicap === true && config.scoringStyle !== "matchplay" && config.scoringStyle !== "putting");
 }
 
 export function handicapKey(memberId) {
@@ -102,7 +102,7 @@ export function handicapsFromRounds(rows, now = new Date()) {
 export function myLayoutHandicaps(casual, now = new Date()) {
   const byLayout = new Map();
   for (const row of Array.isArray(casual) ? casual : []) {
-    if (!row || row.stroke === false || row.stroke === 0) continue;
+    if (!row || row.stroke === false || row.stroke === 0 || row.stroke_singles === 0) continue;
     if (row.place == null || row.place === "") continue;
     const toPar = Number(row.to_par);
     if (!Number.isFinite(toPar)) continue;
@@ -122,7 +122,7 @@ export function myLayoutHandicaps(casual, now = new Date()) {
       memberId: "self",
       name: "You",
       toPar,
-      playedAt: row.finalized_at || row.created_at || "",
+      playedAt: row.finalized_at || row.event_date || row.created_at || "",
     });
     byLayout.set(layoutId, bucket);
   }
@@ -157,9 +157,10 @@ function applyOne(standing, byKey) {
     rounds = Math.min(rounds, Number(row.rounds) || 0);
     if (row.provisional) provisional = true;
   }
+  const teamStart = keys.length > 1 ? Math.round(start / keys.length) : start;
   const toPar = Number(standing.toPar);
   const gross = Number.isFinite(toPar) ? toPar : 0;
-  return { handicapStart: start, net: start + gross, provisional, handicapRounds: Number.isFinite(rounds) ? rounds : 0 };
+  return { handicapStart: teamStart, net: teamStart + gross, provisional, handicapRounds: Number.isFinite(rounds) ? rounds : 0 };
 }
 
 export function decorateStandings(standings, byKey) {
