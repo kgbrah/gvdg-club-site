@@ -4,9 +4,10 @@
 // Scene's fee. Player, event and course data from PDGA carry PDGA's credit and link to pdga.com.
 import React from "react";
 import { publicApiBase } from "./public-api.js";
-import { readMemberToken } from "../shared/member-session.js";
+import { clearMemberSession, readMemberToken } from "../shared/member-session.js";
 import { guestRegs, setGuestReg } from "./guest-registrations.js";
 import { PdgaCredit, PdgaLink, pdgaPlayerHref } from "../shared/pdga-credit.js";
+import { formatPdgaTier, isAmateurDivision } from "../shared/pdga-divisions.js";
 import { parseArray } from "../members-app/registration-utils.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
 
@@ -42,6 +43,10 @@ async function api(path, { method = "GET", body, token } = {}) {
 
 const ERRORS = {
   division_rating_limit: (data) => `Your PDGA rating (${data.rating}) is above this division's limit of ${data.limit}. Choose another division.`,
+  pdga_rating_unverified: (data) => `This division requires a rating check (${data.limit} or below). Renew your PDGA membership or pick an open division.`,
+  pro_in_amateur_division: (data) => data.limit != null
+    ? `Players classed Pro may play Amateur divisions only when rated ${data.limit} or below (yours: ${data.rating ?? "unrated"}).`
+    : "This Amateur division isn't open to Professional-class players at this tier.",
   pdga_membership_required: () => "This event is for current PDGA members. Renew at pdga.com, then register.",
   pdga_check_required: () => "This event is for current PDGA members: enter your PDGA number.",
   pdga_not_found: () => "PDGA has no player with that number. Check it and try again.",
@@ -52,6 +57,11 @@ const ERRORS = {
   registration_closed: () => "Registration is closed.",
   field_full: () => "The field filled before your payment went through, so you weren't charged. You're on the waitlist.",
   waitlisted: () => "You're on the waitlist. If a spot opens, the TD will offer it to you here.",
+  offer_expired: () => "Your 48-hour spot offer expired. If another spot opens, the TD can offer it to the waitlist.",
+  wallet_not_allowed_for_tournament: () => "Store credit can't be used for PDGA tournament entries. Pay by PayPal or Zelle.",
+  already_paid: () => "Your entry is already paid.",
+  paid_contact_admin: () => "You have already paid. Contact the Tournament Director to withdraw.",
+  event_started: () => "The event has started or finished, so you can't withdraw online. Contact the Tournament Director.",
   rate_limited: () => "Too many tries. Wait a minute and try again.",
   session_expired: () => "Your members session expired. Sign in again, or register as a guest.",
 };
@@ -59,13 +69,23 @@ const errorText = (data) => (ERRORS[data && data.error] || (() => "That didn't w
 
 function useTournament(eventId) {
   const [state, setState] = React.useState({ status: "loading", data: null });
-  const token = readMemberToken() || null;
+  const [token, setToken] = React.useState(() => readMemberToken() || null);
   const guest = token ? null : guestRegs()[eventId] || null;
-  const load = React.useCallback(async () => {
-    const query = guest && guest.guestToken ? `?gt=${encodeURIComponent(guest.guestToken)}` : "";
-    const result = await api(`/events/${encodeURIComponent(eventId)}/registration${query}`, { token });
+  const load = React.useCallback(async (overrideToken) => {
+    const activeToken = overrideToken !== undefined ? overrideToken : (readMemberToken() || null);
+    if (activeToken !== token) setToken(activeToken);
+    const activeGuest = activeToken ? null : guestRegs()[eventId] || null;
+    const query = activeGuest && activeGuest.guestToken ? `?gt=${encodeURIComponent(activeGuest.guestToken)}` : "";
+    let result = await api(`/events/${encodeURIComponent(eventId)}/registration${query}`, { token: activeToken });
+    if (activeToken && (result.status === 401 || result.data?.error === "session_expired")) {
+      clearMemberSession();
+      setToken(null);
+      const guestFallback = guestRegs()[eventId] || null;
+      const fallbackQuery = guestFallback && guestFallback.guestToken ? `?gt=${encodeURIComponent(guestFallback.guestToken)}` : "";
+      result = await api(`/events/${encodeURIComponent(eventId)}/registration${fallbackQuery}`);
+    }
     setState(result.ok && result.data.tournament ? { status: "ready", data: result.data } : { status: "error", data: null });
-  }, [eventId, token, guest && guest.guestToken]);
+  }, [eventId, token]);
   React.useEffect(() => { load(); }, [load]);
   return { ...state, load, token, guest };
 }
@@ -126,7 +146,7 @@ function PlayerCheck({ player, token }) {
   ]);
 }
 
-function SignUp({ event, config, tournament, token, onDone }) {
+function SignUp({ event, config, tournament, token, onDone, onSessionExpired }) {
   const divisions = parseArray(config.divisions);
   const [pdgaNumber, setPdgaNumber] = React.useState("");
   const [player, setPlayer] = React.useState(null);
@@ -138,6 +158,20 @@ function SignUp({ event, config, tournament, token, onDone }) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const limits = (tournament.rules && tournament.rules.divisionLimits) || {};
+  const tier = String((tournament.pdgaEvent && tournament.pdgaEvent.tier) || "").trim().toUpperCase();
+
+  const divisionBlocked = (div, currentPlayer = player) => {
+    if (!currentPlayer) return false;
+    const limit = limits[div];
+    if (currentPlayer.rating != null && limit != null && currentPlayer.rating > limit) return true;
+    if (currentPlayer.rating == null && currentPlayer.membershipStatus !== "current" && limit != null) return true;
+    if (currentPlayer.classification === "P" && isAmateurDivision(div)) {
+      if (["M", "ES", "NT", "XM"].includes(tier)) return true;
+      const proCap = /^F/i.test(String(div || "").trim()) ? 870 : 970;
+      if (currentPlayer.rating == null || currentPlayer.rating >= proCap) return true;
+    }
+    return false;
+  };
 
   async function check() {
     setError("");
@@ -146,25 +180,40 @@ function SignUp({ event, config, tournament, token, onDone }) {
     const result = await api(`/pdga/player?number=${encodeURIComponent(pdgaNumber.trim())}`);
     if (!result.ok) { setError(errorText(result.data)); return; }
     if (!result.data.player) { setError(errorText({ error: "pdga_not_found" })); return; }
-    setPlayer(result.data.player);
-    if (!nameTyped || !name) setName(result.data.player.name);
+    const nextPlayer = result.data.player;
+    setPlayer(nextPlayer);
+    if (!nameTyped || !name) setName(nextPlayer.name);
+    if (division && divisionBlocked(division, nextPlayer)) {
+      const allowed = divisions.find((div) => !divisionBlocked(div, nextPlayer));
+      if (allowed) setDivision(allowed);
+    }
   }
 
   async function submit(formEvent) {
     formEvent.preventDefault();
     setBusy(true);
     setError("");
-    const result = await api(`/events/${encodeURIComponent(event.id)}/register`, {
-      method: "POST", token,
-      body: { pdgaNumber: pdgaNumber.trim() || undefined, division, name: token ? undefined : name, email: token ? undefined : email, addons },
-    });
-    setBusy(false);
-    if (!result.ok) { setError(errorText(result.data)); return; }
-    if (result.data.guestToken) setGuestReg(event.id, { guestToken: result.data.guestToken, name: result.data.registration.name });
-    onDone();
+    try {
+      const result = await api(`/events/${encodeURIComponent(event.id)}/register`, {
+        method: "POST", token,
+        body: { pdgaNumber: pdgaNumber.trim() || undefined, division, name: token ? undefined : name, email: token ? undefined : email, addons },
+      });
+      if (!result.ok) {
+        if (result.status === 401 || result.data?.error === "session_expired") {
+          clearMemberSession();
+          if (onSessionExpired) onSessionExpired();
+        }
+        setError(errorText(result.data));
+        return;
+      }
+      if (result.data.guestToken) setGuestReg(event.id, { guestToken: result.data.guestToken, name: result.data.registration.name });
+      onDone();
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const overLimit = (div) => player && player.rating != null && limits[div] != null && player.rating > limits[div];
+  const overLimit = (div) => divisionBlocked(div);
   return h("form", { className: "tournament-signup", onSubmit: submit }, [
     h("label", { key: "pdga" }, [
       "PDGA number",
@@ -206,6 +255,7 @@ function Payment({ event, tournament, registration, token, guest, onDone }) {
   const zelle = tournament.payments && tournament.payments.zelle;
   const [method, setMethod] = React.useState(registration.payment_method === "zelle" && zelle ? "zelle" : "paypal");
   const [donate, setDonate] = React.useState(Number(registration.donation_cents) > 0);
+  const [donateDirty, setDonateDirty] = React.useState(false);
   const [quote, setQuote] = React.useState(null);
   const [zelleInfo, setZelleInfo] = React.useState(null);
   const [error, setError] = React.useState("");
@@ -218,7 +268,7 @@ function Payment({ event, tournament, registration, token, guest, onDone }) {
     let live = true;
     api(`${base}/quote?method=${method}&donate=${donate ? 1 : 0}${gt}`, { token }).then((result) => { if (live && result.ok) setQuote(result.data.quote); });
     return () => { live = false; };
-  }, [method, donate]);
+  }, [base, gt, token, method, donate]);
 
   React.useEffect(() => {
     if (method !== "paypal" || !paypalHost.current) return undefined;
@@ -232,7 +282,11 @@ function Payment({ event, tournament, registration, token, guest, onDone }) {
       window.paypal.Buttons({
         createOrder: async () => {
           const result = await api(`${base}/create-order`, { method: "POST", token, body: { guestToken, donate } });
-          if (!result.ok) { setError(errorText(result.data)); if (result.data.error === "field_full") onDone(); throw new Error(result.data.error || "order"); }
+          if (!result.ok) {
+            setError(errorText(result.data));
+            if (result.data?.error === "field_full" || result.data?.error === "offer_expired") onDone();
+            throw new Error(result.data?.error || "order");
+          }
           return result.data.orderId;
         },
         onApprove: async (data) => {
@@ -244,12 +298,17 @@ function Payment({ event, tournament, registration, token, guest, onDone }) {
       }).render(host);
     }).catch(() => setError("PayPal couldn't load. Try again in a moment."));
     return () => { live = false; host.replaceChildren(); };
-  }, [method, donate]);
+  }, [base, guestToken, token, method, donate]);
 
   async function chooseZelle() {
     setError("");
     const result = await api(`${base}/zelle`, { method: "POST", token, body: { guestToken, donate } });
-    if (!result.ok) { setError(errorText(result.data)); return; }
+    if (!result.ok) {
+      setError(errorText(result.data));
+      if (result.data?.error === "field_full" || result.data?.error === "offer_expired") onDone();
+      return;
+    }
+    setDonateDirty(false);
     setZelleInfo(result.data.zelle);
   }
 
@@ -260,23 +319,26 @@ function Payment({ event, tournament, registration, token, guest, onDone }) {
   }
 
   const saved = quote ? quote.savedVsDgsCents : 0;
+  const shownZelle = zelleInfo || (!donateDirty && registration.payment_method === "zelle" && registration.zelle_code && zelle && quote
+    ? { to: zelle.to, name: zelle.name ?? null, amountCents: quote.totalCents, memo: registration.zelle_code }
+    : null);
   return h("div", { className: "tournament-pay" }, [
     h("h3", { className: "roster-title", key: "title" }, "Pay your entry"),
     h("div", { className: "tournament-methods", role: "radiogroup", "aria-label": "Payment method", key: "methods" }, [
-      h("label", { key: "paypal" }, [h("input", { key: "r", type: "radio", name: "method", checked: method === "paypal", onChange: () => setMethod("paypal") }),
+      h("label", { key: "paypal" }, [h("input", { key: "r", type: "radio", name: "method", checked: method === "paypal", onChange: () => { setError(""); setMethod("paypal"); } }),
         tournament.payments.paypalFeeCovered ? " PayPal or card (PayPal's fee added)" : " PayPal or card"]),
-      zelle ? h("label", { key: "zelle" }, [h("input", { key: "r", type: "radio", name: "method", checked: method === "zelle", onChange: () => setMethod("zelle") }), " Zelle (no fee)"]) : null,
+      zelle ? h("label", { key: "zelle" }, [h("input", { key: "r", type: "radio", name: "method", checked: method === "zelle", onChange: () => { setError(""); setMethod("zelle"); } }), " Zelle (no fee)"]) : null,
     ]),
     saved > 0 ? h("label", { className: "tournament-check", key: "donate" }, [
-      h("input", { key: "box", type: "checkbox", checked: donate, onChange: (e) => setDonate(e.target.checked) }),
+      h("input", { key: "box", type: "checkbox", checked: donate, onChange: (e) => { setZelleInfo(null); setDonateDirty(true); setDonate(e.target.checked); } }),
       ` Give the club the ${dollars(saved)} you're saving vs Disc Golf Scene`]) : null,
     h(Quote, { quote, key: "quote" }),
     error ? h("p", { className: "register-error", role: "alert", key: "error" }, error) : null,
     method === "paypal" ? h("div", { className: "tournament-paypal", ref: paypalHost, key: "paypal" }) : null,
-    method === "zelle" && !zelleInfo ? h("button", { className: "reg-btn", type: "button", key: "zelle", onClick: chooseZelle }, "Pay with Zelle") : null,
-    method === "zelle" && zelleInfo ? h("div", { className: "tournament-zelle", key: "zelle-info" }, [
-      h("p", { key: "to" }, ["Send ", h("b", { key: "a" }, dollars(zelleInfo.amountCents)), " by Zelle to ", h("b", { key: "t" }, zelleInfo.to),
-        zelleInfo.name ? ` (${zelleInfo.name})` : "", ", with this memo: ", h("b", { key: "m" }, zelleInfo.memo)]),
+    method === "zelle" && !shownZelle ? h("button", { className: "reg-btn", type: "button", key: "zelle", onClick: chooseZelle }, "Pay with Zelle") : null,
+    method === "zelle" && shownZelle ? h("div", { className: "tournament-zelle", key: "zelle-info" }, [
+      h("p", { key: "to" }, ["Send ", h("b", { key: "a" }, dollars(shownZelle.amountCents)), " by Zelle to ", h("b", { key: "t" }, shownZelle.to),
+        shownZelle.name ? ` (${shownZelle.name})` : "", ", with this memo: ", h("b", { key: "m" }, shownZelle.memo)]),
       h("p", { className: "dash-note", key: "note" }, "You're entered once the club sees it arrive. Spots go in the order payments arrive."),
       registration.zelle_sent_at
         ? h("p", { className: "dash-note", key: "sent" }, "Thanks, the TD will confirm it.")
@@ -287,6 +349,7 @@ function Payment({ event, tournament, registration, token, guest, onDone }) {
 
 function Withdraw({ event, tournament, registration, token, guest, onDone }) {
   const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
   if (Number(registration.paid_entry) === 1) {
     // PDGA 1.03.1: withdrawals go to the Tournament Director (by email or phone).
     return tournament.tdEmail
@@ -296,13 +359,21 @@ function Withdraw({ event, tournament, registration, token, guest, onDone }) {
   }
   async function withdraw() {
     setBusy(true);
-    const query = guest && guest.guestToken ? `?gt=${encodeURIComponent(guest.guestToken)}` : "";
-    const result = await api(`/events/${encodeURIComponent(event.id)}/register${query}`, { method: "DELETE", token });
-    setBusy(false);
-    if (result.ok && guest) setGuestReg(event.id, null);
-    onDone();
+    setError("");
+    try {
+      const query = guest && guest.guestToken ? `?gt=${encodeURIComponent(guest.guestToken)}` : "";
+      const result = await api(`/events/${encodeURIComponent(event.id)}/register${query}`, { method: "DELETE", token });
+      if (!result.ok) { setError(errorText(result.data)); return; }
+      if (guest) setGuestReg(event.id, null);
+      onDone();
+    } finally {
+      setBusy(false);
+    }
   }
-  return h("button", { className: "reg-btn tertiary", type: "button", disabled: busy, onClick: withdraw }, busy ? "Withdrawing…" : "Withdraw");
+  return h(React.Fragment, null, [
+    error ? h("p", { className: "register-error", role: "alert", key: "error" }, error) : null,
+    h("button", { className: "reg-btn tertiary", type: "button", key: "btn", disabled: busy, onClick: withdraw }, busy ? "Withdrawing…" : "Withdraw"),
+  ]);
 }
 
 export function TournamentRegistration({ event, onChanged }) {
@@ -311,24 +382,33 @@ export function TournamentRegistration({ event, onChanged }) {
   if (state.status !== "ready") return null;
   const { config, registration, tournament } = state.data;
   const pdgaEvent = tournament.pdgaEvent || {};
+  const tierLabel = formatPdgaTier(pdgaEvent.tier);
   const paid = registration && Number(registration.paid_entry) === 1;
   const waitlisted = registration && Number(registration.waitlisted) === 1;
+  const offerExpired = Boolean(tournament.offerExpired);
+  const registrationOpen = Number(config?.registration_open) === 1 && event.status !== "final" && event.status !== "cancelled";
   const position = waitlisted ? tournament.myWaitlistPosition || 0 : 0;
-  return h("section", { className: "event-register-panel tournament-register", "data-tournament-registration": paid ? "paid" : waitlisted ? "waitlisted" : registration ? "registered" : "open" }, [
+  return h("section", { className: "event-register-panel tournament-register", "data-tournament-registration": paid ? "paid" : waitlisted ? "waitlisted" : registration ? "registered" : registrationOpen ? "open" : "closed" }, [
     h("h2", { className: "roster-title", key: "title" }, "Register"),
     h("p", { className: "tournament-pdga", key: "pdga" }, [
       "PDGA event: ",
       h(PdgaLink, { href: tournament.pdgaEventUrl, key: "link" }, pdgaEvent.name || `#${tournament.pdgaEventId}`),
-      pdgaEvent.tier ? ` · ${pdgaEvent.tier}-tier` : "",
+      tierLabel ? ` · ${tierLabel}` : "",
     ]),
     h(Rules, { tournament, config, key: "rules" }),
-    !registration ? h(SignUp, { event, config, tournament, token: state.token, onDone: reload, key: "signup" }) : null,
+    !registration && registrationOpen
+      ? h(SignUp, { event, config, tournament, token: state.token, onDone: reload, onSessionExpired: () => state.load(null), key: "signup" })
+      : null,
+    !registration && !registrationOpen
+      ? h("p", { className: "dash-note", key: "closed" }, "Registration is closed.")
+      : null,
     registration ? h("p", { className: "register-status", key: "status" },
       paid ? `You're entered${registration.division ? ` in ${registration.division}` : ""}.`
         : waitlisted ? `You're on the waitlist${position ? ` (#${position})` : ""}. If a spot opens, the TD will offer it to you here.`
-          : registration.offered_at ? "A spot opened for you: pay below to take it (held for 48 hours)."
-            : "You're signed up. Pay your entry to take a spot in the field.") : null,
-    registration && !paid && !waitlisted ? h(Payment, { event, tournament, registration, token: state.token, guest: state.guest, onDone: reload, key: "pay" }) : null,
+          : offerExpired ? "Your 48-hour spot offer expired."
+            : registration.offered_at ? "A spot opened for you: pay below to take it (held for 48 hours)."
+              : "You're signed up. Pay your entry to take a spot in the field.") : null,
+    registration && !paid && !waitlisted && !offerExpired ? h(Payment, { event, tournament, registration, token: state.token, guest: state.guest, onDone: reload, key: "pay" }) : null,
     registration ? h(Withdraw, { event, tournament, registration, token: state.token, guest: state.guest, onDone: reload, key: "withdraw" }) : null,
     h(FieldLists, { tournament, key: "field" }),
     h("p", { className: "dash-note", key: "refunds" }, [

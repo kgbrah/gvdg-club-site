@@ -70,7 +70,8 @@ function rulesOf(cfg: TournamentConfig): TournamentRules {
 /** What a registration owes the event: entry + add-ons + the non-member fee when it applies. */
 export function tournamentOwed(cfg: TournamentConfig, reg: Row): number {
   const standing = reg.pdga_number ? { status: (reg.pdga_status as string | null) ?? null, rating: (reg.pdga_rating as number | null) ?? null } : null;
-  return computeOwed(cfg as OwedConfig, parseAddons(reg.addons)) + (isTournament(cfg) ? nonMemberFeeFor(rulesOf(cfg), standing) : 0);
+  const division = (reg.division as string | null) ?? null;
+  return computeOwed(cfg as OwedConfig, parseAddons(reg.addons)) + (isTournament(cfg) ? nonMemberFeeFor(rulesOf(cfg), standing, division) : 0);
 }
 
 function quoteFor(env: Env, cfg: TournamentConfig, reg: Row, method: PaymentMethod, donate: boolean) {
@@ -81,7 +82,7 @@ function quoteFor(env: Env, cfg: TournamentConfig, reg: Row, method: PaymentMeth
 }
 
 /** The public part of a tournament's registration page: its PDGA event, rules, cap, the paid field and the waitlist. */
-export async function tournamentView(env: Env, eventId: number, cfg: TournamentConfig, registrationId: number | null = null) {
+export async function tournamentView(env: Env, eventId: number, cfg: TournamentConfig, registrationId: number | null = null, reg: Row | null = null) {
   const pdgaEvent = freshPdgaEventCopy(cfg.pdga_event) as Row | null;
   const field = await tdb.publicField(env.DB, eventId, new Date(), registrationId);
   const rules = rulesOf(cfg);
@@ -90,6 +91,7 @@ export async function tournamentView(env: Env, eventId: number, cfg: TournamentC
     pdgaEvent: pdgaEvent ? { name: pdgaEvent.name ?? null, tier: pdgaEvent.tier ?? null, startDate: pdgaEvent.startDate ?? null, endDate: pdgaEvent.endDate ?? null } : null,
     rules, cap: cfg.player_cap ?? null, spotsLeft: cfg.player_cap == null ? null : Math.max(0, Number(cfg.player_cap) - field.used),
     field: field.paid, waitlist: field.waitlist, myWaitlistPosition: field.position,
+    offerExpired: reg ? tdb.offerExpired(reg) : false,
     payments: {
       paypalFeeCovered: Number(cfg.paypal_fee_passthrough) === 1,
       zelle: cfg.zelle_to ? { to: cfg.zelle_to, name: cfg.zelle_name ?? null } : null,
@@ -143,23 +145,38 @@ export async function registerForTournament(
   if (pdgaNumber && !checked && pdgaCheckMatters(rules, division)) return json({ error: "pdga_unavailable" }, 503, origin);
   if (!name && player) name = player.name;
   if (!name) return json({ error: "name_required" }, 400, origin);
-  const standing = checked && player ? { status: player.membershipStatus, rating: player.rating } : null;
-  const problem = eligibilityProblem(rules, division, pdgaNumber ? standing ?? { status: null, rating: null } : null);
+  const standing = checked && player ? { status: player.membershipStatus, rating: player.rating, classification: player.classification } : null;
+  const pdgaEvent = freshPdgaEventCopy(cfg.pdga_event) as { tier?: string | null } | null;
+  const problem = eligibilityProblem(rules, division, pdgaNumber ? standing ?? { status: null, rating: null } : null, pdgaEvent?.tier ?? null);
   if (problem) return json(problem, 403, origin);
 
   const existing = await db.getMyRegistration(env.DB, eventId, memberId) as Row | null;
   if (Number(existing?.paid_entry) === 1) {
-    // Paid: details can be fixed, but nothing that would change what's owed.
-    const draft = { ...existing, addons: body.addons && typeof body.addons === "object" ? JSON.stringify(body.addons) : existing!.addons,
-      pdga_status: standing?.status ?? existing!.pdga_status, pdga_rating: standing?.rating ?? existing!.pdga_rating, pdga_number: pdgaNumber };
-    if (tournamentOwed(cfg, draft) > Number(existing!.amount_paid_cents ?? 0)) return json({ error: "paid_addons_locked" }, 409, origin);
+    // Paid: details can be fixed, but nothing that would change what's owed (exclude fee/donation from paid sum).
+    const draft = {
+      ...existing,
+      division,
+      addons: body.addons && typeof body.addons === "object"
+        ? JSON.stringify({ ctp: !!(body.addons as Row).ctp, ace: !!(body.addons as Row).ace })
+        : existing!.addons,
+      pdga_status: standing?.status ?? existing!.pdga_status,
+      pdga_rating: standing?.rating ?? existing!.pdga_rating,
+      pdga_number: pdgaNumber,
+    };
+    const paidForEvent = Math.max(0, Number(existing!.amount_paid_cents ?? 0) - Number(existing!.fee_cents ?? 0) - Number(existing!.donation_cents ?? 0));
+    const prevOwed = tournamentOwed(cfg, existing!);
+    const nextOwed = tournamentOwed(cfg, draft);
+    if (nextOwed > prevOwed || (Number(existing!.amount_paid_cents ?? 0) > 0 && nextOwed > paidForEvent)) {
+      return json({ error: "paid_addons_locked" }, 409, origin);
+    }
   }
   if (!existing) {
     const sched = (await db.getEventSchedule(env.DB, eventId)) as { registration_deadline?: string | null } | null;
     if (deadlinePassed(sched?.registration_deadline)) return json({ error: "registration_closed" }, 403, origin);
   }
   const addons = body.addons && typeof body.addons === "object"
-    ? JSON.stringify({ ctp: !!(body.addons as Row).ctp, ace: !!(body.addons as Row).ace }) : null;
+    ? JSON.stringify({ ctp: !!(body.addons as Row).ctp, ace: !!(body.addons as Row).ace })
+    : (existing ? ((existing.addons as string | null) ?? null) : null);
   const row = await tdb.registerTournamentPlayer(env.DB, {
     event_id: eventId, member_id: memberId, name, division, team: asStr(body.team, 40), addons, email,
     pdga_number: pdgaNumber, pdga_status: standing?.status ?? null, pdga_rating: standing?.rating ?? null,
@@ -169,6 +186,25 @@ export async function registerForTournament(
 }
 
 type Reg = Row & { id: number; paid_entry?: number; payment_ref?: string | null; waitlisted?: number };
+
+async function refreshLapsedStanding(
+  env: Env, cfg: TournamentConfig, reg: Reg, refresh: "none" | "lapsed",
+): Promise<Reg> {
+  if (!isTournament(cfg) || Number(reg.paid_entry) === 1 || !reg.pdga_number || reg.pdga_status === "current" || !pdgaApiConfigured(apiEnv(env))) {
+    return reg;
+  }
+  try {
+    const player = await lookupPdgaPlayer(apiEnv(env), String(reg.pdga_number), refresh);
+    if (player && (player.membershipStatus !== reg.pdga_status || player.rating !== reg.pdga_rating)) {
+      const now = new Date().toISOString();
+      await env.DB.prepare(
+        "UPDATE registrations SET pdga_status = ?, pdga_rating = ?, pdga_checked_at = ? WHERE id = ?",
+      ).bind(player.membershipStatus, player.rating, now, reg.id).run();
+      return { ...reg, pdga_status: player.membershipStatus, pdga_rating: player.rating, pdga_checked_at: now };
+    }
+  } catch { /* PDGA unreachable: keep stored standing */ }
+  return reg;
+}
 
 /**
  * /events/:id/pay/{quote,create-order,capture,zelle,zelle/sent} for an event with tournament settings or the new
@@ -180,10 +216,15 @@ export async function handleTournamentPay(request: Request, env: Env, origin: st
   const donate = body.donate === true || new URL(request.url).searchParams.get("donate") === "1";
   if (action === "quote" && method === "GET") {
     const choice = new URL(request.url).searchParams.get("method") === "zelle" ? "zelle" : "paypal";
-    return json({ quote: quoteFor(env, cfg, reg, choice, donate) }, 200, origin);
+    const currentReg = await refreshLapsedStanding(env, cfg, reg, "none");
+    return json({ quote: quoteFor(env, cfg, currentReg, choice, donate) }, 200, origin);
   }
   if (method !== "POST") return null;
   if (Number(reg.paid_entry) === 1 && action !== "capture") return json({ error: "already_paid" }, 409, origin);
+  if (Number(reg.paid_entry) !== 1 && tdb.offerExpired(reg)) {
+    await tdb.moveToWaitlist(env.DB, reg.id);
+    return json({ error: "offer_expired" }, 409, origin);
+  }
   if (Number(reg.waitlisted) === 1 && action !== "capture") return json({ error: "waitlisted" }, 409, origin);
 
   if (action === "zelle" && seg[4] === "sent") {
@@ -192,9 +233,14 @@ export async function handleTournamentPay(request: Request, env: Env, origin: st
   }
   if (action === "zelle") {
     if (!cfg.zelle_to) return json({ error: "zelle_not_offered" }, 409, origin);
-    const quote = quoteFor(env, cfg, reg, "zelle", donate);
+    if (isTournament(cfg) && !(await tdb.spotOpen(env.DB, reg.id, eventId, cfg.player_cap ?? null))) {
+      await tdb.moveToWaitlist(env.DB, reg.id);
+      return json({ error: "field_full" }, 409, origin);
+    }
+    const currentReg = await refreshLapsedStanding(env, cfg, reg, "lapsed");
+    const quote = quoteFor(env, cfg, currentReg, "zelle", donate);
     if (quote.totalCents <= 0) return json({ error: "nothing_owed" }, 400, origin);
-    const row = await tdb.setPaymentChoice(env.DB, reg.id, { method: "zelle", feeCents: 0, donationCents: quote.donationCents, zelleCode: zelleCode(eventId, reg.id) });
+    const row = await tdb.setPaymentChoice(env.DB, currentReg.id, { method: "zelle", feeCents: 0, donationCents: quote.donationCents, zelleCode: zelleCode(eventId, currentReg.id) });
     return json({ registration: row, quote, zelle: { to: cfg.zelle_to, name: cfg.zelle_name ?? null, amountCents: quote.totalCents, memo: row?.zelle_code } }, 200, origin);
   }
 
@@ -202,13 +248,14 @@ export async function handleTournamentPay(request: Request, env: Env, origin: st
   const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
   try {
     if (action === "create-order") {
-      const quote = quoteFor(env, cfg, reg, "paypal", donate);
+      const currentReg = await refreshLapsedStanding(env, cfg, reg, "lapsed");
+      const quote = quoteFor(env, cfg, currentReg, "paypal", donate);
       if (quote.totalCents <= 0) return json({ error: "nothing_owed" }, 400, origin);
-      if (isTournament(cfg) && !(await tdb.spotOpen(env.DB, reg.id, eventId, cfg.player_cap ?? null))) {
-        await tdb.moveToWaitlist(env.DB, reg.id);
+      if (isTournament(cfg) && !(await tdb.spotOpen(env.DB, currentReg.id, eventId, cfg.player_cap ?? null))) {
+        await tdb.moveToWaitlist(env.DB, currentReg.id);
         return json({ error: "field_full" }, 409, origin);
       }
-      await tdb.setPaymentChoice(env.DB, reg.id, { method: "paypal", feeCents: quote.feeCents, donationCents: quote.donationCents });
+      await tdb.setPaymentChoice(env.DB, currentReg.id, { method: "paypal", feeCents: quote.feeCents, donationCents: quote.donationCents });
       const orderId = await ppCreateOrder(creds, quote.totalCents, isTournament(cfg) ? "GVDG tournament entry" : "GVDG event entry");
       return json({ orderId, quote }, 200, origin);
     }
@@ -218,7 +265,8 @@ export async function handleTournamentPay(request: Request, env: Env, origin: st
       if (Number(reg.paid_entry) === 1) {
         return reg.payment_ref === orderId ? json({ registration: reg }, 200, origin) : json({ error: "already_paid" }, 409, origin);
       }
-      const expected = tournamentOwed(cfg, reg) + Number(reg.fee_cents ?? 0) + Number(reg.donation_cents ?? 0);
+      const quote = quoteFor(env, cfg, reg, "paypal", Number(reg.donation_cents ?? 0) > 0);
+      const expected = quote.totalCents;
       // Hold the spot before charging (two players can't both buy the last one), then the order id (no double charge).
       if (isTournament(cfg) && !(await tdb.claimSpot(env.DB, reg.id, eventId, cfg.player_cap ?? null))) {
         await tdb.moveToWaitlist(env.DB, reg.id);
@@ -241,7 +289,7 @@ export async function handleTournamentPay(request: Request, env: Env, origin: st
         await tdb.releaseSpot(env.DB, reg.id);
         return json({ error: "payment_incomplete" }, 402, origin);
       }
-      const row = await tdb.markTournamentPaid(env.DB, reg.id, { ref: orderId, amountCents: captured.amountCents, paidAt: new Date().toISOString(), method: "paypal" });
+      const row = await tdb.markTournamentPaid(env.DB, reg.id, { ref: orderId, amountCents: captured.amountCents, paidAt: new Date().toISOString(), method: "paypal", feeCents: quote.feeCents });
       return json({ registration: row ?? (await db.getRegistration(env.DB, reg.id)) }, 200, origin);
     }
   } catch (error) {
@@ -308,7 +356,7 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
     const ids = rounds.slice(0, 4).map((round) => round.eventId);
     const marks = ids.map(() => "?").join(", ");
     const [results, registrations] = ids.length ? await Promise.all([
-      env.DB.prepare(`SELECT event_id, member_id, name, total FROM results WHERE event_id IN (${marks})`).bind(...ids).all<UploadResult>(),
+      env.DB.prepare(`SELECT event_id, member_id, name, place, total FROM results WHERE event_id IN (${marks})`).bind(...ids).all<UploadResult>(),
       env.DB.prepare(`SELECT event_id, member_id, name, division, pdga_number FROM registrations WHERE event_id IN (${marks}) ORDER BY paid_entry DESC, id`).bind(...ids).all<UploadRegistration>(),
     ]) : [{ results: [] }, { results: [] }];
     const names = await storedPdgaNames(env, (registrations.results ?? []).map((row) => row.pdga_number));
@@ -354,6 +402,7 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
     if (body.playerCap != null && body.playerCap !== "" && (cap == null || cap <= 0 || cap > 1000)) return json({ error: "invalid_cap" }, 400, origin);
     const tdEmail = asStr(body.tdEmail, 120);
     if (tdEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(tdEmail)) return json({ error: "invalid_td_email" }, 400, origin);
+    if (pdgaEventId != null && !tdEmail) return json({ error: "td_email_required" }, 400, origin);
     const zelleTo = asStr(body.zelleTo, 120);
     let pdgaEvent: string | null = null;
     if (pdgaEventId != null && pdgaApiConfigured(apiEnv(env))) {
@@ -377,11 +426,15 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
     if (!reg || Number(reg.event_id) !== eventId) return json({ error: "not_found" }, 404, origin);
     const cfg = ((await db.getEventConfig(env.DB, eventId)) ?? {}) as TournamentConfig;
     if (seg[5] === "offer") {
-      const row = await tdb.offerSpot(env.DB, eventId, registrationId);
-      return row ? json({ registration: row }, 200, origin) : json({ error: "not_waitlisted" }, 409, origin);
+      const res = await tdb.offerSpot(env.DB, eventId, registrationId, cfg.player_cap ?? null);
+      return res.ok ? json({ registration: res.registration }, 200, origin) : json({ error: res.error }, 409, origin);
     }
     if (seg[5] === "zelle-received") {
       if (Number(reg.paid_entry) === 1) return json({ error: "already_paid" }, 409, origin);
+      if (isTournament(cfg) && tdb.offerExpired(reg)) {
+        await tdb.moveToWaitlist(env.DB, registrationId);
+        return json({ error: "offer_expired" }, 409, origin);
+      }
       const body = (await readJson(request)) ?? {};
       const received = asStr(body.receivedAt, 40);
       const paidAt = received && !Number.isNaN(Date.parse(received)) ? new Date(received).toISOString() : new Date().toISOString();
@@ -389,8 +442,17 @@ export async function handleTournamentAdmin(request: Request, env: Env, origin: 
         return json({ error: "field_full" }, 409, origin);
       }
       const amount = tournamentOwed(cfg, reg) + Number(reg.donation_cents ?? 0);
-      const row = await tdb.markTournamentPaid(env.DB, registrationId, { ref: "zelle:" + (reg.zelle_code ?? registrationId), amountCents: amount, paidAt, method: "zelle" });
-      return row ? json({ registration: row }, 200, origin) : json({ error: "already_paid" }, 409, origin);
+      const row = await tdb.markTournamentPaid(
+        env.DB,
+        registrationId,
+        { ref: "zelle:" + (reg.zelle_code ?? registrationId), amountCents: amount, paidAt, method: "zelle" },
+        isTournament(cfg) ? { eventId, cap: cfg.player_cap ?? null } : undefined,
+      );
+      if (!row) {
+        const latest = (await db.getRegistration(env.DB, registrationId)) as Reg | null;
+        return json({ error: Number(latest?.paid_entry) === 1 ? "already_paid" : "field_full" }, 409, origin);
+      }
+      return json({ registration: row }, 200, origin);
     }
   }
   return null;

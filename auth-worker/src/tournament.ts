@@ -94,34 +94,79 @@ export function dgsFee(cents: number): number {
   return cents > 0 ? DGS_FEE.fixedCents + Math.ceil((cents * DGS_FEE.bps) / 10_000) : 0;
 }
 
-export type PdgaStanding = { status: string | null; rating: number | null };
+export const STANDARD_DIVISION_LIMITS: Record<string, number> = {
+  MA2: 934,
+  MA3: 899,
+  MA4: 849,
+  FA2: 824,
+  FA3: 774,
+  FA4: 724,
+};
 
-/** The non-member fee applies unless PDGA says the player's membership is current. */
-export function nonMemberFeeFor(rules: TournamentRules, standing: PdgaStanding | null): number {
+export function isJuniorDivision(division: string | null | undefined): boolean {
+  return /^[MF]J\d{1,2}$/i.test(String(division || "").trim());
+}
+
+export function isAmateurDivision(division: string | null | undefined): boolean {
+  const code = String(division || "").trim().toUpperCase();
+  return /^[MF]A\d+$/.test(code) || isJuniorDivision(code);
+}
+
+/** Waitlist order: when the player joined the waitlist, then lowest PDGA number, then sign-up order. */
+export function waitlistOrder<T extends { waitlisted_at?: unknown; pdga_number?: unknown; id?: unknown }>(a: T, b: T): number {
+  const at = String(a.waitlisted_at ?? "\uffff").localeCompare(String(b.waitlisted_at ?? "\uffff"));
+  if (at) return at;
+  const pdgaA = Number(a.pdga_number) || Number.MAX_SAFE_INTEGER;
+  const pdgaB = Number(b.pdga_number) || Number.MAX_SAFE_INTEGER;
+  return pdgaA - pdgaB || Number(a.id) - Number(b.id);
+}
+
+export type PdgaStanding = { status: string | null; rating: number | null; classification?: "P" | "A" | null };
+
+/** The non-member fee applies unless PDGA says the player's membership is current (Junior divisions are exempt). */
+export function nonMemberFeeFor(rules: TournamentRules, standing: PdgaStanding | null, division?: string | null): number {
+  if (isJuniorDivision(division)) return 0;
   return rules.nonMemberFeeCents > 0 && standing?.status !== "current" ? rules.nonMemberFeeCents : 0;
 }
 
 export type EligibilityProblem =
   | { error: "pdga_membership_required" }
   | { error: "division_rating_limit"; limit: number; rating: number }
+  | { error: "pdga_rating_unverified"; limit: number }
+  | { error: "pro_in_amateur_division"; limit?: number; rating?: number | null }
   | { error: "pdga_check_required" };
 
 /**
- * Whether a player may enter `division`. A division with a rating limit needs the player's PDGA rating (unrated
- * players may enter it); a members-only event needs a current membership.
+ * Whether a player may enter `division`. Enforces members-only events, PDGA 2.05 Pro-playing-Am thresholds
+ * (Pros cannot play Am in Majors/ES/NT or above 969 Mixed / 869 Women's), and division rating limits (expired
+ * memberships omit ratings and cannot bypass a capped division).
  */
-export function eligibilityProblem(rules: TournamentRules, division: string | null, standing: PdgaStanding | null): EligibilityProblem | null {
+export function eligibilityProblem(
+  rules: TournamentRules,
+  division: string | null,
+  standing: PdgaStanding | null,
+  tier?: string | null,
+): EligibilityProblem | null {
   if (rules.membersOnly && standing?.status !== "current") return standing ? { error: "pdga_membership_required" } : { error: "pdga_check_required" };
+  if (standing?.classification === "P" && isAmateurDivision(division)) {
+    const normalizedTier = String(tier || "").trim().toUpperCase();
+    if (["M", "ES", "NT", "XM"].includes(normalizedTier)) return { error: "pro_in_amateur_division" };
+    const proCap = /^F/i.test(String(division || "").trim()) ? 870 : 970;
+    if (standing.rating == null || standing.rating >= proCap) {
+      return { error: "pro_in_amateur_division", limit: proCap - 1, rating: standing.rating };
+    }
+  }
   const limit = division ? rules.divisionLimits[division] : undefined;
   if (limit == null) return null;
   if (!standing) return null; // no PDGA number: unrated, which any division accepts
   if (standing.rating != null && standing.rating > limit) return { error: "division_rating_limit", limit, rating: standing.rating };
+  if (standing.rating == null && standing.status !== "current") return { error: "pdga_rating_unverified", limit };
   return null;
 }
 
-/** Whether checking this registration's PDGA number matters (membership, a fee, or the chosen division's limit). */
+/** Whether checking this registration's PDGA number matters (membership, fee, division rating cap, or Am Pro check). */
 export function pdgaCheckMatters(rules: TournamentRules, division: string | null): boolean {
-  return rules.membersOnly || rules.nonMemberFeeCents > 0 || Boolean(division && rules.divisionLimits[division] != null);
+  return rules.membersOnly || rules.nonMemberFeeCents > 0 || Boolean(division && rules.divisionLimits[division] != null) || isAmateurDivision(division);
 }
 
 export type PaymentMethod = "paypal" | "zelle" | "wallet";
@@ -175,7 +220,7 @@ export function zelleCode(eventId: number, registrationId: number): string {
 export const PDGA_UPLOAD_HEADER = ["DivCode", "T.O.", "Place", "First Name", "Last Name", "PDGA"] as const;
 
 export type UploadRound = { eventId: number; name: string; date: string | null };
-export type UploadResult = { event_id: number; member_id: string | null; name: string; total: number | null };
+export type UploadResult = { event_id: number; member_id: string | null; name: string; place?: number | null; total: number | null };
 export type UploadRegistration = { event_id: number; member_id: string | null; name: string; division: string | null; pdga_number: string | null };
 
 const nameKey = (name: string) => String(name || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -203,7 +248,7 @@ export function pdgaResultsUpload(rounds: UploadRound[], results: UploadResult[]
     const key = result.member_id ? "m:" + result.member_id : reg?.member_id ? "m:" + reg.member_id : "n:" + nameKey(result.name);
     const player = players.get(key) ?? { name: (reg?.name || result.name).trim(), division: cell(reg?.division).toUpperCase(), pdga: cell(reg?.pdga_number), scores: used.map(() => null) };
     const total = Number(result.total);
-    if (Number.isFinite(total) && total > 0) player.scores[round] = total;
+    if (result.place !== null && Number.isFinite(total) && total > 0) player.scores[round] = total;
     players.set(key, player);
   }
   const list = [...players.values()];
@@ -253,7 +298,7 @@ export type UploadPlayer = {
 export function pdgaPlayersUpload(registrations: UploadPlayer[], pdgaNames: PdgaNames = new Map()) {
   const paid = registrations.filter((row) => Number(row.paid_entry) === 1).sort(fieldOrder);
   const waitlist = registrations.filter((row) => Number(row.paid_entry) !== 1 && Number(row.waitlisted) === 1)
-    .sort((a, b) => String(a.waitlisted_at ?? "").localeCompare(String(b.waitlisted_at ?? "")) || a.id - b.id);
+    .sort(waitlistOrder);
   const teams = registrations.some((row) => cell(row.team));
   const header = [...(teams ? ["Team Name"] : []), "DivCode", "First Name", "Last Name", "PDGA", ...(waitlist.length ? ["Start"] : [])];
   const line = (row: UploadPlayer, start: string) => {

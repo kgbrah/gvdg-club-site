@@ -5,6 +5,7 @@
 import React from "react";
 import { adminRequest } from "./admin-api.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref, pdgaPlayerHref } from "../shared/pdga-credit.js";
+import { formatPdgaTier, STANDARD_DIVISION_LIMITS } from "../shared/pdga-divisions.js";
 
 const h = React.createElement;
 
@@ -15,9 +16,12 @@ const ERRORS = {
   invalid_rules: "Check the rating limits (300–1200) and the non-member fee.",
   invalid_cap: "The cap must be a whole number of players.",
   invalid_td_email: "Check the TD's email address.",
+  td_email_required: "Enter the TD's email address (required for PDGA withdrawal requests).",
   field_full: "The field is full, so this payment can't be entered. Refund it, or offer the spot when one opens.",
   already_paid: "Already marked paid.",
   not_waitlisted: "That player isn't on the waitlist.",
+  waitlist_order: "Offer the spot to the first player on the waitlist before later waitlisted players.",
+  offer_expired: "That 48-hour offer expired and the player moved back to the waitlist.",
 };
 
 function dollars(cents) {
@@ -48,7 +52,8 @@ export function fieldRows(registrations) {
     String(a.paid_at || "￿").localeCompare(String(b.paid_at || "￿"))
       || (Number(a.pdga_number) || Infinity) - (Number(b.pdga_number) || Infinity) || a.id - b.id);
   const waitlist = registrations.filter((row) => Number(row.paid_entry) !== 1 && Number(row.waitlisted) === 1)
-    .sort((a, b) => String(a.waitlisted_at || "").localeCompare(String(b.waitlisted_at || "")) || a.id - b.id);
+    .sort((a, b) => String(a.waitlisted_at || "\uffff").localeCompare(String(b.waitlisted_at || "\uffff"))
+      || (Number(a.pdga_number) || Infinity) - (Number(b.pdga_number) || Infinity) || a.id - b.id);
   const pending = registrations.filter((row) => Number(row.paid_entry) !== 1 && Number(row.waitlisted) !== 1);
   return { paid, waitlist, pending };
 }
@@ -69,8 +74,18 @@ function Settings({ eventId, settings, onSaved }) {
     setMessage("");
     if (!String(form.pdgaEventId).trim()) return;
     const result = await call(`/admin/pdga-events/${encodeURIComponent(String(form.pdgaEventId).trim())}`);
-    if (result.ok) setPdgaEvent(result.data.event);
-    else setMessage(ERRORS[result.data.error] || "Couldn't look that up.");
+    if (result.ok) {
+      const ev = result.data.event;
+      setPdgaEvent(ev);
+      if (!settings?.pdgaEventId && ev?.tier) {
+        const tier = String(ev.tier).trim().toUpperCase();
+        if (["A", "B", "M", "ES", "NT", "XA", "XB", "XM"].includes(tier)) {
+          setForm((prev) => ({ ...prev, membersOnly: true, nonMemberFee: "" }));
+        } else if (["C", "XC"].includes(tier)) {
+          setForm((prev) => ({ ...prev, membersOnly: false, nonMemberFee: prev.nonMemberFee === "" ? "15.00" : prev.nonMemberFee }));
+        }
+      }
+    } else setMessage(ERRORS[result.data.error] || "Couldn't look that up.");
   }
 
   async function save(event) {
@@ -92,12 +107,13 @@ function Settings({ eventId, settings, onSaved }) {
   }
 
   const divisions = settings?.divisions || [];
+  const hasStandardDivisions = divisions.some((division) => STANDARD_DIVISION_LIMITS[division] != null);
   return h("form", { className: "course-operator-fields tournament-settings", onSubmit: save }, [
     h("label", { key: "pdga" }, ["PDGA event number", h("input", { key: "input", inputMode: "numeric", value: form.pdgaEventId,
       onChange: (e) => setForm({ ...form, pdgaEventId: e.target.value.replace(/\D/g, "") }), onBlur: lookUp })]),
     pdgaEvent ? h("p", { className: "al-note", key: "event" }, [
       h(PdgaLink, { href: pdgaEventHref(pdgaEvent.id), key: "link" }, pdgaEvent.name),
-      ` · ${pdgaEvent.tier || "?"}-tier · ${pdgaEvent.startDate || ""}${pdgaEvent.director ? ` · TD ${pdgaEvent.director}` : ""}`,
+      `${pdgaEvent.tier ? ` · ${formatPdgaTier(pdgaEvent.tier)}` : ""}${pdgaEvent.startDate ? ` · ${pdgaEvent.startDate}` : ""}${pdgaEvent.director ? ` · TD ${pdgaEvent.director}` : ""}`,
     ]) : null,
     pdgaEvent && !settings?.pdgaEventId ? h(PdgaCredit, { key: "preview-credit" }) : null,
     h("label", { key: "cap" }, ["Player cap (blank = no cap)", h("input", { key: "input", inputMode: "numeric", value: form.playerCap,
@@ -108,6 +124,16 @@ function Settings({ eventId, settings, onSaved }) {
       h("legend", { key: "legend" }, "Highest rating allowed (blank = no limit)"),
       ...divisions.map((division) => h("label", { key: division }, [division, h("input", { key: "input", inputMode: "numeric", value: form.limits[division] ?? "",
         onChange: (e) => setForm({ ...form, limits: { ...form.limits, [division]: e.target.value.replace(/\D/g, "") } }) })])),
+      hasStandardDivisions ? h("button", {
+        className: "admin-btn secondary", type: "button", key: "fill-caps",
+        onClick: () => setForm((prev) => {
+          const limits = { ...prev.limits };
+          for (const div of divisions) {
+            if (STANDARD_DIVISION_LIMITS[div] != null) limits[div] = String(STANDARD_DIVISION_LIMITS[div]);
+          }
+          return { ...prev, limits };
+        }),
+      }, "Fill PDGA standard caps") : null,
     ]) : h("p", { className: "al-note", key: "no-divisions" }, "Add divisions in the event's registration settings to set rating limits."),
     h("label", { key: "passthrough" }, [h("input", { key: "box", type: "checkbox", checked: form.paypalFeePassthrough, onChange: set("paypalFeePassthrough") }), " Players cover PayPal's fee"]),
     h("label", { key: "zelle" }, ["Zelle to (email or phone; blank = no Zelle)", h("input", { key: "input", value: form.zelleTo, onChange: set("zelleTo") })]),

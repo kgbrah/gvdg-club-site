@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { preRegistrationCsv } from "../src/admin-app/tournament-panel.js";
 import { PDGA_HOME, pdgaEventHref, pdgaPlayerHref } from "../src/shared/pdga-credit.js";
+import { formatPdgaTier, isAmateurDivision, STANDARD_DIVISION_LIMITS } from "../src/shared/pdga-divisions.js";
 
 // PDGA Developer Program attribution: every screen showing PDGA data says "Player, event, and course data provided
 // by PDGA." (PDGA linked to pdga.com), and PDGA event and player names link to their pdga.com pages.
@@ -122,4 +123,18 @@ test("PDGA compliance cleanup: no scraped claims on scoring-app.html, no DGS scr
   for (const file of ["src/admin-app/import-controls.js", "src/admin-app/import-controller.js"]) {
     assert.doesNotMatch(readFileSync(file, "utf8"), /GVDG-DGS-Scraper|\/admin\/import\/dgs|Import from DiscGolfScene/);
   }
+});
+
+test("PDGA tier labels, amateur/junior helpers, and public hub redirect behave as expected", () => {
+  assert.equal(formatPdgaTier("L"), "PDGA League");
+  assert.equal(formatPdgaTier("M"), "PDGA Major");
+  assert.equal(formatPdgaTier("ES"), "Elite Series");
+  assert.equal(formatPdgaTier("C"), "C-tier");
+  assert.equal(isAmateurDivision("MA3"), true);
+  assert.equal(isAmateurDivision("MJ18"), true);
+  assert.equal(isAmateurDivision("MPO"), false);
+  assert.equal(STANDARD_DIVISION_LIMITS.MA2, 934);
+  const regApp = readFileSync("src/public-app/events-registration-app.js", "utf8");
+  assert.match(regApp, /#event\/\$\{encodeURIComponent\(event\.id\)\}[\s\S]*tournament && !inline/);
+  assert.match(regApp, /Register on event page/);
 });

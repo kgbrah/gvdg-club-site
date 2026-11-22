@@ -314,6 +314,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
 }
 
 function RegistrationCard({ api, event, guestReg, inline = false, myReg, onRefresh, onSessionExpired, token }) {
+  const tournament = Boolean(event && event.pdga_event_id);
   const registered = Boolean(myReg || guestReg);
   const who = myReg
     ? myReg.division ? ` - ${myReg.division}` : ""
@@ -329,26 +330,36 @@ function RegistrationCard({ api, event, guestReg, inline = false, myReg, onRefre
     event.play_format ? formatLabel(event.play_format) : "",
   ].filter(Boolean).join(" · ");
 
+  const tournamentStatus = myReg
+    ? (Number(myReg.waitlisted) === 1 ? "On the waitlist" : Number(myReg.paid_entry) === 1 ? "Registered & paid" : "Signed up · payment needed") + (myReg.division ? ` · ${myReg.division}` : "")
+    : `Registered${who}`;
+  const eventHref = `#event/${encodeURIComponent(event.id)}`;
+
   return h("article", { className: `event-card register-card${inline ? " inline" : ""}`, "data-react-events-registration-card": "true" }, [
-    inline ? null : h("div", { className: "event-card-top", key: "top" },
-      h("h3", { className: "event-name" }, displayEventTitle(event.name || "Event"))),
+    inline ? null : h("div", { className: "event-card-top", key: "top" }, [
+      tournament ? h("span", { className: "type-badge pdga-badge", key: "pdga" }, "PDGA") : null,
+      h("h3", { className: "event-name", key: "name" }, displayEventTitle(event.name || "Event")),
+    ]),
     inline ? null : h(EventMeta, { event, key: "meta" }),
     h("div", { className: "register-fee", key: "fee" }, inline ? [h("span", { className: "meta-icon", key: "icon" }, icon(CalendarDays)), h("span", { key: "text" }, summary)] : feeText),
     inline ? null : h(EventFieldRoster, { compact: true, key: "field", players: event.field }),
     registered ? h("div", { className: "register-status", key: "status" }, [
       h("span", { className: "meta-icon", key: "icon" }, icon(CheckCircle2)),
-      h("span", { key: "text" }, `Registered${who}`),
+      h("span", { key: "text" }, tournament ? tournamentStatus : `Registered${who}`),
     ]) : null,
-    registered && owed > 0 && !(myReg && myReg.paid_entry)
+    registered && !tournament && owed > 0 && !(myReg && myReg.paid_entry)
       ? h("div", { className: "register-fee", key: "owed" },
         `Amount due: ${dollars(owed)} - pay at the event${token ? " or in the Members area." : "."}`)
       : null,
-    registered
-      ? h(RegisteredCardActions, { api, event, guestReg, key: "actions", myReg, onRefresh, token })
-      : h("details", { className: "event-registration-form", key: "registration-form" }, [
-          h("summary", { key: "summary" }, "Sign up"),
-          h(RegisterForm, { api, event, key: "form", onRefresh, onSessionExpired, token }),
-        ]),
+    tournament && !inline
+      ? h("a", { className: "reg-btn", href: eventHref, key: "tournament-link" },
+        !registered ? "Register on event page" : myReg && Number(myReg.paid_entry) === 1 ? "Event page" : "Finish registration & pay")
+      : registered
+        ? h(RegisteredCardActions, { api, event, guestReg, key: "actions", myReg, onRefresh, token })
+        : h("details", { className: "event-registration-form", key: "registration-form" }, [
+            h("summary", { key: "summary" }, "Sign up"),
+            h(RegisterForm, { api, event, key: "form", onRefresh, onSessionExpired, token }),
+          ]),
   ]);
 }
 
@@ -409,10 +420,11 @@ function cardProps(state, event) {
   };
 }
 
-/** Reuses the hub's registration card on the event page (only when the event is open for sign-up). */
-export function EventRegistrationPanel({ eventId }) {
+/** Reuses the hub's registration card on the event page (and keeps PDGA tournament view visible when closed or live). */
+export function EventRegistrationPanel({ eventId, event: detailEvent }) {
   const state = useRegistrationState();
-  const event = state.events.find((item) => String(item && item.id) === String(eventId));
+  const openEvent = state.events.find((item) => String(item && item.id) === String(eventId));
+  const event = openEvent || (detailEvent && detailEvent.pdga_event_id && (detailEvent.status === "scheduled" || detailEvent.status === "live") ? detailEvent : null);
   if (!event) return null;
   // A club-run PDGA event registers with its PDGA rules, the paid field and waitlist, and payment on the page.
   if (event.pdga_event_id) return h(TournamentRegistration, { event, onChanged: state.load });

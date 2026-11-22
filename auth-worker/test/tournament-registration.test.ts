@@ -5,6 +5,7 @@ import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
 import { signSession } from "../src/jwt.js";
 import { resetPdgaApiSession } from "../src/pdga-api.js";
+import { startLiveEvent } from "../src/club-live-routes.js";
 
 // Club-run PDGA events registered on the club site, end to end through the routes: PDGA number checks with the
 // official API, the event's rules, the field in order of payment with a published cap and waitlist (PDGA
@@ -268,11 +269,13 @@ describe("results for PDGA Tournament Manager", () => {
     db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (8, 'Greenville Fall Classic R2', 'tournament', 'final', '2099-12-13')`);
     expect((await call("/admin/events/8/pdga", { method: "PATCH", token: adminToken, body: { pdgaEventId: 104547 } })).status).toBe(200);
     db.raw.exec(`INSERT INTO registrations (event_id, member_id, name, division, pdga_number, paid_entry) VALUES
-      (7, 'm_ada', 'Ada Lovelace', 'MA3', '80024', 1), (7, 'g_cy', 'Cy Young', 'MPO', '70007', 1), (7, 'g_al', 'Al Tie', 'MA3', NULL, 1)`);
-    db.raw.exec(`INSERT INTO results (event_id, member_id, name, total) VALUES
-      (7, 'm_ada', 'Ada Lovelace', 54), (8, 'm_ada', 'Ada Lovelace', 52),
-      (7, NULL, 'Al  Tie', 55), (8, NULL, 'al tie', 51),
-      (7, NULL, 'Cy Young', 50)`);
+      (7, 'm_ada', 'Ada Lovelace', 'MA3', '80024', 1), (7, 'g_cy', 'Cy Young', 'MPO', '70007', 1), (7, 'g_al', 'Al Tie', 'MA3', NULL, 1),
+      (7, 'g_dan', 'Dan Dnf', 'MPO', '60006', 1)`);
+    db.raw.exec(`INSERT INTO results (event_id, member_id, name, place, total) VALUES
+      (7, 'm_ada', 'Ada Lovelace', 1, 54), (8, 'm_ada', 'Ada Lovelace', 1, 52),
+      (7, NULL, 'Al  Tie', 2, 55), (8, NULL, 'al tie', 2, 51),
+      (7, NULL, 'Cy Young', 1, 50),
+      (7, NULL, 'Dan Dnf', 2, 55), (8, NULL, 'Dan Dnf', NULL, 28)`);
     const upload = await call("/admin/events/8/pdga-results", { token: adminToken });
     expect(upload.status).toBe(200);
     expect(upload.data.rounds.map((round: { eventId: number }) => round.eventId)).toEqual([7, 8]);
@@ -281,8 +284,9 @@ describe("results for PDGA Tournament Manager", () => {
       ["MA3", "", "1", "Ada", "Lovelace", "80024", "54", "52"],
       ["MA3", "", "1", "Al", "Tie", "", "55", "51"],
       ["MPO", "", "", "Cy", "Young", "70007", "50", ""],
+      ["MPO", "", "", "Dan", "Dnf", "60006", "55", ""],
     ]);
-    expect(upload.data).toMatchObject({ players: 3, missingScores: 1, noDivision: 0, noPdga: 1, extraRounds: 0 });
+    expect(upload.data).toMatchObject({ players: 4, missingScores: 2, noDivision: 0, noPdga: 1, extraRounds: 0 });
     expect(upload.data.text.split("\n")[0]).toBe("DivCode\tT.O.\tPlace\tFirst Name\tLast Name\tPDGA\tRd1\tRd2");
     expect((await call("/admin/events/8/pdga-results")).status).toBe(401);
     db.raw.exec(`INSERT INTO events (id, name, type, status, date) VALUES (9, 'League night', 'league', 'final', '2099-12-14')`);
@@ -324,5 +328,140 @@ describe("the player list for PDGA Tournament Manager", () => {
     expect(configs.length).toBeGreaterThan(0);
     expect(configs.every((row) => !("pdga_event" in row))).toBe(true);
     expect((await call("/admin/import/dgs", { method: "POST", token: adminToken, body: {} })).status).toBe(404);
+  });
+});
+
+describe("PDGA Competition Manual & payment safety (Batch 2)", () => {
+  it("prevents waitlist line-jumping, enforces waitlist order & cap in offerSpot, and expires 48h offers", async () => {
+    await setup({ playerCap: 1 });
+    const paid = await call("/events/7/register", { method: "POST", body: { pdgaNumber: "80024", division: "MPO" } });
+    const unoffered = await call("/events/7/register", { method: "POST", body: { pdgaNumber: "90001", division: "MA3" } });
+    expect((await payByPaypal(paid.data.guestToken)).status).toBe(200);
+
+    // Next signups enter waitlisted when cap is full.
+    const w1 = await call("/events/7/register", { method: "POST", body: { name: "Wait One", division: "MPO" } });
+    const w2 = await call("/events/7/register", { method: "POST", body: { name: "Wait Two", division: "MPO" } });
+    expect(w1.data.registration.waitlisted).toBe(1);
+    expect(w2.data.registration.waitlisted).toBe(1);
+
+    // While the field is full, offerSpot must refuse.
+    expect((await call(`/admin/events/7/registrations/${w1.data.registration.id}/offer`, { method: "POST", token: adminToken }))).toMatchObject({ status: 409, data: { error: "field_full" } });
+
+    // Remove the paid player so 1 spot opens; Waitlist #1 (w1) must go first.
+    await call(`/admin/events/7/registrations/${paid.data.registration.id}`, { method: "DELETE", token: adminToken });
+
+    // New signup still joins waitlist behind w1/w2; unoffered unpaid player cannot jump the waitlist via PayPal or Zelle.
+    const newcomer = await call("/events/7/register", { method: "POST", body: { name: "Line Jumper", division: "MPO" } });
+    expect(newcomer.data.registration.waitlisted).toBe(1);
+    expect((await call("/events/7/pay/create-order", { method: "POST", body: { guestToken: unoffered.data.guestToken } })).data.error).toBe("field_full");
+    const lateSign = await call("/events/7/register", { method: "POST", body: { name: "Zelle Jumper", division: "MPO" } });
+    expect(lateSign.data.registration.waitlisted).toBe(1);
+
+    // Offering out-of-order (#2 before #1) is blocked.
+    expect((await call(`/admin/events/7/registrations/${w2.data.registration.id}/offer`, { method: "POST", token: adminToken }))).toMatchObject({ status: 409, data: { error: "waitlist_order" } });
+
+    // Offer #1 cleanly.
+    const offered = await call(`/admin/events/7/registrations/${w1.data.registration.id}/offer`, { method: "POST", token: adminToken });
+    expect(offered.status).toBe(200);
+    expect(offered.data.registration.waitlisted).toBe(0);
+
+    // Backdate offered_at > 48h ago: paying is rejected with offer_expired and moves w1 back to waitlist.
+    const expiredAt = new Date(Date.now() - 49 * 3_600_000).toISOString();
+    db.raw.prepare("UPDATE registrations SET offered_at = ? WHERE id = ?").run(expiredAt, w1.data.registration.id);
+    expect((await call(`/events/7/registration?gt=${w1.data.guestToken}`)).data.tournament.offerExpired).toBe(true);
+    expect((await call("/events/7/pay/create-order", { method: "POST", body: { guestToken: w1.data.guestToken } }))).toMatchObject({ status: 409, data: { error: "offer_expired" } });
+    expect((await call(`/events/7/registration?gt=${w1.data.guestToken}`)).data.registration.waitlisted).toBe(1);
+
+    // Waitlist #2 is now #1 and can be offered the open spot and paid.
+    const offer2 = await call(`/admin/events/7/registrations/${w2.data.registration.id}/offer`, { method: "POST", token: adminToken });
+    expect(offer2.status).toBe(200);
+    expect((await payByPaypal(w2.data.guestToken)).data.registration.paid_entry).toBe(1);
+  });
+
+  it("rejects store credit, requires TD email, blocks PayPal fee bypass, and fixes paid add-on check", async () => {
+    const missingTd = await call("/admin/events/7/tournament", { method: "PUT", token: adminToken, body: { pdgaEventId: 104547 } });
+    expect(missingTd).toMatchObject({ status: 400, data: { error: "td_email_required" } });
+
+    db.raw.exec("UPDATE event_config SET ctp_fee_cents = 300 WHERE event_id = 7");
+    await setup({ playerCap: 2 });
+    const member = await signSession({ sub: "m_ada", mustChangePin: false }, SECRET, 900);
+    await call("/events/7/register", { method: "POST", token: member, body: { division: "MPO" } });
+
+    // Wallet / store credit is rejected for PDGA tournaments.
+    const wallet = await call("/events/7/pay/wallet", { method: "POST", token: member, body: {} });
+    expect(wallet).toMatchObject({ status: 409, data: { error: "wallet_not_allowed_for_tournament" } });
+
+    // PayPal fee-passthrough bypass prevented: switching to /pay/zelle does not allow capturing a zero-fee $50 order.
+    await call("/events/7/pay/zelle", { method: "POST", token: member, body: { donate: false } });
+    const partialCapture = await call("/events/7/pay/capture", { method: "POST", token: member, body: { orderId: "ORDER-50.00" } });
+    expect(partialCapture).toMatchObject({ status: 402, data: { error: "payment_incomplete" } });
+
+    // Paying full entry + PayPal fee + donation succeeds, then trying to add a $3 CTP pot must fail (fee/donation excluded).
+    const order = await call("/events/7/pay/create-order", { method: "POST", token: member, body: { donate: true } });
+    const captured = await call("/events/7/pay/capture", { method: "POST", token: member, body: { orderId: order.data.orderId } });
+    expect(captured.data.registration).toMatchObject({ paid_entry: 1, fee_cents: 236, donation_cents: 127 });
+    const addCtp = await call("/events/7/register", { method: "POST", token: member, body: { division: "MPO", addons: { ctp: true } } });
+    expect(addCtp).toMatchObject({ status: 409, data: { error: "paid_addons_locked" } });
+  });
+
+  it("limits public field, live scoring, and shotgun holes to paid PDGA registrants, and sets paid_at/pdga_event_id", async () => {
+    await setup({ playerCap: 1 });
+    const course = db.raw.prepare("INSERT INTO courses (name) VALUES (?) RETURNING id").get("QA Test Course") as { id: number };
+    const layout = db.raw.prepare(`INSERT INTO course_layouts (course_id, name, holes, total_par) VALUES (?, 'Main', '[{"hole":1,"par":3},{"hole":2,"par":3}]', 6) RETURNING id`).get(course.id) as { id: number };
+    db.raw.prepare("UPDATE events SET course_id = ?, layout_id = ? WHERE id = 7").run(course.id, layout.id);
+
+    const member = await signSession({ sub: "m_ada", mustChangePin: false }, SECRET, 900);
+    const ada = await call("/events/7/register", { method: "POST", token: member, body: { division: "MPO" } });
+    const unpaid = await call("/events/7/register", { method: "POST", body: { pdgaNumber: "90001", division: "MA3" } });
+    expect((await payByPaypal(ada.data.guestToken || "")).status).toBe(401);
+    const adaOrder = await call("/events/7/pay/create-order", { method: "POST", token: member, body: {} });
+    await call("/events/7/pay/capture", { method: "POST", token: member, body: { orderId: adaOrder.data.orderId } });
+    const waitlistGuest = await call("/events/7/register", { method: "POST", body: { name: "Wait Guest", division: "MPO" } });
+    expect(waitlistGuest.data.registration.waitlisted).toBe(1);
+
+    // Public field only exposes paid Ada Lovelace (excludes unpaid Bo Burnham and waitlisted Wait Guest).
+    const pub = await call("/events/7");
+    expect(pub.data.event.field.map((p: { name: string }) => p.name)).toEqual(["Ada Lovelace"]);
+
+    // Shotgun starting holes skip unpaid/waitlisted players on tournaments.
+    const holes = await call("/admin/events/7/assign-starting-holes", { method: "POST", token: adminToken, body: { shuffle: false } });
+    expect(holes.status).toBe(200);
+    const byName = new Map((holes.data.registrations as { name: string; starting_hole: number | null }[]).map((r) => [r.name, r.starting_hole]));
+    expect(byName.get("Ada Lovelace")).toBe(1);
+    expect(byName.get("Bo Burnham")).toBeNull();
+    expect(byName.get("Wait Guest")).toBeNull();
+
+    // Live scoring start seeds only paid players.
+    const starts: Record<string, unknown>[] = [];
+    const liveEnv = {
+      ...env,
+      LIVE: {
+        idFromName: (n: string) => n,
+        get: () => ({
+          fetch: async (_u: string, init?: RequestInit) => {
+            starts.push(JSON.parse(String(init?.body || "{}")));
+            return Response.json({ status: "live" });
+          },
+        }),
+      },
+    } as unknown as Env;
+    const started = await startLiveEvent(liveEnv, ORIGIN, 7, {});
+    expect(started.status).toBe(200);
+    expect((starts[0]?.players as { name: string }[]).map((p) => p.name)).toEqual(["Ada Lovelace"]);
+
+    // /my-registrations includes pdga_event_id; registerMemberStmt sets paid_at; admin PATCH paid clears waitlisted.
+    const mine = await call("/my-registrations", { token: member });
+    expect(mine.data.registrations[0]).toMatchObject({ event_id: 7, pdga_event_id: 104547 });
+
+    await db.raw.prepare("INSERT INTO events (id, name, type, status, date) VALUES (10, 'Admin Batch', 'tournament', 'scheduled', '2099-12-20')").run();
+    const adminAdd = await call("/admin/events/10/registrations", { method: "POST", token: adminToken, body: { member_ids: ["m_ada"], paid_entry: true } });
+    expect(adminAdd.status).toBe(200);
+    expect(adminAdd.data.registrations[0].paid_at).toBeTruthy();
+
+    const patched = await call(`/admin/events/7/registrations/${waitlistGuest.data.registration.id}`, {
+      method: "PATCH", token: adminToken, body: { paid_entry: true },
+    });
+    expect(patched.data.registration).toMatchObject({ paid_entry: 1, waitlisted: 0 });
+    expect(patched.data.registration.paid_at).toBeTruthy();
   });
 });

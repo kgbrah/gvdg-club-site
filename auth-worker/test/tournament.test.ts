@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  coverFee, dgsFee, eligibilityProblem, fieldOrder, nonMemberFeeFor, parseTournamentRules, paypalFeeRates, pdgaCheckMatters, processorFee,
-  tournamentQuote, tournamentRulesInput, zelleCode, PAYPAL_STANDARD_FEE,
+  coverFee, dgsFee, eligibilityProblem, fieldOrder, isAmateurDivision, isJuniorDivision, NO_RULES, nonMemberFeeFor, parseTournamentRules,
+  paypalFeeRates, pdgaCheckMatters, processorFee, STANDARD_DIVISION_LIMITS, tournamentQuote, tournamentRulesInput, waitlistOrder,
+  zelleCode, PAYPAL_STANDARD_FEE,
 } from "../src/tournament.js";
 
 describe("what a tournament player pays", () => {
@@ -59,8 +60,32 @@ describe("tournament rules", () => {
     expect(nonMemberFeeFor(rules, { status: "current", rating: 900 })).toBe(0);
     expect(nonMemberFeeFor(rules, { status: "expired", rating: null })).toBe(1000);
     expect(nonMemberFeeFor(rules, null)).toBe(1000);
+    // PDGA exempts Junior divisions from the non-member fee, even when expired or unverified.
+    expect(isJuniorDivision("MJ18")).toBe(true);
+    expect(isJuniorDivision("FJ12")).toBe(true);
+    expect(isJuniorDivision("MA3")).toBe(false);
+    expect(nonMemberFeeFor(rules, { status: "expired", rating: null }, "MJ18")).toBe(0);
+    expect(nonMemberFeeFor(rules, null, "FJ15")).toBe(0);
+    // Expired members omit ratings and must not silently bypass capped divisions.
+    expect(eligibilityProblem(rules, "MA3", { status: "expired", rating: null })).toEqual({ error: "pdga_rating_unverified", limit: 899 });
+    // PDGA 2.05 Pro-playing-Am rules: Pros rated >= 970 (Mixed) / >= 870 (Women), unrated Pros, or Majors/ES are blocked.
+    expect(isAmateurDivision("MA1")).toBe(true);
+    expect(isAmateurDivision("MPO")).toBe(false);
+    expect(STANDARD_DIVISION_LIMITS.MA3).toBe(899);
+    expect(eligibilityProblem(NO_RULES, "MA1", { status: "current", rating: 975, classification: "P" }, "C"))
+      .toEqual({ error: "pro_in_amateur_division", limit: 969, rating: 975 });
+    expect(eligibilityProblem(NO_RULES, "FA1", { status: "current", rating: 870, classification: "P" }, "C"))
+      .toEqual({ error: "pro_in_amateur_division", limit: 869, rating: 870 });
+    expect(eligibilityProblem(NO_RULES, "MA1", { status: "current", rating: 920, classification: "P" }, "C")).toBeNull();
+    expect(eligibilityProblem(NO_RULES, "MA1", { status: "current", rating: 920, classification: "P" }, "M"))
+      .toEqual({ error: "pro_in_amateur_division" });
+    expect(eligibilityProblem(NO_RULES, "MA1", { status: "current", rating: null, classification: "P" }, "C"))
+      .toEqual({ error: "pro_in_amateur_division", limit: 969, rating: null });
     expect(pdgaCheckMatters({ ...rules, nonMemberFeeCents: 0 }, "MPO")).toBe(false);
+    expect(pdgaCheckMatters({ ...rules, nonMemberFeeCents: 0 }, "MA1")).toBe(true);
     expect(pdgaCheckMatters({ ...rules, nonMemberFeeCents: 0 }, "MA3")).toBe(true);
+    expect([...[{ id: 1, waitlisted_at: "2026-11-19T10:00:00.000Z", pdga_number: "90000" },
+      { id: 2, waitlisted_at: "2026-11-19T10:00:00.000Z", pdga_number: "8000" }]].sort(waitlistOrder).map((r) => r.id)).toEqual([2, 1]);
   });
 
   it("orders the field by when the fee was received, then the lowest PDGA number (PDGA 1.02.5-6)", () => {
@@ -82,21 +107,23 @@ describe("pdgaResultsUpload", () => {
     const upload = pdgaResultsUpload(
       [{ eventId: 1, name: "R1", date: "2099-01-01" }],
       [
-        { event_id: 1, member_id: "a", name: "Ann Lee", total: 60 },
-        { event_id: 1, member_id: "b", name: "Bo", total: 58 },
-        { event_id: 1, member_id: "c", name: "Cal Ray Jr", total: 60 },
-        { event_id: 1, member_id: "d", name: "Dee Dee", total: null },
-        { event_id: 2, member_id: "a", name: "Ann Lee", total: 40 },
+        { event_id: 1, member_id: "a", name: "Ann Lee", place: 1, total: 60 },
+        { event_id: 1, member_id: "b", name: "Bo", place: 1, total: 58 },
+        { event_id: 1, member_id: "c", name: "Cal Ray Jr", place: 1, total: 60 },
+        { event_id: 1, member_id: "d", name: "Dee Dee", place: null, total: null },
+        { event_id: 1, member_id: "f", name: "Dan Dnf", place: null, total: 28 },
+        { event_id: 2, member_id: "a", name: "Ann Lee", place: 1, total: 40 },
       ],
       [{ event_id: 1, member_id: "a", name: "Ann Lee", division: "ma1", pdga_number: "1" }, { event_id: 1, member_id: "c", name: "Cal Ray Jr", division: "MA1", pdga_number: "3" }],
     );
     expect(upload.rows).toEqual([
       ["", "", "1", "Bo", "", "", "58"],
+      ["", "", "", "Dan", "Dnf", "", ""],
       ["", "", "", "Dee", "Dee", "", ""],
       ["MA1", "", "1", "Ann", "Lee", "1", "60"],
       ["MA1", "", "1", "Cal", "Ray Jr", "3", "60"],
     ]);
-    expect(upload).toMatchObject({ players: 4, missingScores: 1, noDivision: 2, noPdga: 2 });
+    expect(upload).toMatchObject({ players: 5, missingScores: 2, noDivision: 3, noPdga: 3 });
     // PDGA's own first/last split when it knows the number ("Steady Ed" + "Headrick", not "Steady" + "Ed Headrick").
     const named = pdgaResultsUpload([{ eventId: 1, name: "R1", date: null }], [{ event_id: 1, member_id: "e", name: "Steady Ed Headrick", total: 61 }],
       [{ event_id: 1, member_id: "e", name: "Steady Ed Headrick", division: "MPO", pdga_number: "1" }], new Map([["1", { first: "Steady Ed", last: "Headrick" }]]));

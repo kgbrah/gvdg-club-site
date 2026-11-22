@@ -27,11 +27,13 @@ export async function listMyRegistrations(db: D1Like, memberId: string) {
                 e.starts_at AS event_starts_at,
                 e.registration_deadline AS event_registration_deadline,
                 e.checkin_deadline AS event_checkin_deadline,
-                c.name AS course_name, l.name AS layout_name
+                c.name AS course_name, l.name AS layout_name,
+                ec.pdga_event_id AS pdga_event_id
          FROM registrations r
          LEFT JOIN events e ON e.id = r.event_id
          LEFT JOIN courses c ON c.id = e.course_id
          LEFT JOIN course_layouts l ON l.id = e.layout_id
+         LEFT JOIN event_config ec ON ec.event_id = r.event_id
          WHERE r.member_id = ?
          ORDER BY COALESCE(e.date, '') DESC, r.event_id DESC`,
       )
@@ -59,12 +61,13 @@ export async function registerForEvent(db: D1Like, r: RegistrationInput) {
  *  round-trip (plus the roster reads), not N inserts + N paid updates. ON CONFLICT is a no-op so a
  *  concurrent self-register is not overwritten. */
 export function registerMemberStmt(db: D1Like, r: RegistrationInput): D1StatementLike {
+  const paid = r.paid_entry ? 1 : 0;
   return db
     .prepare(
-      `INSERT INTO registrations (event_id, member_id, name, division, team, addons, email, paid_entry) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO registrations (event_id, member_id, name, division, team, addons, email, paid_entry, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(event_id, member_id) DO NOTHING`,
     )
-    .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null, r.email ?? null, r.paid_entry ? 1 : 0);
+    .bind(r.event_id, r.member_id, r.name, r.division ?? null, r.team ?? null, r.addons ?? null, r.email ?? null, paid, paid ? new Date().toISOString() : null);
 }
 
 export async function withdrawRegistration(db: D1Like, eventId: number, memberId: string) {
@@ -112,12 +115,14 @@ export async function adminUpdateRegistration(
 ) {
   return db
     .prepare(
-      // Marking paid records when (a tournament's field is in order of payment); unmarking clears it.
+      // Marking paid records when and clears waitlist/claim flags; unmarking clears paid_at.
       `UPDATE registrations SET division=COALESCE(?,division), team=COALESCE(?,team), starting_hole=COALESCE(?,starting_hole),
         checked_in=COALESCE(?,checked_in), paid_at = CASE WHEN ? IS NULL THEN paid_at WHEN ? = 1 THEN COALESCE(paid_at, ?) ELSE NULL END,
+        waitlisted = CASE WHEN ? = 1 THEN 0 ELSE waitlisted END,
+        spot_claimed_at = CASE WHEN ? = 1 THEN NULL ELSE spot_claimed_at END,
         paid_entry=COALESCE(?,paid_entry) WHERE id=? RETURNING *`,
     )
     .bind(p.division ?? null, p.team ?? null, p.starting_hole ?? null, p.checked_in ?? null, p.paid_entry ?? null, p.paid_entry ?? null,
-      new Date().toISOString(), p.paid_entry ?? null, id)
+      new Date().toISOString(), p.paid_entry ?? null, p.paid_entry ?? null, p.paid_entry ?? null, id)
     .first();
 }
