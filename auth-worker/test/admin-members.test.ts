@@ -204,4 +204,108 @@ describe("admin member removal and renewal", () => {
     expect(me.membership.throughYear).toBe(through + 1);
     expect(me.membership.lapsed).toBe(false);
   });
+
+  it("lets an admin re-add a previously removed member immediately, even when Workers KV serves stale 60s cached reads", async () => {
+    // Real Workers KV caches get() for 60s and propagates delete()/put() eventually.
+    // Simulate a stale KV whose get() keeps returning old values after delete() and whose list() lags behind.
+    const backing = new Map<string, string>();
+    const edgeCache = new Map<string, string>();
+    const staleKv = {
+      get: async (k: string) => {
+        if (edgeCache.has(k)) return edgeCache.get(k)!;
+        const v = backing.get(k) ?? null;
+        if (v !== null) edgeCache.set(k, v);
+        return v;
+      },
+      put: async (k: string, v: string) => {
+        backing.set(k, v);
+        // Simulate stale edge POP cache that hasn't refreshed yet if already cached
+      },
+      delete: async (k: string) => {
+        backing.delete(k);
+        // Deliberately leave edgeCache[k] intact to mimic KV's 60s edge cache after delete!
+      },
+      list: async ({ prefix = "" }: { prefix?: string } = {}) => {
+        const names = new Set<string>([...backing.keys(), ...edgeCache.keys()]);
+        return {
+          keys: [...names].filter((k) => k.startsWith(prefix)).map((name) => ({ name })),
+          list_complete: true,
+        };
+      },
+    };
+    // Minimal in-memory D1 supporting kv_store (as in migration 0010).
+    const kvStore = new Map<string, { ns: string; key: string; value: string; expires_at: number | null }>();
+    const d1 = {
+      prepare: (sql: string) => {
+        let args: unknown[] = [];
+        const stmt = {
+          bind: (...vals: unknown[]) => { args = vals; return stmt; },
+          all: async () => {
+            if (/SELECT key, value FROM kv_store/i.test(sql)) {
+              const [ns, now] = args as [string, number];
+              const results = [...kvStore.values()]
+                .filter((r) => r.ns === ns && (r.expires_at === null || r.expires_at > now))
+                .map((r) => ({ key: r.key, value: r.value }));
+              return { results, success: true };
+            }
+            return { results: [], success: true };
+          },
+          first: async () => null,
+          run: async () => {
+            if (/INSERT INTO kv_store/i.test(sql)) {
+              const [ns, key, value, expires_at] = args as [string, string, string, number | null];
+              kvStore.set(`${ns}:${key}`, { ns, key, value, expires_at });
+            }
+            return { results: [], success: true, meta: { changes: 1 } };
+          },
+        };
+        return stmt;
+      },
+    };
+    const kvEnv = { ...env, ROSTER: staleKv, DB: d1 } as unknown as Env;
+    await putMember(staleKv as never, { memberId: "m_1", name: "Admin Person", pdgaNo: "1", pinHash: await hashPin("4821"), mustChangePin: false, isAdmin: true });
+    await putMember(staleKv as never, { memberId: "m_21439", name: "Max Crotts", pdgaNo: "21439", pinHash: await hashPin("4821"), mustChangePin: false, isAdmin: true });
+    await staleKv.put("wa:creds:m_21439", JSON.stringify([{ id: "old-passkey", publicKey: "pk", counter: 1 }]));
+
+    const adminToken = ((await (await worker.fetch(req("/login", "POST", undefined, { identifier: "1", pin: "4821" }), kvEnv)).json()) as { token: string }).token;
+    const maxOldToken = ((await (await worker.fetch(req("/login", "POST", undefined, { identifier: "21439", pin: "4821" }), kvEnv)).json()) as { token: string }).token;
+
+    // Warm the edge cache by listing members (exactly what Admin > Members does).
+    const before = await json(await worker.fetch(req("/admin/members", "GET", adminToken), kvEnv));
+    expect(before.members.some((m: { memberId: string }) => m.memberId === "m_21439")).toBe(true);
+
+    // Remove Max Crotts.
+    const rm = await worker.fetch(req("/admin/members/remove", "POST", adminToken, { memberId: "m_21439" }), kvEnv);
+    expect(rm.status).toBe(200);
+
+    // Immediately absent from member list, old session immediately rejected, and old passkeys cleared.
+    const afterRm = await json(await worker.fetch(req("/admin/members", "GET", adminToken), kvEnv));
+    expect(afterRm.members.some((m: { memberId: string }) => m.memberId === "m_21439")).toBe(false);
+    expect((await worker.fetch(req("/me", "GET", maxOldToken), kvEnv)).status).toBe(401);
+    expect(backing.has("wa:creds:m_21439")).toBe(false);
+
+    // Immediately re-add Max Crotts with the same PDGA# — must succeed (never 409 member_exists).
+    const readd = await worker.fetch(req("/admin/members", "POST", adminToken, { name: "Max Crotts", pdgaNo: "21439", isAdmin: true }), kvEnv);
+    expect(readd.status).toBe(201);
+    const created = await json(readd);
+    expect(created.member).toMatchObject({ memberId: "m_21439", name: "Max Crotts", pdgaNo: "21439", isAdmin: true, mustChangePin: true });
+
+    // Re-added member immediately shows up in the list and can log in with the new temporary PIN.
+    const afterAdd = await json(await worker.fetch(req("/admin/members", "GET", adminToken), kvEnv));
+    expect(afterAdd.members.some((m: { memberId: string }) => m.memberId === "m_21439")).toBe(true);
+    const reLogin = await worker.fetch(req("/login", "POST", undefined, { identifier: "21439", pin: created.tempPin }), kvEnv);
+    expect(reLogin.status).toBe(200);
+    expect((await json(reLogin)).mustChangePin).toBe(true);
+  });
+
+  it("ignores dangling login indexes pointing to a removed member when re-adding", async () => {
+    const t = await login("1", "4821");
+    // Stale index pointing to an old memberId that no longer exists in KV.
+    await roster.put("idx:pdga:21439", "m_u_oldmax");
+    const res = await worker.fetch(req("/admin/members", "POST", t, { name: "Max Crotts", pdgaNo: "21439", isAdmin: true }), env);
+    expect(res.status).toBe(201);
+    const created = await json(res);
+    expect(created.member.memberId).toBe("m_21439");
+    expect(await roster.get("idx:pdga:21439")).toBe("m_21439");
+  });
 });

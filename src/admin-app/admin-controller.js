@@ -821,7 +821,12 @@ export function startAdminController() {
             else {
                 let err = {};
                 try { err = await r.json(); } catch (e) {}
-                adminMsg('Create failed: ' + (err.error || r.status), false);
+                const msg = err.error === 'member_exists'
+                    ? 'That member is already in the club — use Reissue PIN if they need a new PIN.'
+                    : err.error === 'member_conflict'
+                        ? 'That PDGA # or UDisc is already on another member’s account.'
+                        : 'Create failed: ' + (err.error || r.status);
+                adminMsg(msg, false);
                 window.dispatchEvent(new CustomEvent('gvdg:admin-member-create-result', { detail: { ok: false, requestId } }));
             }
         }

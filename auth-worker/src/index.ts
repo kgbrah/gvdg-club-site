@@ -26,7 +26,7 @@ import { handleClubFeed } from "./feeds.js";
 import { handleMembershipApply } from "./membership-apply.js";
 import { handleMembershipPublic } from "./membership-dues.js";
 import { clubApi } from "./club-api.js";
-import { D1KV, purgeExpired } from "./d1kv.js";
+import { ConsistentKV, D1KV, purgeExpired, ROSTER_RECENT_NS } from "./d1kv.js";
 
 export type { Env } from "./env.js";
 export { LiveEventDO } from "./live.js";
@@ -78,9 +78,12 @@ export function limitsInD1(env: RawEnv): boolean {
 }
 
 function withKvFallback(env: RawEnv): Env {
+  const roster = env.ROSTER
+    ? (env.DB && !(env.ROSTER instanceof D1KV) ? new ConsistentKV(env.ROSTER, env.DB) : env.ROSTER)
+    : new D1KV(env.DB, "roster");
   return {
     ...env,
-    ROSTER: env.ROSTER ?? new D1KV(env.DB, "roster"),
+    ROSTER: roster,
     RATELIMIT: limitsInD1(env) || !env.RATELIMIT ? new D1KV(env.DB, "ratelimit") : env.RATELIMIT,
   };
 }
@@ -216,10 +219,11 @@ export default {
       (async () => {
         try {
           if (isUdiscLayoutCron(controller.cron)) {
-            // Sign-in counters in D1 expire on read; clear the ones nobody read again (one IP's minute window etc.).
+            // Sign-in counters and recent roster-consistency rows in D1 expire on read; clear expired rows nobody read again.
             try {
               const purged = await purgeExpired(env.DB, "ratelimit");
-              if (purged) console.log(JSON.stringify({ message: "ratelimit_purged", rows: purged }));
+              const rosterPurged = await purgeExpired(env.DB, ROSTER_RECENT_NS);
+              if (purged || rosterPurged) console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged }));
             } catch (error) {
               console.error(JSON.stringify({ message: "ratelimit_purge_failed", error: error instanceof Error ? error.message : String(error) }));
             }
