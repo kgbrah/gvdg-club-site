@@ -3,7 +3,7 @@ import { aggregatePlayerRating, type RatingMethod, type RatingStream } from "./r
 import { calibrateRatingField } from "./ratings-recompute-core.js";
 import { readArchivedRatingHoles, ratingLayoutRevision, ratingNumber, ratingTimestamp } from "./rating-layout.js";
 import { CURRENT_RESULT_FIELDS, MAX_RATING_ROUND_RESULTS, RATING_SOURCE_ROWS, STORED_EVIDENCE_FIELDS, competitionSourceRowsSql,
-  matchesStoredRatingEvidence, ratingFieldFingerprint, ratingSourceGroups } from "./rating-source.js";
+  matchesStoredRatingEvidence, ratingFieldFingerprint, ratingFieldScoresFingerprint, ratingSourceGroups } from "./rating-source.js";
 
 export type LayoutRatingBaseline = {
   ssa: number;
@@ -72,9 +72,51 @@ async function baselineFieldEvidence(revision: string, row: VersionedBaseline, s
   return { row, evidence, earliest };
 }
 
-/** The calibration, if that field with those prior anchors still solves to exactly what was stored. */
-async function baselineFromField({ row, evidence }: FieldEvidence, anchors: Map<string, number>): Promise<LayoutRatingBaseline | null> {
-  if (await ratingFieldFingerprint(evidence, anchors) !== row.field_fingerprint) return null;
+type LegacyStoredRatingRow = {
+  event_id: number;
+  source_result_id: number;
+  source_fingerprint: string | null;
+  layout_revision: string | null;
+  ssa: number | null;
+  ppt: number | null;
+  propagator_count: number | null;
+};
+
+function matchesLegacyStoredRounds(revision: string, { row, evidence }: FieldEvidence, storedRows: readonly LegacyStoredRatingRow[]): boolean {
+  const byId = new Map(storedRows.map((entry) => [Number(entry.source_result_id), entry]));
+  if (byId.size !== evidence.length) return false;
+  return evidence.every((entry) => {
+    const saved = byId.get(entry.sourceResultId);
+    return saved != null
+      && saved.source_fingerprint === entry.sourceFingerprint
+      && saved.layout_revision === revision
+      && saved.ssa === row.ssa
+      && saved.ppt === row.ppt
+      && Number(saved.propagator_count) === Number(row.propagator_count);
+  });
+}
+
+async function verifyLegacyRoundRatings(db: D1Like, revision: string, field: FieldEvidence): Promise<boolean> {
+  const res = await db.prepare(
+    `SELECT event_id, source_result_id, source_fingerprint, layout_revision, ssa, ppt, propagator_count
+       FROM round_ratings WHERE stream = 'competition' AND event_id = ?`,
+  ).bind(field.row.event_id).all<LegacyStoredRatingRow>();
+  if (!res.success) return false;
+  return matchesLegacyStoredRounds(revision, field, res.results ?? []);
+}
+
+/**
+ * The calibration, if that event's field still matches what was stored.
+ * Fields stored with `field:` are verified directly against current competition result scores so
+ * casual `layout` ratings survive the 7-day purge of PDGA rating anchors.
+ */
+async function baselineFromField(field: FieldEvidence, anchors: ReadonlyMap<string, number> | null): Promise<LayoutRatingBaseline | null> {
+  const { row, evidence } = field;
+  if (row.field_fingerprint?.startsWith("field:")) {
+    if (await ratingFieldScoresFingerprint(evidence) !== row.field_fingerprint) return null;
+    return { ssa: row.ssa, ppt: row.ppt, propagatorCount: row.propagator_count, eventId: row.event_id, availableAt: row.available_at };
+  }
+  if (!anchors || await ratingFieldFingerprint(evidence, anchors) !== row.field_fingerprint) return null;
   const { solved } = calibrateRatingField(evidence, anchors);
   if (!solved || solved.ssa !== row.ssa || solved.ppt !== row.ppt || solved.propagatorCount !== row.propagator_count) return null;
   return { ssa: row.ssa, ppt: row.ppt, propagatorCount: row.propagator_count, eventId: row.event_id, availableAt: row.available_at };
@@ -91,16 +133,21 @@ async function verifyBaselineField(db: D1Like, revision: string, row: VersionedB
   if (guards) guards.push(...ratingReadGuards(db, sourceSql, sourceArgs, source.results));
   const field = await baselineFieldEvidence(revision, row, source.results as Record<string, unknown>[]);
   if (!field) return null;
-  return baselineFromField(field, await priorRatingAnchors(db, field.evidence.map((entry) => entry.memberId), field.earliest, guards));
+  if (row.field_fingerprint?.startsWith("field:")) return baselineFromField(field, null);
+  const anchors = await priorRatingAnchors(db, field.evidence.map((entry) => entry.memberId), field.earliest, guards);
+  const exact = await baselineFromField(field, anchors);
+  if (exact) return exact;
+  return (await verifyLegacyRoundRatings(db, revision, field))
+    ? { ssa: row.ssa, ppt: row.ppt, propagatorCount: row.propagator_count, eventId: row.event_id, availableAt: row.available_at }
+    : null;
 }
 
 export type SourceBaselineKey = { revision: string; eventId: number };
 
 /**
- * The stored club calibrations casual estimates were made from, each only if its event's field still solves to it
+ * The stored club calibrations casual estimates were made from, each only if its event's field still matches it
  * (as verifyBaselineField checks one). Showing a member's ratings checks every one: the calibrations, their fields and
- * the fields' prior anchors are each read in one pass. One at a time this was about four queries per calibration
- * event, past D1's per-request query cap for a busy league player.
+ * any legacy prior anchors are each read in one pass.
  */
 export async function getSourceRatingBaselines(db: D1Like, keys: readonly SourceBaselineKey[]): Promise<(LayoutRatingBaseline | null)[]> {
   const events = [...new Set(keys.map((key) => key.eventId))];
@@ -130,8 +177,37 @@ export async function getSourceRatingBaselines(db: D1Like, keys: readonly Source
     }
   }
   const fields = await Promise.all(rows.map((row, index) => row ? baselineFieldEvidence(keys[index]!.revision, row, sources.get(row.event_id) ?? []) : null));
-  const anchors = await priorRatingAnchorsMany(db, fields.map((field) => field ? { ids: field.evidence.map((entry) => entry.memberId), before: field.earliest } : null));
-  return Promise.all(fields.map((field, index) => field ? baselineFromField(field, anchors[index]!) : null));
+  const needAnchors = fields.map((field) => field && !field.row.field_fingerprint?.startsWith("field:")
+    ? { ids: field.evidence.map((entry) => entry.memberId), before: field.earliest }
+    : null);
+  const anchors = await priorRatingAnchorsMany(db, needAnchors);
+  const initial = await Promise.all(fields.map((field, index) => field ? baselineFromField(field, anchors[index] ?? null) : null));
+  const legacyEventIds = [...new Set(fields.flatMap((field, index) => (field && !initial[index] && !field.row.field_fingerprint?.startsWith("field:")) ? [field.row.event_id] : []))];
+  if (!legacyEventIds.length) return initial;
+  const legacyStored = new Map<number, LegacyStoredRatingRow[]>();
+  for (let offset = 0; offset < legacyEventIds.length; offset += 90) {
+    const group = legacyEventIds.slice(offset, offset + 90);
+    const res = await db.prepare(
+      `SELECT event_id, source_result_id, source_fingerprint, layout_revision, ssa, ppt, propagator_count
+         FROM round_ratings WHERE stream = 'competition' AND event_id IN (${group.map(() => "?").join(", ")})`,
+    ).bind(...group).all<LegacyStoredRatingRow>();
+    if (!res.success) continue;
+    for (const row of res.results ?? []) {
+      const id = Number(row.event_id);
+      const list = legacyStored.get(id) ?? [];
+      list.push(row);
+      legacyStored.set(id, list);
+    }
+  }
+  return initial.map((baseline, index) => {
+    if (baseline) return baseline;
+    const field = fields[index];
+    if (!field || field.row.field_fingerprint?.startsWith("field:")) return null;
+    const storedForEvent = legacyStored.get(field.row.event_id) ?? [];
+    return matchesLegacyStoredRounds(keys[index]!.revision, field, storedForEvent)
+      ? { ssa: field.row.ssa, ppt: field.row.ppt, propagatorCount: field.row.propagator_count, eventId: field.row.event_id, availableAt: field.row.available_at }
+      : null;
+  });
 }
 
 export async function getRevisionRatingBaseline(db: D1Like, revision: string | null, before: string, guards?: D1StatementLike[]): Promise<LayoutRatingBaseline | null> {

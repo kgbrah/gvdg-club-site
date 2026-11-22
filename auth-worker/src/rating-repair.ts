@@ -3,7 +3,7 @@ import { roundRatingForScoreWithWeather, type RatingMethod, type RatingStream } 
 import { calibrateRatingField } from "./ratings-recompute-core.js";
 import { getRevisionRatingBaseline, priorRatingAnchors, ratingReadGuards, writeRatingBatch, type RatingBaselineInput, type RoundRatingInput } from "./rating-store.js";
 
-import { MAX_RATING_ROUND_RESULTS, RATING_SOURCE_ROWS, ratingFieldFingerprint, ratingSourceGroups, type EligibleRatingSource } from "./rating-source.js";
+import { MAX_RATING_ROUND_RESULTS, RATING_SOURCE_ROWS, ratingFieldScoresFingerprint, ratingSourceGroups, type EligibleRatingSource } from "./rating-source.js";
 
 export const RATING_EVIDENCE = {
   anchors: "not-enough-prior-anchors",
@@ -103,7 +103,7 @@ export async function repairRatingSource(db: D1Like, stream: RatingStream, sourc
       const last = group.reduce((latest, row) => row.availableAt > latest.availableAt ? row : latest, sample);
       baselines.push({ ...solved, eventId: sourceId, layoutRevision: sample.layoutRevision,
         layoutId: sample.actualLayoutId, sourceResultId: last.sourceResultId, sourceScorecard: last.sourceScorecard,
-        playedAt: earliest, availableAt: last.availableAt, fieldFingerprint: await ratingFieldFingerprint(group, anchors) });
+        playedAt: earliest, availableAt: last.availableAt, fieldFingerprint: await ratingFieldScoresFingerprint(group) });
     }
   }
   await writeRatingBatch(db, ratings, baselines, guards);

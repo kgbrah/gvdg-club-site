@@ -37,9 +37,9 @@ function csvCell(value) {
 
 /** The pre-registration list for the PDGA event page: paid players in field order, then the waitlist. */
 export function preRegistrationCsv(field, waitlist) {
-  const rows = [["List", "Order", "Name", "PDGA #", "Division", "Rating", "Membership", "Paid at", "Method"]];
-  field.forEach((row, index) => rows.push(["Registered", index + 1, row.name, row.pdga_number, row.division, row.pdga_rating, row.pdga_status, row.paid_at, row.payment_method]));
-  waitlist.forEach((row, index) => rows.push(["Waitlist", index + 1, row.name, row.pdga_number, row.division, row.pdga_rating, row.pdga_status, "", ""]));
+  const rows = [["List", "Order", "Name", "PDGA #", "Division", "Paid at", "Method"]];
+  field.forEach((row, index) => rows.push(["Registered", index + 1, row.name, row.pdga_number, row.division, row.paid_at, row.payment_method]));
+  waitlist.forEach((row, index) => rows.push(["Waitlist", index + 1, row.name, row.pdga_number, row.division, "", ""]));
   return rows.map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
 }
 
@@ -99,6 +99,7 @@ function Settings({ eventId, settings, onSaved }) {
       h(PdgaLink, { href: pdgaEventHref(pdgaEvent.id), key: "link" }, pdgaEvent.name),
       ` · ${pdgaEvent.tier || "?"}-tier · ${pdgaEvent.startDate || ""}${pdgaEvent.director ? ` · TD ${pdgaEvent.director}` : ""}`,
     ]) : null,
+    pdgaEvent && !settings?.pdgaEventId ? h(PdgaCredit, { key: "preview-credit" }) : null,
     h("label", { key: "cap" }, ["Player cap (blank = no cap)", h("input", { key: "input", inputMode: "numeric", value: form.playerCap,
       onChange: (e) => setForm({ ...form, playerCap: e.target.value.replace(/\D/g, "") }) })]),
     h("label", { key: "members" }, [h("input", { key: "box", type: "checkbox", checked: form.membersOnly, onChange: set("membersOnly") }), " Current PDGA members only"]),
@@ -130,7 +131,8 @@ function Row({ eventId, row, kind, onChanged }) {
     ? [h(PdgaLink, { href: pdgaPlayerHref(row.pdga_number), key: "pdga" }, `#${row.pdga_number}`), row.pdga_rating ? ` · ${row.pdga_rating}` : "", row.pdga_status && row.pdga_status !== "current" ? ` · ${row.pdga_status}` : ""]
     : " · no PDGA #";
   return h("li", { "data-tournament-row": row.id }, [
-    h("b", { key: "name" }, row.name), row.division ? ` · ${row.division}` : "", " · ", ...[].concat(pdga),
+    row.pdga_number ? h(PdgaLink, { href: pdgaPlayerHref(row.pdga_number), key: "name" }, row.name) : h("b", { key: "name" }, row.name),
+    row.division ? ` · ${row.division}` : "", " · ", ...[].concat(pdga),
     kind === "paid" ? ` · ${row.payment_method || "marked paid"} ${dollars(row.amount_paid_cents)}${row.donation_cents ? ` (gift ${dollars(row.donation_cents)})` : ""}${row.paid_at ? ` · ${new Date(row.paid_at).toLocaleString()}` : ""}` : "",
     kind === "pending" && row.payment_method === "zelle" ? ` · Zelle ${row.zelle_code || ""}${row.zelle_sent_at ? ` · says sent ${new Date(row.zelle_sent_at).toLocaleString()}` : ""}` : "",
     kind === "pending" && row.offered_at ? " · spot offered" : "",
@@ -252,7 +254,7 @@ export function AdminTournamentPanel({ eventId }) {
     linked && waitlist.length ? h("h4", { className: "al-h", key: "wait-title" }, `Waitlist (${waitlist.length}), in order`) : null,
     linked && waitlist.length ? h("ol", { key: "wait" }, waitlist.map((row) => h(Row, { eventId, row, kind: "waitlist", onChanged: load, key: row.id }))) : null,
     linked ? h("p", { className: "al-note", key: "csv" }, [
-      "PDGA asks for the pre-registration list on the PDGA event page, updated at least weekly (only paid players): ",
+      "PDGA asks for the pre-registration list on the PDGA event page, updated at least weekly (paid players in field order, then the waitlist): ",
       h("a", { href: "data:text/csv;charset=utf-8," + encodeURIComponent(csv), download: `pdga-${state.settings.pdgaEventId}-registrations.csv`, key: "a" }, "Download the list (CSV)"),
     ]) : null,
     linked ? h(PdgaPaste, { eventId, kind: "players", key: "players" }) : null,

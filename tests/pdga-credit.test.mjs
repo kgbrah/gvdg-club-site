@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { preRegistrationCsv } from "../src/admin-app/tournament-panel.js";
 import { PDGA_HOME, pdgaEventHref, pdgaPlayerHref } from "../src/shared/pdga-credit.js";
 
 // PDGA Developer Program attribution: every screen showing PDGA data says "Player, event, and course data provided
@@ -25,6 +26,13 @@ test("every screen that shows PDGA data carries the PDGA credit", () => {
     "src/members-app/pdga-events-panel.js": "Nearby PDGA events",
     "src/home-app/feed-panels.js": "Public home: Area Tournaments (PDGA's API)",
     "src/score-app/scorecard-view.js": "Scorer: playing rating against the PDGA rating",
+    "src/public-app/tournament-registration.js": "Public PDGA tournament registration",
+    "src/admin-app/tournament-panel.js": "Admin PDGA tournament settings & reports",
+    "src/admin-app/event-form.js": "Admin event PDGA lookup",
+    "src/admin-app/scoring-panel.js": "Admin PDGA results export",
+    "src/shared/pdga-membership.js": "PDGA membership join/renew card",
+    "src/public-app/events-detail-app.js": "Public PDGA event detail page",
+    "src/public-app/events-hub-app.js": "Public events schedule & PDGA sections",
   };
   for (const [file, what] of Object.entries(screens)) {
     assert.match(readFileSync(file, "utf8"), /h\(PdgaCredit,/, `${file} (${what}) shows the PDGA credit`);
@@ -98,4 +106,20 @@ test("nothing in the site asks for the removed PDGA data", () => {
   }
   assert.doesNotMatch(readFileSync("src/members-app/pdga-dashboard.js", "utf8"), /Live rating estimate|Best round rating|Tournaments \(/);
   assert.doesNotMatch(readFileSync("src/shared/play-stats.js", "utf8"), /pdgaRowsFromStats/);
+});
+
+test("PDGA compliance cleanup: no scraped claims on scoring-app.html, no DGS scraper in admin, no Rating/Membership in CSV", () => {
+  const scoring = readFileSync("scoring-app.html", "utf8");
+  assert.doesNotMatch(scoring, /checks PDGA's registration lists|scoring mix for available PDGA rounds/);
+  const pdgaRegisterSection = scoring.slice(scoring.indexOf('id="pdga-register"'), scoring.indexOf('id="pdga-nearby"'));
+  assert.doesNotMatch(pdgaRegisterSection, /store credit/);
+  const csv = preRegistrationCsv(
+    [{ name: "Ada Lovelace", pdga_number: "80024", division: "MA3", pdga_rating: 935, pdga_status: "current", paid_at: "2026-11-11T10:00:00Z", payment_method: "paypal" }],
+    [{ name: "Bo Wait", pdga_number: "90001", division: "MPO", pdga_rating: 1000, pdga_status: "current" }],
+  );
+  assert.match(csv, /^List,Order,Name,PDGA #,Division,Paid at,Method\nRegistered,1,Ada Lovelace,80024,MA3,/);
+  assert.doesNotMatch(csv, /Rating|Membership|935|1000|current/);
+  for (const file of ["src/admin-app/import-controls.js", "src/admin-app/import-controller.js"]) {
+    assert.doesNotMatch(readFileSync(file, "utf8"), /GVDG-DGS-Scraper|\/admin\/import\/dgs|Import from DiscGolfScene/);
+  }
 });

@@ -2,7 +2,7 @@
 // link, so the code sits beside the button with a copy control ("paste it at checkout"). The code comes from the
 // server only for signed-in current club members (PDGA asks clubs to keep it within the club).
 import React from "react";
-import { PdgaCredit } from "./pdga-credit.js";
+import { PdgaCredit, PdgaLink, pdgaPlayerHref } from "./pdga-credit.js";
 import { SIGNUP_LINK } from "./outside-link.js";
 
 const h = React.createElement;
@@ -95,9 +95,14 @@ export function PdgaMembershipCard({ data, compact = false, credit = true, onChe
   const settled = Boolean(player) && status === "current" && !renew;
   const href = data.lookup === "none" || (!player && data.lookup === "ok") ? data.joinUrl : data.renewUrl;
   const label = data.lookup === "none" || (!player && data.lookup === "ok") ? "Join the PDGA" : "Renew with PDGA";
+  const playerHref = player ? (player.url || pdgaPlayerHref(data.pdgaNumber)) : "";
   return h("div", { className: `pdga-membership${compact ? " compact" : ""}`, "data-pdga-membership": status || data.lookup }, [
     h("h3", { key: "title" }, "PDGA membership"),
-    h("p", { className: "player-card-meta", key: "line" }, line),
+    h("p", { className: "player-card-meta", key: "line" }, [
+      player && playerHref
+        ? [h(PdgaLink, { href: playerHref, key: "player" }, player.name || `PDGA #${data.pdgaNumber}`), " · ", line]
+        : line,
+    ]),
     settled ? null : h("div", { className: "member-action-grid", key: "actions" }, [
       h("a", { className: `player-btn${renew || data.lookup === "none" ? " primary" : ""}`, href, ...SIGNUP_LINK, key: "go", onClick: () => markPdgaRenewStarted() }, label),
       renew && onCheckAgain ? h(CheckAgain, { onCheckAgain, key: "again" }) : null,

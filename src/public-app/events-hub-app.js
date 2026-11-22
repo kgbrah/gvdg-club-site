@@ -150,6 +150,7 @@ function EventSection({ events, hubRegion, live = false, title }) {
     ]),
     h("div", { className: "events-grid", key: "grid" }, events.map((event, index) =>
       h(EventCard, { event, key: eventKey(event, index) }))),
+    events.some((event) => event && event.pdga) ? h(PdgaCredit, { key: "pdga-credit" }) : null,
   ]);
 }
 

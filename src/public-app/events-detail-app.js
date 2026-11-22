@@ -422,7 +422,10 @@ export function EventsEventDetailApp() {
         event.status === "live"
           ? h("span", { className: "detail-live-pill", key: "status" }, [h("span", { className: "live-dot", key: "dot" }), "Live"])
           : event.status ? h(Badge, { className: `status-badge ${statusClass}`, key: "status", text: statusLabel(event.status) }) : null,
-        h("h1", { className: "detail-title", key: "title" }, displayEventTitle(event.name || "Event", event.league_name)),
+        h("h1", { className: "detail-title", key: "title" },
+          event.pdga_event_id
+            ? h(PdgaLink, { href: pdgaEventHref(event.pdga_event_id) }, displayEventTitle(event.name || "Event", event.league_name))
+            : displayEventTitle(event.name || "Event", event.league_name)),
       ]),
       h(DetailWhen, { course, event, key: "when" }),
       event.status === "live" ? h(LivePanel, { data, key: "live" }) : null,

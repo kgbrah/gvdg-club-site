@@ -1,5 +1,6 @@
 import React from "react";
 import { KarmaChip } from "../shared/karma.js";
+import { PdgaLink, pdgaPlayerHref } from "../shared/pdga-credit.js";
 import { CalendarDays, Search, Star, Trophy, Users } from "lucide-react";
 
 import { memberFullName, memberInitials } from "./club-data.js";
@@ -69,10 +70,8 @@ function MemberCard({ member }) {
     h("div", { className: "member-avatar", key: "avatar" }, memberInitials(member)),
     h("div", { className: "member-name", key: "name" }, [fullName, h(KarmaChip, { key: "karma", pdga: member.pdga })]),
     h("div", { className: "member-since", key: "since" }, `Member since ${member.yearJoined}`),
-    member.pdga ? h("div", { className: "member-pdga", key: "pdga" }, h("a", {
-      href: `https://www.pdga.com/player/${encodeURIComponent(member.pdga)}`,
-      target: "_blank",
-      rel: "noopener",
+    member.pdga ? h("div", { className: "member-pdga", key: "pdga" }, h(PdgaLink, {
+      href: pdgaPlayerHref(member.pdga),
     }, `PDGA #${member.pdga}`)) : null,
   ]);
 }

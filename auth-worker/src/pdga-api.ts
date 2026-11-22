@@ -111,14 +111,46 @@ function base(env: PdgaApiEnv): string {
   return (env.PDGA_API_BASE || DEFAULT_BASE).replace(/\/+$/, "");
 }
 
+const PDGA_OUTBOUND_LIMIT = 60;
+const PDGA_OUTBOUND_WINDOW_MS = 10_000;
+const BUDGET_PREFIX = "pdga-api:win:";
+const COOLDOWN_KEY = "pdga-api:cooldown";
+
+function retryAfterSeconds(header: string | null, now: number): number {
+  if (!header) return 10;
+  const num = Number(header.trim());
+  if (Number.isFinite(num) && num > 0) return Math.min(120, Math.max(1, Math.ceil(num)));
+  const dateMs = Date.parse(header);
+  if (Number.isFinite(dateMs) && dateMs > now) return Math.min(120, Math.max(1, Math.ceil((dateMs - now) / 1000)));
+  return 10;
+}
+
+async function acquirePdgaBudget(env: PdgaApiEnv, now = Date.now()): Promise<void> {
+  const cooldownUntil = Number(await env.RATELIMIT.get(COOLDOWN_KEY).catch(() => null));
+  if (Number.isFinite(cooldownUntil) && cooldownUntil > now) throw new PdgaApiError("rate_limited");
+  const key = BUDGET_PREFIX + Math.floor(now / PDGA_OUTBOUND_WINDOW_MS);
+  const used = Number(await env.RATELIMIT.get(key).catch(() => null)) || 0;
+  if (used >= PDGA_OUTBOUND_LIMIT) throw new PdgaApiError("rate_limited");
+  await env.RATELIMIT.put(key, String(used + 1), { expirationTtl: 60 }).catch(() => {});
+}
+
+async function notePdgaRateLimited(env: PdgaApiEnv, res: Response, now = Date.now()): Promise<void> {
+  const waitSec = retryAfterSeconds(res.headers.get("Retry-After"), now);
+  await env.RATELIMIT.put(COOLDOWN_KEY, String(now + waitSec * 1000), { expirationTtl: Math.max(60, waitSec + 10) }).catch(() => {});
+}
+
 async function login(env: PdgaApiEnv): Promise<Session> {
+  await acquirePdgaBudget(env);
   const res = await fetch(base(env) + "/services/json/user/login", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ username: env.PDGA_API_USERNAME, password: env.PDGA_API_PASSWORD }),
     signal: AbortSignal.timeout(10_000),
   });
-  if (res.status === 429) throw new PdgaApiError("rate_limited");
+  if (res.status === 429) {
+    await notePdgaRateLimited(env, res);
+    throw new PdgaApiError("rate_limited");
+  }
   if (res.status === 401 || res.status === 403) throw new PdgaApiError("refused");
   if (!res.ok) throw new PdgaApiError("unavailable");
   const body = (await res.json().catch(() => null)) as { sessid?: string; session_name?: string; token?: string } | null;
@@ -151,6 +183,7 @@ async function apiGet(env: PdgaApiEnv, path: string): Promise<Record<string, unk
   if (!pdgaApiConfigured(env)) throw new PdgaApiError("not_configured");
   for (let attempt = 0; attempt < 2; attempt++) {
     const current = await session(env);
+    await acquirePdgaBudget(env);
     const res = await fetch(base(env) + path, {
       headers: { Accept: "application/json", Cookie: current.cookie, ...(current.token ? { "X-CSRF-Token": current.token } : {}) },
       signal: AbortSignal.timeout(10_000),
@@ -159,7 +192,10 @@ async function apiGet(env: PdgaApiEnv, path: string): Promise<Record<string, unk
       await forgetSession(env);
       continue;
     }
-    if (res.status === 429) throw new PdgaApiError("rate_limited");
+    if (res.status === 429) {
+      await notePdgaRateLimited(env, res);
+      throw new PdgaApiError("rate_limited");
+    }
     // status 1 (no match) comes back as 404 for a requested id that doesn't exist.
     if (res.status === 404) return null;
     if (!res.ok) throw new PdgaApiError(res.status === 401 || res.status === 403 ? "refused" : "unavailable");
@@ -238,16 +274,19 @@ export async function cachedPdgaPlayers(env: Pick<PdgaApiEnv, "DB">, numbers: re
   const wanted = [...new Set(numbers.map(normalPdgaNumber).filter((value): value is string => value != null))];
   const found = new Map<string, PdgaPlayer | null>();
   if (!wanted.length || refresh === "all") return found;
-  const cached = await env.DB.prepare(`SELECT pdga_number, data, fetched_at FROM pdga_api_players WHERE pdga_number IN (${wanted.map(() => "?").join(", ")})`)
-    .bind(...wanted).all<{ pdga_number: string; data: string | null; fetched_at: number }>();
-  for (const row of cached.results ?? []) {
-    const age = now - Number(row.fetched_at);
-    let player: PdgaPlayer | null = null;
-    try { player = row.data ? parsePdgaPlayer(JSON.parse(row.data)) : null; } catch { continue; }
-    const ttl = !row.data ? MISSING_TTL_MS : membershipMayChange(player, now) ? RECHECK_TTL_MS : FOUND_TTL_MS;
-    if (age > ttl || age < 0) continue;
-    if (refresh === "lapsed" && player && player.membershipStatus !== "current") continue;
-    found.set(row.pdga_number, player);
+  for (let offset = 0; offset < wanted.length; offset += 80) {
+    const group = wanted.slice(offset, offset + 80);
+    const cached = await env.DB.prepare(`SELECT pdga_number, data, fetched_at FROM pdga_api_players WHERE pdga_number IN (${group.map(() => "?").join(", ")})`)
+      .bind(...group).all<{ pdga_number: string; data: string | null; fetched_at: number }>();
+    for (const row of cached.results ?? []) {
+      const age = now - Number(row.fetched_at);
+      let player: PdgaPlayer | null = null;
+      try { player = row.data ? parsePdgaPlayer(JSON.parse(row.data)) : null; } catch { continue; }
+      const ttl = !row.data ? MISSING_TTL_MS : membershipMayChange(player, now) ? RECHECK_TTL_MS : FOUND_TTL_MS;
+      if (age > ttl || age < 0) continue;
+      if (refresh === "lapsed" && player && player.membershipStatus !== "current") continue;
+      found.set(row.pdga_number, player);
+    }
   }
   return found;
 }

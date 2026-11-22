@@ -1,6 +1,5 @@
 import type { Env } from "./env.js";
 import type { D1Like } from "./db-types.js";
-import { getMember } from "./roster.js";
 import { playersMatch } from "./player-identity.js";
 import { karmaKey } from "./karma-directory.js";
 
@@ -129,26 +128,17 @@ export async function publicFieldsByEvent(env: Env, eventIds: readonly number[])
     rowsIn<WalkOnSeed>(env.DB, `SELECT event_id, member_id, name, pdga_no, division, team FROM event_players WHERE event_id IN (${inList})`, ids),
   ]);
   const seeds = unionFieldSeeds(regs, walkons);
-  const memberIds = [...new Set(seeds.map((seed) => seed.memberId).filter((id): id is string => Boolean(id && !isGuest(id))))];
-  const members = await Promise.all(memberIds.map((id) => getMember(env.ROSTER, id)));
-  const pdgaByMember = new Map<string, string>();
-  for (let i = 0; i < memberIds.length; i++) {
-    const pdga = digits(members[i]?.pdgaNo);
-    if (pdga) pdgaByMember.set(memberIds[i]!, pdga);
-  }
 
   for (const seed of seeds) {
-    const pdga = seed.pdgaNo || (seed.memberId ? pdgaByMember.get(seed.memberId) : null) || null;
     const list = out.get(seed.eventId) || [];
     list.push({
       name: seed.name,
       karmaKey: karmaKey(seed.memberId),
       division: seed.division,
       team: seed.team,
-      pdga_no: pdga,
-      // No PDGA ratings on the public field: they came from pdga.com pages (PDGA's Developer Program reads only
-      // through the API, and every PDGA rating shown must link to the player's pdga.com page, which would make
-      // clubmates' PDGA numbers public).
+      // No PDGA numbers or ratings on the public field: clubmates' PDGA numbers stay private, and PDGA's API
+      // attribution requires linking every displayed player to pdga.com (which would make clubmates' PDGA numbers public).
+      pdga_no: null,
       rating: null,
     });
     out.set(seed.eventId, list);

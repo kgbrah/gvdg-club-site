@@ -107,6 +107,9 @@ describe("PDGA membership and the club's discount code", () => {
     expect((await call("/pdga/membership", { sub: "m_nopdga" })).data).toMatchObject({ pdgaNumber: null, player: null, lookup: "none", promo: { code: "GVDG" + YEAR } });
     expect((await call("/pdga/membership", { sub: "m_admin" })).data.promo.code).toBe("GVDG" + YEAR);
     expect((await call("/pdga/membership")).status).toBe(401);
+    expect((await call("/pdga/membership", { sub: "m_deleted" })).status).toBe(401);
+    await (env.ROSTER as unknown as { put(k: string, v: string): Promise<void> }).put("member:m_held", member("m_held", { held: true }));
+    expect((await call("/pdga/membership", { sub: "m_held" })).status).toBe(401);
   });
 
   it("stops offering last year's code, and a cleared code", async () => {

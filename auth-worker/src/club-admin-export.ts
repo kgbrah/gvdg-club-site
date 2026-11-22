@@ -158,7 +158,11 @@ async function buildExportSnapshot(
     ? (await Promise.all(
         eventIds.map(async (id) => {
           const cfg = await dbLike.prepare("SELECT * FROM event_config WHERE event_id = ?").bind(id).all();
-          return toList(cfg.results);
+          // PDGA's API license allows temporary caching only; never copy cached PDGA API payloads into archives/exports.
+          return toList(cfg.results).map((row) => {
+            const { pdga_event: _pdga, ...rest } = row as Record<string, unknown>;
+            return rest;
+          });
         }),
       )).flat()
     : [];

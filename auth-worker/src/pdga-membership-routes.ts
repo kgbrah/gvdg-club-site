@@ -44,8 +44,9 @@ export async function handlePdgaMembership(request: Request, env: Env, origin: s
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
   const member = claims.member ?? await getMember(env.ROSTER, claims.sub);
+  if (!member || member.held === true) return json({ error: "unauthorized" }, 401, origin);
   const club = membershipStatus(member);
-  const clubMember = member?.isAdmin === true || (!club.guest && club.current);
+  const clubMember = member.isAdmin === true || (!club.guest && club.current);
   const promo = await getPdgaPromo(env.DB);
   const pdgaNumber = normalPdgaNumber(member?.pdgaNo ?? null);
   let player = null;

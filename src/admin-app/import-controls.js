@@ -12,9 +12,7 @@ function resultDetail(event) {
 
 export function AdminImportControls() {
   const [csvText, setCsvText] = React.useState("");
-  const [busyDgs, setBusyDgs] = React.useState(false);
   const [busyCsv, setBusyCsv] = React.useState(false);
-  const dgsRequest = React.useRef("");
   const csvRequest = React.useRef("");
   const [udiscUrl, setUdiscUrl] = React.useState("");
   const [busyUdisc, setBusyUdisc] = React.useState(false);
@@ -22,12 +20,6 @@ export function AdminImportControls() {
   const requestCounter = React.useRef(0);
 
   React.useEffect(() => {
-    function updateDgs(event) {
-      const detail = resultDetail(event);
-      if (!detail.requestId || detail.requestId !== dgsRequest.current) return;
-      setBusyDgs(false);
-      dgsRequest.current = "";
-    }
     function updateCsv(event) {
       const detail = resultDetail(event);
       if (!detail.requestId || detail.requestId !== csvRequest.current) return;
@@ -40,22 +32,13 @@ export function AdminImportControls() {
       setBusyUdisc(false);
       udiscRequest.current = "";
     }
-    window.addEventListener("gvdg:admin-dgs-import-result", updateDgs);
     window.addEventListener("gvdg:admin-csv-import-result", updateCsv);
     window.addEventListener("gvdg:admin-udisc-events-import-result", updateUdisc);
     return () => {
-      window.removeEventListener("gvdg:admin-dgs-import-result", updateDgs);
       window.removeEventListener("gvdg:admin-csv-import-result", updateCsv);
       window.removeEventListener("gvdg:admin-udisc-events-import-result", updateUdisc);
     };
   }, []);
-
-  function requestDgsImport() {
-    const requestId = `dgs-import-${requestCounter.current += 1}`;
-    dgsRequest.current = requestId;
-    setBusyDgs(true);
-    dispatchRequest("gvdg:admin-dgs-import-request", { requestId });
-  }
 
   function requestCsvImport() {
     const requestId = `csv-import-${requestCounter.current += 1}`;
@@ -81,14 +64,6 @@ export function AdminImportControls() {
       h("em", { key: "em" }, "Create"),
       " to add an event.",
     ]),
-    h("button", {
-      className: "admin-btn secondary",
-      disabled: busyDgs,
-      id: "dgsImportBtn",
-      key: "dgs",
-      onClick: requestDgsImport,
-      type: "button",
-    }, busyDgs ? "Importing…" : "Import from DiscGolfScene feed"),
     h("div", { className: "admin-import-csv", key: "csv" }, [
       h("label", { htmlFor: "csvImportText", key: "label" }, "Paste CSV (header: name,date,type,format)"),
       h("textarea", {

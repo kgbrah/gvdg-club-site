@@ -178,10 +178,11 @@ export async function handleClubRegistration(
   if (seg[2] === "registration" && method === "GET") {
     const memberId = claims ? claims.sub : guestMemberId(request);
     const registration = memberId ? await db.getMyRegistration(env.DB, eid, memberId) : null;
-    const config = (await db.getEventConfig(env.DB, eid)) as TournamentConfig | null;
+    const rawConfig = (await db.getEventConfig(env.DB, eid)) as TournamentConfig | null;
+    const config = rawConfig ? (({ pdga_event: _ignored, ...rest }) => rest)(rawConfig) : null;
     // A club-run PDGA event also shows its PDGA event, rules, cap, the paid field and the waitlist.
-    const tournament = isTournament(config)
-      ? await tournamentView(env, eid, config, registration ? Number((registration as { id?: unknown }).id) : null) : null;
+    const tournament = isTournament(rawConfig)
+      ? await tournamentView(env, eid, rawConfig, registration ? Number((registration as { id?: unknown }).id) : null) : null;
     return json(tournament ? { config, registration, tournament } : { config, registration }, 200, origin);
   }
   if (seg[2] === "register" && method === "POST") {

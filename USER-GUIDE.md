@@ -122,7 +122,7 @@ Tap a tab to switch rooms.
 
 ### ✍️ Sign up for a game (register)
 1. Go to the **Events** tab.
-2. **PDGA events** lists every upcoming sanctioned event within 100 miles, closest to you first. Tap **Register** to open that event on Disc Golf Scene. Allow location so the miles are from where you are; otherwise the list is centered on Greenville.
+2. **PDGA events** lists every upcoming sanctioned event within 100 miles, closest to you first. Tap **Register** to open the event's registration page (or register on the club site for GVDG-run PDGA events). Allow location so the miles are from where you are; otherwise the list is centered on Greenville.
 3. **Club registration** is the club's own events. Tap **Register**, pick your **division**, and add CTP or ace pot if you want.
 4. Tap to finish. To un-sign-up from a club event, tap **Withdraw**.
 

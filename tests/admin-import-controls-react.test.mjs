@@ -7,15 +7,13 @@ test('admin import controls are rendered by React from request events', () => {
   const importController = readFileSync('src/admin-app/import-controller.js', 'utf8');
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const controls = readFileSync('src/admin-app/import-controls.js', 'utf8');
-  const adminDgsImport = importController.match(/export async function adminDgsImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminCsvImportFromReact/)?.[0];
   const adminCsvImport = importController.match(/export async function adminCsvImportFromReact\(detail, \{ adminApi, adminMsg \}\) \{[\s\S]*?export async function adminUdiscEventsImportFromReact/)?.[0];
 
   assert.match(html, /id="adminImportControlsReactApp"/);
   assert.doesNotMatch(html, /id="dgsImportBtn"|id="csvImportBtn"|id="csvImportText"/);
-  assert.ok(adminDgsImport);
+  assert.doesNotMatch(importController, /adminDgsImportFromReact|\/admin\/import\/dgs|gvdg:admin-dgs-import-request/);
+  assert.doesNotMatch(controls, /id:\s*"dgsImportBtn"|gvdg:admin-dgs-import-request|Import from DiscGolfScene feed/);
   assert.ok(adminCsvImport);
-  assert.match(adminDgsImport, /adminApi\('\/admin\/import\/dgs', \{ method: 'POST', body: \{\} \}\)/);
-  assert.match(adminDgsImport, /gvdg:admin-dgs-import-result/);
   assert.match(adminCsvImport, /adminApi\('\/admin\/import\/csv', \{ method: 'POST', body: \{ csv \} \}\)/);
   assert.match(adminCsvImport, /gvdg:admin-csv-import-result/);
   assert.match(adminCsvImport, /Paste CSV first/);
@@ -23,18 +21,14 @@ test('admin import controls are rendered by React from request events', () => {
   assert.doesNotMatch(html, /\$\('dgsImportBtn'\)\.addEventListener|\$\('csvImportBtn'\)\.addEventListener/);
   assert.match(html, /import \{ installImportController \} from "\.\/import-controller\.js"/);
   assert.match(html, /installImportController\(adminControllerDeps\)/);
-  assert.match(importController, /gvdg:admin-dgs-import-request/);
   assert.match(importController, /gvdg:admin-csv-import-request/);
   assert.match(main, /import \{ AdminImportControls \} from "\.\/import-controls\.js"/);
   assert.match(main, /const importControlsMount = document\.getElementById\("adminImportControlsReactApp"\)/);
   assert.match(main, /createRoot\(importControlsMount\)\.render\(h\(AdminImportControls\)\)/);
   assert.match(controls, /export function AdminImportControls/);
   assert.match(controls, /data-react-admin-import-controls/);
-  assert.match(controls, /gvdg:admin-dgs-import-request/);
   assert.match(controls, /gvdg:admin-csv-import-request/);
-  assert.match(controls, /gvdg:admin-dgs-import-result/);
   assert.match(controls, /gvdg:admin-csv-import-result/);
-  assert.match(controls, /id: "dgsImportBtn"/);
   assert.match(controls, /id: "csvImportText"/);
   assert.match(controls, /id: "csvImportBtn"/);
   assert.match(controls, /id: "udiscImportUrl"/);

@@ -139,6 +139,12 @@ export async function ratingFieldFingerprint(field: readonly EligibleRatingSourc
     .sort((a, b) => Number(a[0]) - Number(b[0])));
 }
 
+/** Field-scores fingerprint independent of ephemeral PDGA anchor rows so layout baselines survive the 7-day purge. */
+export async function ratingFieldScoresFingerprint(field: readonly EligibleRatingSource[]): Promise<string> {
+  return "field:" + await ratingFingerprint(field.map((row) => [row.sourceResultId, row.sourceFingerprint])
+    .sort((a, b) => Number(a[0]) - Number(b[0])));
+}
+
 export async function ratingSourceGroups(rows: readonly Row[], stream: RatingStream, currentGust: number | null) {
   const candidates = (await Promise.all(rows.map((row) => eligibleRatingSource(row, stream, currentGust))))
     .filter((row): row is EligibleRatingSource => row != null);
