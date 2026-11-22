@@ -73,6 +73,8 @@ export async function handleAdminMembers(
     // Someone already on the club's sheets: their held account (store credit, dues, bag tag) comes across.
     const carried = await claimHeldFor(env, result.member, adminId);
     const member = carried ? (await getMember(env.ROSTER, result.member.memberId)) ?? result.member : result.member;
+    // Clear any lingering login lockouts from before a previous removal so the new temp PIN works right away.
+    try { await clearAccountLocks(env, member); } catch { /* lockouts are best-effort */ }
     return json({ tempPin, member: pub(member), carriedOver: carriedOverText(carried) || null }, 201, origin);
   }
 
@@ -222,6 +224,7 @@ export async function handleAdminMembers(
         return json({ error: "last_admin" }, 409, origin);
       }
     }
+    if (await env.ROSTER.get(`wa:creds:${memberId}`)) await env.ROSTER.delete(`wa:creds:${memberId}`);
     try {
       await env.DB.prepare("DELETE FROM member_push_subscriptions WHERE member_id = ?").bind(memberId).run();
     } catch { /* push rows are optional */ }

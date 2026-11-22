@@ -198,7 +198,7 @@ export async function setMemberEmail(kv: KVLike, memberId: string, email: string
   if (!m) return "missing";
   const next = normEmail(email);
   const owner = await kv.get(IDX_EMAIL(next));
-  if (owner && owner !== memberId) return "conflict";
+  if (owner && owner !== memberId && (await getMember(kv, owner))) return "conflict";
   if (m.email && normEmail(m.email) !== next && (await kv.get(IDX_EMAIL(m.email))) === memberId) await kv.delete(IDX_EMAIL(m.email));
   m.email = next;
   await kv.put(RECORD(memberId), JSON.stringify(m));
@@ -299,11 +299,11 @@ export async function updateProfile(kv: KVLike, memberId: string, patch: Profile
 
   if (newPdga) {
     const owner = await kv.get(IDX_PDGA(newPdga));
-    if (owner && owner !== memberId) return { ok: false, conflict: "pdga" };
+    if (owner && owner !== memberId && (await getMember(kv, owner))) return { ok: false, conflict: "pdga" };
   }
   if (newUdisc) {
     const owner = await kv.get(IDX_UDISC(newUdisc));
-    if (owner && owner !== memberId) return { ok: false, conflict: "udisc" };
+    if (owner && owner !== memberId && (await getMember(kv, owner))) return { ok: false, conflict: "udisc" };
   }
 
   if (newPdga !== undefined) {
@@ -366,13 +366,13 @@ export type AdminMember = Pick<Member, "memberId" | "name" | "pdgaNo" | "udisc" 
 export async function createMember(kv: KVLike, input: CreateMemberInput, pinHash: string, opts: { pinChosenByMember?: boolean } = {}): Promise<CreateResult> {
   const memberId = memberIdFor(input);
   if (!memberId || !input.name?.trim()) return { ok: false, reason: "invalid" };
-  if (await kv.get(RECORD(memberId))) return { ok: false, reason: "exists" };
+  if (await getMember(kv, memberId)) return { ok: false, reason: "exists" };
   const pdga = input.pdgaNo ? normPdga(input.pdgaNo) : "";
   const udisc = input.udisc ? normUdisc(input.udisc) : "";
-  if (pdga) { const o = await kv.get(IDX_PDGA(pdga)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
-  if (udisc) { const o = await kv.get(IDX_UDISC(udisc)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
+  if (pdga) { const o = await kv.get(IDX_PDGA(pdga)); if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" }; }
+  if (udisc) { const o = await kv.get(IDX_UDISC(udisc)); if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" }; }
   const email = input.email ? normEmail(input.email) : "";
-  if (email) { const o = await kv.get(IDX_EMAIL(email)); if (o && o !== memberId) return { ok: false, reason: "conflict" }; }
+  if (email) { const o = await kv.get(IDX_EMAIL(email)); if (o && o !== memberId && (await getMember(kv, o))) return { ok: false, reason: "conflict" }; }
   const m: Member = {
     memberId,
     name: input.name.trim(),
