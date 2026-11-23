@@ -106,20 +106,29 @@ export function fieldsFor(kind) {
 export function parseMoney(text) {
   const value = String(text ?? "").trim();
   if (!value) return null;
-  const negative = /^\(.*\)$/.test(value) || /^-|-\s*\$/.test(value);
-  const digits = value.replace(/[()$,\s-]/g, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(digits)) return Number.NaN;
-  const cents = Math.round(Number(digits) * 100);
-  return negative ? -cents : cents;
+  const parens = /^\(\s*\$?\s*([0-9,]+(?:\.\d{1,2})?)\s*\)$/.exec(value);
+  if (parens) {
+    const normalized = parens[1].replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return Number.NaN;
+    const cents = Math.round(Number(normalized) * 100);
+    return cents === 0 ? 0 : -cents;
+  }
+  const signed = /^(?:(-)\s*\$?\s*|\$\s*(-)\s*|\$?\s*)([0-9,]+(?:\.\d{1,2})?)$/.exec(value);
+  if (!signed) return Number.NaN;
+  const normalized = signed[3].replace(/,/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return Number.NaN;
+  const cents = Math.round(Number(normalized) * 100);
+  return (signed[1] || signed[2]) && cents !== 0 ? -cents : cents;
 }
 
 const PAID = /^(y|yes|paid|x|✓|✔|true|1|member|current|done)$/i;
 const UNPAID = /^(n|no|unpaid|false|0|-|—|lapsed|not paid)$/i;
+const UNPAID_WORD = /\b(?:unpaid|not\s*paid|lapsed|expired)\b|^no(?:\s*[-,:;(]|\s+(?:paid|dues)\b)/i;
 
 /** A dues cell: a year ("2026", "Paid 2026"), a paid mark (that counts as `year`), unpaid/blank (null), else NaN. */
 export function parseDues(text, year) {
   const value = String(text ?? "").trim();
-  if (!value || UNPAID.test(value)) return null;
+  if (!value || UNPAID.test(value) || UNPAID_WORD.test(value)) return null;
   const found = value.match(/\b(20\d{2})\b/);
   if (found) return Number(found[1]);
   if (PAID.test(value)) return year;

@@ -5,8 +5,10 @@ import { json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import {
   chooseUdiscPlayer,
+  normUdiscPlayer,
   parseUdiscHistory,
   UDISC_HISTORY_MAX_CSV_CHARS,
+  UDISC_HISTORY_MAX_ROUNDS,
 } from "./imports/udisc-history.js";
 import { summarizeUdiscRounds, type UdiscStatHole, type UdiscStatRound } from "./imports/udisc-stats.js";
 
@@ -114,8 +116,9 @@ export async function handleUdiscHistory(
   }, requested);
   if ("error" in choice) return json({ error: choice.error }, 400, origin);
   if ("players" in choice) return json({ error: "pick_player", players: choice.players }, 409, origin);
-  const rounds = parsed.rounds.filter((round) => round.playerName === choice.player);
+  const rounds = parsed.rounds.filter((round) => normUdiscPlayer(round.playerName) === normUdiscPlayer(choice.player));
   if (!rounds.length) return json({ error: "empty" }, 400, origin);
+  if (rounds.length > UDISC_HISTORY_MAX_ROUNDS) return json({ error: "too_many" }, 400, origin);
   await db.upsertUdiscHistory(env.DB, memberId, rounds);
   return json({ saved: rounds.length, playerName: choice.player }, 200, origin);
 }

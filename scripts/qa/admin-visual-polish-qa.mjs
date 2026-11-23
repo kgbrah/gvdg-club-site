@@ -692,6 +692,7 @@ async function verifyRoutes(variant) {
     await pane.getByLabel("Adjustment ($)").fill("5");
     const walletSaved = page.waitForResponse((response) => response.url().endsWith("/admin/wallets/credit"));
     await pane.getByRole("button", { name: "Post wallet adjustment" }).click();
+    await page.getByRole("dialog", { name: "Post wallet adjustment?" }).getByRole("button", { name: "Post adjustment" }).click();
     assert.equal((await walletSaved).status(), 200);
     assert.ok(requested.some((call) => call.path === "/admin/wallets/credit" && call.body?.amount_cents === 500));
 

@@ -75,10 +75,12 @@ async function resolveLinks(env: Env, leagueId: number): Promise<void> {
     members,
     links.map((link) => ({ playerKey: link.player_key, memberId: link.member_id })),
   );
+  const updates: { tag: number; memberId: string | null }[] = [];
   for (const row of ladder) {
     const next = linked.get(row.tag_number) ?? null;
-    if (next !== row.member_id) await league.setLadderMember(env.DB, leagueId, row.tag_number, next);
+    if (next !== row.member_id) updates.push({ tag: row.tag_number, memberId: next });
   }
+  if (updates.length) await league.setLadderMembers(env.DB, leagueId, updates);
   await league.markLinked(env.DB, leagueId);
 }
 
@@ -87,13 +89,30 @@ export async function relinkLeague(env: Env, leagueId: number): Promise<void> {
   await resolveLinks(env, leagueId);
 }
 
-function playersFromUdisc(rows: readonly league.UdiscTagRow[]): LadderPlayer[] {
+function playersFromUdisc(
+  rows: readonly league.UdiscTagRow[],
+  previousTags: ReadonlyMap<string, number> = new Map(),
+): LadderPlayer[] {
+  const valid = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => Number.isInteger(row.place) && row.place >= 1);
+  valid.sort((a, b) => {
+    if (a.row.place !== b.row.place) return a.row.place - b.row.place;
+    const prevA = previousTags.get(playerKey(a.row.name)) ?? Infinity;
+    const prevB = previousTags.get(playerKey(b.row.name)) ?? Infinity;
+    if (prevA !== prevB) return prevA - prevB;
+    return a.row.name.localeCompare(b.row.name) || a.index - b.index;
+  });
   const taken = new Set<number>();
+  const seenMembers = new Set<string>();
   const players: LadderPlayer[] = [];
-  for (const row of rows) {
-    if (!Number.isInteger(row.place) || row.place < 1 || taken.has(row.place)) continue;
-    taken.add(row.place);
-    players.push({ tag: row.place, name: row.name, memberId: row.member_id });
+  for (const { row } of valid) {
+    let tag = row.place;
+    while (taken.has(tag)) tag += 1;
+    taken.add(tag);
+    const memberId = row.member_id && !seenMembers.has(row.member_id) ? row.member_id : null;
+    if (memberId) seenMembers.add(memberId);
+    players.push({ tag, name: row.name, memberId });
   }
   return players;
 }
@@ -117,7 +136,12 @@ async function keepResultLinks(env: Env, leagueId: number, players: readonly Lad
  * becomes that order, open challenges close, and earlier app swaps stay in history as app-only.
  */
 export async function resetLeagueLadderFromUdisc(env: Env, leagueId: number): Promise<number> {
-  const players = playersFromUdisc(await league.udiscTagRows(env.DB, leagueId));
+  const [tagRows, existingLadder] = await Promise.all([
+    league.udiscTagRows(env.DB, leagueId),
+    league.listLadder(env.DB, leagueId).catch(() => []),
+  ]);
+  const previousTags = new Map(existingLadder.map((row) => [playerKey(row.player_name), row.tag_number]));
+  const players = playersFromUdisc(tagRows, previousTags);
   if (!players.length) return 0;
   const open = await league.pendingLeagueChallenges(env.DB, leagueId).catch(() => []);
   await league.resetLadder(env.DB, leagueId, players);

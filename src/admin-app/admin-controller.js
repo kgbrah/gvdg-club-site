@@ -918,7 +918,10 @@ export function startAdminController() {
             const r = await adminApi('/admin/orders/' + id, { method: 'PATCH', body });
             if (r.ok) { adminMsg('Order #' + id + ' updated', true); adminLoadOrders(); return true; }
             const d = await r.json().catch(() => ({}));
-            adminMsg('Order update failed' + (d.error ? ' (' + d.error + ')' : ''), false);
+            const msg = r.status === 409 && d.error === 'already_cancelled'
+                ? 'Cancelled orders cannot be reopened'
+                : 'Order update failed' + (d.error ? ' (' + d.error + ')' : '');
+            adminMsg(msg, false);
             return false;
         }
         async function cancelOrder(id, status) {
@@ -1227,17 +1230,38 @@ export function startAdminController() {
             const e = await r.json().catch(() => ({}));
             adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
         }
-        async function rgAwardCredit(memberId, name, amountValue) {
+        async function rgAwardCredit(memberId, name, amountValue, opts = {}) {
+            const requestId = opts.requestId || '';
+            const emit = (ok) => {
+                if (requestId) window.dispatchEvent(new CustomEvent('gvdg:admin-registration-credit-result', { detail: { ok, requestId } }));
+            };
             const amount = dollarsToCents(amountValue);
-            if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body: { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + rgSelectedEventLabel() } });
-            if (r.ok) { const d = await r.json(); adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true); rgLoadRoster({ quiet: true }); rgLoadCredits(); }
-            else adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
+            if (amount == null || amount <= 0) { adminMsg('Enter a store credit amount', false); emit(false); return; }
+            try {
+                const body = { member_id: memberId, member_name: name || null, amount_cents: amount, note: 'Event payout: ' + rgSelectedEventLabel() };
+                if (opts.idempotencyKey) body.idempotency_key = opts.idempotencyKey;
+                const r = await adminApi('/admin/events/' + rgEventId + '/store-credit', { method: 'POST', body });
+                if (r.ok) {
+                    const d = await r.json();
+                    adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                    rgLoadRoster({ quiet: true });
+                    rgLoadCredits();
+                    emit(true);
+                } else {
+                    adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
+                    emit(false);
+                }
+            } catch {
+                adminMsg('Store credit award failed (network error)', false);
+                emit(false);
+            }
         }
         async function rgStoreCreditError(r, fallback) {
             const d = await r.json().catch(() => ({}));
             if (d.error === 'member_not_found') return fallback + ': member id not found';
             if (d.error === 'invalid_store_credit') return fallback + ': enter a valid member and amount';
+            if (d.error === 'ctp_already_paid') return fallback + ': store credit was already awarded for this CTP';
+            if (d.error === 'idempotency_key_conflict') return fallback + ': payout already recorded with different details';
             return fallback + ' (' + r.status + ')';
         }
         async function rgPatch(rid, patch) {
@@ -1281,20 +1305,33 @@ export function startAdminController() {
         function setAdminRegistrationCtpsState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctps-list', { detail: state }));
         }
-        async function rgAwardCtpCredit(ctp, memberIdValue, winnerNameValue, amountValue) {
+        async function rgAwardCtpCredit(ctp, memberIdValue, winnerNameValue, amountValue, opts = {}) {
+            const requestId = opts.requestId || '';
+            const emit = (ok) => {
+                if (requestId) window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctp-credit-result', { detail: { ok, requestId } }));
+            };
             const memberId = String(memberIdValue || '').trim();
             const winnerName = String(winnerNameValue || '').trim();
             const amount = dollarsToCents(amountValue);
-            if (!memberId) { adminMsg('CTP store credit needs a member id', false); return; }
-            if (amount == null || amount <= 0) { adminMsg('Enter a CTP store credit amount', false); return; }
-            const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body: { member_id: memberId, winner_name: winnerName || null, amount_cents: amount } });
-            if (r.ok) {
-                const d = await r.json();
-                adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
-                rgLoadCtps();
-                rgLoadCredits();
-            } else {
-                adminMsg(await rgStoreCreditError(r, 'CTP store credit award failed'), false);
+            if (!memberId) { adminMsg('CTP store credit needs a member id', false); emit(false); return; }
+            if (amount == null || amount <= 0) { adminMsg('Enter a CTP store credit amount', false); emit(false); return; }
+            try {
+                const body = { member_id: memberId, winner_name: winnerName || null, amount_cents: amount };
+                if (opts.idempotencyKey) body.idempotency_key = opts.idempotencyKey;
+                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id + '/store-credit', { method: 'POST', body });
+                if (r.ok) {
+                    const d = await r.json();
+                    adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
+                    rgLoadCtps();
+                    rgLoadCredits();
+                    emit(true);
+                } else {
+                    adminMsg(await rgStoreCreditError(r, 'CTP store credit award failed'), false);
+                    emit(false);
+                }
+            } catch {
+                adminMsg('CTP store credit award failed (network error)', false);
+                emit(false);
             }
         }
         async function rgAddCtpFromReact(detail) {
@@ -1722,8 +1759,11 @@ export function startAdminController() {
             });
             window.addEventListener('gvdg:admin-registration-roster-credit-request', async (event) => {
                 const detail = event.detail || {};
-                if (!detail.memberId || !rgEventId) return;
-                await rgAwardCredit(detail.memberId, detail.memberName, detail.amountValue);
+                if (!detail.memberId || !rgEventId) {
+                    if (detail.requestId) window.dispatchEvent(new CustomEvent('gvdg:admin-registration-credit-result', { detail: { ok: false, requestId: detail.requestId } }));
+                    return;
+                }
+                await rgAwardCredit(detail.memberId, detail.memberName, detail.amountValue, { idempotencyKey: detail.idempotencyKey, requestId: detail.requestId });
             });
             window.addEventListener('gvdg:admin-registration-manual-remove-request', async (event) => {
                 const player = event.detail && event.detail.player;
@@ -1754,8 +1794,11 @@ export function startAdminController() {
             window.addEventListener('gvdg:admin-registration-ctp-credit-request', async (event) => {
                 const detail = event.detail || {};
                 const ctp = detail.ctp;
-                if (!ctp || ctp.id == null || !rgEventId) return;
-                await rgAwardCtpCredit(ctp, detail.winnerMemberId, detail.winnerName, detail.amountValue);
+                if (!ctp || ctp.id == null || !rgEventId) {
+                    if (detail.requestId) window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctp-credit-result', { detail: { ok: false, requestId: detail.requestId } }));
+                    return;
+                }
+                await rgAwardCtpCredit(ctp, detail.winnerMemberId, detail.winnerName, detail.amountValue, { idempotencyKey: detail.idempotencyKey, requestId: detail.requestId });
             });
             window.addEventListener('gvdg:admin-registration-ctp-delete-request', async (event) => {
                 const ctp = event.detail && event.detail.ctp;

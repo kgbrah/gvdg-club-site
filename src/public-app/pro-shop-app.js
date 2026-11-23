@@ -458,6 +458,7 @@ export function ProShopApp() {
     }
     if (changed) {
       cartRef.current = next;
+      checkoutKeyRef.current = null;
       setCart(next);
       if (message) notify(message, "error");
     }
@@ -595,6 +596,7 @@ export function ProShopApp() {
       }
       next.set(key, quantity + 1);
       cartRef.current = next;
+      checkoutKeyRef.current = null;
       notify("");
       return next;
     });
@@ -607,6 +609,7 @@ export function ProShopApp() {
         const next = new Map(current);
         next.delete(productKey(productId));
         cartRef.current = next;
+        checkoutKeyRef.current = null;
         return next;
       });
       notify("That product is no longer available.", "error");
@@ -620,6 +623,7 @@ export function ProShopApp() {
       else if (quantity <= stockQty(product)) next.set(key, quantity);
       else notify("That is all the stock available for this product.", "error");
       cartRef.current = next;
+      checkoutKeyRef.current = null;
       return next;
     });
   }
@@ -701,6 +705,9 @@ export function ProShopApp() {
       } else if (body.error === "product_unavailable") {
         notify("One item is no longer available. Refreshing inventory.", "error");
         await loadProducts();
+      } else if (body.error === "idempotency_key_conflict") {
+        checkoutKeyRef.current = null;
+        notify("Your cart changed — tap Checkout again to place this order.", "error");
       } else {
         notify("Checkout failed. Please try again or see an admin.", "error");
       }
@@ -718,12 +725,13 @@ export function ProShopApp() {
       throw new Error("empty_cart");
     }
     const name = guest.name.trim();
+    const contact = guest.contact.trim();
     if (!token && !name) {
       notify("Enter your name so the club can match your order.", "error");
       throw new Error("name_required");
     }
     const response = await api("/shop/pay/create-order", {
-      body: { items: cartItemsPayload(current), name: name || null },
+      body: { contact: contact || null, items: cartItemsPayload(current), name: name || null },
       method: "POST",
       token: token || undefined,
     });
@@ -737,7 +745,7 @@ export function ProShopApp() {
       throw new Error(body.error || "paypal_create_failed");
     }
     return body.orderId;
-  }, [api, guest.name, loadProducts, notify, pruneCart, token]);
+  }, [api, guest.contact, guest.name, loadProducts, notify, pruneCart, token]);
 
   const approvePayPalOrder = React.useCallback(async (data) => {
     const response = await api("/shop/pay/capture", {

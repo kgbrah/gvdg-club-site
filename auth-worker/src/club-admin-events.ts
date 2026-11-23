@@ -12,6 +12,7 @@ import { inlineLayout } from "./admin-event-layout.js";
 import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
 import { playersMatch } from "./player-identity.js";
 import { isTournament, type TournamentConfig } from "./tournament-routes.js";
+import { createWalletCreditOnce } from "./wallet-idempotency.js";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -281,7 +282,8 @@ export async function handleAdminEvents(
       if (!event) return json({ error: "not_found" }, 404, origin);
       const member = await getMember(env.ROSTER, memberId);
       if (!member) return json({ error: "member_not_found" }, 404, origin);
-      const tx = await shopDb.createWalletTransaction(env.DB, {
+      const idemKey = asStr(body.idempotency_key, 160);
+      const txInput = {
         member_id: memberId,
         member_name: member.name,
         amount_cents: amount,
@@ -290,7 +292,13 @@ export async function handleAdminEvents(
         event_id: id,
         note: asStr(body.note, 300) ?? "Store credit payout",
         created_by: adminId,
-      });
+      };
+      if (idemKey) {
+        const res = await createWalletCreditOnce(env.DB, { ...txInput, idempotency_key: `event_payout:${id}:${idemKey}` });
+        if (!res.ok) return json({ error: res.error }, 409, origin);
+        return json({ transaction: res.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, res.created ? 201 : 200, origin);
+      }
+      const tx = await shopDb.createWalletTransaction(env.DB, txInput);
       return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
     }
   }
@@ -310,22 +318,32 @@ export async function handleAdminEvents(
       if (!memberId || amount == null || amount <= 0) return json({ error: "invalid_store_credit" }, 400, origin);
       const event = await db.getEvent(env.DB, id);
       if (!event) return json({ error: "not_found" }, 404, origin);
+      const existingCtp = ((await db.listCtps(env.DB, id)) as Record<string, unknown>[]).find((row) => Number(row.id) === cid);
+      if (!existingCtp) return json({ error: "not_found" }, 404, origin);
       const member = await getMember(env.ROSTER, memberId);
       if (!member) return json({ error: "member_not_found" }, 404, origin);
       const winnerName = asStr(body.winner_name, 100) ?? member.name;
-      const ctp = await db.setCtpWinner(env.DB, cid, id, memberId, winnerName);
-      if (!ctp) return json({ error: "not_found" }, 404, origin);
-      const tx = await shopDb.createWalletTransaction(env.DB, {
+      const allowDuplicate = body.allow_duplicate === true;
+      const rawKey = asStr(body.idempotency_key, 120);
+      const ctpKey = allowDuplicate
+        ? `ctp_payout:${id}:${cid}:${rawKey || crypto.randomUUID()}`
+        : `ctp_payout:${id}:${cid}`;
+      const res = await createWalletCreditOnce(env.DB, {
         member_id: memberId,
         member_name: member.name,
         amount_cents: amount,
         transaction_type: "credit",
         source: "event_payout",
         event_id: id,
-        note: asStr(body.note, 300) ?? defaultCtpPayoutNote(event, ctp),
+        note: asStr(body.note, 300) ?? defaultCtpPayoutNote(event, existingCtp),
         created_by: adminId,
+        idempotency_key: ctpKey,
       });
-      return json({ ctp, transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, 201, origin);
+      if (!res.ok) return json({ error: "ctp_already_paid" }, 409, origin);
+      const ctp = res.created
+        ? ((await db.setCtpWinner(env.DB, cid, id, memberId, winnerName)) ?? existingCtp)
+        : (((await db.listCtps(env.DB, id)) as Record<string, unknown>[]).find((row) => Number(row.id) === cid) ?? existingCtp);
+      return json({ ctp, transaction: res.transaction, balance_cents: await shopDb.walletBalance(env.DB, memberId), payouts: await shopDb.listEventStoreCreditPayouts(env.DB, id) }, res.created ? 201 : 200, origin);
     }
     if (method === "PATCH" && cid != null && seg[5] == null) {
       const b = (await readJson(request)) ?? {};

@@ -2,7 +2,7 @@ import { karmaKey } from "./karma-directory.js";
 import type { Env } from "./env.js";
 import { requireAuth } from "./authz.js";
 import { json, readJson } from "./http.js";
-import { asInt, asStr } from "./input.js";
+import { asInt, asStr, isUniqueViolation } from "./input.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { getMember } from "./roster.js";
 import { settleBagTags, settleSummary, type TagPlayer } from "./bag-tags.js";
@@ -137,17 +137,7 @@ async function adminLeagueBoards(env: Env) {
   return out;
 }
 
-async function leagueTagsStillMatch(env: Env, challenge: tags.BagChallengeRow): Promise<boolean> {
-  const leagueId = challenge.league_id;
-  if (leagueId == null) return false;
-  const challenger = await leagueDb.ladderByMember(env.DB, leagueId, challenge.challenger_id);
-  const defender = await leagueDb.ladderByMember(env.DB, leagueId, challenge.defender_id);
-  return Boolean(challenger && defender
-    && challenger.tag_number === challenge.challenger_tag
-    && defender.tag_number === challenge.defender_tag);
-}
-
-/** Swap by score on the app ladder only. UDisc's next import overwrites this. */
+/** Swap by score on the app ladder only, atomically verifying both ladder tags match. UDisc's next import overwrites this. */
 async function settleLeagueChallenge(
   env: Env,
   challenge: tags.BagChallengeRow,
@@ -157,17 +147,80 @@ async function settleLeagueChallenge(
   if (leagueId == null) return { error: "not_found", status: 404 };
   const challenger = await leagueDb.ladderByMember(env.DB, leagueId, challenge.challenger_id);
   const defender = await leagueDb.ladderByMember(env.DB, leagueId, challenge.defender_id);
-  if (!challenger || !defender) return { error: "not_a_holder", status: 400 };
+  if (!challenger || !defender || challenger.tag_number !== challenge.challenger_tag || defender.tag_number !== challenge.defender_tag) {
+    await tags.claimChallenge(env.DB, challenge.id, "declined", "tags changed before it was confirmed");
+    return { error: "stale_tags", status: 409 };
+  }
   const settled = settleBagTags([
-    { memberId: challenge.challenger_id, name: challenger.player_name, tagNumber: challenger.tag_number, score: challenge.challenger_score },
-    { memberId: challenge.defender_id, name: defender.player_name, tagNumber: defender.tag_number, score: challenge.defender_score },
+    { memberId: challenge.challenger_id, name: challenger.player_name, tagNumber: challenge.challenger_tag, score: challenge.challenger_score },
+    { memberId: challenge.defender_id, name: defender.player_name, tagNumber: challenge.defender_tag, score: challenge.defender_score },
   ]);
   if (!settled.ok) return { error: settled.error, status: 400 };
+  const swapped = settled.changes.length > 0;
   const summary = settleSummary("challenge", settled.changes);
-  if (settled.changes.length) {
-    await leagueDb.replaceLadderTags(env.DB, leagueId, settled.assignments, { summary, actorId });
-  } else {
-    await leagueDb.recordLeagueMove(env.DB, { leagueId, summary, actorId });
+  const ok = await leagueDb.confirmLeagueChallenge(env.DB, {
+    challengeId: challenge.id,
+    leagueId,
+    challengerId: challenge.challenger_id,
+    challengerName: challenger.player_name,
+    challengerTag: challenge.challenger_tag,
+    defenderId: challenge.defender_id,
+    defenderName: defender.player_name,
+    defenderTag: challenge.defender_tag,
+    swapped,
+    summary,
+    actorId,
+  });
+  if (!ok) {
+    const latest = await tags.getChallenge(env.DB, challenge.id);
+    if (!latest || latest.status !== "pending") return { error: "not_found", status: 404 };
+    await tags.claimChallenge(env.DB, challenge.id, "declined", "tags changed before it was confirmed");
+    return { error: "stale_tags", status: 409 };
+  }
+  return { changes: settled.changes.length };
+}
+
+/** Atomically confirm a club-series challenge only if the series is active and both holders still hold their challenged tags. */
+async function confirmSeriesChallenge(
+  env: Env,
+  challenge: tags.BagChallengeRow,
+  actorId: string,
+): Promise<{ error: string; status: number } | { changes: number }> {
+  const series = await tags.getSeries(env.DB, challenge.series_id);
+  if (!series || series.active !== 1) return { error: "no_series", status: 404 };
+  const challenger = await tags.holderByMember(env.DB, challenge.series_id, challenge.challenger_id);
+  const defender = await tags.holderByMember(env.DB, challenge.series_id, challenge.defender_id);
+  if (!challenger || !defender || challenger.tag_number !== challenge.challenger_tag || defender.tag_number !== challenge.defender_tag) {
+    await tags.claimChallenge(env.DB, challenge.id, "declined");
+    return { error: "stale_tags", status: 409 };
+  }
+  const settled = settleBagTags([
+    { memberId: challenge.challenger_id, name: challenger.member_name, tagNumber: challenge.challenger_tag, score: challenge.challenger_score },
+    { memberId: challenge.defender_id, name: defender.member_name, tagNumber: challenge.defender_tag, score: challenge.defender_score },
+  ]);
+  if (!settled.ok) return { error: settled.error, status: 400 };
+  const swapped = settled.changes.length > 0;
+  const summary = settleSummary("challenge", settled.changes);
+  const ok = await tags.confirmSeriesChallenge(env.DB, {
+    challengeId: challenge.id,
+    seriesId: challenge.series_id,
+    challengerId: challenge.challenger_id,
+    challengerName: challenger.member_name,
+    challengerTag: challenge.challenger_tag,
+    defenderId: challenge.defender_id,
+    defenderName: defender.member_name,
+    defenderTag: challenge.defender_tag,
+    swapped,
+    summary,
+    actorId,
+  });
+  if (!ok) {
+    const latest = await tags.getChallenge(env.DB, challenge.id);
+    if (!latest || latest.status !== "pending") return { error: "not_found", status: 404 };
+    const latestSeries = await tags.getSeries(env.DB, challenge.series_id);
+    if (!latestSeries || latestSeries.active !== 1) return { error: "no_series", status: 404 };
+    await tags.claimChallenge(env.DB, challenge.id, "declined");
+    return { error: "stale_tags", status: 409 };
   }
   return { changes: settled.changes.length };
 }
@@ -387,21 +440,9 @@ export async function handleBagTags(
         notifyChallenge(ctx, env, challenge, { kind: "declined" });
         return json({ ok: true }, 200, origin);
       }
-      if (!await leagueTagsStillMatch(env, challenge)) {
-        await tags.claimChallenge(env.DB, challenge.id, "declined", "tags changed before it was confirmed");
-        notifyChallenge(ctx, env, challenge, { kind: "declined", stale: true });
-        return json({ error: "stale_tags" }, 409, origin);
-      }
-      if (!await tags.claimChallenge(env.DB, challenge.id, "settled")) return json({ error: "not_found" }, 404, origin);
-      let done;
-      try {
-        done = await settleLeagueChallenge(env, challenge, member.memberId);
-      } catch (error) {
-        await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
-        throw error;
-      }
+      const done = await settleLeagueChallenge(env, challenge, member.memberId);
       if ("error" in done) {
-        await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
+        if (done.error === "stale_tags") notifyChallenge(ctx, env, challenge, { kind: "declined", stale: true });
         return json({ error: done.error }, done.status, origin);
       }
       notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: done.changes > 0 });
@@ -413,25 +454,9 @@ export async function handleBagTags(
       notifyChallenge(ctx, env, challenge, { kind: "declined" });
       return json({ ok: true }, 200, origin);
     }
-    if (!await tagsStillMatch(env, challenge)) {
-      await tags.claimChallenge(env.DB, challenge.id, "declined");
-      notifyChallenge(ctx, env, challenge, { kind: "declined", stale: true });
-      return json({ error: "stale_tags" }, 409, origin);
-    }
-    const claimed = await tags.claimChallenge(env.DB, challenge.id, "settled");
-    if (!claimed) return json({ error: "not_found" }, 404, origin);
-    let settled;
-    try {
-      settled = await settlePlayers(env, challenge.series_id, [
-        { memberId: challenge.challenger_id, score: challenge.challenger_score },
-        { memberId: challenge.defender_id, score: challenge.defender_score },
-      ], "challenge", member.memberId);
-    } catch (error) {
-      await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
-      throw error;
-    }
+    const settled = await confirmSeriesChallenge(env, challenge, member.memberId);
     if ("error" in settled) {
-      await tags.reopenChallenge(env.DB, challenge.id).catch(() => {});
+      if (settled.error === "stale_tags") notifyChallenge(ctx, env, challenge, { kind: "declined", stale: true });
       return json({ error: settled.error }, settled.status, origin);
     }
     notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: settled.changes > 0 });
@@ -492,7 +517,12 @@ export async function handleAdminBagTags(
       await tags.clearRequest(env.DB, seriesId, memberId);
       return json({ ok: true }, 200, origin);
     }
-    await tags.giveTag(env.DB, { seriesId, tagNumber, memberId, memberName: member.name });
+    try {
+      await tags.giveTag(env.DB, { seriesId, tagNumber, memberId, memberName: member.name });
+    } catch (error) {
+      if (isUniqueViolation(error)) return json({ error: "tag_taken" }, 409, origin);
+      throw error;
+    }
     await tags.clearRequest(env.DB, seriesId, memberId);
     await tags.recordMove(env.DB, {
       seriesId,
@@ -509,6 +539,8 @@ export async function handleAdminBagTags(
     const seriesId = asInt(body.seriesId);
     const memberId = asStr(body.memberId, 80);
     if (!seriesId || !memberId) return json({ error: "invalid_assignment" }, 400, origin);
+    const series = await tags.getSeries(env.DB, seriesId);
+    if (!series || series.active !== 1) return json({ error: "no_series" }, 404, origin);
     const current = await tags.holderByMember(env.DB, seriesId, memberId);
     if (!current) return json({ error: "not_a_holder" }, 404, origin);
     await tags.releaseTag(env.DB, seriesId, memberId);
@@ -537,16 +569,7 @@ export async function handleAdminBagTags(
     if (!challenge || challenge.status !== "pending") return json({ error: "not_found" }, 404, origin);
     // League challenges are answered by the two members only. An admin can cancel one.
     if (challenge.league_id != null) return json({ error: "league_challenge" }, 409, origin);
-    if (!await tagsStillMatch(env, challenge)) {
-      await tags.claimChallenge(env.DB, challenge.id, "declined");
-      return json({ error: "stale_tags" }, 409, origin);
-    }
-    const claimed = await tags.claimChallenge(env.DB, challenge.id, "settled");
-    if (!claimed) return json({ error: "not_found" }, 404, origin);
-    const settled = await settlePlayers(env, challenge.series_id, [
-      { memberId: challenge.challenger_id, score: challenge.challenger_score },
-      { memberId: challenge.defender_id, score: challenge.defender_score },
-    ], "challenge", adminId);
+    const settled = await confirmSeriesChallenge(env, challenge, adminId);
     if ("error" in settled) return json({ error: settled.error }, settled.status, origin);
     notifyChallenge(ctx, env, challenge, { kind: "confirmed", swapped: settled.changes > 0, byAdmin: true });
     return json({ ok: true, changes: settled.changes }, 200, origin);

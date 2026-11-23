@@ -1,4 +1,4 @@
-import type { D1Like } from "./db-types.js";
+import type { D1Like, D1StatementLike } from "./db-types.js";
 import type { TagAssignment } from "./bag-tags.js";
 
 export interface BagSeriesRow {
@@ -104,12 +104,12 @@ export async function giveTag(
   db: D1Like,
   input: { seriesId: number; tagNumber: number; memberId: string; memberName: string },
 ): Promise<void> {
-  await db.prepare(
-    "DELETE FROM bag_tag_holders WHERE series_id = ? AND member_id = ?",
-  ).bind(input.seriesId, input.memberId).run();
-  await db.prepare(
-    "INSERT INTO bag_tag_holders (series_id, tag_number, member_id, member_name) VALUES (?, ?, ?, ?)",
-  ).bind(input.seriesId, input.tagNumber, input.memberId, input.memberName).run();
+  await runAll(db, [
+    db.prepare("DELETE FROM bag_tag_holders WHERE series_id = ? AND member_id = ?")
+      .bind(input.seriesId, input.memberId),
+    db.prepare("INSERT INTO bag_tag_holders (series_id, tag_number, member_id, member_name) VALUES (?, ?, ?, ?)")
+      .bind(input.seriesId, input.tagNumber, input.memberId, input.memberName),
+  ]);
 }
 
 export async function releaseTag(db: D1Like, seriesId: number, memberId: string): Promise<void> {
@@ -118,7 +118,7 @@ export async function releaseTag(db: D1Like, seriesId: number, memberId: string)
   ).bind(seriesId, memberId).run();
 }
 
-async function runAll(db: D1Like, statements: ReturnType<D1Like["prepare"]>[]): Promise<void> {
+async function runAll(db: D1Like, statements: D1StatementLike[]): Promise<void> {
   if (db.batch) {
     await db.batch(statements);
     return;
@@ -144,6 +144,79 @@ export async function replaceTags(
     "INSERT INTO bag_tag_moves (series_id, kind, summary, actor_id) VALUES (?, ?, ?, ?)",
   ).bind(seriesId, move.kind, move.summary, move.actorId));
   await runAll(db, statements);
+}
+
+/** Atomically verify the series is active and both holders still match, claim the challenge, swap if needed, and record the move. */
+export async function confirmSeriesChallenge(
+  db: D1Like,
+  input: {
+    challengeId: number;
+    seriesId: number;
+    challengerId: string;
+    challengerName: string;
+    challengerTag: number;
+    defenderId: string;
+    defenderName: string;
+    defenderTag: number;
+    swapped: boolean;
+    summary: string;
+    actorId: string;
+  },
+): Promise<boolean> {
+  const token = `settling:${crypto.randomUUID()}`;
+  const claimStmt = db.prepare(
+    `UPDATE bag_tag_challenges
+     SET status = 'settled', closed_note = ?, closed_at = datetime('now')
+     WHERE id = ? AND status = 'pending' AND series_id = ? AND league_id IS NULL
+       AND EXISTS (SELECT 1 FROM bag_tag_series WHERE id = ? AND active = 1)
+       AND EXISTS (SELECT 1 FROM bag_tag_holders WHERE series_id = ? AND member_id = ? AND tag_number = ?)
+       AND EXISTS (SELECT 1 FROM bag_tag_holders WHERE series_id = ? AND member_id = ? AND tag_number = ?)`,
+  ).bind(
+    token, input.challengeId, input.seriesId, input.seriesId,
+    input.seriesId, input.challengerId, input.challengerTag,
+    input.seriesId, input.defenderId, input.defenderTag,
+  );
+  const tail: D1StatementLike[] = [];
+  if (input.swapped) {
+    tail.push(
+      db.prepare(
+        `DELETE FROM bag_tag_holders
+         WHERE series_id = ?
+           AND ((member_id = ? AND tag_number = ?) OR (member_id = ? AND tag_number = ?))
+           AND EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+      ).bind(
+        input.seriesId,
+        input.challengerId, input.challengerTag,
+        input.defenderId, input.defenderTag,
+        input.challengeId, token,
+      ),
+      db.prepare(
+        `INSERT INTO bag_tag_holders (series_id, tag_number, member_id, member_name)
+         SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+      ).bind(input.seriesId, input.defenderTag, input.challengerId, input.challengerName, input.challengeId, token),
+      db.prepare(
+        `INSERT INTO bag_tag_holders (series_id, tag_number, member_id, member_name)
+         SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+      ).bind(input.seriesId, input.challengerTag, input.defenderId, input.defenderName, input.challengeId, token),
+    );
+  }
+  tail.push(
+    db.prepare(
+      `INSERT INTO bag_tag_moves (series_id, kind, summary, actor_id)
+       SELECT ?, 'challenge', ?, ? WHERE EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+    ).bind(input.seriesId, input.summary, input.actorId, input.challengeId, token),
+    db.prepare(
+      "UPDATE bag_tag_challenges SET closed_note = NULL WHERE id = ? AND closed_note = ?",
+    ).bind(input.challengeId, token),
+  );
+  if (db.batch) {
+    const res = await db.batch([claimStmt, ...tail]) as Array<{ meta?: { changes?: number } }>;
+    return Number(res[0]?.meta?.changes) > 0;
+  }
+  const claimed = await claimStmt.run() as { meta?: { changes?: number } };
+  if (!(Number(claimed.meta?.changes) > 0)) return false;
+  for (const stmt of tail) await stmt.run();
+  return true;
 }
 
 export async function openChallengeBetween(

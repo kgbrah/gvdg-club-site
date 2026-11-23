@@ -143,8 +143,17 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
   // EMBEDS this same COALESCE(SUM(amount_cents)) as a balance guard — without the anchor it would misroute
   // that INSERT here and never record the debit.
   if (/^\s*SELECT COALESCE\(SUM\(amount_cents\)/i.test(sql)) return { balance_cents: state.balanceCents };
+  if (/SELECT \* FROM wallet_transactions WHERE idempotency_key = \?/i.test(sql)) {
+    return state.transactions.find((t) => t.idempotency_key === args[0]) ?? null;
+  }
   if (/SELECT \* FROM store_orders WHERE payment_ref/i.test(sql)) return state.orders.find((o) => o.payment_ref === args[0]) ?? null;
   if (/SELECT \* FROM store_orders WHERE id = \?/i.test(sql)) return state.orders.find((o) => numberArg(o.id) === numberArg(args[0])) ?? null;
+  if (/UPDATE store_orders SET restocked_at = datetime\('now'\) WHERE id = \? AND restocked_at IS NULL/i.test(sql)) {
+    const row = state.orders.find((o) => numberArg(o.id) === numberArg(args[0]) && o.restocked_at == null);
+    if (!row) return null;
+    row.restocked_at = "2026-06-01T12:05:00Z";
+    return { id: row.id };
+  }
   // claimStoreOrderReversal: atomic "flip to cancelled ONLY if not already cancelled", returns the row iff it won.
   if (/UPDATE store_orders SET status = 'cancelled'/i.test(sql) && /status != 'cancelled'/i.test(sql)) {
     const row = state.orders.find((o) => numberArg(o.id) === numberArg(args[0]));
@@ -153,6 +162,20 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
     return row;
   }
   if (/SELECT \* FROM store_payment_sessions WHERE paypal_order_id/i.test(sql)) return state.paymentSessions.find((session) => session.paypal_order_id === args[0]) ?? null;
+  if (/UPDATE store_payment_sessions\s+SET status = 'capturing'/i.test(sql)) {
+    const row = state.paymentSessions.find((session) => session.paypal_order_id === args[0] && session.status === "pending");
+    if (!row) return null;
+    row.status = "capturing";
+    row.captured_at = "2026-06-01T12:05:00Z";
+    return row;
+  }
+  if (/UPDATE store_payment_sessions SET status = 'pending'/i.test(sql)) {
+    const row = state.paymentSessions.find((session) => session.paypal_order_id === args[0] && session.status === "capturing");
+    if (!row) return null;
+    row.status = "pending";
+    row.captured_at = null;
+    return row;
+  }
   if (/SELECT \* FROM events WHERE id = \?/i.test(sql)) {
     return state.eventExists ? { id: numberArg(args[0]), name: "League Night", date: "2026-06-01", status: "scheduled" } : null;
   }
@@ -184,6 +207,7 @@ function firstRow(sql: string, args: unknown[], state: MockState): Row | null {
     const id = numberArg(args[args.length - 1]);
     const row = state.orders.find((o) => numberArg(o.id) === id);
     if (!row) return null;
+    if (/AND status != 'cancelled'/i.test(sql) && row.status === "cancelled") return null;
     if (/status = \?/i.test(sql)) row.status = stringArg(args[0]);
     return row;
   }
@@ -219,6 +243,10 @@ function insertProduct(args: unknown[], state: MockState): Row {
 }
 
 function insertTransaction(args: unknown[], state: MockState): Row {
+  const idemKey = args.length > 9 ? stringArg(args[9]) : null;
+  if (idemKey && state.transactions.some((t) => t.idempotency_key === idemKey)) {
+    throw new Error("UNIQUE constraint failed: wallet_transactions.idempotency_key");
+  }
   const amount = numberArg(args[2]);
   const row: Row = {
     id: state.nextTransactionId++,
@@ -232,6 +260,7 @@ function insertTransaction(args: unknown[], state: MockState): Row {
     note: stringArg(args[7]),
     created_by: stringArg(args[8]),
     created_at: "2026-06-01T12:00:00Z",
+    ...(idemKey ? { idempotency_key: idemKey } : {}),
   };
   state.transactions.unshift(row);
   state.balanceCents += amount;
@@ -239,15 +268,20 @@ function insertTransaction(args: unknown[], state: MockState): Row {
 }
 
 function insertOrder(args: unknown[], state: MockState): Row {
+  const paymentRef = stringArg(args[4]);
+  if (paymentRef && state.orders.some((o) => o.payment_ref === paymentRef)) {
+    throw new Error("UNIQUE constraint failed: store_orders.payment_ref");
+  }
   const row: Row = {
     id: state.nextOrderId++,
     member_id: stringArg(args[0]),
     member_name: stringArg(args[1]),
     total_cents: numberArg(args[2]),
     payment_method: stringArg(args[3]) ?? "store_credit",
-    payment_ref: stringArg(args[4]),
+    payment_ref: paymentRef,
     status: "submitted",
     created_at: "2026-06-01T12:00:00Z",
+    restocked_at: null,
   };
   state.orders.unshift(row);
   return row;
@@ -271,8 +305,9 @@ function insertPaymentSession(args: unknown[], state: MockState): Row {
     paypal_order_id: stringArg(args[0]),
     member_id: stringArg(args[1]),
     member_name: stringArg(args[2]),
-    items_json: stringArg(args[3]) ?? "[]",
-    total_cents: numberArg(args[4]),
+    contact: stringArg(args[3]),
+    items_json: stringArg(args[4]) ?? "[]",
+    total_cents: numberArg(args[5]),
     status: "pending",
     created_at: "2026-06-01T12:00:00Z",
     captured_at: null,
@@ -291,6 +326,12 @@ function capturePaymentSession(args: unknown[], state: MockState): Row | null {
 }
 
 function runSql(sql: string, args: unknown[], state: MockState): MockResult {
+  if (/INSERT INTO store_order_items/i.test(sql)) {
+    for (let i = 0; i + 4 < args.length; i += 5) {
+      insertOrderItem([args[i], args[i + 1], args[i + 2], args[i + 3], args[i + 4]], state);
+    }
+    return { results: [], success: true, meta: { changes: Math.floor(args.length / 5) } };
+  }
   if (/UPDATE store_products SET stock_qty = stock_qty \+ \?/i.test(sql)) {
     // restock: incrementStoreProductStock binds (quantity, id)
     const row = state.products.find((p) => numberArg(p.id) === numberArg(args[1]));

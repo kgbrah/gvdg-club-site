@@ -238,6 +238,22 @@ export async function handleAdminMembers(
     try {
       await env.DB.prepare("DELETE FROM member_push_subscriptions WHERE member_id = ?").bind(memberId).run();
     } catch { /* push rows are optional */ }
+    try {
+      const heldTags = (await env.DB.prepare("SELECT series_id, tag_number, member_name FROM bag_tag_holders WHERE member_id = ?")
+        .bind(memberId).all<{ series_id: number; tag_number: number; member_name: string }>()).results ?? [];
+      for (const tag of heldTags) {
+        await env.DB.prepare("DELETE FROM bag_tag_holders WHERE series_id = ? AND member_id = ?")
+          .bind(tag.series_id, memberId).run();
+        await env.DB.prepare("INSERT INTO bag_tag_moves (series_id, kind, summary, actor_id) VALUES (?, 'release', ?, ?)")
+          .bind(tag.series_id, `Released #${tag.tag_number} from ${tag.member_name || target.name} (account removed)`, adminId).run();
+      }
+      await env.DB.prepare("DELETE FROM bag_tag_requests WHERE member_id = ?").bind(memberId).run();
+      await env.DB.prepare("DELETE FROM bag_tag_league_links WHERE member_id = ?").bind(memberId).run();
+      await env.DB.prepare("UPDATE bag_tag_league_ladder SET member_id = NULL WHERE member_id = ?").bind(memberId).run();
+      await env.DB.prepare(
+        "UPDATE bag_tag_challenges SET status = 'cancelled', closed_note = 'member removed', closed_at = datetime('now') WHERE status = 'pending' AND (challenger_id = ? OR defender_id = ?)",
+      ).bind(memberId, memberId).run();
+    } catch { /* bag-tag tables optional in partial test schemas */ }
     console.log(JSON.stringify({ evt: "member_removed", actor: adminId, target: memberId, at: Date.now() }));
     return json({ ok: true, memberId }, 200, origin);
   }

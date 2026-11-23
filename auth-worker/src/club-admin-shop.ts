@@ -6,13 +6,17 @@ import { asInt, asStr, inSet } from "./input.js";
 import { reverseStoreOrder } from "./order-reversal.js";
 import { decodeDataUrl } from "./photos.js";
 import { readProductLabel } from "./vision.js";
+import { createWalletAdjustmentOnce } from "./wallet-idempotency.js";
 
 const PRODUCT_CATEGORIES = ["disc", "accessory"] as const;
 const PRODUCT_ADMIN_STATUSES = ["active", "inactive", "all"] as const;
 
 function asSignedInt(v: unknown): number | null {
   if (typeof v === "number" && Number.isInteger(v) && v !== 0) return v;
-  if (typeof v === "string" && /^-?\d+$/.test(v.trim())) return parseInt(v, 10);
+  if (typeof v === "string" && /^-?\d+$/.test(v.trim())) {
+    const parsed = parseInt(v, 10);
+    return parsed !== 0 ? parsed : null;
+  }
   return null;
 }
 
@@ -224,7 +228,8 @@ export async function handleAdminShop(
           : json({ error: "member_not_found" }, 404, origin);
       }
       const member = resolved.member;
-      const tx = await shopDb.createWalletTransaction(env.DB, {
+      const idemKey = asStr(body.idempotency_key, 160);
+      const txInput = {
         member_id: member.memberId,
         member_name: member.name,
         amount_cents: amount,
@@ -232,7 +237,13 @@ export async function handleAdminShop(
         source: "manual_adjustment",
         note: asStr(body.note, 300),
         created_by: adminId,
-      });
+      };
+      if (idemKey) {
+        const res = await createWalletAdjustmentOnce(env.DB, { ...txInput, idempotency_key: "admin_wallet:" + idemKey });
+        if (!res.ok) return json({ error: res.error }, 409, origin);
+        return json({ transaction: res.transaction, balance_cents: await shopDb.walletBalance(env.DB, member.memberId) }, res.created ? 201 : 200, origin);
+      }
+      const tx = await shopDb.createWalletTransaction(env.DB, txInput);
       return json({ transaction: tx, balance_cents: await shopDb.walletBalance(env.DB, member.memberId) }, 201, origin);
     }
   }
@@ -259,6 +270,11 @@ export async function handleAdminShop(
       if ("tracking_carrier" in body) patch.tracking_carrier = asStr(body.tracking_carrier, 60);
       if ("tracking_number" in body) patch.tracking_number = asStr(body.tracking_number, 120);
       if ("admin_note" in body) patch.admin_note = asStr(body.admin_note, 500);
+      const existing = await shopDb.getStoreOrderById(env.DB, id);
+      if (!existing) return json({ error: "not_found" }, 404, origin);
+      if ((existing as Record<string, unknown>).status === "cancelled" && patch.status !== undefined && patch.status !== "cancelled") {
+        return json({ error: "already_cancelled" }, 409, origin);
+      }
       // Cancelling an order must make the member whole — restock and refund store credit — not just flip
       // the status. Route the cancel through the reversal primitive (idempotent), then apply any other
       // patch fields (tracking/note) without re-setting status.
@@ -270,7 +286,13 @@ export async function handleAdminShop(
         return json({ order: await shopDb.getStoreOrderById(env.DB, id), reversal: { refund: rev.refund, restocked: rev.restocked } }, 200, origin);
       }
       const updated = await shopDb.updateStoreOrderFulfillment(env.DB, id, patch);
-      if (!updated) return json({ error: "not_found" }, 404, origin);
+      if (!updated) {
+        const latest = await shopDb.getStoreOrderById(env.DB, id);
+        if (latest && (latest as Record<string, unknown>).status === "cancelled" && patch.status !== undefined && patch.status !== "cancelled") {
+          return json({ error: "already_cancelled" }, 409, origin);
+        }
+        return json({ error: "not_found" }, 404, origin);
+      }
       return json({ order: updated }, 200, origin);
     }
     if (method === "DELETE" && id != null) {

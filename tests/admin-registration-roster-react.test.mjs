@@ -13,7 +13,7 @@ test('admin registration roster is rendered by React from direct loader events',
   const rgLoadRoster = html.match(/async function rgLoadRoster\(options\) \{[\s\S]*?\n        \}/)?.[0];
   const rgRemoveManualPlayer = html.match(/async function rgRemoveManualPlayer\(player\) \{[\s\S]*?\n        \}/)?.[0];
   const rgRemoveRegistration = html.match(/async function rgRemoveRegistration\(registration\) \{[\s\S]*?\n        \}/)?.[0];
-  const rgAwardCredit = html.match(/async function rgAwardCredit\(memberId, name, amountValue\) \{[\s\S]*?\n        \}/)?.[0];
+  const rgAwardCredit = html.match(/async function rgAwardCredit\(memberId, name, amountValue(?:, opts = \{\})?\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminRegistrationReactApp"/);
@@ -38,13 +38,13 @@ test('admin registration roster is rendered by React from direct loader events',
   assert.doesNotMatch(rgRemoveRegistration, /confirm\(/);
   assert.ok(rgAwardCredit);
   assert.match(rgAwardCredit, /dollarsToCents\(amountValue\)/);
-  assert.match(rgAwardCredit, /rgLoadRoster\(\{ quiet: true \}\); rgLoadCredits\(\)/);
+  assert.match(rgAwardCredit, /rgLoadRoster\(\{ quiet: true \}\);\s*rgLoadCredits\(\)/);
   assert.doesNotMatch(rgAwardCredit, /input\.value|memberInput|amountInput/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-registration-roster-patch-request/);
   assert.match(initAdmin, /rgPatch\(registration\.id, detail\.patch \|\| \{\}\)/);
   assert.match(initAdmin, /gvdg:admin-registration-roster-credit-request/);
-  assert.match(initAdmin, /rgAwardCredit\(detail\.memberId, detail\.memberName, detail\.amountValue\)/);
+  assert.match(initAdmin, /rgAwardCredit\(detail\.memberId, detail\.memberName, detail\.amountValue(?:, \{ idempotencyKey: detail\.idempotencyKey, requestId: detail\.requestId \})?\)/);
   assert.match(initAdmin, /gvdg:admin-registration-manual-remove-request/);
   assert.match(initAdmin, /rgRemoveManualPlayer\(player\)/);
   assert.match(initAdmin, /gvdg:admin-registration-remove-request/);

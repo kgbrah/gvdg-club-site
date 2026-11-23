@@ -155,16 +155,21 @@ export function clubWallClockToIso(value) {
   const day = Number(match[3]);
   const hour = Number(match[4]);
   const minute = Number(match[5]);
-  const utcGuess = Date.UTC(year, month - 1, day, hour, minute);
-  const shown = easternParts(new Date(utcGuess));
-  const shownAsUtc = Date.UTC(
-    Number(shown.year),
-    Number(shown.month) - 1,
-    Number(shown.day),
-    Number(shown.hour),
-    Number(shown.minute),
-  );
-  return new Date(utcGuess - (shownAsUtc - utcGuess)).toISOString();
+  const targetUtc = Date.UTC(year, month - 1, day, hour, minute);
+  const offsetAt = (ms) => {
+    const shown = easternParts(new Date(ms));
+    const shownAsUtc = Date.UTC(
+      Number(shown.year),
+      Number(shown.month) - 1,
+      Number(shown.day),
+      Number(shown.hour),
+      Number(shown.minute),
+    );
+    return shownAsUtc - ms;
+  };
+  const pass1 = targetUtc - offsetAt(targetUtc);
+  const pass2 = targetUtc - offsetAt(pass1);
+  return new Date(pass2).toISOString();
 }
 
 export function eventClubCalendarDay(event) {

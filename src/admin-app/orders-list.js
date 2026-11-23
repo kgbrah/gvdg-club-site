@@ -178,7 +178,7 @@ function OrderCard({ order }) {
       h("div", { key: "status" }, [
         h("label", { htmlFor: `order-status-${order.id}`, key: "label" }, "Status"),
         h("select", {
-          disabled: busy,
+          disabled: busy || order.status === "cancelled",
           id: `order-status-${order.id}`,
           key: "select",
           onChange: (event) => setStatus(event.target.value),

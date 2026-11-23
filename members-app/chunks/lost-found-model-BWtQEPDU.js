@@ -1,0 +1,2 @@
+function e(e){let t=Number(e?.karma)||0,n=Number(e?.returned)||0;if(t===0&&n<=0)return``;let r=t<0?`−`+Math.abs(t):String(t);return n<=0?`Karma ${r}`:`Karma ${r} · ${n} ${n===1?`disc`:`discs`} returned`}export{e as t};
+//# sourceMappingURL=lost-found-model-BWtQEPDU.js.map

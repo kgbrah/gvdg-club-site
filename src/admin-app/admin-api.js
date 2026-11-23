@@ -27,8 +27,11 @@ export function adminRequest(path, { body, method = "GET", signal, token = admin
 export async function adminJson(path, options) {
   const response = await adminRequest(path, options);
   if (!response.ok) {
+    const data = await response.json().catch(() => null);
     const error = new Error(`admin request failed: ${response.status}`);
     error.status = response.status;
+    error.data = data;
+    error.code = data && typeof data.error === "string" ? data.error : "";
     throw error;
   }
   return response.json();

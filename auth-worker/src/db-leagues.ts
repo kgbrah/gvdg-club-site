@@ -41,6 +41,15 @@ export async function deleteLeague(db: D1Like, id: number) {
     await db.prepare(`DELETE FROM events WHERE id IN (${marks})`).bind(...imported).run();
   }
   await db.prepare("UPDATE events SET league_id = NULL, updated_at = datetime('now') WHERE league_id = ?").bind(id).run();
+  for (const sql of [
+    "DELETE FROM bag_tag_league_ladder WHERE league_id = ?",
+    "DELETE FROM bag_tag_league_state WHERE league_id = ?",
+    "DELETE FROM bag_tag_league_links WHERE league_id = ?",
+    "DELETE FROM bag_tag_challenges WHERE league_id = ?",
+    "DELETE FROM bag_tag_moves WHERE league_id = ?",
+  ]) {
+    try { await db.prepare(sql).bind(id).run(); } catch { /* optional bag-tag tables in partial test schemas */ }
+  }
   await db.prepare("DELETE FROM leagues WHERE id = ?").bind(id).run();
 }
 

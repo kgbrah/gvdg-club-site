@@ -562,7 +562,7 @@ test('admin registration CTP, credit, and ace pot widgets are rendered by React 
   const rgLoadCtps = html.match(/async function rgLoadCtps\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgLoadCredits = html.match(/async function rgLoadCredits\(\) \{[\s\S]*?\n        \}/)?.[0];
   const rgLoadAcePot = html.match(/async function rgLoadAcePot\(\) \{[\s\S]*?\n        \}/)?.[0];
-  const rgAwardCtpCredit = html.match(/async function rgAwardCtpCredit\(ctp, memberIdValue, winnerNameValue, amountValue\) \{[\s\S]*?\n        \}/)?.[0];
+  const rgAwardCtpCredit = html.match(/async function rgAwardCtpCredit\(ctp, memberIdValue, winnerNameValue, amountValue(?:, opts = \{\})?\) \{[\s\S]*?\n        \}/)?.[0];
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?navigationFromUrl\(true\);[\s\S]*?adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminRegistrationReactApp"/);
@@ -598,7 +598,7 @@ test('admin registration CTP, credit, and ace pot widgets are rendered by React 
   assert.match(initAdmin, /gvdg:admin-registration-ctp-winner-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/events\/' \+ rgEventId \+ '\/ctps\/' \+ ctp\.id, \{ method: 'PATCH', body: \{ winner_name: winnerName \|\| null, winner_member_id: winnerMemberId \|\| null \} \}\)/);
   assert.match(initAdmin, /gvdg:admin-registration-ctp-credit-request/);
-  assert.match(initAdmin, /rgAwardCtpCredit\(ctp, detail\.winnerMemberId, detail\.winnerName, detail\.amountValue\)/);
+  assert.match(initAdmin, /rgAwardCtpCredit\(ctp, detail\.winnerMemberId, detail\.winnerName, detail\.amountValue(?:, \{ idempotencyKey: detail\.idempotencyKey, requestId: detail\.requestId \})?\)/);
   assert.match(initAdmin, /gvdg:admin-registration-ctp-delete-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/events\/' \+ rgEventId \+ '\/ctps\/' \+ ctp\.id, \{ method: 'DELETE' \}\)/);
   assert.match(main, /import \{ AdminRegistrationPanel \} from "\.\/registration-panel\.js"/);

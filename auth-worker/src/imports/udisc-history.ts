@@ -30,6 +30,10 @@ function norm(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+export function normUdiscPlayer(value: string): string {
+  return norm(value);
+}
+
 function clip(value: string, max: number): string {
   const text = value.normalize("NFKC").trim().replace(/\s+/g, " ");
   return text.length > max ? text.slice(0, max) : text;
@@ -140,13 +144,33 @@ function rowWhen(row: Record<string, string>): string {
   return row.startdate || row.date || "";
 }
 
-/** Current exports keep a placeholder stroke on a scratched hole and leave it out of Total. */
-function dropScratchedHole(strokes: Map<number, number>, total: number | null): Map<number, number> {
+/** Drop UDisc's scratched-hole placeholder only when par + to_par consistency or single unambiguous gap confirms it. */
+function dropScratchedHole(
+  strokes: Map<number, number>,
+  total: number | null,
+  toPar: number | null,
+  parFor: ReadonlyMap<number, number>,
+): Map<number, number> {
   if (total == null) return strokes;
   let sum = 0;
   for (const score of strokes.values()) sum += score;
   const gap = sum - total;
   if (gap <= 0) return strokes;
+  if (toPar != null && parFor.size > 0 && [...strokes.keys()].every((hole) => parFor.has(hole))) {
+    let rawToPar = 0;
+    for (const [hole, score] of strokes.entries()) rawToPar += score - parFor.get(hole)!;
+    const expectedPar = gap - (rawToPar - toPar);
+    if (expectedPar >= 2 && expectedPar <= 6) {
+      const matches = [...strokes.entries()].filter(([hole, score]) => score === gap && parFor.get(hole) === expectedPar);
+      if (matches.length === 1) {
+        const next = new Map(strokes);
+        next.delete(matches[0]![0]);
+        return next;
+      }
+    }
+    return strokes;
+  }
+  if (gap > 12) return strokes;
   const matches = [...strokes.entries()].filter(([, score]) => score === gap);
   if (matches.length !== 1) return strokes;
   const next = new Map(strokes);
@@ -192,9 +216,7 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
       const score = parseCount(row["hole" + hole] || "", 40);
       if (score != null) rawStrokes.set(hole, score);
     }
-    const total = parseTotal(row.total || "");
-    const strokes = dropScratchedHole(rawStrokes, total);
-    if (!strokes.size) continue;
+    if (!rawStrokes.size) continue;
     const sourceFinishedAt = row.enddate?.trim();
     playerRows.push({
       playerName,
@@ -203,9 +225,9 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
       playedAt,
       sourcePlayedAt,
       ...(sourceFinishedAt && parseUdiscPlayedAt(sourceFinishedAt) ? { sourceFinishedAt } : {}),
-      total,
+      total: parseTotal(row.total || ""),
       toPar: parseToPar(row["+/-"] || row.topar || ""),
-      strokes,
+      strokes: rawStrokes,
     });
   }
 
@@ -213,7 +235,9 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
   for (const row of playerRows) {
     const cardKey = [norm(row.courseName), norm(row.layoutName), row.playedAt].join("\n");
     const parFor = pars.get(cardKey) || new Map<number, number>();
-    const holeRows: UdiscHistoryHole[] = [...row.strokes.entries()]
+    const strokes = dropScratchedHole(row.strokes, row.total, row.toPar, parFor);
+    if (!strokes.size) continue;
+    const holeRows: UdiscHistoryHole[] = [...strokes.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([hole, strokes]) => ({ hole, par: parFor.get(hole) ?? null, strokes }));
     let toPar = row.toPar;
@@ -235,7 +259,7 @@ export function parseUdiscHistory(csv: string): UdiscHistoryParse {
     byKey.set(round.roundKey, round);
   }
   const rounds = [...byKey.values()];
-  if (rounds.length > UDISC_HISTORY_MAX_ROUNDS) return { error: "too_many" };
+  if (rounds.length > UDISC_HISTORY_MAX_ROUNDS * 6) return { error: "too_many" };
   if (!rounds.length) return { error: "empty" };
   const players: string[] = [];
   const seen = new Set<string>();
