@@ -119,6 +119,8 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
 .hero .carousel-prev { left: auto; right: 102px; }
 .hero .carousel-next { right: 48px; }
 .hero .carousel-arrow:hover { transform: none; background: var(--primary-strong); }
+.hero .carousel-pause { top: auto; bottom: 22px; left: auto; right: 156px; padding: 0; border-width: 1px; background: rgba(15,15,30,.3); transform: none; }
+.hero .carousel-pause:hover { transform: none; background: var(--primary-strong); }
 .club-rhythm {
   grid-column: 2; grid-row: 1 / span 4; align-self: center;
   grid-template-columns: 1fr; gap: 0; margin: 0; padding: 8px 26px 0;
@@ -169,8 +171,9 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
   .nav-right { gap: 8px; }
   .theme-toggle, .menu-toggle { padding: 0; width: 44px; height: 44px; min-width: 44px; }
   .hero { padding: 112px 0 28px; min-height: 0; }
+  .hero .carousel-pause { top: 76px; right: 20px; bottom: auto; left: auto; padding: 0; transform: none; }
   .hero-content { display: flex; flex-direction: column; padding: 0 24px; gap: 0; }
-  .hero-kicker { font-size: .6rem; letter-spacing: .12em; margin-bottom: 20px; }
+  .hero-kicker { font-size: .6rem; letter-spacing: .12em; margin-bottom: 20px; padding-right: 3.5rem; }
   .hero-title { font-size: clamp(3.25rem, 13vw, 4.8rem); margin-bottom: 20px; }
   .hero-subtitle { font-size: .94rem; line-height: 1.7; margin-bottom: 24px; }
   .hero-actions { width: 100%; max-width: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }

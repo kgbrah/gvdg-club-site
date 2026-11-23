@@ -1,5 +1,7 @@
 # Cloudflare Pages: revalidate code + markup on every load so deploys show up immediately.
 # (Pages defaults JS/CSS to a 4-hour browser cache, which made site updates appear "not deployed".)
+/
+  Cache-Control: public, max-age=0, must-revalidate
 /*.html
   Cache-Control: public, max-age=0, must-revalidate
 /*.js

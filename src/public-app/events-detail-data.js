@@ -50,7 +50,10 @@ async function loadCourseData(api) {
           const courses = Array.isArray(data?.courses) ? data.courses : [];
           return { api, courses, index: buildCourseIndex(courses) };
         })
-        .catch(() => ({ api, courses: [], index: new Map() })),
+        .catch(() => {
+          if (courseCache?.api === api) courseCache = null;
+          return { api, courses: [], index: new Map() };
+        }),
     };
   }
   return courseCache.promise;

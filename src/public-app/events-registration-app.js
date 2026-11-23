@@ -99,6 +99,7 @@ function RegisteredCardActions({ api, event, guestReg, myReg, onRefresh, token }
   const [error, setError] = React.useState("");
 
   async function withdraw() {
+    if (busy) return;
     if (!confirming) {
       setError("");
       setConfirming(true);
@@ -118,6 +119,8 @@ function RegisteredCardActions({ api, event, guestReg, myReg, onRefresh, token }
       setError(body.error === "paid_contact_admin"
         ? "You have already paid. Please contact an admin to withdraw."
         : "Withdraw failed. Please try again.");
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -176,6 +179,7 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
   }, [event.id]);
 
   async function submit() {
+    if (busy) return;
     const body = {
       division: divisions.length ? division : null,
       addons: {
@@ -229,6 +233,8 @@ function RegisterForm({ api, event, onRefresh, onSessionExpired, token }) {
         });
       }
       await onRefresh();
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setBusy(false);
     }

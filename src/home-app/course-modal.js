@@ -96,7 +96,6 @@ export function CourseModal() {
         role: "dialog",
         "aria-modal": dialog.isolated ? "true" : undefined,
         "aria-labelledby": "course-modal-title",
-        "aria-label": "Course details",
         tabIndex: -1,
         ref: dialog.panelRef,
       }, [

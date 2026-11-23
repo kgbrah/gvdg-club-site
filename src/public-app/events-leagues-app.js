@@ -1,5 +1,6 @@
 import React from "react";
 
+import { formatLabel } from "../shared/events-model.js";
 import { fetchPublicJson, publicApiBase } from "./public-api.js";
 
 const h = React.createElement;
@@ -48,7 +49,7 @@ function leagueKey(league, index) {
 }
 
 function leagueMeta(league) {
-  return [league.season, league.format].filter(Boolean).join(" · ");
+  return [league.season, league.format ? formatLabel(league.format) : ""].filter(Boolean).join(" · ");
 }
 
 function LeagueCard({ league }) {

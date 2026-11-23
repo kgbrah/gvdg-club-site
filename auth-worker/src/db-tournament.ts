@@ -3,6 +3,7 @@
 // (48 hours). Each check and change is one statement, so two players can't both take the last spot.
 
 import type { D1Like } from "./db-types.js";
+import { karmaKey } from "./karma-directory.js";
 import { waitlistOrder } from "./tournament.js";
 
 export const CLAIM_MINUTES = 15;
@@ -204,8 +205,8 @@ export async function offerSpot(
 }
 
 export type PublicField = {
-  paid: { name: string; division: string | null }[];
-  waitlist: { position: number; name: string; division: string | null }[];
+  paid: { name: string; division: string | null; karmaKey?: string }[];
+  waitlist: { position: number; name: string; division: string | null; karmaKey?: string }[];
   used: number;
   /** The asking registration's place on the waitlist (1-based), when it's on it. */
   position: number | null;
@@ -213,7 +214,7 @@ export type PublicField = {
 
 /** The published lists (PDGA 1.02.7–8): paid players in field order, and the waitlist in order. */
 export async function publicField(db: D1Like, eventId: number, now = new Date(), registrationId: number | null = null): Promise<PublicField> {
-  const rows = (await db.prepare(`SELECT id, name, division, paid_entry, paid_at, pdga_number, waitlisted, waitlisted_at, spot_claimed_at, offered_at
+  const rows = (await db.prepare(`SELECT id, member_id, name, division, paid_entry, paid_at, pdga_number, waitlisted, waitlisted_at, spot_claimed_at, offered_at
       FROM registrations WHERE event_id = ?`).bind(eventId).all<Record<string, unknown>>()).results ?? [];
   const claim = cutoff(now, CLAIM_MINUTES);
   const offer = cutoff(now, OFFER_HOURS * 60);
@@ -226,9 +227,20 @@ export async function publicField(db: D1Like, eventId: number, now = new Date(),
   const used = rows.filter((row) => Number(row.paid_entry) === 1
     || (row.spot_claimed_at != null && String(row.spot_claimed_at) > claim)
     || (row.offered_at != null && Number(row.waitlisted) === 0 && String(row.offered_at) > offer)).length;
+  const fieldKey = (row: Record<string, unknown>) => karmaKey(typeof row.member_id === "string" ? row.member_id : null);
   return {
-    paid: paid.map((row) => ({ name: String(row.name), division: (row.division as string | null) ?? null })),
-    waitlist: waitlist.map((row, index) => ({ position: index + 1, name: String(row.name), division: (row.division as string | null) ?? null })),
+    paid: paid.map((row) => {
+      const key = fieldKey(row);
+      return key
+        ? { name: String(row.name), division: (row.division as string | null) ?? null, karmaKey: key }
+        : { name: String(row.name), division: (row.division as string | null) ?? null };
+    }),
+    waitlist: waitlist.map((row, index) => {
+      const key = fieldKey(row);
+      return key
+        ? { position: index + 1, name: String(row.name), division: (row.division as string | null) ?? null, karmaKey: key }
+        : { position: index + 1, name: String(row.name), division: (row.division as string | null) ?? null };
+    }),
     used,
     position: registrationId == null ? null : (waitlist.findIndex((row) => Number(row.id) === registrationId) + 1) || null,
   };

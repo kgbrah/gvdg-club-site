@@ -45,7 +45,7 @@ function fakeCaches() {
 }
 
 // Load sw.js as one deployed version whose build listed `chunks`.
-function worker(caches, chunks, { network, now }) {
+function worker(caches, chunks, { network, now, publicChunks = [] }) {
   const handlers = new Map();
   const fetched = [];
   const self = {
@@ -58,8 +58,13 @@ function worker(caches, chunks, { network, now }) {
     URL, Response, self, caches,
     Date: Object.assign(class extends Date {}, { now: () => now }),
     importScripts: (path) => {
-      assert.equal(path, "members-app/sw-chunks.js");
-      self.GVDG_MEMBER_CHUNKS = chunks;
+      if (path === "members-app/sw-chunks.js") {
+        self.GVDG_MEMBER_CHUNKS = chunks;
+      } else if (path === "public-app/sw-chunks.js") {
+        self.GVDG_PUBLIC_CHUNKS = publicChunks;
+      } else {
+        throw new Error(`unexpected chunk script: ${path}`);
+      }
     },
     fetch: async (request) => {
       const url = new URL(typeof request === "string" ? request : request.url, origin + "/").href;

@@ -398,7 +398,7 @@ body.player-theme-page header .nav-more-menu {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 0.9rem;
   border-radius: 0.5rem;
   background: var(--primary-strong);

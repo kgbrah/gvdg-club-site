@@ -1,7 +1,7 @@
 import React from "react";
 import { KarmaChip } from "../shared/karma.js";
 
-import { displayEventTitle, formatEventDate, statusLabel } from "../shared/events-model.js";
+import { displayEventTitle, formatEventDate, formatLabel, statusLabel } from "../shared/events-model.js";
 import {
   currentEventsRoute,
   EVENTS_ROUTE_REQUEST_EVENT,
@@ -186,7 +186,7 @@ function useOfficialRyderTally(routeId) {
 }
 
 function leagueMeta(league) {
-  return [league.season, league.format].filter(Boolean).join(" · ");
+  return [league.season, league.format ? formatLabel(league.format) : ""].filter(Boolean).join(" · ");
 }
 
 function fmtToPar(value) {

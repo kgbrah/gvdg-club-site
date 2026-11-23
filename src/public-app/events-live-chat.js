@@ -141,6 +141,7 @@ export function EventLiveChat({ apiBase, eventId, memberName, memberToken }) {
       signedIn
         ? h("div", { className: "live-chat-as", key: "as" }, "Posting as " + memberName)
         : h("input", {
+          "aria-label": "Your name",
           className: "live-chat-input",
           key: "name",
           maxLength: EVENT_CHAT_NAME_MAX,
@@ -149,6 +150,7 @@ export function EventLiveChat({ apiBase, eventId, memberName, memberToken }) {
           value: name,
         }),
       h("textarea", {
+        "aria-label": "Your message",
         className: "live-chat-input live-chat-draft",
         key: "draft",
         maxLength: EVENT_CHAT_BODY_MAX,
@@ -158,7 +160,7 @@ export function EventLiveChat({ apiBase, eventId, memberName, memberToken }) {
         value: draft,
       }),
       h("button", { className: "live-chat-send", disabled: busy, key: "send", type: "submit" }, busy ? "Sending…" : "Send"),
-      status ? h("div", { className: "live-chat-status", key: "status" }, status) : null,
+      status ? h("div", { "aria-live": "polite", className: "live-chat-status", key: "status", role: "status" }, status) : null,
     ]),
   ]);
 }

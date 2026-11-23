@@ -267,7 +267,7 @@ export function CrottsHelpLink(props) {
   }, props.children ?? "Help");
 }
 
-function AssistantBubble({ message }) {
+function AssistantBubble({ message, onClose }) {
   const actions = sanitizeCrottsActions(message.actions);
   return h("div", { className: `crotts-b ${message.kind}` }, [
     message.content,
@@ -276,6 +276,18 @@ function AssistantBubble({ message }) {
         className: "crotts-action",
         href: action.href,
         key: action.href,
+        onClick: () => {
+          if (typeof window === "undefined" || !window.location?.href) return;
+          try {
+            const target = new URL(action.href, window.location.href);
+            const norm = (path) => path.replace(/\.html$/, "");
+            if (target.origin === window.location.origin && norm(target.pathname) === norm(window.location.pathname)) {
+              onClose?.();
+            }
+          } catch {
+            // Keep default navigation if URL parsing fails.
+          }
+        },
       }, action.label)))
       : null,
   ]);
@@ -397,7 +409,13 @@ export function CrottsWidget() {
         method: "POST",
       });
       if (!response.ok) {
-        setError(response.status === 429 ? "Crotts is getting a lot of questions. Try again in a minute." : "Crotts couldn’t answer. Try sending your question again.");
+        if (response.status === 413) {
+          setError("That message is too long. Please shorten it and try again.");
+        } else if (response.status === 429) {
+          setError("Crotts is getting a lot of questions. Try again in a minute.");
+        } else {
+          setError("Crotts couldn’t answer. Try sending your question again.");
+        }
         return;
       }
       const data = await response.json();
@@ -455,7 +473,7 @@ export function CrottsWidget() {
       ]),
       h("div", { "aria-label": "Conversation", id: "crotts-thread", key: "thread", ref: threadRef, role: "region", tabIndex: 0 }, [
         h("div", { "aria-label": "Messages", id: "crotts-msgs", key: "messages", role: "log" },
-          messages.map((message) => h(AssistantBubble, { key: message.id, message }))),
+          messages.map((message) => h(AssistantBubble, { key: message.id, message, onClose: closeHelp }))),
         busy && h("div", { className: "crotts-status", key: "progress", role: "status" }, operation === "attachment"
           ? "Preparing attachment…" : shot ? "Crotts is looking at your attachment…" : "Waiting for Crotts…"),
         error && h("div", { className: "crotts-status error", key: "error", role: "alert" }, error),
@@ -498,6 +516,7 @@ export function CrottsWidget() {
             "aria-label": "Message Crotts",
             id: "crotts-input",
             key: "input",
+            maxLength: 2000,
             onChange: (event) => setDraft(event.target.value),
             onKeyDown: (event) => {
               if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
