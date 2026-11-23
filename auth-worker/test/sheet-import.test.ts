@@ -187,7 +187,7 @@ describe("held accounts carry over when the player sets up their account", () =>
     expect(listed.data.members.find((m: { memberId: string }) => m.memberId === heldId)).toMatchObject({ held: true, tier: "member" });
     const linked = await call("/admin/members/link-held", { heldId, memberId: "m_555" });
     expect(linked.status).toBe(200);
-    expect(linked.data.carriedOver).toBe("Matched Taylor Morgn from the club's sheets: $5.00 store credit and dues through 2026 came over.");
+    expect(linked.data.carriedOver).toBe("Matched Taylor Morgn from the club's sheets: $5.00 store credit came over.");
     expect(wallet("m_555")).toBe(500);
     expect(record(heldId)).toBeNull();
     expect((await call("/admin/members/link-held", { heldId, memberId: "m_555" })).status).toBe(409);

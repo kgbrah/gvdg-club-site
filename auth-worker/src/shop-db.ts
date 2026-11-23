@@ -79,6 +79,7 @@ type StorePaymentSessionInput = {
   readonly paypal_order_id: string;
   readonly member_id: string;
   readonly member_name?: string | null;
+  readonly contact?: string | null;
   readonly items_json: string;
   readonly total_cents: number;
 };
@@ -400,6 +401,7 @@ export async function countUnfulfilledStoreOrders(db: D1Like): Promise<number> {
 export async function updateStoreOrderFulfillment(db: D1Like, id: number, patch: OrderFulfillmentPatch) {
   const sets: string[] = [];
   const binds: unknown[] = [];
+  const updatingStatus = patch.status !== undefined && patch.status !== "cancelled";
   if (patch.status !== undefined) {
     sets.push("status = ?", "status_updated_at = datetime('now')");
     binds.push(patch.status);
@@ -409,17 +411,87 @@ export async function updateStoreOrderFulfillment(db: D1Like, id: number, patch:
   if (patch.admin_note !== undefined) { sets.push("admin_note = ?"); binds.push(patch.admin_note); }
   if (!sets.length) return db.prepare("SELECT * FROM store_orders WHERE id = ?").bind(id).first();
   binds.push(id);
-  return db.prepare(`UPDATE store_orders SET ${sets.join(", ")} WHERE id = ? RETURNING *`).bind(...binds).first();
+  const guard = updatingStatus ? " AND status != 'cancelled'" : "";
+  return db.prepare(`UPDATE store_orders SET ${sets.join(", ")} WHERE id = ?${guard} RETURNING *`).bind(...binds).first();
 }
 
 export async function deleteStoreOrder(db: D1Like, id: number) {
   return db.prepare("DELETE FROM store_orders WHERE id = ? RETURNING *").bind(id).first();
 }
 
+export async function claimStoreOrderRestock(db: D1Like, id: number): Promise<boolean> {
+  const row = await db
+    .prepare("UPDATE store_orders SET restocked_at = datetime('now') WHERE id = ? AND restocked_at IS NULL RETURNING id")
+    .bind(id)
+    .first();
+  return row != null;
+}
+
+export async function reserveStoreStock(
+  db: D1Like,
+  lines: readonly StoreOrderLineInput[],
+): Promise<{ ok: true } | { ok: false; error: "insufficient_stock" | "product_unavailable"; product_id: number }> {
+  if (!lines.length) return { ok: false, error: "insufficient_stock", product_id: 0 };
+  const changedCount = (res: { meta?: { changes?: number; rows_written?: number } } | undefined) =>
+    Number(res?.meta?.changes ?? res?.meta?.rows_written ?? 0);
+  const succeeded: StoreOrderLineInput[] = [];
+  let failed: StoreOrderLineInput | null = null;
+  if (typeof db.batch === "function" && lines.length > 1) {
+    const stmts = lines.map((line) =>
+      db
+        .prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ? AND active = 1 AND stock_qty >= ?")
+        .bind(line.quantity, line.product_id, line.quantity),
+    );
+    const results = await db.batch(stmts) as Array<{ meta?: { changes?: number; rows_written?: number } }>;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]!;
+      if (changedCount(results[i]) > 0) succeeded.push(line);
+      else if (!failed) failed = line;
+    }
+  } else {
+    for (const line of lines) {
+      const res = await db
+        .prepare("UPDATE store_products SET stock_qty = stock_qty - ?, updated_at = datetime('now') WHERE id = ? AND active = 1 AND stock_qty >= ?")
+        .bind(line.quantity, line.product_id, line.quantity)
+        .run();
+      if (changedCount(res) > 0) succeeded.push(line);
+      else {
+        failed = line;
+        break;
+      }
+    }
+  }
+  if (!failed) return { ok: true };
+  if (succeeded.length) await restoreStoreProductStock(db, succeeded);
+  const product = await db.prepare("SELECT * FROM store_products WHERE id = ?").bind(failed.product_id).first<Record<string, unknown>>();
+  const active = product && Number(product.active) === 1;
+  return { ok: false, error: active ? "insufficient_stock" : "product_unavailable", product_id: failed.product_id };
+}
+
+export async function claimStorePaymentSession(db: D1Like, paypalOrderId: string) {
+  return db
+    .prepare(
+      `UPDATE store_payment_sessions
+       SET status = 'capturing', captured_at = datetime('now')
+       WHERE paypal_order_id = ?
+         AND (status = 'pending' OR (status = 'capturing' AND (captured_at IS NULL OR captured_at <= datetime('now', '-10 minutes'))))
+       RETURNING *`,
+    )
+    .bind(paypalOrderId)
+    .first();
+}
+
+export async function releaseStorePaymentSession(db: D1Like, paypalOrderId: string) {
+  return db
+    .prepare("UPDATE store_payment_sessions SET status = 'pending', captured_at = NULL WHERE paypal_order_id = ? AND status = 'capturing' RETURNING *")
+    .bind(paypalOrderId)
+    .first();
+}
+
 export async function createStorePaymentSession(db: D1Like, session: StorePaymentSessionInput) {
   return db
-    .prepare("INSERT INTO store_payment_sessions (paypal_order_id, member_id, member_name, items_json, total_cents, status) VALUES (?, ?, ?, ?, ?, 'pending') RETURNING *")
-    .bind(session.paypal_order_id, session.member_id, session.member_name ?? null, session.items_json, session.total_cents)
+    .prepare("INSERT INTO store_payment_sessions (paypal_order_id, member_id, member_name, contact, items_json, total_cents, status) VALUES (?, ?, ?, ?, ?, ?, 'pending') RETURNING *")
+    .bind(session.paypal_order_id, session.member_id, session.member_name ?? null, session.contact ?? null, session.items_json, session.total_cents)
     .first();
 }
 

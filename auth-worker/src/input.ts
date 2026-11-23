@@ -80,13 +80,13 @@ export function parseOptionalEmail(v: unknown, max = 120): { ok: true; value: st
 }
 
 // Normalize a client timestamp to an ISO string. null/"" -> null (clear); a valid instant -> its ISO form;
-// anything unparseable OR a zone-less "YYYY-MM-DDTHH:MM" (the Worker runs UTC and would misread it) ->
+// anything unparseable OR a timestamp lacking explicit UTC timezone offset ('Z'/'z' or '+/-HH:MM'/'+/-HHMM') ->
 // undefined, which callers treat as "invalid input" (reject) vs null ("explicitly cleared").
 export function asIsoTimestamp(v: unknown): string | null | undefined {
   if (v == null || v === "") return null;
   const text = asStr(v, 80);
   if (!text) return undefined;
-  if (/T\d/.test(text) && !/(Z|[+-]\d\d:?\d\d)$/.test(text)) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(text)) return undefined;
   const time = Date.parse(text);
   return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
 }

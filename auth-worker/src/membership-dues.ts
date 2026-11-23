@@ -103,6 +103,7 @@ export async function handleMembershipPublic(
     try {
       rec = await recordPaypalDues(env.DB, app.id, orderId, cap.captureId ?? "", cap.amountCents);
     } catch {
+      await releaseDues(env.DB, app.id, orderId);
       return json({ error: "order_already_used" }, 409, origin);
     }
     if (!rec) rec = await getDues(env.DB, app.id); // a concurrent retry recorded it first

@@ -1,5 +1,6 @@
 import React from "react";
 import { currentAdminRoute } from "./admin-shell-state.js";
+import { adminConfirm } from "./admin-dialogs.js";
 import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
@@ -9,6 +10,12 @@ const EMPTY_FORM = {
   memberId: "",
   note: "",
 };
+
+function newKey() {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 function dispatchRequest(name, detail) {
   window.dispatchEvent(new CustomEvent(name, { detail }));
@@ -33,14 +40,28 @@ function formBody(form) {
 
 export function AdminWalletAdjustmentForm() {
   const [form, setForm] = React.useState(() => ({ ...EMPTY_FORM, memberId: currentAdminRoute().memberId || "" }));
+  const [busy, setBusy] = React.useState(false);
+  // Member names to autocomplete, from the balances list below (picking one fills the member's id: no ambiguity).
+  const [roster, setRoster] = React.useState([]);
+  React.useEffect(() => {
+    const take = (event) => setRoster(Array.isArray(event.detail?.members) ? event.detail.members : []);
+    window.addEventListener("gvdg:admin-wallet-roster", take);
+    return () => window.removeEventListener("gvdg:admin-wallet-roster", take);
+  }, []);
+  const currentRequest = React.useRef("");
+  const idempotencyKeyRef = React.useRef("");
+  const requestCounter = React.useRef(0);
+
   React.useEffect(() => {
     function selectMember(event) {
       if (event.detail?.tab !== "wallets" || !event.detail.memberId) return;
+      idempotencyKeyRef.current = "";
       setForm({ ...EMPTY_FORM, memberId: event.detail.memberId });
     }
     // "Adjust" in the balances list below fills the member (and puts the cursor in the amount).
     function adjustMember(event) {
       if (!event.detail?.memberId) return;
+      idempotencyKeyRef.current = "";
       setForm({ ...EMPTY_FORM, memberId: event.detail.memberId });
       window.requestAnimationFrame(() => document.getElementById("waAmount")?.focus());
     }
@@ -51,16 +72,6 @@ export function AdminWalletAdjustmentForm() {
       window.removeEventListener("gvdg:admin-wallet-member", adjustMember);
     };
   }, []);
-  const [busy, setBusy] = React.useState(false);
-  // Member names to autocomplete, from the balances list below (picking one fills the member's id: no ambiguity).
-  const [roster, setRoster] = React.useState([]);
-  React.useEffect(() => {
-    const take = (event) => setRoster(Array.isArray(event.detail?.members) ? event.detail.members : []);
-    window.addEventListener("gvdg:admin-wallet-roster", take);
-    return () => window.removeEventListener("gvdg:admin-wallet-roster", take);
-  }, []);
-  const currentRequest = React.useRef("");
-  const requestCounter = React.useRef(0);
 
   React.useEffect(() => {
     function update(event) {
@@ -70,6 +81,7 @@ export function AdminWalletAdjustmentForm() {
       if (detail.ok === true) {
         setForm(EMPTY_FORM);
         currentRequest.current = "";
+        idempotencyKeyRef.current = "";
       }
     }
     window.addEventListener("gvdg:admin-wallet-adjustment-result", update);
@@ -77,17 +89,37 @@ export function AdminWalletAdjustmentForm() {
   }, []);
 
   function updateField(field, value) {
+    idempotencyKeyRef.current = "";
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const payload = formBody(form);
     const requestId = `wallet-adjustment-${requestCounter.current += 1}`;
+    if (!payload.valid) {
+      currentRequest.current = requestId;
+      dispatchRequest("gvdg:admin-wallet-adjustment-request", { ...payload, requestId });
+      return;
+    }
+    const cents = payload.body.amount_cents;
+    const dollars = `${cents < 0 ? "-" : "+"}$${(Math.abs(cents) / 100).toFixed(2)}`;
+    const confirmed = await adminConfirm({
+      title: "Post wallet adjustment?",
+      message: `${dollars} for ${payload.body.member_id}${payload.body.note ? ` (${payload.body.note})` : ""}.`,
+      confirmText: "Post adjustment",
+      danger: cents < 0,
+    });
+    if (!confirmed) return;
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = newKey();
     currentRequest.current = requestId;
     setBusy(true);
-    dispatchRequest("gvdg:admin-wallet-adjustment-request", { ...payload, requestId });
-    if (!payload.valid) setBusy(false);
+    dispatchRequest("gvdg:admin-wallet-adjustment-request", {
+      ...payload,
+      body: { ...payload.body, idempotency_key: idempotencyKeyRef.current },
+      requestId,
+    });
   }
 
   return h("form", {

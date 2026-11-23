@@ -5,6 +5,7 @@
 // its dues and tier come along, and the held record is removed. An admin can also link a held account to a member who
 // is already in the app under another name (POST /admin/members/link-held).
 import type { Env } from "./env.js";
+import { throughYearOf } from "./membership-year.js";
 import { deleteMember, getMember, listMembers, normalizePersonName, saveMemberRecord, type KVListLike, type Member } from "./roster.js";
 
 export interface CarriedOver {
@@ -39,14 +40,15 @@ export async function findHeldMatch(env: Env, who: { name: string; pdgaNo?: stri
   const name = normalizePersonName(who.name);
   if (!name) return null;
   const byName = held.filter((m) => normalizePersonName(m.name) === name
-    && (!m.pdgaNo || digits(m.pdgaNo) === pdga) && (!m.udisc || lower(m.udisc) === udisc));
+    && (!pdga || !m.pdgaNo || digits(m.pdgaNo) === pdga)
+    && (!udisc || !m.udisc || lower(m.udisc) === udisc));
   return byName.length === 1 ? byName[0]!.memberId : null;
 }
 
 /**
  * Move a held account onto a real one: wallet entries and bag tags (a tag the member already holds in that series
- * wins; the held one is released), dues (the held account's year: the sheets are canon) and the guest tier. Then the
- * held record is removed. Returns what came across, or null when `heldId` isn't a held account.
+ * wins; the held one is released), dues (never downgrades a renewed member's year). Never demotes a non-guest
+ * real member or admin to guest. Then the held record is removed.
  */
 export async function absorbHeld(env: Env, heldId: string, target: Member, adminId: string | null): Promise<CarriedOver | null> {
   const held = await getMember(env.ROSTER, heldId);
@@ -74,14 +76,19 @@ export async function absorbHeld(env: Env, heldId: string, target: Member, admin
     moved.push(tag.tag_number);
   }
   const updated: Member = { ...target };
-  if (typeof held.memberThroughYear === "number") updated.memberThroughYear = held.memberThroughYear;
-  if (held.guest === true && target.isAdmin !== true) updated.guest = true;
+  let carriedThroughYear: number | null = null;
+  if (typeof held.memberThroughYear === "number") {
+    const currentYear = throughYearOf(target);
+    const nextYear = Math.max(currentYear, held.memberThroughYear);
+    updated.memberThroughYear = nextYear;
+    carriedThroughYear = nextYear > currentYear || target.memberThroughYear == null ? held.memberThroughYear : null;
+  }
   await saveMemberRecord(env.ROSTER, updated);
   await deleteMember(env.ROSTER, heldId);
   console.log(JSON.stringify({ evt: "held_account_claimed", heldId, memberId: target.memberId, actor: adminId, at: Date.now() }));
   return {
     heldId, name: held.name, balanceCents: Number(balance?.cents) || 0,
-    throughYear: typeof held.memberThroughYear === "number" ? held.memberThroughYear : null, tags: moved, guest: held.guest === true,
+    throughYear: carriedThroughYear, tags: moved, guest: false,
   };
 }
 

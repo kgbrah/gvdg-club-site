@@ -215,11 +215,13 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
     : [];
   const tagOf = new Map(holders.map((holder) => [holder.member_id, holder.tag_number]));
   const seenMember = new Map<string, number>();
+  const seenNewByPdga = new Map<string, number>();
+  const seenNewByUdisc = new Map<string, number>();
+  const seenNewByName = new Map<string, { line: number; pdga: string; udisc: string }>();
   const seenTag = new Map<number, number>();
   const out: PlanRow[] = matched.map(({ row, found }) => {
     const notes: string[] = [];
     const member = found && "member" in found ? found.member : null;
-    const key = member?.memberId ?? "new:" + (row.pdga || row.udisc.toLowerCase() || normalizePersonName(row.name));
     const base: PlanRow = {
       line: row.line, name: row.name || member?.name || row.pdga || row.udisc,
       match: member ? { memberId: member.memberId, name: member.name, how: (found as { how: How }).how, held: member.held === true, tier: memberTier(member) } : null,
@@ -235,11 +237,34 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
       return { ...base, action: "skip" };
     }
     if (found && "ambiguous" in found) return { ...base, action: "skip" };
-    if (seenMember.has(key)) {
-      notes.push(`Same person as row ${seenMember.get(key)}; that row is used.`);
-      return { ...base, action: "skip" };
+    if (member) {
+      if (seenMember.has(member.memberId)) {
+        notes.push(`Same person as row ${seenMember.get(member.memberId)}; that row is used.`);
+        return { ...base, action: "skip" };
+      }
+      seenMember.set(member.memberId, row.line);
+    } else {
+      const normName = normalizePersonName(row.name);
+      const udiscKey = row.udisc.toLowerCase();
+      const namePrior = normName ? seenNewByName.get(normName) : undefined;
+      const nameDupLine = namePrior
+        && (!row.pdga || !namePrior.pdga || row.pdga === namePrior.pdga)
+        && (!udiscKey || !namePrior.udisc || udiscKey === namePrior.udisc)
+        ? namePrior.line
+        : undefined;
+      const dupLine = (row.pdga ? seenNewByPdga.get(row.pdga) : undefined)
+        ?? (udiscKey ? seenNewByUdisc.get(udiscKey) : undefined)
+        ?? nameDupLine;
+      if (dupLine != null) {
+        notes.push(`Same person as row ${dupLine}; that row is used.`);
+        return { ...base, action: "skip" };
+      }
+      if (row.pdga) seenNewByPdga.set(row.pdga, row.line);
+      if (udiscKey) seenNewByUdisc.set(udiscKey, row.line);
+      if (normName && !seenNewByName.has(normName)) {
+        seenNewByName.set(normName, { line: row.line, pdga: row.pdga, udisc: udiscKey });
+      }
     }
-    seenMember.set(key, row.line);
     // Tier (any kind with a tier column, or the default for new accounts). Never touches an admin.
     const tier = row.tier || (member ? "" : defaultTier);
     const tierChange = tier && member && memberTier(member) !== "admin" && memberTier(member) !== tier ? tierLabel(tier) : "";
@@ -256,6 +281,8 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
     let before = "";
     let after = "";
     let changed = !member || Boolean(tierChange);
+    const recordedYear = (m: Pick<Member, "held" | "memberThroughYear">) =>
+      m.held === true ? (typeof m.memberThroughYear === "number" ? m.memberThroughYear : null) : throughYearOf(m);
     if (kind === "balances") {
       if (row.value == null) { notes.push("No balance on this row."); return { ...base, action: "skip" }; }
       const current = member ? balances.get(member.memberId) ?? 0 : 0;
@@ -263,7 +290,7 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
       after = money(row.value);
       changed = changed || current !== row.value;
     } else if (kind === "dues") {
-      const current = member ? throughYearOf(member) : null;
+      const current = member ? recordedYear(member) : null;
       if (row.value == null) {
         notes.push("Not marked paid: dues are left as they are.");
       } else {
@@ -302,10 +329,16 @@ async function plan(env: Env, kind: SheetKind, rows: SheetRow[], seriesId: numbe
 // --- apply ------------------------------------------------------------------------------------------------------
 
 /** The account a row lands on: the planned member, or the person's held account (created once, found again later). */
-async function target(env: Env, row: SheetRow, defaultTier: Tier): Promise<Member | null> {
+async function target(env: Env, kind: SheetKind, row: SheetRow, defaultTier: Tier): Promise<Member | null> {
   if (row.memberId) return getMember(env.ROSTER, row.memberId);
   if (!row.name) return null;
-  return (await createHeldMember(env.ROSTER, { name: row.name, pdgaNo: row.pdga || null, udisc: row.udisc || null, guest: (row.tier || defaultTier) === "guest" })).member;
+  return (await createHeldMember(env.ROSTER, {
+    name: row.name,
+    pdgaNo: row.pdga || null,
+    udisc: row.udisc || null,
+    guest: (row.tier || defaultTier) === "guest",
+    ...(kind === "dues" && row.value != null ? { memberThroughYear: row.value } : {}),
+  })).member;
 }
 
 /** An admin linked this row to someone whose name the sheet spells differently: remember the sheet's spelling, so the
@@ -338,11 +371,13 @@ async function setBalance(env: Env, member: Member, cents: number, adminId: stri
 }
 
 async function applyRows(env: Env, kind: SheetKind, rows: SheetRow[], defaultTier: Tier, adminId: string) {
+  const recordedYear = (m: Pick<Member, "held" | "memberThroughYear">) =>
+    m.held === true ? (typeof m.memberThroughYear === "number" ? m.memberThroughYear : null) : throughYearOf(m);
   const results: { line: number; memberId: string; status: "done" | "same" | "error"; error?: string }[] = [];
   for (const row of rows) {
     if (row.problem) { results.push({ line: row.line, memberId: row.memberId ?? "", status: "error", error: "unusable_value" }); continue; }
     try {
-      let member = await target(env, row, defaultTier);
+      let member = await target(env, kind, row, defaultTier);
       if (!member) { results.push({ line: row.line, memberId: "", status: "error", error: "not_found" }); continue; }
       const before = JSON.stringify(member);
       member = await rememberSheetName(env, member, row);
@@ -350,7 +385,7 @@ async function applyRows(env: Env, kind: SheetKind, rows: SheetRow[], defaultTie
       let status: "done" | "same" = JSON.stringify(member) === before ? "same" : "done";
       if (kind === "balances" && row.value != null) {
         if ((await setBalance(env, member, row.value, adminId)) === "done") status = "done";
-      } else if (kind === "dues" && row.value != null && throughYearOf(member) !== row.value) {
+      } else if (kind === "dues" && row.value != null && recordedYear(member) !== row.value) {
         member = (await setMemberThroughYear(env.ROSTER, member.memberId, row.value)) ?? member;
         status = "done";
       } else if (kind === "people") {
@@ -435,7 +470,7 @@ async function applyTags(env: Env, seriesId: number, rows: SheetRow[], defaultTi
       holders.push({ tag: row.value!, memberId: listed.memberId, name: listed.name });
       continue;
     }
-    member = await target(env, row, defaultTier);
+    member = await target(env, "tags", row, defaultTier);
     if (!member) continue;
     member = await rememberSheetName(env, member, row);
     member = await applyTier(env, member, row);
@@ -449,6 +484,21 @@ async function applyTags(env: Env, seriesId: number, rows: SheetRow[], defaultTi
       `INSERT INTO bag_tag_holders (series_id, tag_number, member_id, member_name) VALUES ${chunk.map(() => "(?, ?, ?, ?)").join(", ")}`,
     ).bind(...chunk.flatMap((holder) => [seriesId, holder.tag, holder.memberId, holder.name])));
   }
+  for (let i = 0; i < holders.length; i += 80) {
+    const ids = holders.slice(i, i + 80).map((holder) => holder.memberId);
+    statements.push(env.DB.prepare(
+      `DELETE FROM bag_tag_requests WHERE series_id = ? AND member_id IN (${ids.map(() => "?").join(", ")})`,
+    ).bind(seriesId, ...ids));
+  }
+  statements.push(env.DB.prepare(
+    `UPDATE bag_tag_challenges
+     SET status = 'expired', closed_note = 'expired: bag tag standings updated from sheet', closed_at = datetime('now')
+     WHERE series_id = ? AND league_id IS NULL AND status = 'pending'
+       AND (
+         NOT EXISTS (SELECT 1 FROM bag_tag_holders h WHERE h.series_id = bag_tag_challenges.series_id AND h.member_id = bag_tag_challenges.challenger_id AND h.tag_number = bag_tag_challenges.challenger_tag)
+         OR NOT EXISTS (SELECT 1 FROM bag_tag_holders h WHERE h.series_id = bag_tag_challenges.series_id AND h.member_id = bag_tag_challenges.defender_id AND h.tag_number = bag_tag_challenges.defender_tag)
+       )`,
+  ).bind(seriesId));
   statements.push(env.DB.prepare("INSERT INTO bag_tag_moves (series_id, kind, summary, actor_id) VALUES (?, 'assign', ?, ?)")
     .bind(seriesId, `Standings set from the club's Google Sheet (${holders.length} tags)`, adminId));
   if (env.DB.batch) await env.DB.batch(statements);

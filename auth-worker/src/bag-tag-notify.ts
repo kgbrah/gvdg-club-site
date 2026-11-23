@@ -47,19 +47,36 @@ export function challengeNote(challenge: BagChallengeRow, event: ChallengeEvent,
         },
       };
     case "confirmed": {
-      const who = event.byAdmin ? "An admin confirmed" : `${defender} confirmed`;
+      if (event.byAdmin) {
+        return {
+          to: [challenge.challenger_id, challenge.defender_id],
+          note: event.swapped
+            ? {
+              title: `Tags swapped${suffix}: #${challenge.defender_tag} ↔ #${challenge.challenger_tag}`,
+              body: `An admin confirmed the challenge, ${scores}. ${challenger} now holds #${challenge.defender_tag}; ${defender} takes #${challenge.challenger_tag}.`,
+              url: URL_TAGS,
+              tag,
+            }
+            : {
+              title: `Tags stay${suffix}: #${challenge.defender_tag} & #${challenge.challenger_tag}`,
+              body: `An admin confirmed the challenge, ${scores}. ${defender} keeps #${challenge.defender_tag}; ${challenger} keeps #${challenge.challenger_tag}.`,
+              url: URL_TAGS,
+              tag,
+            },
+        };
+      }
       return {
-        to: event.byAdmin ? [challenge.challenger_id, challenge.defender_id] : [challenge.challenger_id],
+        to: [challenge.challenger_id],
         note: event.swapped
           ? {
             title: `Tags swapped${suffix}: you now hold #${challenge.defender_tag}`,
-            body: `${who} your challenge, ${scores}. ${defender} takes #${challenge.challenger_tag}.`,
+            body: `${defender} confirmed your challenge, ${scores}. ${defender} takes #${challenge.challenger_tag}.`,
             url: URL_TAGS,
             tag,
           }
           : {
             title: `Tags stay${suffix}: you keep #${challenge.challenger_tag}`,
-            body: `${who} your challenge, ${scores}. ${defender} keeps #${challenge.defender_tag}.`,
+            body: `${defender} confirmed your challenge, ${scores}. ${defender} keeps #${challenge.defender_tag}.`,
             url: URL_TAGS,
             tag,
           },

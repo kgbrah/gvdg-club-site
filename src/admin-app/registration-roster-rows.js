@@ -67,6 +67,9 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
   const [checkedIn, setCheckedIn] = React.useState(registration.checkedIn);
   const [paidEntry, setPaidEntry] = React.useState(registration.paidEntry);
   const [amountValue, setAmountValue] = React.useState("");
+  const [awardBusy, setAwardBusy] = React.useState(false);
+  const awardKeyRef = React.useRef("");
+  const awardRequestRef = React.useRef("");
 
   React.useEffect(() => {
     const active = typeof document !== "undefined" ? document.activeElement : null;
@@ -78,6 +81,55 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
     setCheckedIn(registration.checkedIn);
     setPaidEntry(registration.paidEntry);
   }, [registration.id, registration.division, registration.team, registration.startingHole, registration.checkedIn, registration.paidEntry]);
+
+  React.useEffect(() => {
+    function onResult(event) {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : {};
+      if (!awardRequestRef.current || detail.requestId !== awardRequestRef.current) return;
+      awardRequestRef.current = "";
+      setAwardBusy(false);
+      if (detail.ok) {
+        awardKeyRef.current = "";
+        setAmountValue("");
+      }
+    }
+    window.addEventListener("gvdg:admin-registration-credit-result", onResult);
+    return () => window.removeEventListener("gvdg:admin-registration-credit-result", onResult);
+  }, []);
+
+  async function requestAwardCredit() {
+    if (awardBusy) return;
+    const dollars = Number.parseFloat(amountValue);
+    if (!Number.isFinite(dollars) || dollars <= 0) {
+      dispatchRequest("gvdg:admin-registration-roster-credit-request", {
+        amountValue,
+        memberId: registration.memberId,
+        memberName: registration.name,
+      });
+      return;
+    }
+    const confirmed = await adminConfirm({
+      title: "Award store credit?",
+      message: `Award $${dollars.toFixed(2)} store credit to ${registration.name || registration.memberId}?`,
+      confirmText: "Award credit",
+    });
+    if (!confirmed) return;
+    if (!awardKeyRef.current) {
+      awardKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    const requestId = `roster-credit-${registration.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    awardRequestRef.current = requestId;
+    setAwardBusy(true);
+    dispatchRequest("gvdg:admin-registration-roster-credit-request", {
+      amountValue,
+      idempotencyKey: awardKeyRef.current,
+      memberId: registration.memberId,
+      memberName: registration.name,
+      requestId,
+    });
+  }
 
   function patchText(field, value, previous) {
     const next = value.trim();
@@ -206,7 +258,7 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
             "aria-label": `Store credit amount for ${registration.name}`,
             key: "amount",
             min: "0",
-            onChange: (event) => setAmountValue(event.target.value),
+            onChange: (event) => { awardKeyRef.current = ""; setAmountValue(event.target.value); },
             placeholder: "$",
             step: "0.01",
             type: "number",
@@ -214,14 +266,11 @@ export function RegistrationRow({ divisions = [], registration, teams = [] }) {
           }),
           h("button", {
             className: "admin-btn secondary",
+            disabled: awardBusy,
             key: "award",
-            onClick: () => dispatchRequest("gvdg:admin-registration-roster-credit-request", {
-              amountValue,
-              memberId: registration.memberId,
-              memberName: registration.name,
-            }),
+            onClick: () => { void requestAwardCredit(); },
             type: "button",
-          }, "Award"),
+          }, awardBusy ? "Awarding…" : "Award"),
         ]) : null,
         h("button", {
           className: "admin-btn danger admin-roster-remove",

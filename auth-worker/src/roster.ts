@@ -94,7 +94,7 @@ export function isHeldMemberId(memberId: string): boolean {
 /** Create (or find) the held account for someone on the sheets. No PIN, no login index: it can't sign in. */
 export async function createHeldMember(
   kv: KVLike,
-  input: { name: string; pdgaNo?: string | null; udisc?: string | null; guest?: boolean },
+  input: { name: string; pdgaNo?: string | null; udisc?: string | null; guest?: boolean; memberThroughYear?: number | null },
 ): Promise<{ member: Member; created: boolean }> {
   const memberId = heldMemberIdFor(input);
   const existing = await getMember(kv, memberId);
@@ -107,10 +107,10 @@ export async function createHeldMember(
     ...(pdga ? { pdgaNo: pdga } : {}),
     ...(udisc ? { udisc } : {}),
     ...(input.guest ? { guest: true } : {}),
+    ...(typeof input.memberThroughYear === "number" ? { memberThroughYear: input.memberThroughYear } : {}),
     held: true,
     pinHash: "",
     mustChangePin: true,
-    memberThroughYear: easternCalendarYear(),
   };
   await kv.put(RECORD(memberId), JSON.stringify(m));
   return { member: m, created: true };

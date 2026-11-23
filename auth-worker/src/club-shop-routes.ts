@@ -7,7 +7,7 @@ import { paypalBase, createOrder as ppCreateOrder, captureOrder as ppCaptureOrde
 import { notifyNewOrder } from "./order-notify.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { clientIp, json, readJson } from "./http.js";
-import { asInt, asStr } from "./input.js";
+import { asInt, asStr, isUniqueViolation } from "./input.js";
 import { createWalletDebitOnce, findWalletTransactionByIdempotencyKey } from "./wallet-idempotency.js";
 
 type CartItem = {
@@ -215,10 +215,11 @@ export async function handleClubShop(
     if (!buyerName) return json({ error: "name_required" }, 400, origin);
     const priced = await priceCart(env.DB, items);
     if (!priced.ok) return json(priced.body, priced.status, origin);
+    const contact = asStr(body.contact, 120);
     const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
     try {
       const orderId = await ppCreateOrder(creds, priced.total, "GVDG pro shop order");
-      await shopDb.createStorePaymentSession(env.DB, { paypal_order_id: orderId, member_id: buyerId, member_name: buyerName, items_json: JSON.stringify(priced.lines), total_cents: priced.total });
+      await shopDb.createStorePaymentSession(env.DB, { paypal_order_id: orderId, member_id: buyerId, member_name: buyerName, contact, items_json: JSON.stringify(priced.lines), total_cents: priced.total });
       return json({ orderId }, 200, origin);
     } catch (e) {
       return json({ error: "paypal_error" }, 502, origin);
@@ -244,29 +245,84 @@ export async function handleClubShop(
     const lines = parseStoredLines(session.items_json);
     const total = rowNumber(session, "total_cents");
     if (!lines || total <= 0) return json({ error: "invalid_payment_session" }, 400, origin);
-    if (rowText(session, "status") === "captured") return json({ error: "capture_in_progress" }, 409, origin);
-    const stock = await validateStoredStock(env.DB, lines);
-    if (!stock.ok) return json(stock.body, stock.status, origin);
+    if (rowText(session, "status") === "captured") {
+      const capturedOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
+      if (capturedOrder && buyerMatches(rowText(capturedOrder, "member_id"), auth)) {
+        return json({ order: safeOrder(capturedOrder), balance_cents: await balanceFor() }, 200, origin);
+      }
+      return json({ error: "capture_in_progress" }, 409, origin);
+    }
+    const claimedSession = await shopDb.claimStorePaymentSession(env.DB, orderId);
+    if (!claimedSession) {
+      const capturedOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
+      if (capturedOrder && buyerMatches(rowText(capturedOrder, "member_id"), auth)) {
+        return json({ order: safeOrder(capturedOrder), balance_cents: await balanceFor() }, 200, origin);
+      }
+      return json({ error: "capture_in_progress" }, 409, origin);
+    }
+    // Reserve stock BEFORE calling ppCaptureOrder so a stock race never takes payment without fulfilling an order.
+    const reserved = await shopDb.reserveStoreStock(env.DB, lines);
+    if (!reserved.ok) {
+      await shopDb.releaseStorePaymentSession(env.DB, orderId);
+      return json({ error: reserved.error, product_id: reserved.product_id }, 409, origin);
+    }
     const creds = { clientId: env.PAYPAL_CLIENT_ID, secret: env.PAYPAL_SECRET, base: paypalBase(env.PAYPAL_ENV, env.PAYPAL_API_BASE) };
+    let cap: Awaited<ReturnType<typeof ppCaptureOrder>>;
     try {
-      const cap = await ppCaptureOrder(creds, orderId);
-      // Require the ORDER and the CAPTURE itself to be COMPLETED in the expected currency — a COMPLETED
-      // order can still carry a PENDING eCheck/bank capture (unsettled funds) that must not be fulfilled.
-      if (!isCaptureSettled(cap, total)) {
-        return json({ error: "payment_incomplete" }, 402, origin);
+      cap = await ppCaptureOrder(creds, orderId);
+    } catch {
+      await shopDb.restoreStoreProductStock(env.DB, lines);
+      const concurrentOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
+      if (concurrentOrder) {
+        if (!buyerMatches(rowText(concurrentOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
+        return json({ order: safeOrder(concurrentOrder), balance_cents: await balanceFor() }, 200, origin);
       }
-      const afterCaptureOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
-      if (afterCaptureOrder) {
-        if (!buyerMatches(rowText(afterCaptureOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
-        return json({ order: safeOrder(afterCaptureOrder), balance_cents: await balanceFor() }, 200, origin);
-      }
-      const submitted = await submitStoreOrder(env, ctx, rowText(session, "member_id"), rowText(session, "member_name"), total, lines, { method: "paypal", ref: orderId });
-      if (!submitted.ok) return json(submitted.body, submitted.status, origin);
-      await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
-      return json({ order: safeOrder(submitted.order), balance_cents: await balanceFor() }, 201, origin);
-    } catch (e) {
+      await shopDb.releaseStorePaymentSession(env.DB, orderId);
       return json({ error: "paypal_error" }, 502, origin);
     }
+    // Require the ORDER and the CAPTURE itself to be COMPLETED in the expected currency — a COMPLETED
+    // order can still carry a PENDING eCheck/bank capture (unsettled funds) that must not be fulfilled.
+    if (!isCaptureSettled(cap, total)) {
+      await shopDb.restoreStoreProductStock(env.DB, lines);
+      await shopDb.releaseStorePaymentSession(env.DB, orderId);
+      return json({ error: "payment_incomplete" }, 402, origin);
+    }
+    let order: unknown = null;
+    try {
+      order = await shopDb.createStoreOrder(env.DB, {
+        member_id: rowText(session, "member_id"),
+        member_name: rowText(session, "member_name"),
+        total_cents: total,
+        payment_method: "paypal",
+        payment_ref: orderId,
+      });
+    } catch (err) {
+      await shopDb.restoreStoreProductStock(env.DB, lines);
+      if (isUniqueViolation(err)) {
+        const afterCaptureOrder = await shopDb.getStoreOrderByPaymentRef(env.DB, orderId);
+        if (afterCaptureOrder) {
+          if (!buyerMatches(rowText(afterCaptureOrder, "member_id"), auth)) return json({ error: "forbidden" }, 403, origin);
+          return json({ order: safeOrder(afterCaptureOrder), balance_cents: await balanceFor() }, 200, origin);
+        }
+      }
+      await shopDb.releaseStorePaymentSession(env.DB, orderId);
+      throw err;
+    }
+    const orderIdNum = isRecord(order) ? rowNumber(order, "id") : 0;
+    if (!orderIdNum) {
+      await shopDb.restoreStoreProductStock(env.DB, lines);
+      await shopDb.releaseStorePaymentSession(env.DB, orderId);
+      return json({ error: "order_failed" }, 500, origin);
+    }
+    await shopDb.createStoreOrderItems(env.DB, orderIdNum, lines);
+    const contact = rowText(session, "contact");
+    if (contact) {
+      const updated = await shopDb.updateStoreOrderFulfillment(env.DB, orderIdNum, { admin_note: "Contact: " + contact });
+      if (updated) order = updated;
+    }
+    await shopDb.markStorePaymentSessionCaptured(env.DB, orderId);
+    ctx?.waitUntil(notifyNewOrder(env, order, lines));
+    return json({ order: safeOrder(order), balance_cents: await balanceFor() }, 201, origin);
   }
 
   const claims = await requireAuth(request, env);
@@ -297,6 +353,31 @@ export async function handleClubShop(
       if (prior) {
         const priorOrderId = asInt((prior as Record<string, unknown>).order_id) ?? 0;
         const priorOrder = priorOrderId ? await shopDb.getStoreOrderById(env.DB, priorOrderId) : null;
+        const priorItems = priorOrderId ? await shopDb.getStoreOrderItems(env.DB, priorOrderId) : [];
+        const expectedById = new Map<number, number>();
+        for (const it of priorItems) {
+          const pid = asInt(it.product_id);
+          const qty = asInt(it.quantity);
+          if (pid && qty) expectedById.set(pid, (expectedById.get(pid) ?? 0) + qty);
+        }
+        let sameItems = false;
+        if (expectedById.size > 0) {
+          sameItems = expectedById.size === items.length && items.every((item) => expectedById.get(item.productId) === item.quantity);
+        } else {
+          const products = await shopDb.getStoreProductsByIds(env.DB, items.map((item) => item.productId));
+          const byId = new Map(products.map((p) => [rowNumber(p, "id"), p]));
+          let calcTotal = 0;
+          let allFound = true;
+          for (const item of items) {
+            const p = byId.get(item.productId);
+            if (!p) { allFound = false; break; }
+            calcTotal += rowNumber(p, "price_cents") * item.quantity;
+          }
+          sameItems = allFound && rowNumber(prior, "amount_cents") === -calcTotal;
+        }
+        if (rowText(prior, "member_id") !== claims.sub || rowText(prior, "source") !== "store_purchase" || !sameItems) {
+          return json({ error: "idempotency_key_conflict" }, 409, origin);
+        }
         return json({ order: priorOrder, transaction: prior, balance_cents: await shopDb.walletBalance(env.DB, claims.sub) }, 200, origin);
       }
     }
@@ -334,6 +415,7 @@ export async function handleClubShop(
     };
     if (!debit.ok) {
       await rollback();
+      if (debit.error === "idempotency_key_conflict") return json({ error: "idempotency_key_conflict" }, 409, origin);
       const balanceNow = await shopDb.walletBalance(env.DB, claims.sub);
       if (debit.error === "insufficient_balance") return json({ error: "insufficient_store_credit", balance_cents: balanceNow, total_cents: priced.total }, 402, origin);
       return json({ error: "order_failed" }, 409, origin);

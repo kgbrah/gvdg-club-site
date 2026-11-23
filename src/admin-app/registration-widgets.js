@@ -109,12 +109,67 @@ function CtpRow({ ctp }) {
   const [winnerName, setWinnerName] = React.useState(ctp.winnerName);
   const [winnerMemberId, setWinnerMemberId] = React.useState(ctp.winnerMemberId);
   const [amountValue, setAmountValue] = React.useState("");
+  const [awardBusy, setAwardBusy] = React.useState(false);
+  const awardKeyRef = React.useRef("");
+  const awardRequestRef = React.useRef("");
 
   React.useEffect(() => {
     setWinnerName(ctp.winnerName);
     setWinnerMemberId(ctp.winnerMemberId);
     setAmountValue("");
+    awardKeyRef.current = "";
   }, [ctp.id, ctp.winnerName, ctp.winnerMemberId]);
+
+  React.useEffect(() => {
+    function onResult(event) {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : {};
+      if (!awardRequestRef.current || detail.requestId !== awardRequestRef.current) return;
+      awardRequestRef.current = "";
+      setAwardBusy(false);
+      if (detail.ok) {
+        awardKeyRef.current = "";
+        setAmountValue("");
+      }
+    }
+    window.addEventListener("gvdg:admin-registration-ctp-credit-result", onResult);
+    return () => window.removeEventListener("gvdg:admin-registration-ctp-credit-result", onResult);
+  }, []);
+
+  async function requestAwardCredit() {
+    if (awardBusy) return;
+    const dollars = Number.parseFloat(amountValue);
+    if (!winnerMemberId.trim() || !Number.isFinite(dollars) || dollars <= 0) {
+      dispatchRequest("gvdg:admin-registration-ctp-credit-request", {
+        amountValue,
+        ctp: ctp.source,
+        winnerMemberId,
+        winnerName,
+      });
+      return;
+    }
+    const confirmed = await adminConfirm({
+      title: "Award CTP store credit?",
+      message: `Award $${dollars.toFixed(2)} store credit for Hole ${ctp.hole || "?"} to ${winnerName || winnerMemberId}?`,
+      confirmText: "Award credit",
+    });
+    if (!confirmed) return;
+    if (!awardKeyRef.current) {
+      awardKeyRef.current = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    const requestId = `ctp-credit-${ctp.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    awardRequestRef.current = requestId;
+    setAwardBusy(true);
+    dispatchRequest("gvdg:admin-registration-ctp-credit-request", {
+      amountValue,
+      ctp: ctp.source,
+      idempotencyKey: awardKeyRef.current,
+      requestId,
+      winnerMemberId,
+      winnerName,
+    });
+  }
 
   async function requestDelete() {
     const confirmed = await adminConfirm({
@@ -143,7 +198,7 @@ function CtpRow({ ctp }) {
       key: "member",
       list: "rgMemberOptions",
       maxLength: 64,
-      onChange: (event) => setWinnerMemberId(event.target.value),
+      onChange: (event) => { awardKeyRef.current = ""; setWinnerMemberId(event.target.value); },
       placeholder: "member id",
       size: 10,
       value: winnerMemberId,
@@ -162,7 +217,7 @@ function CtpRow({ ctp }) {
       "aria-label": `Store credit amount for CTP hole ${ctp.hole || "?"}`,
       key: "credit",
       min: "0",
-      onChange: (event) => setAmountValue(event.target.value),
+      onChange: (event) => { awardKeyRef.current = ""; setAmountValue(event.target.value); },
       placeholder: "$",
       size: 5,
       step: "0.01",
@@ -171,15 +226,11 @@ function CtpRow({ ctp }) {
     }),
     h("button", {
       className: "admin-btn secondary",
+      disabled: awardBusy,
       key: "award",
-      onClick: () => dispatchRequest("gvdg:admin-registration-ctp-credit-request", {
-        amountValue,
-        ctp: ctp.source,
-        winnerMemberId,
-        winnerName,
-      }),
+      onClick: () => { void requestAwardCredit(); },
       type: "button",
-    }, "Award credit"),
+    }, awardBusy ? "Awarding…" : "Award credit"),
     h("button", { className: "admin-btn danger", key: "delete", onClick: requestDelete, type: "button" }, "Delete"),
   ]);
 }

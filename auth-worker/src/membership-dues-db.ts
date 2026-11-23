@@ -92,13 +92,13 @@ export async function duesFor(db: D1Like | undefined, ids: string[]): Promise<Ma
   return out;
 }
 
-/** Claim the capture slot for exactly one PayPal order id BEFORE charging. Same order id may re-reserve. */
+/** Claim the capture slot for one PayPal capture attempt BEFORE charging. */
 export async function reserveDues(db: D1Like, applicationId: string, orderId: string): Promise<boolean> {
   const row = await db.prepare(
     `INSERT INTO membership_dues (application_id, method, reserved_order_id) VALUES (?, 'none', ?)
      ON CONFLICT(application_id) DO UPDATE SET reserved_order_id = excluded.reserved_order_id, updated_at = datetime('now')
      WHERE membership_dues.paid_at IS NULL
-       AND (membership_dues.reserved_order_id IS NULL OR membership_dues.reserved_order_id = excluded.reserved_order_id)
+       AND (membership_dues.reserved_order_id IS NULL OR membership_dues.updated_at <= datetime('now', '-5 minutes'))
      RETURNING application_id`,
   ).bind(applicationId, orderId).first();
   return row != null;

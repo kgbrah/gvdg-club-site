@@ -5,7 +5,8 @@ import type { UdiscPastEvent, UdiscStandings } from "./imports/udisc-standings.j
 import { resetLeagueLadderFromUdisc } from "./bag-tag-leagues.js";
 
 const MAX_EVENTS = 80;
-const MAX_RESULTS = 80;
+const MAX_RESULTS = 200;
+const normName = (v: string) => v.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 
 export async function saveUdiscLeague(
   env: Env,
@@ -155,10 +156,21 @@ async function saveEvent(
     if (url) existingByUrl.set(url, { ...existing!, league_id: leagueId });
   }
   if (eventId == null || !scored?.results.length) return 0;
+  const linkedByName = new Map<string, string>();
+  if (existing) {
+    const prevRows = (await env.DB.prepare("SELECT name, member_id FROM results WHERE event_id = ? AND member_id IS NOT NULL")
+      .bind(eventId).all<{ name: string; member_id: string }>()).results ?? [];
+    for (const prev of prevRows) {
+      const key = normName(prev.name || "");
+      if (key && prev.member_id && !linkedByName.has(key)) linkedByName.set(key, prev.member_id);
+    }
+  }
   const statements = [db.clearResultsStmt(env.DB, eventId)];
   for (const result of scored.results.slice(0, MAX_RESULTS)) {
+    const memberId = linkedByName.get(normName(result.name || "")) ?? null;
     statements.push(db.createResultStmt(env.DB, {
       event_id: eventId,
+      ...(memberId ? { member_id: memberId } : {}),
       name: result.name,
       place: result.place,
       total: result.total,

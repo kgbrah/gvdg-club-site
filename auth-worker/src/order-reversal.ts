@@ -42,7 +42,7 @@ export async function reverseStoreOrder(env: Env, orderId: number, opts: { by?: 
   const method = str(claimed, "payment_method");
   const decrementedStock = method === "store_credit" || method === "paypal";
   let restocked = 0;
-  if (decrementedStock) {
+  if (decrementedStock && await shopDb.claimStoreOrderRestock(env.DB, orderId)) {
     for (const item of await shopDb.getStoreOrderItems(env.DB, orderId)) {
       const pid = num(item, "product_id");
       const qty = num(item, "quantity");

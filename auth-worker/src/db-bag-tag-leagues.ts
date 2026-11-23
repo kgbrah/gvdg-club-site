@@ -125,10 +125,13 @@ export async function resetLadder(
   const statements: D1StatementLike[] = [
     db.prepare("DELETE FROM bag_tag_league_ladder WHERE league_id = ?").bind(leagueId),
   ];
+  const seenMembers = new Set<string>();
   for (const player of players) {
+    const memberId = player.memberId && !seenMembers.has(player.memberId) ? player.memberId : null;
+    if (memberId) seenMembers.add(memberId);
     statements.push(db.prepare(
       "INSERT INTO bag_tag_league_ladder (league_id, tag_number, player_name, member_id) VALUES (?, ?, ?, ?)",
-    ).bind(leagueId, player.tag, player.name, player.memberId));
+    ).bind(leagueId, player.tag, player.name, memberId));
   }
   statements.push(db.prepare(
     `INSERT INTO bag_tag_league_state (league_id, imported_at, linked_at) VALUES (?, datetime('now'), NULL)
@@ -152,6 +155,26 @@ export async function setLadderMember(db: D1Like, leagueId: number, tag: number,
   await db.prepare(
     "UPDATE bag_tag_league_ladder SET member_id = ? WHERE league_id = ? AND tag_number = ?",
   ).bind(memberId, leagueId, tag).run();
+}
+
+/** Clear and reassign ladder member links in a single batch so promotions/swaps never collide on the unique index mid-update. */
+export async function setLadderMembers(
+  db: D1Like,
+  leagueId: number,
+  updates: readonly { tag: number; memberId: string | null }[],
+): Promise<void> {
+  if (!updates.length) return;
+  const statements: D1StatementLike[] = updates.map(({ tag }) =>
+    db.prepare("UPDATE bag_tag_league_ladder SET member_id = NULL WHERE league_id = ? AND tag_number = ?").bind(leagueId, tag),
+  );
+  for (const { tag, memberId } of updates) {
+    if (memberId !== null) {
+      statements.push(
+        db.prepare("UPDATE bag_tag_league_ladder SET member_id = ? WHERE league_id = ? AND tag_number = ?").bind(memberId, leagueId, tag),
+      );
+    }
+  }
+  await runAll(db, statements);
 }
 
 export async function markLinked(db: D1Like, leagueId: number): Promise<void> {
@@ -210,6 +233,78 @@ export async function replaceLadderTags(
     "INSERT INTO bag_tag_moves (series_id, league_id, kind, summary, actor_id) VALUES (0, ?, 'challenge', ?, ?)",
   ).bind(leagueId, move.summary, move.actorId));
   await runAll(db, statements);
+}
+
+/** Atomically verify both league ladder tags still match, claim the challenge, swap if needed, and record the move. */
+export async function confirmLeagueChallenge(
+  db: D1Like,
+  input: {
+    challengeId: number;
+    leagueId: number;
+    challengerId: string;
+    challengerName: string;
+    challengerTag: number;
+    defenderId: string;
+    defenderName: string;
+    defenderTag: number;
+    swapped: boolean;
+    summary: string;
+    actorId: string;
+  },
+): Promise<boolean> {
+  const token = `settling:${crypto.randomUUID()}`;
+  const claimStmt = db.prepare(
+    `UPDATE bag_tag_challenges
+     SET status = 'settled', closed_note = ?, closed_at = datetime('now')
+     WHERE id = ? AND status = 'pending' AND league_id = ?
+       AND EXISTS (SELECT 1 FROM bag_tag_league_ladder WHERE league_id = ? AND member_id = ? AND tag_number = ?)
+       AND EXISTS (SELECT 1 FROM bag_tag_league_ladder WHERE league_id = ? AND member_id = ? AND tag_number = ?)`,
+  ).bind(
+    token, input.challengeId, input.leagueId,
+    input.leagueId, input.challengerId, input.challengerTag,
+    input.leagueId, input.defenderId, input.defenderTag,
+  );
+  const tail: D1StatementLike[] = [];
+  if (input.swapped) {
+    tail.push(
+      db.prepare(
+        `DELETE FROM bag_tag_league_ladder
+         WHERE league_id = ?
+           AND ((member_id = ? AND tag_number = ?) OR (member_id = ? AND tag_number = ?))
+           AND EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+      ).bind(
+        input.leagueId,
+        input.challengerId, input.challengerTag,
+        input.defenderId, input.defenderTag,
+        input.challengeId, token,
+      ),
+      db.prepare(
+        `INSERT INTO bag_tag_league_ladder (league_id, tag_number, player_name, member_id)
+         SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+      ).bind(input.leagueId, input.defenderTag, input.challengerName, input.challengerId, input.challengeId, token),
+      db.prepare(
+        `INSERT INTO bag_tag_league_ladder (league_id, tag_number, player_name, member_id)
+         SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+      ).bind(input.leagueId, input.challengerTag, input.defenderName, input.defenderId, input.challengeId, token),
+    );
+  }
+  tail.push(
+    db.prepare(
+      `INSERT INTO bag_tag_moves (series_id, league_id, kind, summary, actor_id)
+       SELECT 0, ?, 'challenge', ?, ? WHERE EXISTS (SELECT 1 FROM bag_tag_challenges WHERE id = ? AND closed_note = ?)`,
+    ).bind(input.leagueId, input.summary, input.actorId, input.challengeId, token),
+    db.prepare(
+      "UPDATE bag_tag_challenges SET closed_note = NULL WHERE id = ? AND closed_note = ?",
+    ).bind(input.challengeId, token),
+  );
+  if (db.batch) {
+    const res = await db.batch([claimStmt, ...tail]) as Array<{ meta?: { changes?: number } }>;
+    return Number(res[0]?.meta?.changes) > 0;
+  }
+  const claimed = await claimStmt.run() as { meta?: { changes?: number } };
+  if (!(Number(claimed.meta?.changes) > 0)) return false;
+  for (const stmt of tail) await stmt.run();
+  return true;
 }
 
 export async function recordLeagueMove(

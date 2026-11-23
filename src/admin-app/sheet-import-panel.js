@@ -118,12 +118,16 @@ export function AdminSheetImport() {
   }
 
   const changes = plan ? plan.rows.filter((row) => row.action === "update" || row.action === "new") : [];
+  const releasesCount = kind === "tags" ? (plan?.releases?.length || 0) : 0;
+  const totalApplyCount = changes.length + releasesCount;
   async function apply() {
-    if (!changes.length) return;
+    if (!totalApplyCount) return;
     const ok = await adminConfirm({
-      title: `Apply ${changes.length} ${changes.length === 1 ? "change" : "changes"}?`,
+      title: changes.length
+        ? `Apply ${changes.length} ${changes.length === 1 ? "change" : "changes"}?`
+        : `Release ${releasesCount} ${releasesCount === 1 ? "bag tag" : "bag tags"}?`,
       message: kind === "tags"
-        ? "The bag tag standings become exactly this sheet." + (plan.releases.length ? ` ${plan.releases.length} not on it give up their tag.` : "")
+        ? "The bag tag standings become exactly this sheet." + (releasesCount ? ` ${releasesCount} not on it give up their tag.` : "")
         : "The app is set to match this sheet. Anyone new gets a held account until they sign up.",
       confirmText: "Apply",
     });
@@ -142,11 +146,18 @@ export function AdminSheetImport() {
           await adminJson("/admin/sheet-import/apply", { method: "POST", body: { kind, rows: payload.slice(i, i + BATCH), defaultTier } });
         }
       }
-      setDone(`Done: ${changes.length} ${changes.length === 1 ? "change" : "changes"} from the sheet applied.`);
+      setDone(changes.length
+        ? `Done: ${changes.length} ${changes.length === 1 ? "change" : "changes"} from the sheet applied.`
+        : `Done: ${releasesCount} ${releasesCount === 1 ? "tag" : "tags"} released from the sheet.`);
       setPlan(null);
       setMessage("");
     } catch (error) {
-      setMessage(error.status === 409 ? ERRORS.duplicate_tag : error.status === 404 ? ERRORS.no_series
+      const code = error.code || "";
+      setMessage(code === "duplicate_member" ? ERRORS.duplicate_member
+        : code === "duplicate_tag" ? ERRORS.duplicate_tag
+        : code === "too_many_new_members" ? "Too many new people for one bag tag import (25 max). Import People first, then Bag Tags."
+        : error.status === 409 ? ERRORS.duplicate_tag
+        : error.status === 404 ? ERRORS.no_series
         : "Not everything applied. Check the sheet again: anything already done shows as matching.");
     } finally {
       setBusy("");
@@ -175,7 +186,7 @@ export function AdminSheetImport() {
       h("h3", { className: "al-h", key: "h" }, `Columns · ${table.length - 1} rows`),
       ...fieldsFor(kind).map((field) => h(ColumnPicker, { field, headers: table[0], key: field, mapping, onChange: (next) => { setMapping(next); setPlan(null); } })),
       kind === "dues" ? h(Field, { htmlFor: "sheetDuesYear", key: "year", label: "A paid mark (Yes, Paid, ✓) means paid through" }, h("input", {
-        id: "sheetDuesYear", inputMode: "numeric", key: "i", onChange: (event) => setDuesYear(Number(event.target.value) || currentYear()), type: "number", value: duesYear,
+        id: "sheetDuesYear", inputMode: "numeric", key: "i", onChange: (event) => { setDuesYear(Number(event.target.value) || currentYear()); setPlan(null); }, type: "number", value: duesYear,
       })) : null,
       h(Field, { htmlFor: "sheetTier", key: "default-tier", label: "New accounts are" }, h("select", { id: "sheetTier", key: "s", onChange: (event) => { setDefaultTier(event.target.value); setPlan(null); }, value: defaultTier }, [
         h("option", { key: "m", value: "member" }, "Members"), h("option", { key: "g", value: "guest" }, "Guests"),
@@ -198,8 +209,12 @@ export function AdminSheetImport() {
       h("ul", { className: "admin-community-list", key: "rows" }, plan.rows.filter((row) => row.action !== "same").map((row) => h(PlanRow, {
         choice: choices[row.line], key: row.line, onChoose: (line, memberId) => setChoices((current) => ({ ...current, [line]: memberId })), row,
       }))),
-      h("button", { className: "admin-btn", disabled: busy !== "" || !changes.length, key: "apply", onClick: () => { void apply(); }, type: "button" },
-        busy === "apply" ? "Applying…" : changes.length ? `Apply ${changes.length} ${changes.length === 1 ? "change" : "changes"}` : "Nothing to change"),
+      h("button", { className: "admin-btn", disabled: busy !== "" || !totalApplyCount, key: "apply", onClick: () => { void apply(); }, type: "button" },
+        busy === "apply" ? "Applying…" : changes.length
+          ? `Apply ${changes.length} ${changes.length === 1 ? "change" : "changes"}`
+          : releasesCount
+            ? `Release ${releasesCount} ${releasesCount === 1 ? "tag" : "tags"}`
+            : "Nothing to change"),
     ]) : null,
     message ? h("p", { className: "dash-note", key: "msg", role: "status" }, message) : null,
     done ? h("p", { className: "dash-note", "data-sheet-done": "true", key: "done", role: "status" }, done) : null,

@@ -157,8 +157,10 @@ export type WalletCreditResult =
  * delete of the same order, reuses the key and returns the existing row (created:false) instead of
  * granting the refund twice. The club's store-credit liability is otherwise wide open to double-grant.
  */
-export async function createWalletCreditOnce(db: D1Like, input: IdempotentWalletTransactionInput): Promise<WalletCreditResult> {
-  if (input.amount_cents < 0) throw new Error("createWalletCreditOnce requires a non-negative amount");
+async function insertIdempotentWalletTransaction(
+  db: D1Like,
+  input: IdempotentWalletTransactionInput,
+): Promise<WalletCreditResult> {
   const existing = await checkWalletTransactionIdempotency(db, input);
   if (!existing.ok) return existing;
   if (existing.transaction) return { ok: true, transaction: existing.transaction, created: false };
@@ -190,5 +192,16 @@ export async function createWalletCreditOnce(db: D1Like, input: IdempotentWallet
     if (!raced) throw e;
     return existingResult(raced, input);
   }
+}
+
+export async function createWalletCreditOnce(db: D1Like, input: IdempotentWalletTransactionInput): Promise<WalletCreditResult> {
+  if (input.amount_cents < 0) throw new Error("createWalletCreditOnce requires a non-negative amount");
+  return insertIdempotentWalletTransaction(db, input);
+}
+
+/** Idempotent signed wallet adjustment (non-zero credit or debit, admin manual adjustments). */
+export async function createWalletAdjustmentOnce(db: D1Like, input: IdempotentWalletTransactionInput): Promise<WalletCreditResult> {
+  if (input.amount_cents === 0) throw new Error("createWalletAdjustmentOnce requires a non-zero amount");
+  return insertIdempotentWalletTransaction(db, input);
 }
 
