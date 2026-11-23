@@ -116,8 +116,54 @@ async function serveFixture(path, query, request, ref, reply) {
     if (request.method !== "GET") fixture.themeWrites += 1;
     reply({ theme: ref.get("mode") === "blue" ? blue : null });
   }
-  // PDGA's official API only (PDGA's terms): the official rating and its date.
-  else if (path === "/pdga-stats") reply({ name: member.name, official_rating: 905, rating_date: "2026-11-01", live_rating: null, events: [], play_rounds: [], source: "pdga-api" });
+  // Official PDGA REST + documented PDGA Live API fixture.
+  else if (path === "/pdga-stats") reply({
+    name: member.name,
+    official_rating: 905,
+    rating_date: "2026-11-01",
+    live_rating: 916,
+    peak_rating: 938,
+    events_count: 1,
+    events: empty ? [] : [{
+      tournament: "Tarboro Autumn Open",
+      date: "2026-10-18",
+      epoch: 1792281600,
+      division: "MA1",
+      eventId: "96414",
+      rounds: [{ rating: 938, score: 54, round: "1" }, { rating: 894, score: 58, round: "2" }],
+    }],
+    play_rounds: empty ? [] : [{
+      tournament: "Tarboro Autumn Open",
+      date: "2026-10-18",
+      division: "MA1",
+      round: "1",
+      breakdown: { holes: 18, birdies: 5, pars: 11, bogeys: 2, fir_hit: 14, fir_att: 16, c1r_hit: 9, c1r_att: 18 },
+    }],
+    source: "pdga-api",
+  });
+  else if (path === "/pdga-registrations") reply(empty ? { mine: [], club: [] } : {
+    mine: [{
+      eventId: 501,
+      name: "Greenville Winter Classic Presented by the Pitt County Disc Golf Association",
+      tier: "B",
+      location: "Greenville, NC",
+      start: "2026-12-12",
+      end: "2026-12-13",
+      url: "https://www.pdga.com/tour/event/501",
+      division: "MA1",
+      going: [{ name: "Jordan Ellis", division: "MA1", karmaKey: JORDAN_KEY }],
+    }],
+    club: [{
+      eventId: 502,
+      name: "Kinston Riverfront Open",
+      tier: "C",
+      location: "Kinston, NC",
+      start: "2026-12-19",
+      end: "2026-12-19",
+      url: "https://www.pdga.com/tour/event/502",
+      going: [{ name: "Jordan Ellis", division: "MA2", karmaKey: JORDAN_KEY }],
+    }],
+  });
   else if (path === "/karma") reply({ players: empty ? {} : { [handicapKey(member.sub)]: 30, [JORDAN_KEY]: 40 }, traders: {} });
   // Nearby PDGA events from PDGA's API (the Worker's /pdga-events).
   else if (path === "/pdga-events") reply({ events: empty ? [] : [{ name: "Greenville Winter Classic Presented by the Pitt County Disc Golf Association",
@@ -391,13 +437,13 @@ async function verifyDestinations(width, mode) {
       await view.go(item.hash);
       if (item.key === "overview") {
         await view.page.locator("#myDashboard [data-react-live-scoring='ready']").waitFor();
-        // Next PDGA: the nearest PDGA event from PDGA's API, its name linking to its pdga.com page.
-        const next = view.page.locator("[data-react-home-pdga='ready']");
+        // Next PDGA: registered PDGA event takes priority on Home on the populated fixture.
+        const next = view.page.locator("[data-react-home-pdga='registered']");
         assert.equal(await next.getByRole("link", { name: /Greenville Winter Classic/ }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
-        // The hero: PDGA's official rating (PDGA's API) and the member's PDGA number linking to their pdga.com page.
-        await view.page.locator("[data-react-home-hero] [data-react-pdga-rating='true']").getByText("905", { exact: true }).waitFor();
+        await next.getByText(/You're registered/).waitFor();
+        // The hero shows Live rating estimate when recent Live rounds exist (and links PDGA # to pdga.com).
+        await view.page.locator("[data-react-home-hero] [data-react-live-rating='true']").getByText("916", { exact: true }).waitFor();
         assert.equal(await view.page.locator("[data-react-home-hero] a.pdga-link").getAttribute("href"), "https://www.pdga.com/player/123456");
-        assert.equal(await view.page.getByText("Live rating estimate").count(), 0, "no PDGA-derived live estimate");
         // Your own karma, next to your name on the Home card; the chip stays whole however long the name.
         const own = view.page.locator("[data-react-home-hero] .player-who h2 .karma-chip[data-karma='30']");
         await own.waitFor();
@@ -442,8 +488,8 @@ async function verifyDestinations(width, mode) {
         const mine = view.page.locator("section[aria-label='My events']");
         await mine.waitFor();
         assert.equal(await mine.getByText("Fall Finale Doubles").count(), 0, "finished events leave My events");
-        // PDGA's terms: no "who's registered" lists from pdga.com; the nearby PDGA list (PDGA's API) stays.
-        assert.equal(await view.page.locator("[data-pdga-registration], [data-pdga-club-going]").count(), 0);
+        await mine.locator("[data-pdga-registration='501'][data-pdga-mine='true']").waitFor();
+        await view.page.locator("[data-pdga-club-going='1'] [data-pdga-registration='502']").waitFor();
         const nearby = view.page.locator("[data-pdga-events='ready'] .pdga-event-card").first();
         assert.equal(await nearby.getByRole("link", { name: /Greenville Winter Classic/ }).getAttribute("href"), "https://www.pdga.com/tour/event/501");
         await view.page.locator("[data-pdga-events='ready'] [data-pdga-credit]").waitFor();

@@ -148,7 +148,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
-  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=243"><\/script>/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=244"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(profileKey.*h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
@@ -364,8 +364,8 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-filters/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /competitive/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /kind === "casual"/);
-  // PDGA hole scores are not used (PDGA's terms): the panel is the club's own scoring.
-  assert.doesNotMatch(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats|pdgaRowsFromStats/);
+  // PDGA Live scoring and throw/putting stats integrate alongside club scoring without merging into club ranks.
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats[\s\S]*pdgaRowsFromStats/);
   assert.match(html, /\.play-score-mix/);
   assert.match(html, /\.play-stats-split/);
   assert.match(html, /\.play-stats-filters/);
@@ -389,14 +389,16 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/more-page.js', 'utf8'), /DashboardThemeBuilder/);
   assert.match(pdga, /id: "membersReactRatingPanel"/);
   assert.match(pdga, /data-react-pdga-dashboard/);
-  assert.doesNotMatch(pdga, /data-react-live-rating|Live rating estimate/);
+  assert.match(pdga, /data-react-live-rating[\s\S]*Live rating estimate/);
   assert.match(pdga, /\/pdga-stats\?pdga=/);
   assert.match(pdga, /PDGA_REFRESH_MS = 15 \* 60 \* 1000/);
   assert.match(pdga, /setInterval\(refreshIfStale, PDGA_REFRESH_MS\)/);
   assert.match(pdga, /addEventListener\("focus", refreshIfStale\)/);
   assert.match(pdga, /addEventListener\("visibilitychange", refreshWhenVisible\)/);
-  // PDGA's terms: no PDGA event history or round ratings on Stats (they came from pdga.com pages).
-  assert.doesNotMatch(pdga, /Tournaments \(|groupPdgaEventsByYear|EventRatingRow|pdgaEventTitle/);
+  assert.match(pdga, /Tournaments \(/);
+  assert.match(pdga, /groupPdgaEventsByYear/);
+  assert.match(pdga, /EventRatingRow/);
+  assert.match(pdga, /pdgaEventTitle/);
   assert.match(board, /data-react-board-panel/);
   assert.doesNotMatch(board, /visibleParent|style\.display|getElementById\("clubBoard"\)/);
   assert.doesNotMatch(board, /window\.alert|window\.confirm/);

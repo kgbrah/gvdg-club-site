@@ -114,10 +114,10 @@ function collectPageErrors(page) {
   return errors;
 }
 
-/** The QA member's PDGA official rating from /pdga-stats (PDGA's official API only), or null when PDGA has none. */
+/** The QA member's shown Home hero rating from /pdga-stats (live_rating when present, else official_rating), or null. */
 async function officialRating(apiBase, pdgaNo) {
   const data = await requestJson(apiBase, `/pdga-stats?pdga=${encodeURIComponent(pdgaNo)}`);
-  const rating = Number(data?.official_rating);
+  const rating = Number(data?.live_rating ?? data?.official_rating);
   return Number.isInteger(rating) && rating > 0 ? rating : null;
 }
 

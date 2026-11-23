@@ -1484,3 +1484,12 @@
 [data-page="lost-found"] [data-lf-view="person"] .lf-grid:has(.lf-celebration) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); }
 [data-page="lost-found"] .lf-photo-tools { display: grid; gap: 8px; }
 [data-page="lost-found"] .market-card-photo { text-decoration: none; }
+
+/* PDGA Live event panel on event detail page */
+[data-pdga-live-panel] .detail-actions { margin-bottom: 12px; }
+[data-pdga-live-panel] .event-action-btn[aria-pressed="true"] {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+  color: var(--light);
+}
+[data-pdga-live-panel] .pdga-live-foot { margin-top: 10px; display: grid; gap: 4px; }

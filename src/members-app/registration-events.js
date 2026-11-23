@@ -5,6 +5,8 @@ import { EventScheduleFacts } from "../shared/event-schedule.js";
 import { EventFieldRoster } from "../shared/event-field-roster.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromClub } from "../shared/event-calendar.js";
+import { PdgaCredit } from "../shared/pdga-credit.js";
+import { PdgaRegistrationCard } from "./pdga-registrations.js";
 import { request, requestJson } from "./api.js";
 import { selectDashboardTab } from "./dashboard-router.js";
 import { dollars, formatEventDay } from "./format.js";
@@ -293,7 +295,7 @@ function Section({ title, children }) {
   ]);
 }
 
-export function EventRegistrationSections({ events, registrations, token, paymentsConfig, onReload }) {
+export function EventRegistrationSections({ events, registrations, token, paymentsConfig, onReload, pdgaMine = [] }) {
   const byEvent = new Map(registrations.map((row) => [row.event_id, row]));
   const openById = new Map(events.map((event) => [event.id, event]));
   const openToJoin = events.filter((event) => !byEvent.has(event.id));
@@ -304,7 +306,9 @@ export function EventRegistrationSections({ events, registrations, token, paymen
   // Finished (final) events live on the Event results tab so upcoming ones stay at the top here.
   const upcoming = registrations.filter((row) => !isFinishedRegistration(row, openById));
   const finishedCount = registrations.length - upcoming.length;
-  if (upcoming.length) {
+  // PDGA events the member is registered for (found via PDGA Live hourly) join their club events.
+  const pdgaCards = pdgaMine.map((event) => h(PdgaRegistrationCard, { event, mine: true, key: `pdga-${event.eventId}` }));
+  if (upcoming.length || pdgaCards.length) {
     sections.push(h(Section, { title: "My events", key: "mine" }, [...sortRegistrations(upcoming).map((row) => h(EventRegistrationCard, {
       event: openById.get(row.event_id) || eventFromRegistration(row),
       registration: row,
@@ -312,7 +316,7 @@ export function EventRegistrationSections({ events, registrations, token, paymen
       paymentsConfig,
       onReload,
       key: `registered-${row.event_id}`,
-    }))]));
+    })), ...pdgaCards, pdgaCards.length ? h(PdgaCredit, { key: "pdga-credit" }) : null]));
   } else if (finishedCount) {
     sections.push(h("section", { className: "member-event-section", "aria-label": "My events", key: "mine" }, [
       h("h2", { className: "register-subhead", key: "title" }, "My events"),

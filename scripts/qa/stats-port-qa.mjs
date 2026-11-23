@@ -80,7 +80,30 @@ function handler(scenario) {
     const path = url.pathname.slice(apiRoot.length);
     const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
     if (path === "/me") return json({ ...member, mustChangePin: false });
-    if (path === "/pdga-stats") return json({ name: member.name, official_rating: 912, rating_date: "2026-11-01", live_rating: null, peak_rating: null, events_count: 0, events: [], source: "pdga-api" });
+    if (path === "/pdga-stats") return json({
+      name: member.name,
+      official_rating: 912,
+      rating_date: "2026-11-01",
+      live_rating: 924,
+      peak_rating: 946,
+      events_count: 1,
+      events: [{
+        tournament: "Greenville Fall Classic",
+        date: "2026-10-18",
+        epoch: 1792281600,
+        division: "MA1",
+        eventId: "96414",
+        rounds: [{ rating: 946, score: 55, round: "1" }, { rating: 902, score: 59, round: "2" }],
+      }],
+      play_rounds: [{
+        tournament: "Greenville Fall Classic",
+        date: "2026-10-18",
+        division: "MA1",
+        round: "1",
+        breakdown: { holes: 18, birdies: 5, pars: 11, bogeys: 2, fir_hit: 13, fir_att: 16, c1r_hit: 9, c1r_att: 18 },
+      }],
+      source: "pdga-api",
+    });
     if (path === "/my-results") return json({ results: scenario === "empty" ? [] : events, casual: scenario === "empty" ? [] : casual });
     if (path === "/my-ratings") {
       if (scenario === "error") return json({ error: "x" }, 503);
@@ -157,7 +180,7 @@ async function populated(width, mode, large = false) {
   for (const label of ["Event rounds", "Event avg", "Best finish"]) assert.ok(await body.getByText(label, { exact: true }).count(), label);
   assert.equal(await body.getByText("Club rating", { exact: true }).count() > 0, true, "Club rating label (live value) present");
   assert.ok(await body.getByText("My play history").count() || await body.locator(".member-history-panel").count(), "play history");
-  for (const group of ["Group format", "Scoring style"]) assert.ok(await body.getByRole("tablist", { name: group }).count(), group);
+  for (const group of ["Group format", "Scoring style"]) assert.ok(await body.getByRole("group", { name: group }).count(), group);
   assert.ok(await body.locator(".play-score-mix").count() >= 2, "existing score mix bars");
   assert.ok(await body.locator(".play-score-legend").count() >= 2, "existing score mix legends");
   assert.ok(await body.locator(".play-stat-card").count() >= 6, "stat cards");
@@ -165,8 +188,10 @@ async function populated(width, mode, large = false) {
   assert.ok(await body.getByText("Club results", { exact: true }).count(), "club results");
   assert.ok(await body.getByText("Coming up", { exact: true }).count(), "coming up");
   assert.ok(await body.locator(".dash-rating-row").count(), "pdga tiles");
-  // PDGA's official rating only (PDGA's API); no PDGA-derived estimate (PDGA's terms).
-  assert.ok(await body.getByText("PDGA official rating", { exact: true }).count() && !(await body.getByText("Live rating estimate", { exact: true }).count()), "PDGA labels");
+  // Official PDGA rating, PDGA Live estimate, and Best round rating from documented APIs.
+  assert.ok(await body.getByText("PDGA official rating", { exact: true }).count()
+    && await body.getByText("Live rating estimate", { exact: true }).count()
+    && await body.getByText("Best round rating", { exact: true }).count(), "PDGA labels");
   assert.ok(await body.locator("[data-react-club-ratings]").count(), "club ratings list");
   assert.ok(await body.getByText("Import UDisc history").count(), "import link");
   // rank notes survive next to the bars
@@ -189,7 +214,7 @@ async function populated(width, mode, large = false) {
   await trend.getByRole("button", { name: "Competitive", exact: true }).click();
   // one label, one number
   const keyText = await trend.locator(".stats-rating-key").innerText();
-  assert.ok(/Club rating\s*918/.test(keyText) && /PDGA official rating\s*912/.test(keyText) && !/Live rating estimate/.test(keyText), "rating key: " + keyText);
+  assert.ok(/Club rating\s*918/.test(keyText) && /PDGA official rating\s*912/.test(keyText) && /Live rating estimate\s*924/.test(keyText), "rating key: " + keyText);
   const dist = body.locator(".stats-dist").first();
   assert.ok(await dist.locator(".stats-dist-row").count() >= 4, "distribution rows: " + (await body.locator(".play-score-mix-wrap").first().innerHTML()).slice(0, 600));
   assert.ok(/\d+ holes?/.test(await dist.innerText()) && /%/.test(await dist.innerText()), "counts and percents");

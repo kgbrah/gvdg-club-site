@@ -145,9 +145,9 @@ Cloudflare Worker  auth-worker/src/index.ts   (default export { fetch, scheduled
     "17 8 * * *"    → daily ratings recompute + the Dec 1 membership reminder
     "*/15 * * * *"  → marketplace withdrawal sweep, UDisc layout import, then the Lost & Found tick LAST
                       (expiry, photo purge, due AI reads, matching incl. bags, bag-photo cleanup)
-    "7 * * * *"     → hourly PDGA events within 100 miles (PDGA's official API, cached briefly); the Sunday UDisc
-                      league refresh rides it. (PDGA layout baselines and members' PDGA registrations, which read
-                      pdga.com pages / internal endpoints and kept PDGA rounds, were removed for PDGA's terms.)
+    "7 * * * *"     → hourly PDGA events within 100 miles (official REST API) + rotating NC/VA/SC Live API roster
+                      matching (cached temporarily with ETag/304 & purged hourly); the Sunday UDisc league refresh rides it.
+                      (Old HTML scraping, undocumented /api/v1/feat/members/*, and permanent PDGA course baselines stay off.)
 ```
 
 ### The split router (`src/index.ts` + `club-api.ts`)

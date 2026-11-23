@@ -25,9 +25,11 @@ test("every screen that shows PDGA data carries the PDGA credit", () => {
     "src/members-app/overview-dashboard.js": "Home: PDGA official rating, Next PDGA",
     "src/members-app/season-page.js": "Stats: PDGA official rating",
     "src/members-app/pdga-events-panel.js": "Nearby PDGA events",
+    "src/members-app/pdga-registrations.js": "Clubmates at PDGA events & My PDGA events",
     "src/home-app/feed-panels.js": "Public home: Area Tournaments (PDGA's API)",
     "src/score-app/scorecard-view.js": "Scorer: playing rating against the PDGA rating",
     "src/public-app/tournament-registration.js": "Public PDGA tournament registration",
+    "src/public-app/pdga-live-panel.js": "Public event PDGA Live results & detailed stats",
     "src/admin-app/tournament-panel.js": "Admin PDGA tournament settings & reports",
     "src/admin-app/event-form.js": "Admin event PDGA lookup",
     "src/admin-app/scoring-panel.js": "Admin PDGA results export",
@@ -40,10 +42,13 @@ test("every screen that shows PDGA data carries the PDGA credit", () => {
   }
 });
 
-test("PDGA event names link to their pdga.com pages", () => {
+test("PDGA event names and players link to their pdga.com pages", () => {
   assert.match(readFileSync("src/members-app/pdga-dashboard.js", "utf8"), /pdgaPlayerHref\(pdgaNo\)/);
+  assert.match(readFileSync("src/members-app/pdga-dashboard.js", "utf8"), /pdgaEventHref\(event\.eventId\)/);
   assert.match(readFileSync("src/members-app/overview-dashboard.js", "utf8"), /h\(PdgaLink, \{ href: pdgaPlayerHref\(context\.pdgaNo\) \}, meta\)/);
   assert.match(readFileSync("src/members-app/pdga-events-panel.js", "utf8"), /h\(PdgaLink, \{ className: "register-name", href: event\.pdgaUrl/);
+  assert.match(readFileSync("src/members-app/pdga-registrations.js", "utf8"), /h\(PdgaLink, \{ className: "register-name", href: event\.url/);
+  assert.match(readFileSync("src/public-app/pdga-live-panel.js", "utf8"), /h\(PdgaLink, \{ href: row\.profileUrl \|\| ""/);
   assert.match(readFileSync("src/members-app/overview-dashboard.js", "utf8"), /h\(PdgaLink, \{ as: "div", className: "player-event-name", href: event\.pdgaUrl/);
   assert.match(readFileSync("src/home-app/feed-panels.js", "utf8"), /h\(PdgaLink, \{ as: "h4", className: "tournament-name", href: tournament\.pdgaUrl/);
 });
@@ -94,19 +99,24 @@ test("pdga.com profile photos are not shown", async () => {
   assert.equal(playerPhotoSrc("https://www.pdga.com/files/pictures/picture-12345.jpg"), "");
 });
 
-// PDGA's tech team (Nov 2026): no data from pdga.com pages or PDGA's internal endpoints. The features built on them
-// are gone from the pages: who's registered for PDGA events, PDGA round ratings / event history / hole mix, the
-// live rating estimate, and the admin's PDGA course baselines.
-test("nothing in the site asks for the removed PDGA data", () => {
+// Official PDGA REST API + documented PDGA Live API (https://www.pdga.com/dev/api/live): PDGA baselines remain
+// permanently removed and undocumented endpoints/scraping never appear in client source, while PDGA Live integrations
+// are wired cleanly.
+test("no undocumented PDGA scraping or course baselines remain, and PDGA Live features are wired", () => {
   const files = ["src/members-app/registration-data.js", "src/members-app/overview-dashboard.js", "src/members-app/registration-panel.js",
     "src/members-app/registration-events.js", "src/members-app/pdga-dashboard.js", "src/members-app/play-stats-panel.js",
-    "src/admin-app/course-health.js", "src/members-app/season-charts.js"];
+    "src/admin-app/course-health.js", "src/members-app/season-charts.js", "src/public-app/pdga-live-panel.js"];
   for (const file of files) {
     const text = readFileSync(file, "utf8");
-    assert.doesNotMatch(text, /pdga-registrations|pdga-baselines|(?:pdgaStats|stats)\?\.live_rating|play_rounds|peak_rating|Clubmates at PDGA/, file);
+    assert.doesNotMatch(text, /pdga-baselines|feat\/members|rating-detail|discgolfscene/i, file);
   }
-  assert.doesNotMatch(readFileSync("src/members-app/pdga-dashboard.js", "utf8"), /Live rating estimate|Best round rating|Tournaments \(/);
-  assert.doesNotMatch(readFileSync("src/shared/play-stats.js", "utf8"), /pdgaRowsFromStats/);
+  assert.match(readFileSync("src/members-app/registration-data.js", "utf8"), /\/pdga-registrations/);
+  const pdgaDashboard = readFileSync("src/members-app/pdga-dashboard.js", "utf8");
+  assert.match(pdgaDashboard, /Live rating estimate/);
+  assert.match(pdgaDashboard, /Best round rating/);
+  assert.match(pdgaDashboard, /Tournaments \(/);
+  assert.match(readFileSync("src/shared/play-stats.js", "utf8"), /pdgaRowsFromStats/);
+  assert.match(readFileSync("src/public-app/events-detail-app.js", "utf8"), /PdgaLivePanel/);
 });
 
 test("PDGA compliance cleanup: no scraped claims on scoring-app.html, no DGS scraper in admin, no Rating/Membership in CSV", () => {

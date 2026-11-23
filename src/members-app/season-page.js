@@ -200,7 +200,7 @@ function SeasonPageBody({ resultsOnly = false } = {}) {
       h(StatTile, { label: "Avg round rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
     h(RatingTrend, { ratings: state.ratings, status: state.status, pdgaStats: pdgaState.stats, key: "trend" }),
-    h(PlayStatsPanel, { key: "play-stats" }),
+    h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats }),
     h("div", { className: "stats-leagues", id: "stats-leagues", key: "leagues" }, [
       h(ActiveStandingsPanel, { key: "active-standings" }),
       page?.standings.length
@@ -227,7 +227,7 @@ function SeasonPageBody({ resultsOnly = false } = {}) {
       h(PdgaDashboard, { pdgaNo: context.pdgaNo, state: pdgaState, key: "pdga" }),
       h(ClubRatings, { token, key: "ratings" }),
     ]),
-    // The PDGA official rating (PDGA's API) is on this page.
+    // Official PDGA rating, PDGA Live round ratings, event history, and Live throw/putting stats are on this page.
     h(PdgaCredit, { key: "pdga-credit" }),
   ]);
 }

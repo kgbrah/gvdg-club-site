@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { puttingBuckets } from "../src/shared/shot-stats-model.js";
 
 import {
+  PLAY_KINDS,
   addHoleToTotals,
   emptyPlayTotals,
   fairwayHit,
@@ -14,6 +15,7 @@ import {
   livePlayStatsView,
   liveRoundStatsFromCard,
   parseBreakdown,
+  pdgaRowsFromStats,
   playKindLabel,
   playRowGroup,
   playRowKind,
@@ -195,6 +197,23 @@ test("PDGA hole lines become a scoring mix without touching club ranks", () => {
   assert.equal(payload.competitive.mine.totals.birdies, 8);
   assert.equal(payload.pdga.mine.totals.birdies, 1);
   assert.equal(payload.pdga.mine.totals.holes, 18);
+  assert.ok(PLAY_KINDS.includes("pdga"));
+
+  const rowsFromRounds = pdgaRowsFromStats({
+    name: "Ada",
+    play_rounds: [{
+      division: "FPO",
+      breakdown: { holes: 18, birdies: 5, pars: 11, bogeys: 2, fir_hit: 14, fir_att: 16, c1r_hit: 8, c1r_att: 18 },
+    }],
+  }, "m_ada", "Ada Lovelace");
+  assert.equal(rowsFromRounds.length, 1);
+  const pdgaView = playStatsByKind(rowsFromRounds, "m_ada").pdga;
+  assert.equal(pdgaView.categories.find((c) => c.id === "fir")?.mine?.hit, 14);
+  assert.equal(pdgaView.categories.find((c) => c.id === "fir")?.mine?.att, 16);
+
+  const fallbackRows = pdgaRowsFromStats({ name: "Ada", play: { holes: 9, pars: 9 } }, "m_ada");
+  assert.equal(fallbackRows.length, 1);
+  assert.equal(pdgaRowsFromStats({ play: { holes: 0 } }, "m_ada").length, 0);
 });
 
 test("doubles partners both receive the team hole mix", () => {

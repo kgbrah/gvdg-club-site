@@ -55,7 +55,8 @@ function response(path, query, tagState, request) {
   if (path === "/rounds/RIVER7/live/mine") return { status: "live", cardId: 1, cardmates: [{ name: "Morgan" }, { name: "Jordan" }] };
   if (path === "/my-live-rounds") return { rounds: [] };
   // PDGA's official API only: the official rating and its date.
-  if (path === "/pdga-stats") return { name: title, official_rating: 913, rating_date: "2026-11-01", live_rating: null, previous_rating: null, events: [], play_rounds: [], source: "pdga-api" };
+  if (path === "/pdga-stats") return { name: title, official_rating: 913, rating_date: "2026-11-01", live_rating: 922, peak_rating: 941, previous_rating: null, events: [], play_rounds: [], source: "pdga-api" };
+  if (path === "/pdga-registrations") return { mine: [], club: [] };
   if (path === "/shop/wallet") return { balance_cents: 3250,
     transactions: [{ id: 1, amount_cents: 3250, source: "event_payout", created_at: "2026-11-13T19:30:00Z" }] };
   if (path === "/bag-tags/challenges" && request.method === "POST" && tagState.lastBody?.leagueId) {
