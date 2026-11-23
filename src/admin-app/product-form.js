@@ -1,8 +1,10 @@
 import React from "react";
+import { Camera, ImagePlus } from "lucide-react";
 
 import { applyShopVoice, VoiceFill } from "./voice-fill.js";
 import { usualPriceDollars } from "./desk-model.js";
 import { SHOP_BRANDS, SHOP_COLORS, SHOP_CUSTOM, choiceOptions, matchChoice, weightOptions } from "./shop-choices.js";
+import { PHOTO_ACCEPT, useCameraCapture, useCameraMode } from "../public-app/photo-add.js";
 
 const h = React.createElement;
 
@@ -181,6 +183,7 @@ export function AdminProductForm() {
         setForm(EMPTY_FORM);
         if (fileRef.current) fileRef.current.value = "";
         currentRequest.current = "";
+        readRequest.current = "";
         setReadNote("");
       }
     }
@@ -192,6 +195,9 @@ export function AdminProductForm() {
     function repeat(event) {
       const product = event.detail && event.detail.product;
       if (!product) return;
+      readRequest.current = "";
+      setReadNote("");
+      if (fileRef.current) fileRef.current.value = "";
       setForm({
         brand: product.brand || "",
         category: product.category || "disc",
@@ -263,8 +269,7 @@ export function AdminProductForm() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
-  async function updateFile(event) {
-    const file = event.target.files && event.target.files[0];
+  const handlePhotoFile = React.useCallback(async (file) => {
     if (!file) return;
     try {
       const dataUrl = await resizeImageToDataUrl(file, 700, 0.78);
@@ -277,9 +282,45 @@ export function AdminProductForm() {
     } catch {
       dispatchRequest("gvdg:admin-product-photo-error", {});
     }
+  }, []);
+
+  const handleCameraFiles = React.useCallback((files) => {
+    const file = Array.isArray(files) ? files[0] : null;
+    if (file) void handlePhotoFile(file);
+  }, [handlePhotoFile]);
+
+  const chooseFile = React.useCallback(() => {
+    fileRef.current?.click();
+  }, []);
+
+  const cameraMode = useCameraMode();
+  const hasCamera = cameraMode === "live" || cameraMode === "app";
+  const [startCamera, cameraSheet] = useCameraCapture({
+    chooseFiles: chooseFile,
+    hint: "Center the disc stamp in the frame.",
+    max: 1,
+    mode: cameraMode,
+    onFiles: handleCameraFiles,
+  });
+
+  function updateFile(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (file) void handlePhotoFile(file);
+  }
+
+  function clearUploadedPhoto() {
+    readRequest.current = "";
+    setReadNote("");
+    setForm((current) => ({ ...current, uploadedImageUrl: "" }));
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function updateImageUrl(value) {
+    if (value) {
+      readRequest.current = "";
+      setReadNote("");
+    }
     setForm((current) => ({ ...current, imageUrl: value, uploadedImageUrl: value ? "" : current.uploadedImageUrl }));
     if (value && fileRef.current) fileRef.current.value = "";
   }
@@ -363,9 +404,33 @@ export function AdminProductForm() {
     h("div", { className: "admin-product-form-wide", key: "image" }, [
       h("label", { htmlFor: "psImage", key: "label" }, "Image"),
       h(hInput, { id: "psImage", key: "url", maxLength: 2000, onChange: (event) => updateImageUrl(event.target.value), placeholder: "https://… paste an image URL", type: "url", value: form.imageUrl }),
-      h("div", { className: "admin-product-image-input", key: "file-row" }, [
-        h(hInput, { accept: "image/*", "aria-label": "Upload product photo", id: "psImageFile", key: "file", onChange: updateFile, ref: fileRef, type: "file" }),
-        h("span", { className: "al-note", key: "note" }, "…or take a photo / upload from your device"),
+      h("div", { className: "admin-product-image-input", "data-photo-camera": cameraMode, key: "file-row" }, [
+        h(hInput, { accept: PHOTO_ACCEPT, "aria-label": "Upload product photo", className: "admin-sr-only", id: "psImageFile", key: "file", onChange: updateFile, ref: fileRef, type: "file" }),
+        h("div", { className: "admin-product-photo-actions", key: "actions" }, [
+          hasCamera ? h("button", {
+            className: "admin-btn secondary admin-product-photo-btn",
+            disabled: busy,
+            key: "camera",
+            onClick: startCamera,
+            type: "button",
+          }, [
+            h(Camera, { "aria-hidden": true, key: "icon", size: 18 }),
+            form.uploadedImageUrl ? "Retake photo" : "Take photo",
+          ]) : null,
+          h("button", {
+            className: "admin-btn secondary admin-product-photo-btn",
+            disabled: busy,
+            key: "choose",
+            onClick: chooseFile,
+            type: "button",
+          }, [
+            h(ImagePlus, { "aria-hidden": true, key: "icon", size: 18 }),
+            hasCamera ? "Choose photo" : "Upload photo",
+          ]),
+        ]),
+        h("span", { className: "al-note", key: "note" }, hasCamera
+          ? "Take a photo to auto-read the disc stamp, or pick one from your device."
+          : "Upload a photo to auto-read the disc stamp from your device."),
       ]),
       form.uploadedImageUrl ? h("figure", {
         className: "admin-product-image-preview",
@@ -378,8 +443,18 @@ export function AdminProductForm() {
           key: "image",
           src: form.uploadedImageUrl,
         }),
-        h("figcaption", { className: "admin-product-image-preview-note", key: "caption" }, readNote || "Selected upload will be saved when you add the product."),
+        h("div", { className: "admin-product-image-preview-body", key: "body" }, [
+          h("figcaption", { className: "admin-product-image-preview-note", key: "caption" }, readNote || "Selected photo will be saved when you add the product."),
+          h("button", {
+            className: "admin-btn secondary",
+            disabled: busy,
+            key: "remove",
+            onClick: clearUploadedPhoto,
+            type: "button",
+          }, "Remove photo"),
+        ]),
       ]) : null,
+      cameraSheet,
     ]),
     h("div", { className: "admin-product-form-wide", key: "description" }, [
       h("label", { htmlFor: "psDescription", key: "label" }, "Description"),

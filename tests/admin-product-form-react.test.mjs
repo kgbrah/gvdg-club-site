@@ -7,14 +7,17 @@ test('admin product creation form and upload preview are rendered by React from 
   const main = readFileSync('src/admin-app/main.js', 'utf8');
   const productForm = readFileSync('src/admin-app/product-form.js', 'utf8');
   const productsList = readFileSync('src/admin-app/products-list.js', 'utf8');
+  const cameraCss = readFileSync('camera.css', 'utf8');
   const initAdmin = html.match(/function initAdmin\(\) \{[\s\S]*?adminLoadEvents\(\);\n            adminLoadCourses\(\);\n            adminLoadLeagues\(\);\n        \}/)?.[0];
 
   assert.match(html, /id="adminProductFormReactApp"/);
+  assert.match(html, /href="camera\.css"/);
   assert.doesNotMatch(html, /id="adminProductForm"/);
   assert.doesNotMatch(html, /id="psImagePreview"/);
   assert.match(html, /\.admin-product-form-wide \{/);
   assert.match(html, /\.admin-product-image-input \{/);
   assert.doesNotMatch(html, /function adminAddProduct|function onProductImageFile|function resizeImageToDataUrl|productImageDataUrl|adminProductImagePreviewReactApp|gvdg:admin-product-image-preview/);
+  assert.match(cameraCss, /\.gv-camera \{[\s\S]*?z-index: 12000;/);
   assert.ok(initAdmin);
   assert.match(initAdmin, /gvdg:admin-product-create-request/);
   assert.match(initAdmin, /adminCreateProductFromReact\(event\.detail \|\| \{\}\)/);
@@ -29,6 +32,12 @@ test('admin product creation form and upload preview are rendered by React from 
   assert.match(main, /createRoot\(productFormMount\)\.render\(h\(AdminProductForm\)\)/);
   assert.match(productForm, /export function AdminProductForm/);
   assert.match(productForm, /data-react-admin-product-form/);
+  assert.match(productForm, /useCameraMode/);
+  assert.match(productForm, /useCameraCapture/);
+  assert.match(productForm, /data-photo-camera/);
+  assert.match(productForm, /"Take photo"/);
+  assert.match(productForm, /"Choose photo"/);
+  assert.match(productForm, /"Remove photo"/);
   assert.match(productForm, /gvdg:admin-product-create-request/);
   assert.match(productForm, /gvdg:admin-product-create-result/);
   assert.match(productForm, /gvdg:admin-product-photo-ready/);

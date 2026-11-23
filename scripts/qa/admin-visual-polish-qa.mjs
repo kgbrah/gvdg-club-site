@@ -82,6 +82,7 @@ let leagueChallengeOpen = true;
 let reviewPending = true;
 // A donation a member reported (owner: "Let's make ALL donations reward +10 karma per dollar"; an admin confirms).
 let donationPending = true;
+let productRequests = [];
 const donation = { id: 4, memberId: "m_jordan", memberName: "Jordan Reyes", amountCents: 1000, source: "club-card", status: "pending", karma: 0, createdAt: date + " 15:20:00", reviewedAt: null, reviewNote: "" };
 // Admin › Scoring › Live casual rounds: a ghost (quiet for a day) and a card out on the course now.
 const freshLiveRounds = () => [
@@ -166,6 +167,13 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/members/applications") return { applications: [application] };
   if (path === "/admin/orders") return { unfulfilled: 1, orders: !query.get("status") || query.get("status") === orderStatus ? [{ ...order, status: orderStatus }] : [] };
   if (path === "/admin/orders/6" && method === "PATCH") { orderStatus = body.status; return { ok: true }; }
+  if (path === "/admin/shop/read-label" && method === "POST") {
+    return { fields: { name: "Destroyer", brand: "Innova", color: "Blue", weight: "173", productType: "distance_driver" } };
+  }
+  if (path === "/admin/shop/products" && method === "POST") {
+    productRequests.push(body);
+    return { ok: true, id: 99 };
+  }
   if (path === "/admin/shop/products") return { products: [{ id: 13, name: "River fairway driver", category: "disc", price_cents: 1800, stock: 9, active: 1, description: "A straight fairway driver." }] };
   if (path === "/admin/wallets/recent") return { transactions: [
     { id: 4, member_id: "m_jordan", member_name: "Jordan Reyes", amount_cents: 1250, source: "manual_adjustment", note: "Club payout", created_by: "m_casey", created_at: date },
@@ -785,9 +793,153 @@ async function verifyLeagueBagTags() {
   console.log("League bag tag challenges verified in admin (filter, cancel, no admin confirm)");
 }
 
+async function verifyShopCamera() {
+  productRequests = [];
+  const camBrowser = await chromium.launch({
+    ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
+    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", ...(process.env.GVDG_QA_NO_SANDBOX ? ["--no-sandbox"] : [])],
+  });
+  async function openCamPage(variant, scripts = []) {
+    const context = await camBrowser.newContext({
+      viewport: { width: variant.width, height: variant.height },
+      isMobile: variant.width < 500,
+      hasTouch: variant.width < 500,
+      deviceScaleFactor: 1,
+      permissions: ["camera", "clipboard-read", "clipboard-write"],
+      serviceWorkers: "block",
+    });
+    await context.route(/^https?:/, (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+    const page = await context.newPage();
+    page.setDefaultTimeout(30_000);
+    page.on("pageerror", (err) => errors.push(err.message));
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text().includes("unique") && message.text().includes("key")) warnings.push(message.text());
+    });
+    await page.routeWebSocket("**/admin-fixture/**", (socket) => { socket.onMessage(() => {}); });
+    await page.addInitScript(({ who, dark }) => {
+      localStorage.setItem("gvdg_member_token", who);
+      localStorage.setItem("theme", dark ? "dark" : "light");
+    }, { who: token, dark: variant.dark });
+    for (const script of scripts) await page.addInitScript(script);
+    return { context, page };
+  }
+  const spyCamera = () => {
+    const media = navigator.mediaDevices;
+    if (!media?.getUserMedia) return;
+    const real = media.getUserMedia.bind(media);
+    window.__gvStreams = [];
+    media.getUserMedia = async (constraints) => {
+      const stream = await real(constraints);
+      window.__gvStreams.push(stream);
+      return stream;
+    };
+  };
+  const noLiveCamera = () => {
+    Object.defineProperty(MediaDevices.prototype, "getUserMedia", { configurable: true, value: undefined });
+    Object.defineProperty(navigator.mediaDevices, "getUserMedia", { configurable: true, value: undefined });
+  };
+  const noCameraHardware = () => {
+    navigator.mediaDevices.enumerateDevices = async () => [{ kind: "audioinput", deviceId: "", groupId: "", label: "" }];
+  };
+  try {
+    // 1. Mobile camera capture: viewfinder sits above admin-dock, snaps JPEG, auto-reads label, and submits product.
+    const live = await openCamPage(variants[0], [spyCamera]);
+    await live.page.goto(origin + "/admin-preview.html#shop", { waitUntil: "commit", timeout: 60_000 });
+    await live.page.getByRole("heading", { name: "Inventory", level: 1, exact: true }).waitFor();
+    const form = live.page.locator("#adminProductForm");
+    await form.locator("[data-photo-camera='live']").waitFor();
+    await form.getByRole("button", { name: "Take photo" }).waitFor();
+    await form.getByRole("button", { name: "Choose photo" }).waitFor();
+    await form.getByRole("button", { name: "Take photo" }).click();
+    const sheet = live.page.locator(".gv-camera[data-gv-camera='ready']");
+    await sheet.waitFor();
+    const shutterTop = await live.page.evaluate(() => {
+      const shutter = document.querySelector(".gv-camera-shutter");
+      const box = shutter?.getBoundingClientRect();
+      if (!box) return false;
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return Boolean(hit && shutter.contains(hit) && !hit.closest(".admin-dock"));
+    });
+    assert.equal(shutterTop, true, "camera shutter must sit above mobile admin-dock");
+    await sheet.getByRole("button", { name: "Take photo", exact: true }).click();
+    await sheet.locator(".gv-camera-shot").first().waitFor();
+    assert.equal((await sheet.locator(".gv-camera-count").innerText()).trim(), "1 of 1");
+    const doneTop = await live.page.evaluate(() => {
+      const done = document.querySelector(".gv-camera-done");
+      const box = done?.getBoundingClientRect();
+      if (!box) return false;
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return Boolean(hit && done.contains(hit) && !hit.closest(".admin-dock"));
+    });
+    assert.equal(doneTop, true, "camera Done button must sit above mobile admin-dock");
+    await sheet.getByRole("button", { name: "Use 1 photo" }).click();
+    await live.page.locator(".gv-camera").waitFor({ state: "detached" });
+    const tracks = await live.page.evaluate(() => (window.__gvStreams || []).flatMap((stream) => stream.getTracks()).map((track) => track.kind + ":" + track.readyState));
+    assert.ok(tracks.length > 0 && tracks.every((track) => track === "video:ended"), "camera tracks stop after Done: " + tracks.join(", "));
+    const preview = form.locator("[data-react-admin-product-image-preview='ready']");
+    await preview.waitFor();
+    assert.match(String(await preview.locator("img").getAttribute("src") || ""), /^data:image\/jpeg;base64,/);
+    await preview.getByText("Filled from the photo. Change anything that's wrong.").waitFor();
+    assert.equal(await form.locator("#psName").inputValue(), "Destroyer");
+    assert.equal(await form.locator("#psBrand").inputValue(), "Innova");
+    assert.equal(await form.locator("#psColor").inputValue(), "Blue");
+    assert.equal(await form.locator("#psWeight").inputValue(), "173");
+    await form.getByRole("button", { name: "Retake photo" }).waitFor();
+    await fit(live.page, "390 shop-camera-preview");
+    await readable(live.page, "390 shop-camera-preview");
+    await shot(live.page, "shop-camera-preview-390");
+    await form.locator("#psPrice").fill("18");
+    const posted = live.page.waitForResponse((response) => response.url().endsWith("/admin/shop/products") && response.request().method() === "POST");
+    await form.getByRole("button", { name: "Add product" }).click();
+    assert.equal((await posted).status(), 200);
+    assert.equal(productRequests.length, 1);
+    assert.match(String(productRequests[0]?.image_url || ""), /^data:image\/jpeg;base64,/);
+    await preview.waitFor({ state: "detached" });
+
+    // Retake and Remove photo clears the uploaded photo before saving.
+    await form.getByRole("button", { name: "Take photo" }).click();
+    await sheet.waitFor();
+    await sheet.getByRole("button", { name: "Take photo", exact: true }).click();
+    await sheet.locator(".gv-camera-shot").first().waitFor();
+    await sheet.getByRole("button", { name: "Use 1 photo" }).click();
+    await preview.waitFor();
+    await preview.getByRole("button", { name: "Remove photo" }).click();
+    await preview.waitFor({ state: "detached" });
+    await form.getByRole("button", { name: "Take photo" }).waitFor();
+    await live.context.close();
+
+    // 2. Phone browser without getUserMedia falls back to capture="environment" camera input.
+    const appMode = await openCamPage(variants[0], [noLiveCamera]);
+    await appMode.page.goto(origin + "/admin-preview.html#shop", { waitUntil: "commit", timeout: 60_000 });
+    await appMode.page.getByRole("heading", { name: "Inventory", level: 1, exact: true }).waitFor();
+    const appForm = appMode.page.locator("#adminProductForm");
+    await appForm.locator("[data-photo-camera='app']").waitFor();
+    const chooserPromise = appMode.page.waitForEvent("filechooser");
+    await appForm.getByRole("button", { name: "Take photo" }).click();
+    const chooser = await chooserPromise;
+    assert.equal(await chooser.element().getAttribute("capture"), "environment");
+    assert.equal(await chooser.element().getAttribute("data-gv-photo-input"), "camera");
+    await appMode.context.close();
+
+    // 3. Desktop without a camera hides Take photo and keeps Upload photo.
+    const noCam = await openCamPage(variants[2], [noCameraHardware]);
+    await noCam.page.goto(origin + "/admin-preview.html#shop", { waitUntil: "commit", timeout: 60_000 });
+    await noCam.page.getByRole("heading", { name: "Inventory", level: 1, exact: true }).waitFor();
+    const deskForm = noCam.page.locator("#adminProductForm");
+    await deskForm.locator("[data-photo-camera='none']").waitFor();
+    assert.equal(await deskForm.getByRole("button", { name: "Take photo" }).count(), 0);
+    await deskForm.getByRole("button", { name: "Upload photo" }).waitFor();
+    await noCam.context.close();
+  } finally {
+    await camBrowser.close();
+  }
+  console.log("Admin shop camera verified (live capture, stamp autofill, product POST, app fallback, no-camera desktop)");
+}
+
 try {
   for (const variant of variants) await verifyRoutes(variant);
   await verifyLeagueBagTags();
+  await verifyShopCamera();
   for (const mode of ["error", "empty", "loading"]) {
     fixtureMode = mode;
     const { page, context } = await newPage(variants[0]);
