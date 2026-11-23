@@ -123,7 +123,11 @@ function LostMatchCard({ match, reload }) {
       "Seller: ", who(listing.seller), match.createdAt ? " · flagged " + when(match.createdAt) : "",
     ].join("")),
     h("p", { className: "al-note", key: "lost" }, [
-      "Looks like the lost ", h("a", { href: match.lost.href, key: "a", rel: "noopener", target: "_blank" }, match.lost.title),
+      "Looks like the lost ",
+      h("a", {
+        href: typeof match.lost.href === "string" && match.lost.href.startsWith("lost-found.html#") ? match.lost.href : "lost-found.html",
+        key: "a", rel: "noopener", target: "_blank",
+      }, match.lost.title),
       match.lost.course ? " (" + match.lost.course + ")" : "", " · ",
       h("a", { href: "pro-shop.html#market/listing/" + listing.id, key: "b", rel: "noopener", target: "_blank" }, "Open the listing"),
     ]),

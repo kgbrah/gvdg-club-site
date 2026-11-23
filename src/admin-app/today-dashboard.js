@@ -103,6 +103,17 @@ export function MorningDesk({ event }) {
 }
 
 function HandoffCard({ order }) {
+  const [busy, setBusy] = React.useState(false);
+  const currentRequest = React.useRef("");
+  React.useEffect(() => {
+    function finish(event) {
+      if (!currentRequest.current || event.detail?.requestId !== currentRequest.current) return;
+      currentRequest.current = "";
+      setBusy(false);
+    }
+    window.addEventListener("gvdg:admin-order-action-result", finish);
+    return () => window.removeEventListener("gvdg:admin-order-action-result", finish);
+  }, []);
   if (!order) return null;
   const ready = order.status === "ready";
   return h("div", { className: "admin-today-card admin-handoff", key: "handoff" }, [
@@ -110,16 +121,23 @@ function HandoffCard({ order }) {
     h("p", { className: "admin-event-meta", key: "state" }, ready ? "Ready to hand off" : "Order waiting"),
     h("button", {
       className: "admin-btn",
+      disabled: busy,
       key: "act",
-      onClick: () => dispatchRequest("gvdg:admin-order-save-request", {
-        order: order.source,
-        requestId: `handoff-${order.id}`,
-        status: ready ? "completed" : "ready",
-        trackingCarrier: "",
-        trackingNumber: "",
-      }),
+      onClick: () => {
+        if (busy) return;
+        const requestId = `handoff-${order.id}`;
+        currentRequest.current = requestId;
+        setBusy(true);
+        dispatchRequest("gvdg:admin-order-save-request", {
+          order: order.source,
+          requestId,
+          status: ready ? "completed" : "ready",
+          trackingCarrier: "",
+          trackingNumber: "",
+        });
+      },
       type: "button",
-    }, ready ? "Handed off" : "Mark ready"),
+    }, busy ? "Saving…" : ready ? "Handed off" : "Mark ready"),
   ]);
 }
 
@@ -161,6 +179,18 @@ function NeedsYou() {
 export function AdminTodayDashboard() {
   const [state, setState] = React.useState(EMPTY_STATE);
   const [orderRows, setOrderRows] = React.useState([]);
+  const [repeatBusy, setRepeatBusy] = React.useState(false);
+  const repeatRequest = React.useRef("");
+
+  React.useEffect(() => {
+    function finishRepeat(event) {
+      if (!repeatRequest.current || event.detail?.requestId !== repeatRequest.current) return;
+      repeatRequest.current = "";
+      setRepeatBusy(false);
+    }
+    window.addEventListener("gvdg:admin-event-save-result", finishRepeat);
+    return () => window.removeEventListener("gvdg:admin-event-save-result", finishRepeat);
+  }, []);
 
   React.useEffect(() => {
     function updateEvents(event) {
@@ -233,13 +263,18 @@ export function AdminTodayDashboard() {
     h(AdminPushCard, { key: "alerts" }),
     offer ? h("button", {
       className: "admin-btn",
+      disabled: repeatBusy,
       key: "next-week",
       onClick: () => {
+        if (repeatBusy) return;
         const payload = repeatSavePayload(offer.source);
-        dispatchRequest("gvdg:admin-event-save-request", { ...payload, eventId: null, requestId: `event-repeat-${offer.nextDate}` });
+        const requestId = `event-repeat-${offer.nextDate}`;
+        repeatRequest.current = requestId;
+        setRepeatBusy(true);
+        dispatchRequest("gvdg:admin-event-save-request", { ...payload, eventId: null, requestId });
       },
       type: "button",
-    }, offer.label) : null,
+    }, repeatBusy ? "Creating…" : offer.label) : null,
     h(HandoffCard, { key: "handoff", order: handoff }),
     rest.length ? h("h3", { className: "admin-pane-kicker", key: "week-title" }, "Up next") : null,
     ...rest.map((event) => h("button", {

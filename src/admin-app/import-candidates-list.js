@@ -66,10 +66,12 @@ export function AdminImportCandidatesList() {
   const [actions, setActions] = React.useState({});
   const [saveState, setSaveState] = React.useState("idle");
   const requestCounter = React.useRef(0);
+  const requestKeysRef = React.useRef(new Map());
 
   React.useEffect(() => {
     function update(event) {
       setState(normalizeState(event.detail && typeof event.detail === "object" ? event.detail : EMPTY_STATE));
+      requestKeysRef.current.clear();
       setActions({});
       setSaveState("idle");
     }
@@ -81,8 +83,9 @@ export function AdminImportCandidatesList() {
     function updateAction(event) {
       const detail = objectOrEmpty(event.detail);
       const requestId = normalizeText(detail.requestId);
-      if (!requestId) return;
-      setActions((current) => ({ ...current, [requestId]: detail.ok === true ? "created" : "failed" }));
+      const key = requestKeysRef.current.get(requestId);
+      if (!requestId || !key) return;
+      setActions((current) => ({ ...current, [key]: detail.ok === true ? "created" : "failed" }));
     }
     window.addEventListener("gvdg:admin-import-candidate-create-result", updateAction);
     return () => window.removeEventListener("gvdg:admin-import-candidate-create-result", updateAction);
@@ -110,13 +113,13 @@ export function AdminImportCandidatesList() {
 
   function requestCreate(candidate) {
     const requestId = `${candidate.key}-${requestCounter.current += 1}`;
-    setActions((current) => ({ ...current, [requestId]: "creating" }));
+    requestKeysRef.current.set(requestId, candidate.key);
+    setActions((current) => ({ ...current, [candidate.key]: "creating" }));
     dispatchRequest("gvdg:admin-import-candidate-create-request", { candidate: candidate.source, requestId });
   }
 
   function actionState(candidate) {
-    const current = Object.entries(actions).find(([requestId]) => requestId.startsWith(`${candidate.key}-`));
-    return current ? current[1] : "idle";
+    return actions[candidate.key] || "idle";
   }
 
   function requestSave() {
@@ -167,11 +170,11 @@ export function AdminImportCandidatesList() {
       h("span", { key: "label" }, candidateLabel(candidate)),
       h("button", {
         className: "admin-btn secondary",
-        disabled: busy || status === "created" || status === "failed" || !candidate.name,
+        disabled: busy || status === "created" || !candidate.name,
         key: "create",
         onClick: () => requestCreate(candidate),
         type: "button",
-      }, busy ? "Creating…" : status === "created" ? "Created" : status === "failed" ? "Failed" : "Create"),
+      }, busy ? "Creating…" : status === "created" ? "Created" : status === "failed" ? "Retry" : "Create"),
     ]);
   }),
   ]);

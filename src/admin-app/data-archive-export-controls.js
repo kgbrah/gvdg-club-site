@@ -32,6 +32,7 @@ function exportPayload(form) {
     to: form.to || null,
   };
   if (form.destinationId) body.endpoint_id = Number(form.destinationId);
+  else body.download_only = true;
   return body;
 }
 
@@ -53,7 +54,7 @@ export function AdminDataArchiveExportControls() {
 
   React.useEffect(() => {
     setForm((current) => {
-      if (userSelectedDestination.current && current.destinationId && destinations.some((destination) => destination.id === current.destinationId)) {
+      if (userSelectedDestination.current && (current.destinationId === "" || destinations.some((destination) => destination.id === current.destinationId))) {
         return current;
       }
       userSelectedDestination.current = false;
@@ -84,6 +85,7 @@ export function AdminDataArchiveExportControls() {
   }
 
   function submit() {
+    if (busy) return;
     const requestId = `data-archive-export-run-${requestCounter.current += 1}`;
     currentRequest.current = requestId;
     setBusy(true);

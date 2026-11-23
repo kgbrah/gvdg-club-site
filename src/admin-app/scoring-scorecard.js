@@ -19,8 +19,10 @@ function ScoreInput({ hole, max = 30, min = 1, readOnly, row, score }) {
   }, [score]);
 
   function commit() {
-    if (readOnly || !value.trim()) return;
-    dispatchRequest("gvdg:admin-scoring-score-request", { hole, row, value });
+    const trimmed = value.trim();
+    const initial = score == null ? "" : String(score);
+    if (readOnly || !trimmed || trimmed === initial) return;
+    dispatchRequest("gvdg:admin-scoring-score-request", { hole, row, value: trimmed });
   }
 
   return h("input", {

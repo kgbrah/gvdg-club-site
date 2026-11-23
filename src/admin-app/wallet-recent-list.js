@@ -102,16 +102,21 @@ export function AdminWalletRecentList() {
     function refreshAfterAdjustment(event) {
       if (event.detail?.ok === true) setRefreshCount((count) => count + 1);
     }
+    function refreshRecent() {
+      setRefreshCount((count) => count + 1);
+    }
 
     window.addEventListener("gvdg:admin-auth-gate", updateAuth);
     window.addEventListener("gvdg:admin-active-tab", updateTab);
     window.addEventListener("gvdg:admin-wallet-adjustment-result", refreshAfterAdjustment);
+    window.addEventListener("gvdg:admin-wallet-balances-refresh", refreshRecent);
     setAdminReady(currentAdminAuthGateState().status === "panel");
     setActiveTab(currentAdminActiveTab());
     return () => {
       window.removeEventListener("gvdg:admin-auth-gate", updateAuth);
       window.removeEventListener("gvdg:admin-active-tab", updateTab);
       window.removeEventListener("gvdg:admin-wallet-adjustment-result", refreshAfterAdjustment);
+      window.removeEventListener("gvdg:admin-wallet-balances-refresh", refreshRecent);
     };
   }, []);
 

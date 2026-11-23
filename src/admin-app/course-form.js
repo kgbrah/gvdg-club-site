@@ -75,6 +75,7 @@ export function AdminCourseForm() {
 
   function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const payload = coursePayload(form);
     const requestId = `course-create-${requestCounter.current += 1}`;
     currentRequest.current = requestId;
@@ -84,6 +85,7 @@ export function AdminCourseForm() {
   }
 
   function importNearby() {
+    if (nearbyBusy) return;
     const requestId = `nearby-courses-${requestCounter.current += 1}`;
     nearbyRequest.current = requestId;
     setNearbyBusy(true);

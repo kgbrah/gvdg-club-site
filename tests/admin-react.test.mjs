@@ -666,7 +666,7 @@ test('admin product inventory list is rendered by React from direct loader event
   assert.match(initAdmin, /adminLoadProducts\(event\.detail \|\| \{\}\)/);
   assert.doesNotMatch(initAdmin, /\$\('adminProductForm'\)\.addEventListener|\$\('psImageFile'\)\.addEventListener|\$\('psImage'\)\.addEventListener|\$\('psInvSort'\)\.addEventListener|\$\('psInvStatus'\)\.addEventListener/);
   assert.match(initAdmin, /gvdg:admin-product-save-request/);
-  assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'PATCH', body: \{ price_cents: dollarsToCents\(detail\.priceValue\), stock_qty: parseInt\(detail\.stockValue, 10\) \|\| 0, active: detail\.active === true \} \}\)/);
+  assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'PATCH', body: \{ price_cents: dollarsToCents\(detail\.priceValue\), stock_qty: Number\.isFinite\(parsedStock\) \? parsedStock : 0, active: detail\.active === true \} \}\)/);
   assert.match(initAdmin, /gvdg:admin-product-delete-request/);
   assert.match(initAdmin, /adminApi\('\/admin\/shop\/products\/' \+ product\.id, \{ method: 'DELETE' \}\)/);
   assert.match(main, /import \{ AdminProductForm \} from "\.\/product-form\.js"/);
@@ -742,7 +742,7 @@ test('admin orders list is rendered by React from direct loader events', () => {
   assert.doesNotMatch(adminLoadOrders, /\$\('ordStatusFilter'\)|\$\('ordRefresh'\)|\$\('adminOrdersList'\)|replaceChildren|appendChild|orderCard|document\.createElement|querySelector|classList|textContent\s*=|addEventListener/);
   assert.ok(saveOrder);
   assert.match(saveOrder, /adminApi\('\/admin\/orders\/' \+ id, \{ method: 'PATCH', body \}\)/);
-  assert.match(saveOrder, /adminLoadOrders\(\); return true/);
+  assert.match(saveOrder, /adminLoadOrders\(\);[\s\S]*return true/);
   assert.match(saveOrder, /return false/);
   assert.ok(cancelOrder);
   assert.match(cancelOrder, /if \(status === 'cancelled'\) return false/);
@@ -750,7 +750,7 @@ test('admin orders list is rendered by React from direct loader events', () => {
   assert.doesNotMatch(cancelOrder, /confirm/);
   assert.ok(deleteOrder);
   assert.match(deleteOrder, /adminApi\('\/admin\/orders\/' \+ id, \{ method: 'DELETE' \}\)/);
-  assert.match(deleteOrder, /adminLoadOrders\(\); return true/);
+  assert.match(deleteOrder, /adminLoadOrders\(\);[\s\S]*return true/);
   assert.match(deleteOrder, /return false/);
   assert.doesNotMatch(deleteOrder, /confirm/);
   assert.ok(initAdmin);

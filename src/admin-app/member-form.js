@@ -54,6 +54,7 @@ export function AdminMemberForm() {
 
   function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const payload = formBody(form);
     const requestId = `member-create-${requestCounter.current += 1}`;
     currentRequest.current = requestId;

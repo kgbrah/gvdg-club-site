@@ -25,6 +25,7 @@ export async function adminCsvImportFromReact(detail, { adminApi, adminMsg }) {
     r = await adminApi('/admin/import/csv', { method: 'POST', body: { csv } });
   } catch (err) {
     adminMsg('CSV import failed', false);
+    dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'idle', candidates: [] });
     dispatchAdminEvent('gvdg:admin-csv-import-result', { ok: false, requestId });
     return;
   }
@@ -35,6 +36,7 @@ export async function adminCsvImportFromReact(detail, { adminApi, adminMsg }) {
     dispatchAdminEvent('gvdg:admin-csv-import-result', { ok: true, requestId });
   } else {
     adminMsg('CSV import failed (' + r.status + ')', false);
+    dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'idle', candidates: [] });
     dispatchAdminEvent('gvdg:admin-csv-import-result', { ok: false, requestId });
   }
 }
@@ -54,6 +56,7 @@ export async function adminUdiscEventsImportFromReact(detail, { adminApi, adminM
     r = await adminApi('/admin/import/udisc-events', { method: 'POST', body: { url } });
   } catch (err) {
     adminMsg('UDisc import failed', false);
+    dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'idle', candidates: [] });
     dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: false, requestId });
     return;
   }
@@ -66,6 +69,7 @@ export async function adminUdiscEventsImportFromReact(detail, { adminApi, adminM
     dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: true, requestId });
   } else {
     adminMsg('UDisc import failed (' + r.status + ')', false);
+    dispatchAdminEvent('gvdg:admin-import-candidates', { status: 'idle', candidates: [] });
     dispatchAdminEvent('gvdg:admin-udisc-events-import-result', { ok: false, requestId });
   }
 }

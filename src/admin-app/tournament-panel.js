@@ -29,9 +29,13 @@ function dollars(cents) {
 }
 
 async function call(path, options) {
-  const response = await adminRequest(path, options);
-  const data = await response.json().catch(() => ({}));
-  return { ok: response.ok, data };
+  try {
+    const response = await adminRequest(path, options);
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, data };
+  } catch {
+    return { ok: false, data: { error: "network" } };
+  }
 }
 
 function csvCell(value) {
@@ -90,6 +94,7 @@ function Settings({ eventId, settings, onSaved }) {
 
   async function save(event) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setMessage("");
     const fee = String(form.nonMemberFee).trim();
@@ -147,9 +152,13 @@ function Settings({ eventId, settings, onSaved }) {
 function Row({ eventId, row, kind, onChanged }) {
   const [received, setReceived] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
   async function act(path, body) {
+    if (busy) return;
+    setBusy(true);
     setMessage("");
     const result = await call(`/admin/events/${eventId}/registrations/${row.id}/${path}`, { method: "POST", body });
+    setBusy(false);
     if (!result.ok) { setMessage(ERRORS[result.data.error] || "Didn't work."); return; }
     onChanged();
   }
@@ -164,9 +173,9 @@ function Row({ eventId, row, kind, onChanged }) {
     kind === "pending" && row.offered_at ? " · spot offered" : "",
     kind === "pending" && row.payment_method === "zelle" ? h("span", { className: "course-operator-actions", key: "zelle" }, [
       h("input", { key: "at", type: "datetime-local", "aria-label": `When ${row.name}'s Zelle arrived`, value: received, onChange: (e) => setReceived(e.target.value) }),
-      h("button", { className: "admin-btn secondary", type: "button", key: "go", onClick: () => act("zelle-received", { receivedAt: received ? new Date(received).toISOString() : undefined }) }, "Zelle received"),
+      h("button", { className: "admin-btn secondary", type: "button", key: "go", disabled: busy, onClick: () => void act("zelle-received", { receivedAt: received ? new Date(received).toISOString() : undefined }) }, busy ? "Saving…" : "Zelle received"),
     ]) : null,
-    kind === "waitlist" ? h("button", { className: "admin-btn secondary", type: "button", key: "offer", onClick: () => act("offer") }, "Offer spot") : null,
+    kind === "waitlist" ? h("button", { className: "admin-btn secondary", type: "button", key: "offer", disabled: busy, onClick: () => void act("offer") }, busy ? "Sending…" : "Offer spot") : null,
     message ? h("span", { className: "al-note", role: "alert", key: "message" }, ` ${message}`) : null,
   ]);
 }
@@ -259,6 +268,12 @@ export function AdminTournamentPanel({ eventId }) {
     return () => window.removeEventListener("gvdg:admin-tournament-changed", changed);
   }, [eventId, load]);
   if (state.status === "loading") return null;
+  if (state.status === "error") {
+    return h("div", { className: "al-section", "data-admin-tournament": "error", role: "alert" }, [
+      h("p", { className: "al-note err", key: "msg" }, "Couldn't load PDGA tournament settings."),
+      h("button", { className: "admin-btn secondary", key: "retry", onClick: () => { setState({ status: "loading", settings: null, registrations: [] }); void load(); }, type: "button" }, "Retry"),
+    ]);
+  }
 
   const linked = Boolean(state.settings?.pdgaEventId);
   const { paid, waitlist, pending } = fieldRows(state.registrations);

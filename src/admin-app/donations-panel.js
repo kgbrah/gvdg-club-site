@@ -14,22 +14,25 @@ const when = (iso) => {
 };
 
 async function call(path, options) {
-  const response = await adminRequest(path, options);
-  const data = await response.json().catch(() => ({}));
-  return { ok: response.ok, data };
+  try {
+    const response = await adminRequest(path, options);
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok, data };
+  } catch {
+    return { ok: false, data: { error: "network" } };
+  }
 }
 
 function PendingRow({ row, karmaPerDollar, onDone }) {
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
-  async function review(decision) {
-    let reason = "";
-    if (decision === "not_received") {
-      reason = window.prompt("Why? (the member sees this)", "Nothing in the club's PayPal") ?? null;
-      if (reason === null) return;
-    }
+  const [rejecting, setRejecting] = React.useState(false);
+  const [reason, setReason] = React.useState("Nothing in the club's PayPal");
+  async function review(decision, note = "") {
+    if (busy) return;
     setBusy(true);
-    const result = await call(`/admin/donations/${row.id}/review`, { method: "POST", body: { decision, reason } });
+    setMessage("");
+    const result = await call(`/admin/donations/${row.id}/review`, { method: "POST", body: { decision, reason: note.trim() } });
     setBusy(false);
     if (result.ok) onDone();
     else setMessage(result.data.error === "already_reviewed" ? "Someone already reviewed this one." : "Couldn't save. Try again.");
@@ -38,8 +41,30 @@ function PendingRow({ row, karmaPerDollar, onDone }) {
   return h("li", { className: "admin-evrow", "data-admin-donation": row.id }, [
     h("span", { className: "ev-name", key: "who" }, `${row.memberName} · ${money(row.amountCents)}`),
     h("span", { className: "admin-event-meta", key: "meta" }, `Reported ${when(row.createdAt)}, ${SOURCES[row.source] || "elsewhere"} · +${karma} karma when confirmed`),
-    h("button", { className: "admin-btn", type: "button", key: "yes", disabled: busy, onClick: () => review("received") }, "Received"),
-    h("button", { className: "admin-btn secondary", type: "button", key: "no", disabled: busy, onClick: () => review("not_received") }, "Not received"),
+    rejecting ? h("form", {
+      className: "admin-mark-paid-form",
+      key: "reject-form",
+      onSubmit: (event) => {
+        event.preventDefault();
+        void review("not_received", reason);
+      },
+    }, [
+      h("input", {
+        "aria-label": `Reason for marking ${row.memberName}'s donation not received`,
+        autoFocus: true,
+        key: "reason",
+        maxLength: 200,
+        onChange: (event) => setReason(event.target.value),
+        placeholder: "Why? (the member sees this)",
+        type: "text",
+        value: reason,
+      }),
+      h("button", { className: "admin-btn secondary", disabled: busy, key: "confirm", type: "submit" }, busy ? "Saving…" : "Confirm not received"),
+      h("button", { className: "admin-btn secondary", disabled: busy, key: "cancel", onClick: () => setRejecting(false), type: "button" }, "Cancel"),
+    ]) : h(React.Fragment, { key: "actions" }, [
+      h("button", { className: "admin-btn", type: "button", key: "yes", disabled: busy, onClick: () => void review("received") }, "Received"),
+      h("button", { className: "admin-btn secondary", type: "button", key: "no", disabled: busy, onClick: () => setRejecting(true) }, "Not received"),
+    ]),
     message ? h("span", { className: "al-note", role: "status", key: "message" }, message) : null,
   ]);
 }
@@ -54,9 +79,14 @@ export function AdminDonationsPanel() {
   }, []);
   React.useEffect(() => {
     load();
-    const again = () => { if (/#donations/.test(window.location.hash)) load(); };
-    window.addEventListener("hashchange", again);
-    return () => window.removeEventListener("hashchange", again);
+    const onHash = () => { if (/#donations/.test(window.location.hash)) load(); };
+    const onTab = (event) => { if (event.detail?.tab === "donations") load(); };
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener("gvdg:admin-active-tab", onTab);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("gvdg:admin-active-tab", onTab);
+    };
   }, [load]);
   return h("div", { className: "al-section admin-donations", "data-admin-donations": state.status }, [
     h("h3", { className: "al-h", key: "title" }, "Donations to confirm"),

@@ -70,35 +70,55 @@ export function installTeeSignReviewController({ adminApi, adminMsg, api, authBa
       finishTeeSignReviewAction(detail.requestId, false);
       return;
     }
-    const r = await adminApi('/admin/tee-signs/' + sign.id + '/approve', { method: 'POST', body: { rows } });
-    adminMsg(r.ok ? 'Tee sign approved and layout holes updated' : 'Approve failed (' + r.status + ')', r.ok);
-    finishTeeSignReviewAction(detail.requestId, r.ok);
-    if (r.ok) loadReview();
+    try {
+      const r = await adminApi('/admin/tee-signs/' + sign.id + '/approve', { method: 'POST', body: { rows } });
+      adminMsg(r.ok ? 'Tee sign approved and layout holes updated' : 'Approve failed (' + r.status + ')', r.ok);
+      finishTeeSignReviewAction(detail.requestId, r.ok);
+      if (r.ok) loadReview();
+    } catch {
+      adminMsg('Approve failed', false);
+      finishTeeSignReviewAction(detail.requestId, false);
+    }
   }
 
   async function tsExtractFromReact(detail) {
     const sign = detail.sign || {};
     adminMsg('Re-running tee-sign vision…', true);
-    const r = await adminApi('/admin/tee-signs/' + sign.id + '/extract', { method: 'POST', body: {} });
-    adminMsg(r.ok ? 'Vision extraction refreshed' : 'Vision refresh failed (' + r.status + ')', r.ok);
-    finishTeeSignReviewAction(detail.requestId, r.ok);
-    if (r.ok) loadReview();
+    try {
+      const r = await adminApi('/admin/tee-signs/' + sign.id + '/extract', { method: 'POST', body: {} });
+      adminMsg(r.ok ? 'Vision extraction refreshed' : 'Vision refresh failed (' + r.status + ')', r.ok);
+      finishTeeSignReviewAction(detail.requestId, r.ok);
+      if (r.ok) loadReview();
+    } catch {
+      adminMsg('Vision refresh failed', false);
+      finishTeeSignReviewAction(detail.requestId, false);
+    }
   }
 
   async function tsRejectFromReact(detail) {
     const sign = detail.sign || {};
-    const r = await adminApi('/admin/tee-signs/' + sign.id + '/reject', { method: 'POST', body: {} });
-    adminMsg(r.ok ? 'Tee sign rejected' : 'Reject failed (' + r.status + ')', r.ok);
-    finishTeeSignReviewAction(detail.requestId, r.ok);
-    if (r.ok) loadReview();
+    try {
+      const r = await adminApi('/admin/tee-signs/' + sign.id + '/reject', { method: 'POST', body: {} });
+      adminMsg(r.ok ? 'Tee sign rejected' : 'Reject failed (' + r.status + ')', r.ok);
+      finishTeeSignReviewAction(detail.requestId, r.ok);
+      if (r.ok) loadReview();
+    } catch {
+      adminMsg('Reject failed', false);
+      finishTeeSignReviewAction(detail.requestId, false);
+    }
   }
 
   async function tsDeleteFromReact(detail) {
     const sign = detail.sign || {};
-    const r = await adminApi('/admin/tee-signs/' + sign.id, { method: 'DELETE' });
-    adminMsg(r.ok ? 'Tee sign deleted' : 'Delete failed (' + r.status + ')', r.ok);
-    finishTeeSignReviewAction(detail.requestId, r.ok);
-    if (r.ok) loadReview();
+    try {
+      const r = await adminApi('/admin/tee-signs/' + sign.id, { method: 'DELETE' });
+      adminMsg(r.ok ? 'Tee sign deleted' : 'Delete failed (' + r.status + ')', r.ok);
+      finishTeeSignReviewAction(detail.requestId, r.ok);
+      if (r.ok) loadReview();
+    } catch {
+      adminMsg('Delete failed', false);
+      finishTeeSignReviewAction(detail.requestId, false);
+    }
   }
 
   window.addEventListener('gvdg:admin-tee-sign-review-controls-request', async (event) => {

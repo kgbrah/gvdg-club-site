@@ -29,10 +29,11 @@ function field({ children, id, label }) {
   ]);
 }
 
-function PositionSelect({ current, kind, onChange, pool, rowKey }) {
+function PositionSelect({ "aria-label": ariaLabel, current, kind, onChange, pool, rowKey }) {
   const options = positionsFor(pool, kind, current);
   const id = `al-${kind}-${rowKey}`;
   return h("select", {
+    "aria-label": ariaLabel,
     id,
     onChange: (event) => onChange(findPosition({ current, kind, pool, value: event.target.value })),
     value: current?.label || "",
@@ -50,6 +51,7 @@ function BuilderRow({ index, onRemove, onUpdate, pool, row }) {
   return h("tr", { className: rowClass }, [
     h("td", { key: "number" }, String(index + 1)),
     h("td", { key: "par" }, h("input", {
+      "aria-label": `Hole ${index + 1} par`,
       className: "al-par",
       max: "15",
       min: "1",
@@ -58,6 +60,7 @@ function BuilderRow({ index, onRemove, onUpdate, pool, row }) {
       value: row.par,
     })),
     h("td", { className: "al-tee", key: "tee" }, h(PositionSelect, {
+      "aria-label": `Hole ${index + 1} tee`,
       current: row.tee,
       kind: "tee",
       onChange: (tee) => update({ tee }),
@@ -65,6 +68,7 @@ function BuilderRow({ index, onRemove, onUpdate, pool, row }) {
       rowKey: row.key,
     })),
     h("td", { className: "al-target", key: "target" }, h(PositionSelect, {
+      "aria-label": `Hole ${index + 1} target`,
       current: row.target,
       kind: "target",
       onChange: (target) => update({ target }),
@@ -72,6 +76,7 @@ function BuilderRow({ index, onRemove, onUpdate, pool, row }) {
       rowKey: row.key,
     })),
     h("td", { key: "manual" }, h("input", {
+      "aria-label": `Hole ${index + 1} manual distance in feet`,
       className: "al-manual",
       min: "0",
       onChange: (event) => update({ manualDistance: event.target.value }),
@@ -84,7 +89,7 @@ function BuilderRow({ index, onRemove, onUpdate, pool, row }) {
       h("span", { key: "feet" }, estimate.ft == null ? "none" : `${estimate.ft} ft`),
       estimate.source ? h("span", { className: "src", key: "source" }, ` ${estimate.source}`) : null,
     ]),
-    h("td", { key: "remove" }, h("button", { className: "al-poolitem", onClick: onRemove, type: "button" }, "Remove")),
+    h("td", { key: "remove" }, h("button", { "aria-label": `Remove hole ${index + 1}`, className: "al-poolitem", onClick: onRemove, type: "button" }, "Remove")),
   ]);
 }
 

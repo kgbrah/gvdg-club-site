@@ -396,6 +396,7 @@ export async function handleAdminExport(
     const includeCasualRoundsRaw = hasProperty(body, "includeCasualRounds") ? parseBoolean(body.includeCasualRounds) : null;
     const includeEventConfigRaw = hasProperty(body, "includeEventConfig") ? parseBoolean(body.includeEventConfig) : null;
     const dryRunRaw = hasProperty(body, "dry_run") ? parseBoolean(body.dry_run) : null;
+    const downloadOnlyRaw = hasProperty(body, "download_only") ? parseBoolean(body.download_only) : null;
     const testRaw = hasProperty(body, "test") ? parseBoolean(body.test) : null;
     const endpointIdRaw = hasProperty(body, "endpoint_id") ? asInt(body.endpoint_id) : null;
     if ((hasProperty(body, "includeEventPlayers") && includeEventPlayersRaw == null) ||
@@ -403,8 +404,9 @@ export async function handleAdminExport(
       (hasProperty(body, "includeCasualRounds") && includeCasualRoundsRaw == null) ||
       (hasProperty(body, "includeEventConfig") && includeEventConfigRaw == null) ||
       (hasProperty(body, "dry_run") && dryRunRaw == null) ||
+      (hasProperty(body, "download_only") && downloadOnlyRaw == null) ||
       (hasProperty(body, "test") && testRaw == null) ||
-      (hasProperty(body, "endpoint_id") && hasProperty(body, "endpoint_id") && endpointIdRaw == null)) {
+      (hasProperty(body, "endpoint_id") && endpointIdRaw == null)) {
       return json({ error: "invalid_option" }, 400, origin);
     }
 
@@ -413,11 +415,14 @@ export async function handleAdminExport(
     const includeCasualRounds = includeCasualRoundsRaw !== false;
     const includeEventConfig = includeEventConfigRaw !== false;
     const dryRun = dryRunRaw === true;
+    const downloadOnly = downloadOnlyRaw === true;
     const test = testRaw === true;
     const explicitEndpointId = endpointIdRaw;
 
-    let destination = explicitEndpointId == null ? await db.getActiveDataArchiveEndpoint(env.DB) : await db.getDataArchiveEndpoint(env.DB, explicitEndpointId);
-    if (!destination && explicitEndpointId != null) return json({ error: "endpoint_not_found" }, 404, origin);
+    let destination = downloadOnly
+      ? null
+      : (explicitEndpointId == null ? await db.getActiveDataArchiveEndpoint(env.DB) : await db.getDataArchiveEndpoint(env.DB, explicitEndpointId));
+    if (!downloadOnly && !destination && explicitEndpointId != null) return json({ error: "endpoint_not_found" }, 404, origin);
 
     if (test) {
       if (!destination) return json({ error: "endpoint_required" }, 400, origin);

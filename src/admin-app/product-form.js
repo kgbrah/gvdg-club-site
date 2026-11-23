@@ -286,6 +286,7 @@ export function AdminProductForm() {
 
   function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const payload = formBody(form);
     const requestId = `product-create-${requestCounter.current += 1}`;
     currentRequest.current = requestId;
@@ -363,7 +364,7 @@ export function AdminProductForm() {
       h("label", { htmlFor: "psImage", key: "label" }, "Image"),
       h(hInput, { id: "psImage", key: "url", maxLength: 2000, onChange: (event) => updateImageUrl(event.target.value), placeholder: "https://… paste an image URL", type: "url", value: form.imageUrl }),
       h("div", { className: "admin-product-image-input", key: "file-row" }, [
-        h(hInput, { accept: "image/*", id: "psImageFile", key: "file", onChange: updateFile, ref: fileRef, type: "file" }),
+        h(hInput, { accept: "image/*", "aria-label": "Upload product photo", id: "psImageFile", key: "file", onChange: updateFile, ref: fileRef, type: "file" }),
         h("span", { className: "al-note", key: "note" }, "…or take a photo / upload from your device"),
       ]),
       form.uploadedImageUrl ? h("figure", {

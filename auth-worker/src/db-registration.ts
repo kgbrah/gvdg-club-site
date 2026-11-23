@@ -112,18 +112,31 @@ export async function adminUpdateRegistration(
   db: D1Like,
   id: number,
   p: { division?: string | null; team?: string | null; starting_hole?: number | null; checked_in?: number | null; paid_entry?: number | null },
+  eventId?: number,
 ) {
+  const where = eventId != null ? "WHERE id=? AND event_id=?" : "WHERE id=?";
+  const binds: unknown[] = [
+    p.division !== undefined ? 1 : 0, p.division ?? null,
+    p.team !== undefined ? 1 : 0, p.team ?? null,
+    p.starting_hole !== undefined ? 1 : 0, p.starting_hole ?? null,
+    p.checked_in ?? null,
+    p.paid_entry ?? null, p.paid_entry ?? null, new Date().toISOString(),
+    p.paid_entry ?? null, p.paid_entry ?? null, p.paid_entry ?? null,
+    id,
+  ];
+  if (eventId != null) binds.push(eventId);
   return db
     .prepare(
       // Marking paid records when and clears waitlist/claim flags; unmarking clears paid_at.
-      `UPDATE registrations SET division=COALESCE(?,division), team=COALESCE(?,team), starting_hole=COALESCE(?,starting_hole),
+      `UPDATE registrations SET division=CASE WHEN ? THEN ? ELSE division END,
+        team=CASE WHEN ? THEN ? ELSE team END,
+        starting_hole=CASE WHEN ? THEN ? ELSE starting_hole END,
         checked_in=COALESCE(?,checked_in), paid_at = CASE WHEN ? IS NULL THEN paid_at WHEN ? = 1 THEN COALESCE(paid_at, ?) ELSE NULL END,
         waitlisted = CASE WHEN ? = 1 THEN 0 ELSE waitlisted END,
         spot_claimed_at = CASE WHEN ? = 1 THEN NULL ELSE spot_claimed_at END,
-        paid_entry=COALESCE(?,paid_entry) WHERE id=? RETURNING *`,
+        paid_entry=COALESCE(?,paid_entry) ${where} RETURNING *`,
     )
-    .bind(p.division ?? null, p.team ?? null, p.starting_hole ?? null, p.checked_in ?? null, p.paid_entry ?? null, p.paid_entry ?? null,
-      new Date().toISOString(), p.paid_entry ?? null, p.paid_entry ?? null, p.paid_entry ?? null, id)
+    .bind(...binds)
     .first();
 }
 

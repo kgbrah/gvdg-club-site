@@ -24,6 +24,7 @@ async function remember(subscription) {
 export function AdminPushCard() {
   const [state, setState] = React.useState("loading");
   const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState("");
 
   const refresh = React.useCallback(async () => {
     if (currentAdminAuthGateState().status !== "panel") return;
@@ -62,7 +63,9 @@ export function AdminPushCard() {
   }, [refresh]);
 
   async function turnOn() {
+    if (busy) return;
     setBusy(true);
+    setError("");
     try {
       const info = await adminJson("/admin/push");
       if (!info.configured || !info.publicKey) {
@@ -89,24 +92,35 @@ export function AdminPushCard() {
       setState("on");
     } catch {
       setState("off");
+      setError("Could not turn on alerts. Try again.");
     } finally {
       setBusy(false);
     }
   }
 
   async function turnOff() {
+    if (busy) return;
     setBusy(true);
+    setError("");
+    let unsubscribed = false;
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         const endpoint = subscription.endpoint;
         await subscription.unsubscribe();
-        await adminRequest("/admin/push", { method: "DELETE", body: { endpoint } });
+        unsubscribed = true;
+        const response = await adminRequest("/admin/push", { method: "DELETE", body: { endpoint } });
+        if (!response.ok) throw new Error("unsubscribe failed");
       }
       setState("off");
     } catch {
-      setState("on");
+      setState(unsubscribed ? "off" : "on");
+      setError(
+        unsubscribed
+          ? "Alerts turned off on this browser, but removing the server record failed."
+          : "Could not turn off alerts. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -127,6 +141,7 @@ export function AdminPushCard() {
   return h("div", { className: "admin-today-card", "data-admin-push": state }, [
     h("div", { className: "ev-name", key: "title" }, "Alerts"),
     h("p", { className: "admin-event-meta", key: "note" }, note),
+    error ? h("p", { className: "al-note err", key: "error", role: "alert" }, error) : null,
     state === "off" ? h("button", {
       className: "admin-btn",
       disabled: busy,

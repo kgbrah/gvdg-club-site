@@ -128,6 +128,7 @@ export function PuttingStations({ onChange, stations }) {
       h("div", { className: "putt-station-head", key: "head" }, [
         h("strong", { key: "title" }, `Station ${index + 1}`),
         stations.length > 1 ? h("button", {
+          "aria-label": `Remove station ${index + 1}`,
           className: "putt-remove",
           key: "remove",
           onClick: () => onChange(stations.filter((_, stationIndex) => stationIndex !== index)),
@@ -287,8 +288,7 @@ function StartControls({ state }) {
           id: "scAddPlayersBtn",
           key: "roster",
           onClick: () => {
-            dispatchRequest("gvdg:admin-tab-request", { tab: "registration" });
-            dispatchRequest("gvdg:admin-registration-event-select-request", { eventId: state.eventId });
+            dispatchRequest("gvdg:admin-tab-request", { tab: "registration", eventId: state.eventId });
           },
           type: "button",
         }, "Add players"),
@@ -306,6 +306,15 @@ function StartControls({ state }) {
 function LiveControls({ state }) {
   const snap = state.snap || {};
   const submitted = Array.isArray(snap.lockedCardIds) ? snap.lockedCardIds.length : 0;
+  const [actionBusy, setActionBusy] = React.useState("");
+  React.useEffect(() => {
+    function finish(event) {
+      const kind = event.detail?.kind;
+      if (kind === "finalize" || kind === "cancel") setActionBusy("");
+    }
+    window.addEventListener("gvdg:admin-scoring-action-result", finish);
+    return () => window.removeEventListener("gvdg:admin-scoring-action-result", finish);
+  }, []);
   return h("div", { "data-react-admin-scoring-live": snap.status || "ready", id: "scLive", style: { marginTop: "1rem" } }, [
     h("h2", { className: "al-h", key: "score-title" }, "Scorecard"),
     snap.status === "live" ? h("p", { className: "al-note", key: "score-note" },
@@ -320,8 +329,30 @@ function LiveControls({ state }) {
     h("h4", { className: "al-h", key: "board-title", style: { marginTop: "1rem" } }, "Live leaderboard"),
     h(AdminScoringLeaderboard, { key: "board", snapshot: snap }),
     h("div", { className: "al-row", key: "actions", style: { marginTop: "0.75rem" } }, [
-      h("button", { className: "admin-btn danger", id: "scFinalizeBtn", key: "finalize", onClick: () => dispatchRequest("gvdg:admin-scoring-finalize-request"), type: "button" }, "Finalize results"),
-      state.canCancel === true ? h("button", { className: "admin-btn secondary", id: "scCancelBtn", key: "cancel", onClick: () => dispatchRequest("gvdg:admin-scoring-cancel-request"), type: "button" }, "Cancel scoring") : null,
+      h("button", {
+        className: "admin-btn danger",
+        disabled: Boolean(actionBusy),
+        id: "scFinalizeBtn",
+        key: "finalize",
+        onClick: () => {
+          if (actionBusy) return;
+          setActionBusy("finalize");
+          dispatchRequest("gvdg:admin-scoring-finalize-request");
+        },
+        type: "button",
+      }, actionBusy === "finalize" ? "Finalizing…" : "Finalize results"),
+      state.canCancel === true ? h("button", {
+        className: "admin-btn secondary",
+        disabled: Boolean(actionBusy),
+        id: "scCancelBtn",
+        key: "cancel",
+        onClick: () => {
+          if (actionBusy) return;
+          setActionBusy("cancel");
+          dispatchRequest("gvdg:admin-scoring-cancel-request");
+        },
+        type: "button",
+      }, actionBusy === "cancel" ? "Cancelling…" : "Cancel scoring") : null,
       h("span", { className: "al-note", key: "note" }, submitted
         ? submitted + " card" + (submitted === 1 ? "" : "s") + " submitted. Finalize writes results and closes the event. Cancel scraps a mis-started round and returns the event to Scheduled."
         : "Finalize writes results and closes the event. Cancel scraps a mis-started round and returns the event to Scheduled."),

@@ -258,6 +258,7 @@ function SettingsForm({ state }) {
           groupFormat: form.playFormat === "doubles" ? "doubles" : "singles",
           scoringStyle: existing.scoringStyle,
           handicap: existing.handicap === true && existing.scoringStyle !== "matchplay",
+          ...(existing.scoringStyle === "putting" && existing.putting ? { putting: existing.putting } : {}),
         },
         play_format: form.playFormat || null,
         registration_open: form.registrationOpen,
@@ -287,9 +288,9 @@ function SettingsForm({ state }) {
         " Registration open",
       ]),
       h("div", { className: "admin-registration-fees", key: "fees" }, [
-        h("label", { key: "entry" }, ["Entry fee ($)", h("input", { disabled, key: "input", id: "rgEntry", min: "0", onChange: (event) => setField("entryFee", event.target.value), size: 5, step: "1", type: "number", value: form.entryFee })]),
-        h("label", { key: "ctp" }, ["CTP fee ($)", h("input", { disabled, key: "input", id: "rgCtp", min: "0", onChange: (event) => setField("ctpFee", event.target.value), size: 5, step: "1", type: "number", value: form.ctpFee })]),
-        h("label", { key: "ace" }, ["Ace fee ($)", h("input", { disabled, key: "input", id: "rgAce", min: "0", onChange: (event) => setField("aceFee", event.target.value), size: 5, step: "1", type: "number", value: form.aceFee })]),
+        h("label", { key: "entry" }, ["Entry fee ($)", h("input", { disabled, key: "input", id: "rgEntry", min: "0", onChange: (event) => setField("entryFee", event.target.value), size: 5, step: "0.01", type: "number", value: form.entryFee })]),
+        h("label", { key: "ctp" }, ["CTP fee ($)", h("input", { disabled, key: "input", id: "rgCtp", min: "0", onChange: (event) => setField("ctpFee", event.target.value), size: 5, step: "0.01", type: "number", value: form.ctpFee })]),
+        h("label", { key: "ace" }, ["Ace fee ($)", h("input", { disabled, key: "input", id: "rgAce", min: "0", onChange: (event) => setField("aceFee", event.target.value), size: 5, step: "0.01", type: "number", value: form.aceFee })]),
         h("label", { key: "format" }, "Play format", h("select", { disabled, id: "rgFormat", onChange: (event) => setField("playFormat", event.target.value), value: form.playFormat }, FORMATS.map(([value, label]) => h("option", { key: value || "empty", value }, label)))),
       ]),
       h("div", { key: "menus" }, [
