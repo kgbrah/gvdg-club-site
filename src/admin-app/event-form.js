@@ -4,6 +4,7 @@ import { clubToday, clubWallClockToIso, isoToClubWallClock } from "../shared/eve
 import { applyEventVoice, VoiceFill } from "./voice-fill.js";
 import { defaultPuttingStations } from "./scoring-model.js";
 import { adminRequest } from "./admin-api.js";
+import { publishAdminMessageState } from "./admin-shell-state.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
 import {
   calendarDaysBetween,
@@ -168,7 +169,7 @@ function normalizedCourseRows(rows) {
   }));
 }
 
-function eventPayload(form, courseRows, quickLayout) {
+function eventPayload(form, courseRows, quickLayout, editingEvent = null) {
   const venueRows = normalizedCourseRows(courseRows);
   const selectedRows = venueRows.filter((row) => row.courseId || row.layoutId);
   if (selectedRows.some((row) => !row.courseId && row.layoutId)) {
@@ -201,7 +202,7 @@ function eventPayload(form, courseRows, quickLayout) {
       groupFormat: body.play_format,
       scoringStyle: scoring,
       handicap: scoring === "stroke" && form.handicap === true,
-      ...(scoring === "putting" ? { putting: { stations: defaultPuttingStations() } } : {}),
+      ...(scoring === "putting" && !editingEvent ? { putting: { stations: defaultPuttingStations() } } : {}),
     };
   }
   if (!body.name) return { body, message: "Name required", valid: false };
@@ -406,8 +407,16 @@ export function AdminEventForm() {
         const want = chosen.on && chosen.number ? Number(chosen.number) : null;
         if (detail.eventId != null && want !== chosen.initial) {
           adminRequest(`/admin/events/${encodeURIComponent(detail.eventId)}/pdga`, { method: "PATCH", body: { pdgaEventId: want } })
-            .then(() => window.dispatchEvent(new CustomEvent("gvdg:admin-tournament-changed", { detail: { eventId: detail.eventId } })))
-            .catch(() => {});
+            .then((response) => {
+              if (response.ok) {
+                window.dispatchEvent(new CustomEvent("gvdg:admin-tournament-changed", { detail: { eventId: detail.eventId } }));
+              } else {
+                publishAdminMessageState({ text: "Event saved, but linking the PDGA event failed.", ok: false });
+              }
+            })
+            .catch(() => {
+              publishAdminMessageState({ text: "Event saved, but linking the PDGA event failed.", ok: false });
+            });
         }
         currentRequest.current = "";
         resetForm();
@@ -510,6 +519,13 @@ export function AdminEventForm() {
     });
   }
 
+  const formRef = React.useRef(form);
+  formRef.current = form;
+  const courseRowsRef = React.useRef(courseRows);
+  courseRowsRef.current = courseRows;
+  const coursesRef = React.useRef(courses);
+  coursesRef.current = courses;
+
   function formForSave() {
     if (timesOpen || form.registrationDeadline || form.checkinDeadline || !form.startsAt) return form;
     return {
@@ -521,8 +537,9 @@ export function AdminEventForm() {
 
   function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const requestId = `event-save-${requestCounter.current += 1}`;
-    const payload = eventPayload(formForSave(), courseRows, quickLayout);
+    const payload = eventPayload(formForSave(), courseRows, quickLayout, editingEvent);
     currentRequest.current = requestId;
     setBusy(payload.valid);
     dispatchRequest("gvdg:admin-event-save-request", { ...payload, eventId: editingEvent?.id ?? null, requestId });
@@ -594,7 +611,17 @@ export function AdminEventForm() {
     h(VoiceFill, {
       form: "event",
       key: "voice",
-      onFields: (fields) => setForm((current) => applyEventVoice(current, fields, courses)),
+      onFields: (fields) => {
+        const latestForm = formRef.current;
+        const latestCourseRows = courseRowsRef.current;
+        const next = applyEventVoice(latestForm, fields, coursesRef.current);
+        setForm(next);
+        if (next.courseId && next.courseId !== latestCourseRows[0]?.courseId) {
+          setLayoutChoice("");
+          updateCourseRow(PRIMARY_COURSE_ROW_KEY, { courseId: next.courseId, layoutId: "" });
+          loadLayouts(next.courseId);
+        }
+      },
     }),
     h("form", { className: "admin-form", id: "adminCreateForm", key: "form", onSubmit: submit }, [
       formField({ id: "aeType", label: "Type", children: h("select", { id: "aeType", key: "input", onChange: (event) => updateField("type", event.target.value), value: form.type }, [option("tournament", "Tournament"), option("league_round", "League round"), option("fundraiser", "Fundraiser"), option("meeting", "Meeting")]) }),
@@ -646,9 +673,9 @@ export function AdminEventForm() {
       layoutChoice === "__new__" ? h("div", { className: "al-section", id: "aeQuickLayout", key: "quick", style: { margin: 0 } }, [
         h("h4", { className: "al-h", key: "title" }, "Create layout"),
         h("div", { className: "al-row", key: "row" }, [
-          h("input", { id: "aeLayoutName", key: "name", maxLength: 60, onChange: (event) => setQuickLayout((current) => ({ ...current, name: event.target.value })), placeholder: "Layout name", value: quickLayout.name }),
-          h("span", { key: "holes" }, ["Holes ", h("input", { id: "aeHoleCount", key: "input", max: 36, min: 1, onChange: (event) => setQuickLayout((current) => ({ ...current, holeCount: event.target.value })), style: { width: "4.5rem" }, type: "number", value: quickLayout.holeCount })]),
-          h("span", { key: "par" }, ["Par ", h("input", { id: "aeDefaultPar", key: "input", max: 15, min: 1, onChange: (event) => setQuickLayout((current) => ({ ...current, defaultPar: event.target.value })), style: { width: "4.5rem" }, type: "number", value: quickLayout.defaultPar })]),
+          h("input", { "aria-label": "Layout name", id: "aeLayoutName", key: "name", maxLength: 60, onChange: (event) => setQuickLayout((current) => ({ ...current, name: event.target.value })), placeholder: "Layout name", value: quickLayout.name }),
+          h("span", { key: "holes" }, ["Holes ", h("input", { "aria-label": "Hole count", id: "aeHoleCount", key: "input", max: 36, min: 1, onChange: (event) => setQuickLayout((current) => ({ ...current, holeCount: event.target.value })), style: { width: "4.5rem" }, type: "number", value: quickLayout.holeCount })]),
+          h("span", { key: "par" }, ["Par ", h("input", { "aria-label": "Default par", id: "aeDefaultPar", key: "input", max: 15, min: 1, onChange: (event) => setQuickLayout((current) => ({ ...current, defaultPar: event.target.value })), style: { width: "4.5rem" }, type: "number", value: quickLayout.defaultPar })]),
         ]),
       ]) : null,
       formField({ id: "aeLeague", label: "League (for league rounds)", children: h("select", { id: "aeLeague", key: "input", onChange: (event) => updateField("leagueId", event.target.value), value: form.leagueId }, [option("", "-"), ...leagues.map((league) => option(league.id, league.label))]) }),

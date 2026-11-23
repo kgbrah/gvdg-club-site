@@ -113,6 +113,7 @@ export function AdminRegistrationManualPlayerForm() {
     h("h4", { className: "al-h", key: "title" }, "Add a walk-on / non-member"),
     h("form", { className: "al-row", key: "form", onSubmit: submit }, [
       h("input", {
+        "aria-label": "Player name",
         id: "rgPlayerName",
         key: "name",
         maxLength: 100,
@@ -121,6 +122,7 @@ export function AdminRegistrationManualPlayerForm() {
         value: form.name,
       }),
       h("input", {
+        "aria-label": "Member id (optional)",
         id: "rgPlayerMember",
         key: "member",
         maxLength: 64,
@@ -129,6 +131,7 @@ export function AdminRegistrationManualPlayerForm() {
         value: form.memberId,
       }),
       h("input", {
+        "aria-label": "PDGA number (optional)",
         id: "rgPlayerPdga",
         key: "pdga",
         maxLength: 20,
@@ -137,6 +140,7 @@ export function AdminRegistrationManualPlayerForm() {
         value: form.pdgaNo,
       }),
       nameControl({
+        "aria-label": "Division",
         disabled: busy,
         id: "rgPlayerDivision",
         names: divisions,
@@ -145,6 +149,7 @@ export function AdminRegistrationManualPlayerForm() {
         value: form.division,
       }),
       nameControl({
+        "aria-label": doubles ? "Pair label" : "Team",
         disabled: busy,
         id: "rgPlayerTeam",
         names: teamEvent ? teams : [],

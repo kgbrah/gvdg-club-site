@@ -206,7 +206,9 @@ function AdminMemberRow({ adminCount, currentMemberId, member, members = [] }) {
 function MemberMoreMenu({ member, items }) {
   const ref = React.useRef(null);
   const summary = React.useRef(null);
+  const [menuOpen, setMenuOpen] = React.useState(false);
   React.useEffect(() => {
+    if (!menuOpen) return undefined;
     function outside(event) {
       if (ref.current?.open && !ref.current.contains(event.target)) ref.current.open = false;
     }
@@ -221,8 +223,8 @@ function MemberMoreMenu({ member, items }) {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
-  }, []);
-  return h("details", { className: "admin-member-more", ref }, [
+  }, [menuOpen]);
+  return h("details", { className: "admin-member-more", onToggle: (event) => setMenuOpen(event.currentTarget.open), ref }, [
     h("summary", { className: "admin-btn secondary", "aria-label": `More for ${member.name}`, key: "summary", ref: summary }, "More"),
     h("div", { className: "admin-member-more-menu", role: "menu", key: "menu" }, items.map((item) => h("button", {
       ...(item.attrs || {}),
@@ -368,14 +370,44 @@ export function paymentChipModel(payment, duesOnline) {
 function ApplicationRow({ row, duesOnline }) {
   const [marking, setMarking] = React.useState(false);
   const [note, setNote] = React.useState("");
+  const [busyAction, setBusyAction] = React.useState("");
   const chip = paymentChipModel(row.payment, duesOnline);
   const paid = row.payment.status !== "unpaid";
 
+  React.useEffect(() => {
+    function finish(event) {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : {};
+      if (String(detail.id ?? "") === String(row.id)) setBusyAction("");
+    }
+    window.addEventListener("gvdg:admin-membership-action-result", finish);
+    return () => window.removeEventListener("gvdg:admin-membership-action-result", finish);
+  }, [row.id]);
+
   function submitMarkPaid(event) {
     event.preventDefault();
+    if (busyAction) return;
     dispatchRequest("gvdg:admin-membership-mark-paid-request", { id: row.id, name: row.name, note: note.trim() });
     setMarking(false);
     setNote("");
+  }
+
+  function approveApplication() {
+    if (busyAction) return;
+    setBusyAction("approve");
+    dispatchRequest("gvdg:admin-membership-approve-request", { id: row.id, name: row.name });
+  }
+
+  async function rejectApplication() {
+    if (busyAction) return;
+    const confirmed = await adminConfirm({
+      title: `Reject ${row.name}?`,
+      message: "Remove this membership application? They can reapply later if needed.",
+      confirmText: "Reject",
+      danger: true,
+    });
+    if (!confirmed) return;
+    setBusyAction("reject");
+    dispatchRequest("gvdg:admin-membership-reject-request", { id: row.id, name: row.name });
   }
 
   return h("div", { className: "admin-evrow", "data-admin-application-id": row.id, "data-admin-application-kind": row.guest ? "guest" : "member" }, [
@@ -393,21 +425,23 @@ function ApplicationRow({ row, duesOnline }) {
       ])
       : paid || row.guest
         ? null
-        : h("button", { className: "admin-btn secondary", key: "mark", onClick: () => setMarking(true), type: "button" },
+        : h("button", { className: "admin-btn secondary", disabled: Boolean(busyAction), key: "mark", onClick: () => setMarking(true), type: "button" },
           // <wbr> lets "(cash/other)" break after the slash on a narrow phone; the accessible name is unchanged.
           ["Mark paid (cash/", h("wbr", { key: "break" }), "other)"]),
     h("button", {
       className: "admin-btn",
+      disabled: Boolean(busyAction),
       key: "approve",
       type: "button",
-      onClick: () => dispatchRequest("gvdg:admin-membership-approve-request", { id: row.id, name: row.name }),
-    }, "Approve"),
+      onClick: approveApplication,
+    }, busyAction === "approve" ? "Approving…" : "Approve"),
     h("button", {
       className: "admin-btn danger",
+      disabled: Boolean(busyAction),
       key: "reject",
       type: "button",
-      onClick: () => dispatchRequest("gvdg:admin-membership-reject-request", { id: row.id, name: row.name }),
-    }, "Reject"),
+      onClick: () => { void rejectApplication(); },
+    }, busyAction === "reject" ? "Rejecting…" : "Reject"),
   ]);
 }
 

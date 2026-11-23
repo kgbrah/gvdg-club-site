@@ -149,6 +149,7 @@ export function AdminSheetImport() {
       setDone(changes.length
         ? `Done: ${changes.length} ${changes.length === 1 ? "change" : "changes"} from the sheet applied.`
         : `Done: ${releasesCount} ${releasesCount === 1 ? "tag" : "tags"} released from the sheet.`);
+      if (kind === "balances") window.dispatchEvent(new CustomEvent("gvdg:admin-wallet-balances-refresh"));
       setPlan(null);
       setMessage("");
     } catch (error) {

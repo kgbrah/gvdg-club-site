@@ -194,6 +194,7 @@ function TeeSignReviewCard({ state, sign }) {
   const [rows, setRows] = React.useState(() => defaultRows(sign));
   const [pending, setPending] = React.useState("");
   const requestCounter = React.useRef(0);
+  const extraRowCounter = React.useRef(0);
   const layouts = layoutsFor(state, sign.courseId);
 
   React.useEffect(() => {
@@ -263,7 +264,11 @@ function TeeSignReviewCard({ state, sign }) {
         row,
       }))),
       h("div", { className: "ts-review-actions", key: "actions" }, [
-        h("button", { className: "admin-btn secondary", disabled: busy, key: "add", onClick: () => setRows((current) => [...current, rowFromSeed({ suggestedLayoutName: "Main", par: 3 }, current.length)]), type: "button" }, "+ Row"),
+        h("button", { className: "admin-btn secondary", disabled: busy, key: "add", onClick: () => {
+          extraRowCounter.current += 1;
+          const idx = extraRowCounter.current;
+          setRows((current) => [...current, rowFromSeed({ suggestedLayoutName: "Main", par: 3 }, `extra-${idx}`)]);
+        }, type: "button" }, "+ Row"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn", disabled: busy, key: "approve", onClick: () => request("gvdg:admin-tee-sign-review-approve-request", { rows: rowsPayload(rows) }), type: "button" }, pending ? "Working…" : sign.status === "official" ? "Apply rows" : "Approve"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn secondary", disabled: busy, key: "extract", onClick: () => request("gvdg:admin-tee-sign-review-extract-request"), type: "button" }, "Re-run vision"),
         sign.status === "rejected" ? null : h("button", { className: "admin-btn danger", disabled: busy, key: "reject", onClick: rejectSign, type: "button" }, "Reject"),
@@ -277,6 +282,14 @@ export function AdminTeeSignReviewControls() {
   const initial = currentControlsState();
   const [status, setStatus] = React.useState(() => normalizeStatus(initial.status));
   React.useEffect(() => { setCurrentControlsState({ status }); }, [status]);
+  React.useEffect(() => {
+    function sync(event) {
+      const next = event.detail && event.detail.queueStatus;
+      if (REVIEW_STATUSES.some(([value]) => value === next)) setStatus(next);
+    }
+    window.addEventListener("gvdg:admin-tee-sign-review", sync);
+    return () => window.removeEventListener("gvdg:admin-tee-sign-review", sync);
+  }, []);
 
   function requestLoad(nextStatus) {
     const next = { status: normalizeStatus(nextStatus) };

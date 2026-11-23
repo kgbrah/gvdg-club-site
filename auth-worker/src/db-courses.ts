@@ -434,14 +434,16 @@ export async function listPositions(db: D1Like, courseId: number, kind?: Positio
 }
 
 export async function createPosition(db: D1Like, p: PositionInput) {
-  return db
-    .prepare("INSERT INTO course_positions (course_id, kind, label, lat, lng, color) VALUES (?, ?, ?, ?, ?, ?) RETURNING *")
-    .bind(p.course_id, p.kind, p.label, p.lat ?? null, p.lng ?? null, p.color ?? null)
-    .first();
+  return afterCatalogWrite(
+    db
+      .prepare("INSERT INTO course_positions (course_id, kind, label, lat, lng, color) VALUES (?, ?, ?, ?, ?, ?) RETURNING *")
+      .bind(p.course_id, p.kind, p.label, p.lat ?? null, p.lng ?? null, p.color ?? null)
+      .first(),
+  );
 }
 
 export async function deletePosition(db: D1Like, courseId: number, id: number) {
-  await db.prepare("DELETE FROM course_positions WHERE id = ? AND course_id = ?").bind(id, courseId).run();
+  await afterCatalogWrite(db.prepare("DELETE FROM course_positions WHERE id = ? AND course_id = ?").bind(id, courseId).run());
 }
 
 export async function replacePositions(db: D1Like, courseId: number, positions: PositionInput[]) {
@@ -454,11 +456,13 @@ export async function replacePositions(db: D1Like, courseId: number, positions: 
       ).bind(...chunk.flatMap((p) => [courseId, p.kind, p.label, p.lat ?? null, p.lng ?? null])),
     );
   }
-  for (let i = 0; i < statements.length; i += 45) {
-    const chunk = statements.slice(i, i + 45);
-    if (typeof db.batch === "function") await db.batch(chunk);
-    else for (const stmt of chunk) await stmt.run();
-  }
+  await afterCatalogWrite((async () => {
+    for (let i = 0; i < statements.length; i += 45) {
+      const chunk = statements.slice(i, i + 45);
+      if (typeof db.batch === "function") await db.batch(chunk);
+      else for (const stmt of chunk) await stmt.run();
+    }
+  })());
   return listPositions(db, courseId);
 }
 

@@ -64,6 +64,7 @@ export function AdminLayoutUdiscImport({ courseId, onApply }) {
     ]),
     h("div", { className: "al-row", key: "controls" }, [
       h("input", {
+        "aria-label": "UDisc course URL",
         id: "alUdiscUrl",
         key: "url",
         maxLength: 1000,
@@ -145,13 +146,13 @@ export function AdminLayoutPositionPool({ courseId, pool }) {
       ])
     )) : "No positions yet - add tees/targets or import from UDisc."),
     h("div", { className: "al-row", key: "form" }, [
-      h("select", { id: "alPosKind", key: "kind", onChange: (event) => updateField("kind", event.target.value), value: form.kind }, [
+      h("select", { "aria-label": "Position kind", id: "alPosKind", key: "kind", onChange: (event) => updateField("kind", event.target.value), value: form.kind }, [
         h("option", { key: "tee", value: "tee" }, "Tee pad"),
         h("option", { key: "target", value: "target" }, "Target"),
       ]),
-      h("input", { id: "alPosLabel", key: "label", maxLength: 80, onChange: (event) => updateField("label", event.target.value), placeholder: "Label e.g. Hole 5 (Blue)", value: form.label }),
-      h("input", { id: "alPosLat", inputMode: "decimal", key: "lat", onChange: (event) => updateField("lat", event.target.value), placeholder: "lat", size: 8, value: form.lat }),
-      h("input", { id: "alPosLng", inputMode: "decimal", key: "lng", onChange: (event) => updateField("lng", event.target.value), placeholder: "lng", size: 8, value: form.lng }),
+      h("input", { "aria-label": "Position label", id: "alPosLabel", key: "label", maxLength: 80, onChange: (event) => updateField("label", event.target.value), placeholder: "Label e.g. Hole 5 (Blue)", value: form.label }),
+      h("input", { "aria-label": "Latitude", id: "alPosLat", inputMode: "decimal", key: "lat", onChange: (event) => updateField("lat", event.target.value), placeholder: "lat", size: 8, value: form.lat }),
+      h("input", { "aria-label": "Longitude", id: "alPosLng", inputMode: "decimal", key: "lng", onChange: (event) => updateField("lng", event.target.value), placeholder: "lng", size: 8, value: form.lng }),
       h("button", { className: "admin-btn secondary", disabled: busy, id: "alPosAddBtn", key: "add", onClick: addPosition, type: "button" }, busy ? "Adding…" : "Add"),
     ]),
   ]);

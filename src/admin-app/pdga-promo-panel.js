@@ -16,13 +16,19 @@ export function AdminPdgaPromo() {
   }, []);
   async function save(event) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setMessage("");
-    const response = await adminRequest("/admin/club-settings/pdga-promo", { method: "PUT", body: { code: form.code.trim(), validThrough: form.validThrough.trim() } });
-    const data = await response.json().catch(() => ({}));
-    setBusy(false);
-    setMessage(response.ok ? (data.promo ? "Saved. Members see it next to Join or renew with PDGA." : "Cleared.")
-      : data.error === "invalid_code" ? "Use letters, numbers, - or _ (2–40)." : data.error === "invalid_valid_through" ? "Good through: a year (2027) or a date (2027-03-31)." : "Couldn't save.");
+    try {
+      const response = await adminRequest("/admin/club-settings/pdga-promo", { method: "PUT", body: { code: form.code.trim(), validThrough: form.validThrough.trim() } });
+      const data = await response.json().catch(() => ({}));
+      setMessage(response.ok ? (data.promo ? "Saved. Members see it next to Join or renew with PDGA." : "Cleared.")
+        : data.error === "invalid_code" ? "Use letters, numbers, - or _ (2–40)." : data.error === "invalid_valid_through" ? "Good through: a year (2027) or a date (2027-03-31)." : "Couldn't save.");
+    } catch {
+      setMessage("Couldn't save.");
+    } finally {
+      setBusy(false);
+    }
   }
   return h("section", { className: "admin-tools-group", "aria-label": "PDGA club discount code", "data-admin-pdga-promo": "" }, [
     h("h2", { className: "admin-pane-kicker", key: "title" }, "PDGA club discount code"),

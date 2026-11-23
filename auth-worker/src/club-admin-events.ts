@@ -6,7 +6,7 @@ import { assignShotgun, assignTeams } from "./assign.js";
 import { getMember } from "./roster.js";
 import { json, readJson } from "./http.js";
 import { asInt, asIsoTimestamp, asStr, inSet, namedStringArray, validEventCoursesInput, validEventInput } from "./input.js";
-import { AdminLiveConfigError, adminLiveScoringConfigJson } from "./admin-live-config.js";
+import { AdminLiveConfigError, adminLiveScoringConfigJson, withPreservedPuttingStations } from "./admin-live-config.js";
 import { isLiveFormatError, normalizeLiveScoringConfig } from "./live-format.js";
 import { inlineLayout } from "./admin-event-layout.js";
 import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
@@ -31,7 +31,11 @@ function eventIdOf(row: unknown): number | null {
   return typeof id === "number" ? id : null;
 }
 
-function scoringConfigFromBody(body: Record<string, unknown>): { playFormat: "singles" | "doubles"; live: string } | null | "invalid" {
+async function scoringConfigFromBody(
+  body: Record<string, unknown>,
+  dbLike?: Env["DB"],
+  eventId?: number,
+): Promise<{ playFormat: "singles" | "doubles"; live: string } | null | "invalid"> {
   const hasPlay = hasField(body, "play_format");
   const hasLive = hasField(body, "liveScoringConfig") || hasField(body, "live_scoring_config");
   if (!hasPlay && !hasLive) return null;
@@ -40,9 +44,12 @@ function scoringConfigFromBody(body: Record<string, unknown>): { playFormat: "si
   const playFormat = rawPlay === "doubles" ? "doubles" : "singles";
   const rawLive = hasField(body, "liveScoringConfig") ? body.liveScoringConfig : body.live_scoring_config;
   try {
-    const normalized = rawLive == null
+    const resolvedRaw = dbLike && eventId != null && rawLive != null
+      ? await withPreservedPuttingStations(dbLike, eventId, rawLive)
+      : rawLive;
+    const normalized = resolvedRaw == null
       ? normalizeLiveScoringConfig({ groupFormat: playFormat, scoringStyle: body.format === "matchplay" ? "matchplay" : body.format === "putting" ? "putting" : "stroke", handicap: false })
-      : normalizeLiveScoringConfig(rawLive);
+      : normalizeLiveScoringConfig(resolvedRaw);
     const groupFormat = normalized.scoringStyle === "putting" ? "singles" : playFormat;
     return { playFormat: groupFormat, live: JSON.stringify({ ...normalized, groupFormat }) };
   } catch (error) {
@@ -254,10 +261,37 @@ export async function handleAdminEvents(
       const rid = asInt(seg[4]);
       if (rid == null) return json({ error: "not_found" }, 404, origin);
       const b = (await readJson(request)) ?? {};
-      const row = await db.adminUpdateRegistration(env.DB, rid, {
-        division: asStr(b.division, 60), team: asStr(b.team, 40), starting_hole: asInt(b.starting_hole),
-        checked_in: b.checked_in == null ? null : (b.checked_in ? 1 : 0), paid_entry: b.paid_entry == null ? null : (b.paid_entry ? 1 : 0),
-      });
+      const patch: Parameters<typeof db.adminUpdateRegistration>[2] = {};
+      if (hasField(b, "division")) {
+        if (b.division == null || (typeof b.division === "string" && b.division.trim() === "")) {
+          patch.division = null;
+        } else {
+          const division = asStr(b.division, 60);
+          if (!division) return json({ error: "invalid_registration" }, 400, origin);
+          patch.division = division;
+        }
+      }
+      if (hasField(b, "team")) {
+        if (b.team == null || (typeof b.team === "string" && b.team.trim() === "")) {
+          patch.team = null;
+        } else {
+          const team = asStr(b.team, 40);
+          if (!team) return json({ error: "invalid_registration" }, 400, origin);
+          patch.team = team;
+        }
+      }
+      if (hasField(b, "starting_hole")) {
+        if (b.starting_hole == null || b.starting_hole === "") {
+          patch.starting_hole = null;
+        } else {
+          const hole = asInt(b.starting_hole);
+          if (hole == null || hole < 1) return json({ error: "invalid_registration" }, 400, origin);
+          patch.starting_hole = hole;
+        }
+      }
+      if (hasField(b, "checked_in")) patch.checked_in = b.checked_in == null ? null : (b.checked_in ? 1 : 0);
+      if (hasField(b, "paid_entry")) patch.paid_entry = b.paid_entry == null ? null : (b.paid_entry ? 1 : 0);
+      const row = await db.adminUpdateRegistration(env.DB, rid, patch, id);
       return row ? json({ registration: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
     }
     if (method === "DELETE" && seg[4] != null) {
@@ -412,7 +446,7 @@ export async function handleAdminEvents(
       eventInput = withPrimaryLayout(v, layoutId);
     }
     if (eventInput.status === "live") return json(liveViaScoringBody, 400, origin);
-    const scoring = scoringConfigFromBody(b as Record<string, unknown>);
+    const scoring = await scoringConfigFromBody(b as Record<string, unknown>);
     if (scoring === "invalid") return json({ error: "invalid_config" }, 400, origin);
     const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
     const createdId = eventIdOf(row);
@@ -486,12 +520,34 @@ export async function handleAdminEvents(
       if (cd === undefined) return json({ error: "invalid_event" }, 400, origin);
       patch.checkin_deadline = cd;
     }
-    const scoring = scoringConfigFromBody(b);
+    const scoring = await scoringConfigFromBody(b, env.DB, id);
     if (scoring === "invalid") return json({ error: "invalid_config" }, 400, origin);
+    let createdLayout: unknown = null;
+    const layoutBody = b && typeof b === "object" ? b.layout : null;
+    if (layoutBody != null && patch.layout_id == null && patch.event_courses?.[0]?.layout_id == null) {
+      const existing = await db.getEvent(env.DB, id);
+      if (!existing) return json({ error: "not_found" }, 404, origin);
+      const explicitEmptyCourses = hasField(b, "event_courses") && (!patch.event_courses || patch.event_courses.length === 0);
+      const targetCourseId = explicitEmptyCourses
+        ? null
+        : patch.event_courses?.length
+          ? patch.event_courses[0]!.course_id
+          : (hasField(b, "course_id") ? patch.course_id : asInt((existing as Record<string, unknown>).course_id));
+      if (targetCourseId == null) return json({ error: "invalid_layout" }, 400, origin);
+      const cleanLayout = inlineLayout(layoutBody);
+      if (!cleanLayout) return json({ error: "invalid_layout" }, 400, origin);
+      createdLayout = await db.createLayout(env.DB, { course_id: targetCourseId, ...cleanLayout });
+      const layoutId = asInt((createdLayout as { id?: unknown } | null)?.id);
+      if (layoutId == null) return json({ error: "invalid_layout" }, 500, origin);
+      patch.layout_id = layoutId;
+      if (patch.event_courses?.length) {
+        patch.event_courses = patch.event_courses.map((course, index) => (index === 0 ? { ...course, layout_id: layoutId } : course));
+      }
+    }
     const row = await db.updateEvent(env.DB, id, patch);
     if (!row) return json({ error: "not_found" }, 404, origin);
     if (scoring) await db.saveEventScoringConfig(env.DB, id, scoring.playFormat, scoring.live);
-    return json({ event: row }, 200, origin);
+    return json(createdLayout ? { event: row, layout: createdLayout } : { event: row }, 200, origin);
   }
   if (method === "DELETE" && id != null) {
     await db.deleteEvent(env.DB, id);

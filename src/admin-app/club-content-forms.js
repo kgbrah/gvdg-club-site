@@ -65,6 +65,7 @@ function useRequestForm(emptyForm, resultEvent) {
   }
 
   function beginRequest(slug, requestEvent, payload) {
+    if (busy) return;
     const requestId = `${slug}-${requestCounter.current += 1}`;
     currentRequest.current = requestId;
     setBusy(true);

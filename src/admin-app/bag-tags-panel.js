@@ -111,7 +111,7 @@ export function AdminBagTagsPanel() {
   const [seriesFilter, setSeriesFilter] = React.useState("all");
 
   const load = React.useCallback(async () => {
-    if (document.body.dataset.adminPanel !== "visible") return;
+    if (currentAdminAuthGateState().status !== "panel") return;
     try {
       const [nextBoard, roster] = await Promise.all([
         adminJson("/admin/bag-tags"),

@@ -160,6 +160,7 @@ export function AdminLeagueNightForm() {
 
   function submit(event) {
     event.preventDefault();
+    if (busy) return;
     const requestId = `league-night-${requestCounter.current += 1}`;
     currentRequest.current = requestId;
     setBusy(true);

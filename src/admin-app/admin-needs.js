@@ -19,6 +19,7 @@ const EMPTY_NEEDS = {
 const MORE_TABS = new Set(["bag-tags", "members", "tee-signs", "lost-found"]);
 
 let adminNeedsState = EMPTY_NEEDS;
+let adminShelfState = null;
 
 function countOf(value) {
   const count = Number(value);
@@ -168,7 +169,7 @@ export function adminNeedsBadgeCount(items, tab) {
 export function useAdminNeeds() {
   const [queue, setQueue] = React.useState(currentAdminNeeds);
   const [orders, setOrders] = React.useState(currentAdminOrdersBadgeCount);
-  const [shelf, setShelf] = React.useState(null);
+  const [shelf, setShelf] = React.useState(() => adminShelfState);
 
   React.useEffect(() => {
     function updateQueue(event) {
@@ -180,16 +181,19 @@ export function useAdminNeeds() {
     }
     function updateShelf(event) {
       const count = Number(event.detail && event.detail.count);
-      setShelf({
+      const next = {
         count: Number.isFinite(count) && count > 0 ? Math.round(count) : 0,
         name: text(event.detail && event.detail.name),
-      });
+      };
+      adminShelfState = next;
+      setShelf(next);
     }
     window.addEventListener("gvdg:admin-needs", updateQueue);
     window.addEventListener("gvdg:admin-orders-badge", updateOrders);
     window.addEventListener("gvdg:admin-shelf", updateShelf);
     setQueue(currentAdminNeeds());
     setOrders(currentAdminOrdersBadgeCount());
+    if (adminShelfState != null) setShelf(adminShelfState);
     return () => {
       window.removeEventListener("gvdg:admin-needs", updateQueue);
       window.removeEventListener("gvdg:admin-orders-badge", updateOrders);

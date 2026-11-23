@@ -31,7 +31,7 @@ export async function adminSaveDataArchiveEndpointFromReact(detail, { adminApi, 
   const body = detail.body || {};
   const label = String(body.label || '').trim();
   const endpointUrl = String(body.endpoint_url || '').trim();
-  if (detail.valid !== true || !label || !/^https?:\/\//.test(endpointUrl)) {
+  if (detail.valid !== true || !label || !/^https:\/\//.test(endpointUrl)) {
     const message = 'Label and https endpoint URL are required.';
     adminMsg(message, false);
     dispatchAdminEvent('gvdg:admin-data-archive-destination-save-result', { ok: false, requestId, message });
@@ -111,24 +111,34 @@ export async function adminRunArchiveExportFromReact(detail, { adminApi, adminMs
 
 async function activateDataArchiveDestination(destination, { adminApi, adminMsg }) {
   if (!destination || destination.id == null) return;
-  const r = await adminApi('/admin/export/endpoints/' + destination.id + '/activate', { method: 'POST' });
-  if (r.ok) {
-    adminMsg('Activated endpoint "' + dataArchiveDestinationLabel(destination) + '"', true);
-    dispatchAdminEvent('gvdg:admin-data-archive-destination-activate-result', { ok: true, destination });
-  } else {
-    adminMsg('Activate failed (' + r.status + ')', false);
+  try {
+    const r = await adminApi('/admin/export/endpoints/' + destination.id + '/activate', { method: 'POST' });
+    if (r.ok) {
+      adminMsg('Activated endpoint "' + dataArchiveDestinationLabel(destination) + '"', true);
+      dispatchAdminEvent('gvdg:admin-data-archive-destination-activate-result', { ok: true, destination });
+    } else {
+      adminMsg('Activate failed (' + r.status + ')', false);
+      dispatchAdminEvent('gvdg:admin-data-archive-destination-activate-result', { ok: false, destination });
+    }
+  } catch {
+    adminMsg('Activate failed', false);
     dispatchAdminEvent('gvdg:admin-data-archive-destination-activate-result', { ok: false, destination });
   }
 }
 
 async function deleteDataArchiveDestination(destination, { adminApi, adminMsg }) {
   if (!destination || destination.id == null) return;
-  const r = await adminApi('/admin/export/endpoints/' + destination.id, { method: 'DELETE' });
-  if (r.ok) {
-    adminMsg('Deleted "' + dataArchiveDestinationLabel(destination) + '"', true);
-    dispatchAdminEvent('gvdg:admin-data-archive-destination-delete-result', { ok: true, destination });
-  } else {
-    adminMsg('Delete failed (' + r.status + ')', false);
+  try {
+    const r = await adminApi('/admin/export/endpoints/' + destination.id, { method: 'DELETE' });
+    if (r.ok) {
+      adminMsg('Deleted "' + dataArchiveDestinationLabel(destination) + '"', true);
+      dispatchAdminEvent('gvdg:admin-data-archive-destination-delete-result', { ok: true, destination });
+    } else {
+      adminMsg('Delete failed (' + r.status + ')', false);
+      dispatchAdminEvent('gvdg:admin-data-archive-destination-delete-result', { ok: false, destination });
+    }
+  } catch {
+    adminMsg('Delete failed', false);
     dispatchAdminEvent('gvdg:admin-data-archive-destination-delete-result', { ok: false, destination });
   }
 }

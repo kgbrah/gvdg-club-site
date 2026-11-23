@@ -115,6 +115,7 @@ export function startAdminController() {
             const route = publishRoute(tab, detail, options);
             const ticket = ++navTicket;
             const pane = destination('admin', route.tab).pane || route.tab;
+            if (pane !== 'scoring') scCloseWs();
             if (pane === 'create') { adminLoadCourses(); adminLoadLeagues(); }
             if (pane === 'today' || pane === 'events') adminLoadEvents();
             if (pane === 'events') { adminLoadFundraisers(); adminLoadMeetings(); }
@@ -356,10 +357,12 @@ export function startAdminController() {
 
         async function scSelectEventFromReact(detail) {
             const eventId = detail && detail.eventId ? Number(detail.eventId) : null;
+            if (scWsEvent && scWsEvent !== eventId) scCloseWs();
             scEventId = eventId;
             scSnap = null;
             scTeeSignData = { teeSigns: [], layouts: [] };
             if (!scEventId) {
+                scCloseWs();
                 scSelectedEvent = null;
                 setAdminScoringState({ eventId: '', layouts: [], status: 'idle' });
                 return;
@@ -371,6 +374,7 @@ export function startAdminController() {
                 scSelectedEvent = scEventById(eventId);
             }
             if (!scSelectedEvent) {
+                scCloseWs();
                 setAdminScoringState({ eventId: String(scEventId), layouts: [], message: 'Event not found.', status: 'error' });
                 return;
             }
@@ -379,6 +383,7 @@ export function startAdminController() {
                 await scRefresh();
                 return;
             }
+            scCloseWs();
             await scShowStartControls();
         }
         async function scShowStartControls(validation) {
@@ -413,41 +418,52 @@ export function startAdminController() {
         async function scStartFromReact(detail) {
             scEventId = detail && detail.eventId ? Number(detail.eventId) : scEventId;
             scSelectedEvent = scEventById(scEventId) || scSelectedEvent;
-            const layoutId = detail && detail.layoutId ? Number(detail.layoutId) : null;
-            if (layoutId) {
-                const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
-                if (pr.ok && scSelectedEvent) scSelectedEvent.layout_id = layoutId;
-            }
-            const liveScoringConfig = scCurrentConfig(detail && detail.liveScoringConfig);
-            if (liveScoringConfig.scoringStyle === 'matchplay') {
-                const current = scState && typeof scState === 'object' ? scState : {};
-                setAdminScoringState({ ...current, validation: 'Match play requires exactly two score targets per card; start will be blocked if the roster/pairs do not satisfy that.' });
-            }
-            // The round always seeds from BOTH registered players and manually-added walk-ons (unioned server-side).
-            const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body: { liveScoringConfig } });
-            if (r.ok) {
-                adminMsg('Live scoring started', true);
-                if (scSelectedEvent) scSelectedEvent.status = 'live';
-                finishAdminScoringAction('start', true);
-                await scRefresh();
-            } else {
-                const e = await r.json().catch(() => ({}));
-                adminMsg(scStartErrorMessage(r.status, e), false);
-                finishAdminScoringAction('start', false);
-                if (e && e.error === 'empty_roster' && scEventId) {
-                    window.dispatchEvent(new CustomEvent('gvdg:admin-tab-request', { detail: { tab: 'registration' } }));
-                    await rgSelectEventFromReact({ eventId: scEventId });
-                    setAdminRegistrationControlsState({
-                        notice: 'This event has no players yet. Add the pairs (same pair label on both teammates), then come back to Live Scoring to start.',
-                    });
+            try {
+                const layoutId = detail && detail.layoutId ? Number(detail.layoutId) : null;
+                if (layoutId) {
+                    const pr = await adminApi('/admin/events/' + scEventId, { method: 'PATCH', body: { layout_id: layoutId } });
+                    if (pr.ok && scSelectedEvent) scSelectedEvent.layout_id = layoutId;
                 }
+                const liveScoringConfig = scCurrentConfig(detail && detail.liveScoringConfig);
+                if (liveScoringConfig.scoringStyle === 'matchplay') {
+                    const current = scState && typeof scState === 'object' ? scState : {};
+                    setAdminScoringState({ ...current, validation: 'Match play requires exactly two score targets per card; start will be blocked if the roster/pairs do not satisfy that.' });
+                }
+                // The round always seeds from BOTH registered players and manually-added walk-ons (unioned server-side).
+                const r = await adminApi('/events/' + scEventId + '/live/start', { method: 'POST', body: { liveScoringConfig } });
+                if (r.ok) {
+                    adminMsg('Live scoring started', true);
+                    if (scSelectedEvent) scSelectedEvent.status = 'live';
+                    finishAdminScoringAction('start', true);
+                    await scRefresh();
+                } else {
+                    const e = await r.json().catch(() => ({}));
+                    adminMsg(scStartErrorMessage(r.status, e), false);
+                    finishAdminScoringAction('start', false);
+                    if (e && e.error === 'empty_roster' && scEventId) {
+                        const targetEventId = scEventId;
+                        await adminSwitch('registration', { eventId: targetEventId });
+                        setAdminRegistrationControlsState({
+                            notice: 'This event has no players yet. Add the pairs (same pair label on both teammates), then come back to Live Scoring to start.',
+                        });
+                    }
+                }
+            } catch {
+                adminMsg('Start failed', false);
+                finishAdminScoringAction('start', false);
             }
         }
 
         async function scRefresh() {
             if (!scEventId) return;
             const eventId = scEventId;
-            const r = await api('/events/' + eventId + '/live');
+            let r;
+            try {
+                r = await api('/events/' + eventId + '/live');
+            } catch {
+                if (eventId === scEventId) setAdminScoringState({ event: scSelectedEvent, eventId: String(scEventId), layouts: [], message: 'Could not reach live scoring.', status: 'error' });
+                return;
+            }
             if (eventId !== scEventId) return;
             if (!r.ok) {
                 setAdminScoringState({ event: scSelectedEvent, eventId: String(scEventId), layouts: [], message: 'Live scoring is not available for this event.', status: 'error' });
@@ -500,6 +516,13 @@ export function startAdminController() {
         // Subscribe to the live event's WebSocket so scores entered by players on the course appear here
         // as they happen. React score inputs preserve focused drafts while snapshots refresh.
         let scWs = null, scWsEvent = null, scWsTimer = null;
+        function scCloseWs() {
+            if (scWsTimer) { clearTimeout(scWsTimer); scWsTimer = null; }
+            scWsEvent = null;
+            const prev = scWs;
+            scWs = null;
+            try { if (prev) prev.close(); } catch (e) {}
+        }
         function scConnectWs() {
             if (scWsEvent === scEventId && scWs && scWs.readyState <= 1) return;
             try { if (scWs) scWs.close(); } catch (e) {}
@@ -527,9 +550,13 @@ export function startAdminController() {
                 if (Number.isFinite(dist)) { if (dist < 20 || dist > 2000) { adminMsg('Distance must be 20-2000 ft', false); return; } body.distance_ft = dist; }
                 if (body.par == null && body.distance_ft == null) { adminMsg('Enter a temporary par and/or distance', false); return; }
             }
-            const r = await adminApi('/events/' + scEventId + '/live/override', { method: 'POST', body });
-            if (r.ok) { adminMsg(clear ? 'Override cleared - hole reverted' : 'Temporary override applied (this round only)', true); await scRefresh(); }
-            else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'empty_override' ? 'Enter a temporary par and/or distance' : 'Override failed (' + r.status + ')', false); }
+            try {
+                const r = await adminApi('/events/' + scEventId + '/live/override', { method: 'POST', body });
+                if (r.ok) { adminMsg(clear ? 'Override cleared - hole reverted' : 'Temporary override applied (this round only)', true); await scRefresh(); }
+                else { const e = await r.json().catch(() => ({})); adminMsg(e.error === 'empty_override' ? 'Enter a temporary par and/or distance' : 'Override failed (' + r.status + ')', false); }
+            } catch {
+                adminMsg('Override failed', false);
+            }
         }
 
         async function scPostScoreFromReact(detail) {
@@ -544,65 +571,96 @@ export function startAdminController() {
             const body = { hole, strokes };
             if (row.targetId) body.targetId = row.targetId;
             else body.index = row.index;
-            const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body });
-            if (r.ok) { scSnap = await r.json(); publishScoringLiveState(); }
-            else { adminMsg('Score save failed', false); }
+            try {
+                const r = await adminApi('/events/' + scEventId + '/live/score', { method: 'POST', body });
+                if (r.ok) { scSnap = await r.json(); publishScoringLiveState(); }
+                else { adminMsg('Score save failed', false); }
+            } catch {
+                adminMsg('Score save failed', false);
+            }
         }
 
         function scFinalize() { return doFinalize(false); } // click handler (no args)
         async function scCancel() {
-            const confirmed = await adminConfirm({
-                title: 'Cancel live scoring',
-                message: 'Cancel live scoring for this event? This wipes every entered score and returns the event to Scheduled so you can re-start it.',
-                confirmText: 'Cancel scoring',
-                danger: true,
-            });
-            if (!confirmed) return;
-            const r = await adminApi('/events/' + scEventId + '/live/cancel', { method: 'POST' });
-            if (r.ok) {
-                adminMsg('Scoring cancelled — event returned to Scheduled.', true);
-                try { if (scWs) scWs.close(); } catch (e) {} scWsEvent = null;
-                if (scSelectedEvent) scSelectedEvent.status = 'scheduled';
-                await scLoadEvents();
-                await scSelectEventFromReact({ eventId: scEventId });
-                adminLoadEvents();
-                return;
-            }
-            adminMsg('Cancel failed (' + r.status + ')', false);
-        }
-        async function doFinalize(force, skipConfirm) {
-            if (!skipConfirm) {
-                const ask = force
-                    ? 'Force-finalize despite unmatched scorecards? Results lock exactly as they stand.'
-                    : 'Finalize this event? This writes final results and closes scoring.';
+            let ok = false;
+            try {
                 const confirmed = await adminConfirm({
-                    title: force ? 'Force-finalize event' : 'Finalize event',
-                    message: ask,
-                    confirmText: force ? 'Force-finalize' : 'Finalize',
-                    danger: force,
-                });
-                if (!confirmed) return;
-            }
-            const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST', ...(force ? { body: { force: true } } : {}) });
-            if (r.ok) { adminMsg('Event finalized — results saved.', true); scEventId = null; scSnap = null; scSelectedEvent = null; setAdminScoringState({ eventId: '', layouts: [], status: 'idle' }); scLoadEvents(); adminLoadEvents(); return; }
-            const data = await r.json().catch(() => ({}));
-            if (r.status === 409 && data.error === 'scorecard_incomplete') {
-                const conflicts = Array.isArray(data.conflicts) ? data.conflicts.length : 0;
-                const missing = Array.isArray(data.missing) ? data.missing.length : 0;
-                const c = conflicts + ' conflict' + (conflicts === 1 ? '' : 's');
-                const m = missing + ' unconfirmed score' + (missing === 1 ? '' : 's');
-                adminMsg('Scorecards don’t agree yet: ' + c + ', ' + m + '.', false);
-                await scRefresh();
-                // Admin override: the finalize route is admin-gated, so an admin may push it through.
-                const confirmed = await adminConfirm({
-                    title: 'Force-finalize event',
-                    message: 'Scorecards don’t fully agree (' + c + ', ' + m + '). Force-finalize as admin and lock results as they stand?',
-                    confirmText: 'Force-finalize',
+                    title: 'Cancel live scoring',
+                    message: 'Cancel live scoring for this event? This wipes every entered score and returns the event to Scheduled so you can re-start it.',
+                    confirmText: 'Cancel scoring',
                     danger: true,
                 });
-                if (confirmed) return doFinalize(true, true); // this prompt IS the force confirmation → skip the inner one
-            } else {
-                adminMsg('Finalize failed (' + r.status + ')', false);
+                if (!confirmed) return;
+                const r = await adminApi('/events/' + scEventId + '/live/cancel', { method: 'POST' });
+                if (r.ok) {
+                    ok = true;
+                    adminMsg('Scoring cancelled — event returned to Scheduled.', true);
+                    scCloseWs();
+                    if (scSelectedEvent) scSelectedEvent.status = 'scheduled';
+                    await scLoadEvents();
+                    await scSelectEventFromReact({ eventId: scEventId });
+                    adminLoadEvents();
+                    return;
+                }
+                adminMsg('Cancel failed (' + r.status + ')', false);
+            } catch {
+                adminMsg('Cancel failed', false);
+            } finally {
+                finishAdminScoringAction('cancel', ok);
+            }
+        }
+        async function doFinalize(force, skipConfirm) {
+            let finalized = false;
+            let delegated = false;
+            try {
+                if (!skipConfirm) {
+                    const ask = force
+                        ? 'Force-finalize despite unmatched scorecards? Results lock exactly as they stand.'
+                        : 'Finalize this event? This writes final results and closes scoring.';
+                    const confirmed = await adminConfirm({
+                        title: force ? 'Force-finalize event' : 'Finalize event',
+                        message: ask,
+                        confirmText: force ? 'Force-finalize' : 'Finalize',
+                        danger: force,
+                    });
+                    if (!confirmed) return;
+                }
+                const r = await adminApi('/events/' + scEventId + '/live/finalize', { method: 'POST', ...(force ? { body: { force: true } } : {}) });
+                if (r.ok) {
+                    finalized = true;
+                    adminMsg('Event finalized — results saved.', true);
+                    scCloseWs();
+                    scEventId = null; scSnap = null; scSelectedEvent = null;
+                    setAdminScoringState({ eventId: '', layouts: [], status: 'idle' });
+                    scLoadEvents(); adminLoadEvents();
+                    return;
+                }
+                const data = await r.json().catch(() => ({}));
+                if (r.status === 409 && data.error === 'scorecard_incomplete') {
+                    const conflicts = Array.isArray(data.conflicts) ? data.conflicts.length : 0;
+                    const missing = Array.isArray(data.missing) ? data.missing.length : 0;
+                    const c = conflicts + ' conflict' + (conflicts === 1 ? '' : 's');
+                    const m = missing + ' unconfirmed score' + (missing === 1 ? '' : 's');
+                    adminMsg('Scorecards don’t agree yet: ' + c + ', ' + m + '.', false);
+                    await scRefresh();
+                    // Admin override: the finalize route is admin-gated, so an admin may push it through.
+                    const confirmed = await adminConfirm({
+                        title: 'Force-finalize event',
+                        message: 'Scorecards don’t fully agree (' + c + ', ' + m + '). Force-finalize as admin and lock results as they stand?',
+                        confirmText: 'Force-finalize',
+                        danger: true,
+                    });
+                    if (confirmed) {
+                        delegated = true;
+                        return await doFinalize(true, true); // this prompt IS the force confirmation → skip the inner one
+                    }
+                } else {
+                    adminMsg('Finalize failed (' + r.status + ')', false);
+                }
+            } catch {
+                adminMsg('Finalize failed', false);
+            } finally {
+                if (!delegated) finishAdminScoringAction('finalize', finalized);
             }
         }
 
@@ -915,25 +973,45 @@ export function startAdminController() {
             window.dispatchEvent(new CustomEvent('gvdg:admin-orders-list', { detail: state }));
         }
         async function saveOrder(id, body) {
-            const r = await adminApi('/admin/orders/' + id, { method: 'PATCH', body });
-            if (r.ok) { adminMsg('Order #' + id + ' updated', true); adminLoadOrders(); return true; }
-            const d = await r.json().catch(() => ({}));
-            const msg = r.status === 409 && d.error === 'already_cancelled'
-                ? 'Cancelled orders cannot be reopened'
-                : 'Order update failed' + (d.error ? ' (' + d.error + ')' : '');
-            adminMsg(msg, false);
-            return false;
+            try {
+                const r = await adminApi('/admin/orders/' + id, { method: 'PATCH', body });
+                if (r.ok) {
+                    adminMsg('Order #' + id + ' updated', true);
+                    adminLoadOrders();
+                    if (body && body.status === 'cancelled') window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-balances-refresh'));
+                    return true;
+                }
+                const d = await r.json().catch(() => ({}));
+                const msg = r.status === 409 && d.error === 'already_cancelled'
+                    ? 'Cancelled orders cannot be reopened'
+                    : 'Order update failed' + (d.error ? ' (' + d.error + ')' : '');
+                adminMsg(msg, false);
+                return false;
+            } catch {
+                adminMsg('Order update failed', false);
+                return false;
+            }
         }
         async function cancelOrder(id, status) {
             if (status === 'cancelled') return false;
             return saveOrder(id, { status: 'cancelled' });
         }
         async function deleteOrder(id) {
-            const r = await adminApi('/admin/orders/' + id, { method: 'DELETE' });
-            if (r.ok) { adminMsg('Order #' + id + ' deleted', true); adminLoadOrders(); return true; }
-            const d = await r.json().catch(() => ({}));
-            adminMsg('Order delete failed' + (d.error ? ' (' + d.error + ')' : ''), false);
-            return false;
+            try {
+                const r = await adminApi('/admin/orders/' + id, { method: 'DELETE' });
+                if (r.ok) {
+                    adminMsg('Order #' + id + ' deleted', true);
+                    adminLoadOrders();
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-balances-refresh'));
+                    return true;
+                }
+                const d = await r.json().catch(() => ({}));
+                adminMsg('Order delete failed' + (d.error ? ' (' + d.error + ')' : ''), false);
+                return false;
+            } catch {
+                adminMsg('Order delete failed', false);
+                return false;
+            }
         }
         // Keeps the last count while it checks (it used to blink to 0 every minute); a failed check clears it.
         async function refreshOrdersBadge() {
@@ -1089,10 +1167,15 @@ export function startAdminController() {
                 return;
             }
             const body = detail.body || {};
-            const r = await adminApi('/admin/events/' + rgEventId + '/config', { method: 'PUT', body });
-            adminMsg(r.ok ? 'Registration settings saved' : 'Save failed (' + r.status + ')', r.ok);
-            if (r.ok) setAdminRegistrationControlsState({ configStatus: 'ready', config: body });
-            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-config-save-result', { detail: { ok: r.ok, requestId } }));
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/config', { method: 'PUT', body });
+                adminMsg(r.ok ? 'Registration settings saved' : 'Save failed (' + r.status + ')', r.ok);
+                if (r.ok) setAdminRegistrationControlsState({ configStatus: 'ready', config: body });
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-config-save-result', { detail: { ok: r.ok, requestId } }));
+            } catch {
+                adminMsg('Save failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-config-save-result', { detail: { ok: false, requestId } }));
+            }
         }
         async function rgLoadRoster(options) {
             const eventId = rgEventId;
@@ -1216,19 +1299,28 @@ export function startAdminController() {
             if (error === 'scoring_started') return (body && body.message) || 'Live scoring already started — add or remove players on the scorecard instead.';
             if (error === 'already_registered') return 'That player is already on this event.';
             if (error === 'event_started') return 'This event has already started. Cancel scoring before changing the roster.';
+            if (error === 'too_many_members') return 'Select 40 or fewer members at a time.';
             return fallback + ' (' + status + ')';
         }
         async function rgRemoveManualPlayer(player) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
-            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster({ quiet: true }); return; }
-            const e = await r.json().catch(() => ({}));
-            adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/players/' + player.id, { method: 'DELETE' });
+                if (r.ok) { adminMsg('Player removed', true); rgLoadRoster({ quiet: true }); return; }
+                const e = await r.json().catch(() => ({}));
+                adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
+            } catch {
+                adminMsg('Remove failed', false);
+            }
         }
         async function rgRemoveRegistration(registration) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + registration.id, { method: 'DELETE' });
-            if (r.ok) { adminMsg('Player removed', true); rgLoadRoster({ quiet: true }); return; }
-            const e = await r.json().catch(() => ({}));
-            adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + registration.id, { method: 'DELETE' });
+                if (r.ok) { adminMsg('Player removed', true); rgLoadRoster({ quiet: true }); return; }
+                const e = await r.json().catch(() => ({}));
+                adminMsg(rgRosterMutationError(e, r.status, 'Remove failed'), false);
+            } catch {
+                adminMsg('Remove failed', false);
+            }
         }
         async function rgAwardCredit(memberId, name, amountValue, opts = {}) {
             const requestId = opts.requestId || '';
@@ -1246,6 +1338,7 @@ export function startAdminController() {
                     adminMsg('Awarded ' + dollarsFromCents(amount) + ' to ' + (name || memberId) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
                     rgLoadRoster({ quiet: true });
                     rgLoadCredits();
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-balances-refresh'));
                     emit(true);
                 } else {
                     adminMsg(await rgStoreCreditError(r, 'Store credit award failed'), false);
@@ -1265,16 +1358,25 @@ export function startAdminController() {
             return fallback + ' (' + r.status + ')';
         }
         async function rgPatch(rid, patch) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
-            if (!r.ok) adminMsg('Update failed', false);
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/registrations/' + rid, { method: 'PATCH', body: patch });
+                if (!r.ok) adminMsg('Update failed', false);
+            } catch {
+                adminMsg('Update failed', false);
+            }
             rgLoadRoster({ quiet: true });
         }
         // Assignment (shotgun cards by starting hole), random.
         async function rgAssign(kind, body) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
-            adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
-            if (r.ok) rgLoadRoster({ quiet: true });
-            return r.ok;
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/' + kind, { method: 'POST', body });
+                adminMsg(r.ok ? 'Assigned' : 'Assign failed (' + r.status + ')', r.ok);
+                if (r.ok) rgLoadRoster({ quiet: true });
+                return r.ok;
+            } catch {
+                adminMsg('Assign failed', false);
+                return false;
+            }
         }
         async function rgAssignFromReact(detail) {
             const requestId = detail.requestId;
@@ -1290,16 +1392,18 @@ export function startAdminController() {
         }
         // CTPs
         async function rgLoadCtps() {
+            const eventId = rgEventId;
             setAdminRegistrationCtpsState({ status: 'loading', ctps: [] });
             let ctps = [];
             try {
-                const r = await api('/events/' + rgEventId + '/ctps');
+                const r = await api('/events/' + eventId + '/ctps');
                 if (!r.ok) throw new Error('ctps_failed');
                 ctps = (await r.json()).ctps || [];
             } catch (e) {
-                setAdminRegistrationCtpsState({ status: 'error', ctps: [] });
+                if (eventId === rgEventId) setAdminRegistrationCtpsState({ status: 'error', ctps: [] });
                 return;
             }
+            if (eventId !== rgEventId) return;
             setAdminRegistrationCtpsState({ status: 'ready', ctps });
         }
         function setAdminRegistrationCtpsState(state) {
@@ -1324,6 +1428,7 @@ export function startAdminController() {
                     adminMsg('Awarded CTP credit ' + dollarsFromCents(amount) + '. Balance: ' + dollarsFromCents(d.balance_cents || 0), true);
                     rgLoadCtps();
                     rgLoadCredits();
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-wallet-balances-refresh'));
                     emit(true);
                 } else {
                     adminMsg(await rgStoreCreditError(r, 'CTP store credit award failed'), false);
@@ -1348,22 +1453,29 @@ export function startAdminController() {
                 window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctp-add-result', { detail: { ok: false, requestId } }));
                 return;
             }
-            const r = await adminApi('/admin/events/' + rgEventId + '/ctps', { method: 'POST', body });
-            if (r.ok) { adminMsg('CTP added', true); rgLoadCtps(); }
-            else adminMsg('Add CTP failed', false);
-            window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctp-add-result', { detail: { ok: r.ok, requestId } }));
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/ctps', { method: 'POST', body });
+                if (r.ok) { adminMsg('CTP added', true); rgLoadCtps(); }
+                else adminMsg('Add CTP failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctp-add-result', { detail: { ok: r.ok, requestId } }));
+            } catch {
+                adminMsg('Add CTP failed', false);
+                window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ctp-add-result', { detail: { ok: false, requestId } }));
+            }
         }
         async function rgLoadCredits() {
+            const eventId = rgEventId;
             setAdminRegistrationCreditsState({ status: 'loading', payouts: [] });
             let payouts = [];
             try {
-                const r = await adminApi('/admin/events/' + rgEventId + '/store-credit');
+                const r = await adminApi('/admin/events/' + eventId + '/store-credit');
                 if (!r.ok) throw new Error('credits_failed');
                 payouts = (await r.json()).payouts || [];
             } catch (e) {
-                setAdminRegistrationCreditsState({ status: 'error', payouts: [] });
+                if (eventId === rgEventId) setAdminRegistrationCreditsState({ status: 'error', payouts: [] });
                 return;
             }
+            if (eventId !== rgEventId) return;
             setAdminRegistrationCreditsState({ status: 'ready', payouts });
         }
         function setAdminRegistrationCreditsState(state) {
@@ -1371,26 +1483,33 @@ export function startAdminController() {
         }
         // Ace pot
         async function rgLoadAcePot() {
+            const eventId = rgEventId;
             setAdminRegistrationAcePotState({ status: 'loading', acePot: null });
             let pot = null;
             try {
-                const r = await api('/events/' + rgEventId + '/ace-pot');
+                const r = await api('/events/' + eventId + '/ace-pot');
                 if (!r.ok) throw new Error('ace_pot_failed');
                 pot = (await r.json()).ace_pot;
             } catch (e) {
-                setAdminRegistrationAcePotState({ status: 'error', acePot: null });
+                if (eventId === rgEventId) setAdminRegistrationAcePotState({ status: 'error', acePot: null });
                 return;
             }
+            if (eventId !== rgEventId) return;
             setAdminRegistrationAcePotState({ status: 'ready', acePot: pot });
         }
         function setAdminRegistrationAcePotState(state) {
             window.dispatchEvent(new CustomEvent('gvdg:admin-registration-ace-pot', { detail: state }));
         }
         async function rgAcePut(body) {
-            const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
-            adminMsg(r.ok ? 'Ace pot updated' : 'Ace pot failed', r.ok);
-            if (r.ok) rgLoadAcePot();
-            return r.ok;
+            try {
+                const r = await adminApi('/admin/events/' + rgEventId + '/ace-pot', { method: 'PUT', body });
+                adminMsg(r.ok ? 'Ace pot updated' : 'Ace pot failed', r.ok);
+                if (r.ok) rgLoadAcePot();
+                return r.ok;
+            } catch {
+                adminMsg('Ace pot failed', false);
+                return false;
+            }
         }
         async function rgAcePutFromReact(detail) {
             const requestId = detail.requestId;
@@ -1432,22 +1551,30 @@ export function startAdminController() {
                 const ev = detail.event;
                 const status = detail.status;
                 if (!ev || ev.id == null || !status) return;
-                const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status } });
-                if (r.ok) {
-                    adminMsg('Updated “' + ev.name + '” → ' + status, true);
+                try {
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'PATCH', body: { status } });
+                    if (r.ok) {
+                        adminMsg('Updated “' + ev.name + '” → ' + status, true);
+                        adminLoadEvents();
+                        return;
+                    }
+                    const e = await r.json().catch(() => ({}));
+                    adminMsg((e && e.message) || 'Update failed', false);
                     adminLoadEvents();
-                    return;
+                } catch (err) {
+                    adminMsg('Update failed', false);
                 }
-                const e = await r.json().catch(() => ({}));
-                adminMsg((e && e.message) || 'Update failed', false);
-                adminLoadEvents();
             });
             window.addEventListener('gvdg:admin-event-delete-request', async (event) => {
                 const ev = event.detail && event.detail.event;
                 if (!ev || ev.id == null) return;
-                const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
-                adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
-                if (r.ok) adminLoadEvents();
+                try {
+                    const r = await adminApi('/admin/events/' + ev.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Deleted “' + ev.name + '”' : 'Delete failed', r.ok);
+                    if (r.ok) adminLoadEvents();
+                } catch (err) {
+                    adminMsg('Delete failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-event-form-layouts-load-request', async (event) => {
                 await adminLoadEventFormLayouts(event.detail || {});
@@ -1464,25 +1591,33 @@ export function startAdminController() {
                 const candidate = detail.candidate || {};
                 const requestId = detail.requestId;
                 if (!requestId || !candidate.name) return;
-                let r;
-                if (candidate.type === 'league') {
-                    r = await adminApi('/admin/leagues', { method: 'POST', body: { name: candidate.name, season: candidate.season || null, format: candidate.format || null, description: candidate.description || candidate.external_url || null, source: 'udisc' } });
-                } else {
-                    let leagueId = null;
-                    if (candidate.league_name) {
-                        try {
-                            const listed = await api('/leagues');
-                            const leagues = listed.ok ? ((await listed.json()).leagues || []) : [];
-                            const match = leagues.find((league) => league && league.name === candidate.league_name);
-                            if (match) leagueId = match.id;
-                        } catch (err) { /* the event can still be created without the league link */ }
+                let ok = false;
+                try {
+                    let r;
+                    if (candidate.type === 'league') {
+                        r = await adminApi('/admin/leagues', { method: 'POST', body: { name: candidate.name, season: candidate.season || null, format: candidate.format || null, description: candidate.description || candidate.external_url || null, source: 'udisc' } });
+                    } else {
+                        let leagueId = null;
+                        if (candidate.league_name) {
+                            try {
+                                const listed = await api('/leagues');
+                                const leagues = listed.ok ? ((await listed.json()).leagues || []) : [];
+                                const match = leagues.find((league) => league && league.name === candidate.league_name);
+                                if (match) leagueId = match.id;
+                            } catch (err) { /* the event can still be created without the league link */ }
+                        }
+                        r = await adminApi('/admin/events', { method: 'POST', body: { type: candidate.type || 'tournament', name: candidate.name, date: candidate.date || null, format: candidate.format || null, source: candidate.source || 'manual', external_url: candidate.external_url || null, notes: candidate.notes || null, league_id: leagueId } });
                     }
-                    r = await adminApi('/admin/events', { method: 'POST', body: { type: candidate.type || 'tournament', name: candidate.name, date: candidate.date || null, format: candidate.format || null, source: candidate.source || 'manual', external_url: candidate.external_url || null, notes: candidate.notes || null, league_id: leagueId } });
-                }
-                window.dispatchEvent(new CustomEvent('gvdg:admin-import-candidate-create-result', { detail: { ok: r.ok, requestId } }));
-                if (r.ok) {
-                    if (candidate.type === 'league') adminLoadLeagues();
-                    else adminLoadEvents();
+                    ok = r.ok;
+                    if (!r.ok) adminMsg('Import failed', false);
+                    if (r.ok) {
+                        if (candidate.type === 'league') adminLoadLeagues();
+                        else adminLoadEvents();
+                    }
+                } catch (err) {
+                    adminMsg('Import failed', false);
+                } finally {
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-import-candidate-create-result', { detail: { ok, requestId } }));
                 }
             });
             window.addEventListener('gvdg:admin-league-create-request', async (event) => {
@@ -1506,13 +1641,17 @@ export function startAdminController() {
             window.addEventListener('gvdg:admin-league-delete-request', async (event) => {
                 const league = event.detail && event.detail.league;
                 if (!league || league.id == null) return;
-                const r = await adminApi('/admin/leagues/' + league.id, { method: 'DELETE' });
-                const body = r.ok ? {} : await r.json().catch(() => ({}));
-                const message = r.ok ? 'Deleted league' : body.error === 'league_live' ? 'Finish the live round before deleting this league' : body.error === 'protected' ? 'The Ryder Cup league stays. Delete the imported one instead.' : 'Delete failed';
-                adminMsg(message, r.ok);
-                if (r.ok) {
-                    adminLoadLeagues();
-                    adminLoadEvents();
+                try {
+                    const r = await adminApi('/admin/leagues/' + league.id, { method: 'DELETE' });
+                    const body = r.ok ? {} : await r.json().catch(() => ({}));
+                    const message = r.ok ? 'Deleted league' : body.error === 'league_live' ? 'Finish the live round before deleting this league' : body.error === 'protected' ? 'The Ryder Cup league stays. Delete the imported one instead.' : 'Delete failed';
+                    adminMsg(message, r.ok);
+                    if (r.ok) {
+                        adminLoadLeagues();
+                        adminLoadEvents();
+                    }
+                } catch (err) {
+                    adminMsg('Delete failed', false);
                 }
             });
             window.addEventListener('gvdg:admin-fundraiser-status-request', async (event) => {
@@ -1520,49 +1659,69 @@ export function startAdminController() {
                 const fundraiser = detail.fundraiser;
                 const status = detail.status;
                 if (!fundraiser || fundraiser.id == null || !status) return;
-                const r = await adminApi('/admin/fundraisers/' + fundraiser.id, { method: 'PATCH', body: { status } });
-                adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
-                if (r.ok) adminLoadFundraisers();
+                try {
+                    const r = await adminApi('/admin/fundraisers/' + fundraiser.id, { method: 'PATCH', body: { status } });
+                    adminMsg(r.ok ? 'Updated' : 'Update failed', r.ok);
+                    if (r.ok) adminLoadFundraisers();
+                } catch (err) {
+                    adminMsg('Update failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-fundraiser-delete-request', async (event) => {
                 const fundraiser = event.detail && event.detail.fundraiser;
                 if (!fundraiser || fundraiser.id == null) return;
-                const r = await adminApi('/admin/fundraisers/' + fundraiser.id, { method: 'DELETE' });
-                adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
-                if (r.ok) adminLoadFundraisers();
+                try {
+                    const r = await adminApi('/admin/fundraisers/' + fundraiser.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
+                    if (r.ok) adminLoadFundraisers();
+                } catch (err) {
+                    adminMsg('Delete failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-meeting-delete-request', async (event) => {
                 const meeting = event.detail && event.detail.meeting;
                 if (!meeting || meeting.id == null) return;
-                const r = await adminApi('/admin/meetings/' + meeting.id, { method: 'DELETE' });
-                adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
-                if (r.ok) adminLoadMeetings();
+                try {
+                    const r = await adminApi('/admin/meetings/' + meeting.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Deleted' : 'Delete failed', r.ok);
+                    if (r.ok) adminLoadMeetings();
+                } catch (err) {
+                    adminMsg('Delete failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-member-reset-pin-request', async (event) => {
                 const detail = event.detail || {};
                 const identifier = detail.identifier;
                 if (!identifier) return;
-                const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier } });
-                if (r.ok) {
-                    const j = await r.json();
-                    showTempPin(j.member, j.tempPin);
-                    adminMsg('New temp PIN issued', true);
-                    adminMembersQuietRefresh = true;
-                    adminLoadMembers();
-                } else {
-                    adminMsg('Reissue failed (' + r.status + ')', false);
+                try {
+                    const r = await adminApi('/admin/members/reset-pin', { method: 'POST', body: { identifier } });
+                    if (r.ok) {
+                        const j = await r.json();
+                        showTempPin(j.member, j.tempPin);
+                        adminMsg('New temp PIN issued', true);
+                        adminMembersQuietRefresh = true;
+                        adminLoadMembers();
+                    } else {
+                        adminMsg('Reissue failed (' + r.status + ')', false);
+                    }
+                } catch (err) {
+                    adminMsg('Reissue failed', false);
                 }
             });
             // Lift every lockout on a member (wrong-PIN, the email step's limits, Forgot PIN requests): they can try now.
             window.addEventListener('gvdg:admin-member-clear-locks-request', async (event) => {
                 const member = (event.detail || {}).member;
                 if (!member || !member.memberId) return;
-                const r = await adminApi('/admin/members/clear-locks', { method: 'POST', body: { memberId: member.memberId } });
-                if (r.ok) {
-                    const j = await r.json().catch(() => ({}));
-                    adminMsg(j.cleared ? 'Lockouts cleared for ' + member.name + ' - they can try again now' : member.name + ' has no lockouts', true);
-                } else {
-                    adminMsg('Clear lockouts failed (' + r.status + ')', false);
+                try {
+                    const r = await adminApi('/admin/members/clear-locks', { method: 'POST', body: { memberId: member.memberId } });
+                    if (r.ok) {
+                        const j = await r.json().catch(() => ({}));
+                        adminMsg(j.cleared ? 'Lockouts cleared for ' + member.name + ' - they can try again now' : member.name + ' has no lockouts', true);
+                    } else {
+                        adminMsg('Clear lockouts failed (' + r.status + ')', false);
+                    }
+                } catch (err) {
+                    adminMsg('Clear lockouts failed', false);
                 }
             });
             window.addEventListener('gvdg:admin-member-role-request', async (event) => {
@@ -1570,13 +1729,17 @@ export function startAdminController() {
                 const member = detail.member;
                 const promoting = detail.isAdmin === true;
                 if (!member || !member.memberId) return;
-                const r = await adminApi('/admin/members/set-role', { method: 'POST', body: { memberId: member.memberId, isAdmin: promoting } });
-                if (r.ok) {
-                    adminMsg((promoting ? 'Promoted ' : 'Demoted ') + member.name, true);
-                    adminLoadMembers();
-                } else {
-                    let err = {}; try { err = await r.json(); } catch (e) {}
-                    adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
+                try {
+                    const r = await adminApi('/admin/members/set-role', { method: 'POST', body: { memberId: member.memberId, isAdmin: promoting } });
+                    if (r.ok) {
+                        adminMsg((promoting ? 'Promoted ' : 'Demoted ') + member.name, true);
+                        adminLoadMembers();
+                    } else {
+                        let err = {}; try { err = await r.json(); } catch (e) {}
+                        adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Role change failed (' + r.status + ')'), false);
+                    }
+                } catch (err) {
+                    adminMsg('Role change failed', false);
                 }
             });
             // Account tiers (Admin / Member / Guest), linking a held account from the sheets, lapsed members to Guest.
@@ -1584,68 +1747,101 @@ export function startAdminController() {
                 const detail = event.detail || {};
                 const member = detail.member;
                 if (!member || !member.memberId || !detail.tier) return;
-                const r = await adminApi('/admin/members/set-tier', { method: 'POST', body: { memberId: member.memberId, tier: detail.tier } });
-                if (r.ok) {
-                    adminMsg(member.name + ' is now ' + (detail.tier === 'admin' ? 'an admin' : detail.tier === 'guest' ? 'a guest' : 'a member'), true);
-                } else {
-                    let err = {}; try { err = await r.json(); } catch (e) {}
-                    adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Tier change failed (' + r.status + ')'), false);
+                try {
+                    const r = await adminApi('/admin/members/set-tier', { method: 'POST', body: { memberId: member.memberId, tier: detail.tier } });
+                    if (r.ok) {
+                        adminMsg(member.name + ' is now ' + (detail.tier === 'admin' ? 'an admin' : detail.tier === 'guest' ? 'a guest' : 'a member'), true);
+                    } else {
+                        let err = {}; try { err = await r.json(); } catch (e) {}
+                        adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : ('Tier change failed (' + r.status + ')'), false);
+                    }
+                    adminLoadMembers();
+                } catch (err) {
+                    adminMsg('Tier change failed', false);
                 }
-                adminLoadMembers();
             });
             window.addEventListener('gvdg:admin-member-link-held-request', async (event) => {
                 const detail = event.detail || {};
                 if (!detail.heldId || !detail.memberId) return;
-                const r = await adminApi('/admin/members/link-held', { method: 'POST', body: { heldId: detail.heldId, memberId: detail.memberId } });
-                const j = r.ok ? await r.json().catch(() => ({})) : {};
-                adminMsg(r.ok ? (j.carriedOver || 'Linked') : ('Link failed (' + r.status + ')'), r.ok);
-                adminLoadMembers();
+                try {
+                    const r = await adminApi('/admin/members/link-held', { method: 'POST', body: { heldId: detail.heldId, memberId: detail.memberId } });
+                    const j = r.ok ? await r.json().catch(() => ({})) : {};
+                    adminMsg(r.ok ? (j.carriedOver || 'Linked') : ('Link failed (' + r.status + ')'), r.ok);
+                    adminLoadMembers();
+                } catch (err) {
+                    adminMsg('Link failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-members-lapsed-to-guest-request', async () => {
-                const r = await adminApi('/admin/members/lapsed-to-guest', { method: 'POST', body: {} });
-                const j = r.ok ? await r.json().catch(() => ({})) : {};
-                adminMsg(r.ok ? ('Moved ' + (j.moved || 0) + ' lapsed ' + (j.moved === 1 ? 'member' : 'members') + ' to Guest') : ('Move failed (' + r.status + ')'), r.ok);
-                adminLoadMembers();
+                try {
+                    const r = await adminApi('/admin/members/lapsed-to-guest', { method: 'POST', body: {} });
+                    const j = r.ok ? await r.json().catch(() => ({})) : {};
+                    adminMsg(r.ok ? ('Moved ' + (j.moved || 0) + ' lapsed ' + (j.moved === 1 ? 'member' : 'members') + ' to Guest') : ('Move failed (' + r.status + ')'), r.ok);
+                    adminLoadMembers();
+                } catch (err) {
+                    adminMsg('Move failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-member-renew-request', async (event) => {
                 const member = event.detail && event.detail.member;
                 if (!member || !member.memberId) return;
-                const r = await adminApi('/admin/members/renew', { method: 'POST', body: { memberId: member.memberId } });
-                if (r.ok) {
-                    const j = await r.json();
-                    adminMsg(member.name + ' renewed through ' + (j.member && j.member.memberThroughYear), true);
-                    adminLoadMembers();
-                } else {
-                    let err = {}; try { err = await r.json(); } catch (e) {}
-                    adminMsg(err.error === 'already_renewed' ? 'Already renewed for next year' : ('Renew failed (' + r.status + ')'), false);
+                try {
+                    const r = await adminApi('/admin/members/renew', { method: 'POST', body: { memberId: member.memberId } });
+                    if (r.ok) {
+                        const j = await r.json();
+                        adminMsg(member.name + ' renewed through ' + (j.member && j.member.memberThroughYear), true);
+                        adminLoadMembers();
+                    } else {
+                        let err = {}; try { err = await r.json(); } catch (e) {}
+                        adminMsg(err.error === 'already_renewed' ? 'Already renewed for next year' : ('Renew failed (' + r.status + ')'), false);
+                    }
+                } catch (err) {
+                    adminMsg('Renew failed', false);
                 }
             });
             window.addEventListener('gvdg:admin-member-remove-request', async (event) => {
                 const member = event.detail && event.detail.member;
                 if (!member || !member.memberId) return;
-                const r = await adminApi('/admin/members/remove', { method: 'POST', body: { memberId: member.memberId } });
-                if (r.ok) {
-                    adminMsg('Removed ' + member.name, true);
-                    adminLoadMembers();
-                } else {
-                    let err = {}; try { err = await r.json(); } catch (e) {}
-                    adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : err.error === 'self' ? "You can't remove your own login" : ('Remove failed (' + r.status + ')'), false);
+                try {
+                    const r = await adminApi('/admin/members/remove', { method: 'POST', body: { memberId: member.memberId } });
+                    if (r.ok) {
+                        adminMsg('Removed ' + member.name, true);
+                        adminLoadMembers();
+                    } else {
+                        let err = {}; try { err = await r.json(); } catch (e) {}
+                        adminMsg(err.error === 'last_admin' ? "Can't remove the last admin" : err.error === 'self' ? "You can't remove your own login" : ('Remove failed (' + r.status + ')'), false);
+                    }
+                } catch (err) {
+                    adminMsg('Remove failed', false);
                 }
             });
             window.addEventListener('gvdg:admin-product-save-request', async (event) => {
                 const detail = event.detail || {};
                 const product = detail.product;
                 if (!product || product.id == null) return;
-                const r = await adminApi('/admin/shop/products/' + product.id, { method: 'PATCH', body: { price_cents: dollarsToCents(detail.priceValue), stock_qty: parseInt(detail.stockValue, 10) || 0, active: detail.active === true } });
-                adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
-                if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
+                let ok = false;
+                try {
+                    const parsedStock = parseInt(detail.stockValue, 10);
+                    const r = await adminApi('/admin/shop/products/' + product.id, { method: 'PATCH', body: { price_cents: dollarsToCents(detail.priceValue), stock_qty: Number.isFinite(parsedStock) ? parsedStock : 0, active: detail.active === true } });
+                    ok = r.ok;
+                    adminMsg(r.ok ? 'Product updated' : 'Product update failed', r.ok);
+                    if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
+                } catch (err) {
+                    adminMsg('Product update failed', false);
+                } finally {
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-product-save-result', { detail: { productId: product.id, ok } }));
+                }
             });
             window.addEventListener('gvdg:admin-product-delete-request', async (event) => {
                 const product = event.detail && event.detail.product;
                 if (!product || product.id == null) return;
-                const r = await adminApi('/admin/shop/products/' + product.id, { method: 'DELETE' });
-                adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
-                if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
+                try {
+                    const r = await adminApi('/admin/shop/products/' + product.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'Product permanently deleted' : 'Delete failed', r.ok);
+                    if (r.ok) { adminLoadProducts(); adminLoadShelf(); }
+                } catch (err) {
+                    adminMsg('Delete failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-product-photo-ready', (event) => {
                 const sizeKb = event.detail && Number(event.detail.sizeKb);
@@ -1700,25 +1896,45 @@ export function startAdminController() {
             window.addEventListener('gvdg:admin-membership-approve-request', async (event) => {
                 const id = event.detail && event.detail.id;
                 if (!id) return;
-                const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
-                const approved = r.ok ? await r.json().catch(() => ({})) : {};
-                // Already on the club's sheets: say what came over from their held account.
-                adminMsg(r.ok ? ('Approved ' + (event.detail.name || 'applicant') + (approved.carriedOver ? '. ' + approved.carriedOver : '')) : 'Approve failed', r.ok);
-                if (r.ok) adminLoadMembers();
+                let ok = false;
+                try {
+                    const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/approve', { method: 'POST' });
+                    ok = r.ok;
+                    const approved = r.ok ? await r.json().catch(() => ({})) : {};
+                    // Already on the club's sheets: say what came over from their held account.
+                    adminMsg(r.ok ? ('Approved ' + (event.detail.name || 'applicant') + (approved.carriedOver ? '. ' + approved.carriedOver : '')) : 'Approve failed', r.ok);
+                    if (r.ok) adminLoadMembers();
+                } catch (err) {
+                    adminMsg('Approve failed', false);
+                } finally {
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-membership-action-result', { detail: { id, ok } }));
+                }
             });
             window.addEventListener('gvdg:admin-membership-mark-paid-request', async (event) => {
                 const id = event.detail && event.detail.id;
                 if (!id) return;
-                const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/mark-paid', { method: 'POST', body: { note: event.detail.note || '' } });
-                adminMsg(r.ok ? ('Marked ' + (event.detail.name || 'applicant') + ' paid') : 'Mark paid failed', r.ok);
-                if (r.ok) adminLoadMembershipApplications(true);
+                try {
+                    const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/mark-paid', { method: 'POST', body: { note: event.detail.note || '' } });
+                    adminMsg(r.ok ? ('Marked ' + (event.detail.name || 'applicant') + ' paid') : 'Mark paid failed', r.ok);
+                    if (r.ok) adminLoadMembershipApplications(true);
+                } catch (err) {
+                    adminMsg('Mark paid failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-membership-reject-request', async (event) => {
                 const id = event.detail && event.detail.id;
                 if (!id) return;
-                const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/reject', { method: 'POST' });
-                adminMsg(r.ok ? ('Rejected ' + (event.detail.name || 'applicant')) : 'Reject failed', r.ok);
-                if (r.ok) adminLoadMembershipApplications();
+                let ok = false;
+                try {
+                    const r = await adminApi('/admin/members/applications/' + encodeURIComponent(id) + '/reject', { method: 'POST' });
+                    ok = r.ok;
+                    adminMsg(r.ok ? ('Rejected ' + (event.detail.name || 'applicant')) : 'Reject failed', r.ok);
+                    if (r.ok) adminLoadMembershipApplications();
+                } catch (err) {
+                    adminMsg('Reject failed', false);
+                } finally {
+                    window.dispatchEvent(new CustomEvent('gvdg:admin-membership-action-result', { detail: { id, ok } }));
+                }
             });
             window.addEventListener('gvdg:admin-registration-event-select-request', async (event) => {
                 const tab = currentAdminRoute().tab;
@@ -1733,11 +1949,15 @@ export function startAdminController() {
                 const eventId = Number(detail.eventId);
                 const registrationId = detail.registrationId;
                 if (!eventId || registrationId == null) return;
-                const patch = detail.settle ? { checked_in: true, paid_entry: true } : { checked_in: false };
-                const r = await adminApi('/admin/events/' + eventId + '/registrations/' + registrationId, { method: 'PATCH', body: patch });
-                if (!r.ok) adminMsg('Check-in failed', false);
-                if (r.ok && Number(rgEventId) === eventId) rgLoadRoster({ quiet: true });
-                await adminLoadDesk(eventId, true);
+                try {
+                    const patch = detail.settle ? { checked_in: true, paid_entry: true } : { checked_in: false };
+                    const r = await adminApi('/admin/events/' + eventId + '/registrations/' + registrationId, { method: 'PATCH', body: patch });
+                    if (!r.ok) adminMsg('Check-in failed', false);
+                    if (r.ok && Number(rgEventId) === eventId) rgLoadRoster({ quiet: true });
+                    await adminLoadDesk(eventId, true);
+                } catch (err) {
+                    adminMsg('Check-in failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-registration-config-save-request', async (event) => {
                 await rgSaveConfigFromReact(event.detail || {});
@@ -1787,9 +2007,13 @@ export function startAdminController() {
                 if (!ctp || ctp.id == null || !rgEventId) return;
                 const winnerName = String(detail.winnerName || '').trim();
                 const winnerMemberId = String(detail.winnerMemberId || '').trim();
-                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id, { method: 'PATCH', body: { winner_name: winnerName || null, winner_member_id: winnerMemberId || null } });
-                adminMsg(r.ok ? 'CTP winner set' : 'CTP winner update failed (' + r.status + ')', r.ok);
-                if (r.ok) rgLoadCtps();
+                try {
+                    const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id, { method: 'PATCH', body: { winner_name: winnerName || null, winner_member_id: winnerMemberId || null } });
+                    adminMsg(r.ok ? 'CTP winner set' : 'CTP winner update failed (' + r.status + ')', r.ok);
+                    if (r.ok) rgLoadCtps();
+                } catch (err) {
+                    adminMsg('CTP winner update failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-registration-ctp-credit-request', async (event) => {
                 const detail = event.detail || {};
@@ -1803,9 +2027,13 @@ export function startAdminController() {
             window.addEventListener('gvdg:admin-registration-ctp-delete-request', async (event) => {
                 const ctp = event.detail && event.detail.ctp;
                 if (!ctp || ctp.id == null || !rgEventId) return;
-                const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id, { method: 'DELETE' });
-                adminMsg(r.ok ? 'CTP deleted' : 'Delete failed (' + r.status + ')', r.ok);
-                if (r.ok) rgLoadCtps();
+                try {
+                    const r = await adminApi('/admin/events/' + rgEventId + '/ctps/' + ctp.id, { method: 'DELETE' });
+                    adminMsg(r.ok ? 'CTP deleted' : 'Delete failed (' + r.status + ')', r.ok);
+                    if (r.ok) rgLoadCtps();
+                } catch (err) {
+                    adminMsg('Delete failed', false);
+                }
             });
             window.addEventListener('gvdg:admin-course-create-request', async (event) => {
                 await adminAddCourseFromReact(event.detail || {});

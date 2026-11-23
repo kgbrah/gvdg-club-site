@@ -975,8 +975,8 @@ body.admin-page.player-theme-active {
 .admin-page .admin-member-actions > .admin-member-wide { grid-column: 1 / -1; }
 .admin-page .admin-member-actions > :is(.admin-btn, .admin-member-tier, .admin-member-more) { width: 100%; min-width: 0; margin: 0; }
 .admin-page .admin-member-actions > .admin-btn,
-.admin-page .admin-member-more > summary { min-height: 2.5rem; display: flex; align-items: center; justify-content: center; text-align: center; }
-.admin-page .admin-member-actions .admin-member-tier select { width: 100%; height: 100%; min-height: 2.5rem; }
+.admin-page .admin-member-more > summary { min-height: 2.75rem; display: flex; align-items: center; justify-content: center; text-align: center; }
+.admin-page .admin-member-actions .admin-member-tier select { width: 100%; height: 100%; min-height: 2.75rem; }
 .admin-page .admin-member-more { position: relative; }
 .admin-page .admin-member-more > summary { list-style: none; cursor: pointer; gap: .35em; }
 .admin-page .admin-member-more > summary::-webkit-details-marker { display: none; }
@@ -1018,9 +1018,9 @@ body.admin-page.player-theme-active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  min-width: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
   border-radius: .45rem;
   color: var(--admin-chrome-ink);
 }
@@ -1041,8 +1041,8 @@ body.admin-page.player-theme-active {
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 360px) {
-  .admin-page .admin-header-actions { gap: .1rem .25rem; }
-  .admin-page .admin-header-icon { width: 2.25rem; min-width: 2.25rem; }
+  .admin-page .admin-header-actions { gap: .1rem; }
+  .admin-page .admin-header-icon { width: 44px; min-width: 44px; height: 44px; }
 }
 .admin-page .admin-header-brand > a { flex: 0 0 auto; }
 @media (max-width: 360px) {
@@ -1081,14 +1081,14 @@ body.admin-page.player-theme-active {
 /* Light/dark in the admin top bar: drawn like the envelope and bell beside it (as the member app's top bar does). */
 .admin-page .admin-header-actions .theme-toggle {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 2.5rem; height: 2.5rem; min-width: 2.5rem; padding: 0;
+  width: 2.75rem; height: 2.75rem; min-width: 2.75rem; padding: 0;
   border: 0; border-radius: .45rem; background: transparent; color: var(--admin-chrome-ink);
 }
 .admin-page .admin-header-actions .theme-toggle:hover,
 .admin-page .admin-header-actions .theme-toggle:active { background: var(--admin-chrome-hover); transform: none; }
 .admin-page .admin-header-actions .theme-toggle svg { width: 20px; height: 20px; }
 @media (max-width: 360px) {
-  .admin-page .admin-header-actions .theme-toggle { width: 2.25rem; min-width: 2.25rem; }
+  .admin-page .admin-header-actions .theme-toggle { width: 44px; min-width: 44px; height: 44px; }
 }
 /* Recent wallet ledger: each entry opens that member's wallet history beneath it. */
 .admin-page button.wallet-row {

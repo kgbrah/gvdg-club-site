@@ -107,10 +107,27 @@ function ProductRow({ product }) {
     });
   }
 
+  const [sellBusy, setSellBusy] = React.useState(false);
+  const sellPrevRef = React.useRef(null);
+  React.useEffect(() => {
+    function onSaveResult(event) {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : {};
+      if (String(detail.productId ?? "") !== String(product.id ?? "")) return;
+      setSellBusy(false);
+      if (detail.ok !== true && sellPrevRef.current != null) setStockValue(sellPrevRef.current);
+      sellPrevRef.current = null;
+    }
+    window.addEventListener("gvdg:admin-product-save-result", onSaveResult);
+    return () => window.removeEventListener("gvdg:admin-product-save-result", onSaveResult);
+  }, [product.id]);
+
   function sellOne() {
+    if (sellBusy) return;
     const current = Number(stockValue);
     if (!Number.isFinite(current) || current < 1) return;
     const next = current - 1;
+    sellPrevRef.current = String(stockValue);
+    setSellBusy(true);
     setStockValue(String(next));
     dispatchRequest("gvdg:admin-product-save-request", {
       active: product.active,
@@ -141,6 +158,7 @@ function ProductRow({ product }) {
 
   return h("div", { className: `shop-tile-card${editing ? " editing" : ""}${active ? "" : " inactive"}`, "data-admin-product-id": product.id }, [
     h("button", {
+      "aria-expanded": open ? "true" : "false",
       className: open ? "shop-tile on" : "shop-tile",
       key: "tile",
       onClick: () => {
@@ -158,7 +176,7 @@ function ProductRow({ product }) {
       ].join("")),
     ]),
     open && !editing ? h("div", { className: "shop-tile-actions", key: "actions" }, [
-      h("button", { className: "admin-btn", disabled: Number(stockValue) < 1, key: "sold", onClick: sellOne, type: "button" }, Number(stockValue) < 1 ? "Sold out" : "Sold"),
+      h("button", { className: "admin-btn", disabled: sellBusy || Number(stockValue) < 1, key: "sold", onClick: sellOne, type: "button" }, sellBusy ? "Saving…" : Number(stockValue) < 1 ? "Sold out" : "Sold"),
       h("button", { className: "admin-btn secondary", key: "another", onClick: requestAnother, type: "button" }, "Add another"),
       h("button", { className: "admin-btn secondary", key: "edit", onClick: () => setEditing(true), type: "button" }, "Edit"),
     ]) : null,

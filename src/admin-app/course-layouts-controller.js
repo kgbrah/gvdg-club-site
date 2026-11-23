@@ -57,20 +57,30 @@ export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
       finishCourseLayoutsAction(detail.requestId, false);
       return;
     }
-    const r = await adminApi('/admin/courses/' + encodeURIComponent(courseId) + '/positions', { method: 'POST', body });
-    adminMsg(r.ok ? 'Added ' + body.kind : 'Add position failed (' + r.status + ')', r.ok);
-    finishCourseLayoutsAction(detail.requestId, r.ok);
-    if (r.ok) await loadCourseLayouts({ courseId });
+    try {
+      const r = await adminApi('/admin/courses/' + encodeURIComponent(courseId) + '/positions', { method: 'POST', body });
+      adminMsg(r.ok ? 'Added ' + body.kind : 'Add position failed (' + r.status + ')', r.ok);
+      finishCourseLayoutsAction(detail.requestId, r.ok);
+      if (r.ok) await loadCourseLayouts({ courseId });
+    } catch {
+      adminMsg('Add position failed', false);
+      finishCourseLayoutsAction(detail.requestId, false);
+    }
   }
 
   async function adminDeleteLayoutPositionFromReact(detail) {
     const courseId = detail.courseId;
     const position = detail.position || {};
     if (!courseId || position.id == null) return;
-    const r = await adminApi('/admin/courses/' + encodeURIComponent(courseId) + '/positions/' + encodeURIComponent(position.id), { method: 'DELETE' });
-    adminMsg(r.ok ? 'Removed position' : 'Remove failed (' + r.status + ')', r.ok);
-    finishCourseLayoutsAction(detail.requestId, r.ok);
-    if (r.ok) await loadCourseLayouts({ courseId });
+    try {
+      const r = await adminApi('/admin/courses/' + encodeURIComponent(courseId) + '/positions/' + encodeURIComponent(position.id), { method: 'DELETE' });
+      adminMsg(r.ok ? 'Removed position' : 'Remove failed (' + r.status + ')', r.ok);
+      finishCourseLayoutsAction(detail.requestId, r.ok);
+      if (r.ok) await loadCourseLayouts({ courseId });
+    } catch {
+      adminMsg('Remove failed', false);
+      finishCourseLayoutsAction(detail.requestId, false);
+    }
   }
 
   async function adminFetchUdiscLayoutsFromReact(detail) {
@@ -82,29 +92,34 @@ export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
       return;
     }
     adminMsg('Fetching from UDisc…', true);
-    const r = await adminApi('/admin/import/udisc', { method: 'POST', body: { url } });
-    if (!r.ok) {
-      adminMsg('UDisc import failed (' + r.status + ')', false);
-      finishCourseLayoutsAction(detail.requestId, false, { message: 'UDisc import failed (' + r.status + ')', layouts: [] });
-      return;
+    try {
+      const r = await adminApi('/admin/import/udisc', { method: 'POST', body: { url } });
+      if (!r.ok) {
+        adminMsg('UDisc import failed (' + r.status + ')', false);
+        finishCourseLayoutsAction(detail.requestId, false, { message: 'UDisc import failed (' + r.status + ')', layouts: [] });
+        return;
+      }
+      const data = await r.json();
+      const messages = [];
+      if (data.udisc_course_id && courseId) {
+        const pr = await adminApi('/admin/courses/' + encodeURIComponent(courseId), { method: 'PATCH', body: { udisc_course_id: String(data.udisc_course_id) } });
+        messages.push(pr.ok ? 'Saved UDisc course id ' + data.udisc_course_id + '.' : 'Found UDisc course id ' + data.udisc_course_id + ' but could not save it (' + pr.status + ').');
+      } else if (!data.udisc_course_id) {
+        messages.push('No UDisc course id found on that page; enter it on the course form if needed.');
+      }
+      const layouts = Array.isArray(data.layouts) ? data.layouts : [];
+      if (!layouts.length) {
+        messages.push('No scorable layouts found on that UDisc page' + (data.name ? ' (' + data.name + ')' : '') + '. Enter pars manually below.');
+        adminMsg('No layouts found', false);
+      } else {
+        messages.push(layouts.length + ' UDisc layout' + (layouts.length > 1 ? 's' : '') + ' found.');
+        adminMsg(layouts.length + ' layout' + (layouts.length > 1 ? 's' : '') + ' loaded', true);
+      }
+      finishCourseLayoutsAction(detail.requestId, true, { layouts, message: messages.join(' ') });
+    } catch {
+      adminMsg('UDisc import failed', false);
+      finishCourseLayoutsAction(detail.requestId, false, { message: 'UDisc import failed', layouts: [] });
     }
-    const data = await r.json();
-    const messages = [];
-    if (data.udisc_course_id && courseId) {
-      const pr = await adminApi('/admin/courses/' + encodeURIComponent(courseId), { method: 'PATCH', body: { udisc_course_id: String(data.udisc_course_id) } });
-      messages.push(pr.ok ? 'Saved UDisc course id ' + data.udisc_course_id + '.' : 'Found UDisc course id ' + data.udisc_course_id + ' but could not save it (' + pr.status + ').');
-    } else if (!data.udisc_course_id) {
-      messages.push('No UDisc course id found on that page; enter it on the course form if needed.');
-    }
-    const layouts = Array.isArray(data.layouts) ? data.layouts : [];
-    if (!layouts.length) {
-      messages.push('No scorable layouts found on that UDisc page' + (data.name ? ' (' + data.name + ')' : '') + '. Enter pars manually below.');
-      adminMsg('No layouts found', false);
-    } else {
-      messages.push(layouts.length + ' UDisc layout' + (layouts.length > 1 ? 's' : '') + ' found.');
-      adminMsg(layouts.length + ' layout' + (layouts.length > 1 ? 's' : '') + ' loaded', true);
-    }
-    finishCourseLayoutsAction(detail.requestId, true, { layouts, message: messages.join(' ') });
   }
 
   async function adminApplyUdiscLayoutFromReact(detail) {
@@ -115,17 +130,22 @@ export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
       finishCourseLayoutsAction(detail.requestId, false);
       return;
     }
-    if (layout.positions && layout.positions.length) {
-      const pr = await adminApi('/admin/courses/' + encodeURIComponent(courseId) + '/positions', { method: 'PUT', body: { positions: layout.positions } });
-      if (!pr.ok) {
-        adminMsg('Could not import tee/target positions (' + pr.status + ')', false);
-        finishCourseLayoutsAction(detail.requestId, false);
-        return;
+    try {
+      if (layout.positions && layout.positions.length) {
+        const pr = await adminApi('/admin/courses/' + encodeURIComponent(courseId) + '/positions', { method: 'PUT', body: { positions: layout.positions } });
+        if (!pr.ok) {
+          adminMsg('Could not import tee/target positions (' + pr.status + ')', false);
+          finishCourseLayoutsAction(detail.requestId, false);
+          return;
+        }
       }
+      await loadCourseLayouts({ courseId });
+      adminMsg('Applied ' + (layout.name || 'Layout') + '. Review the pars below, then save.', true);
+      finishCourseLayoutsAction(detail.requestId, true, { layout });
+    } catch {
+      adminMsg('Could not apply UDisc layout', false);
+      finishCourseLayoutsAction(detail.requestId, false);
     }
-    await loadCourseLayouts({ courseId });
-    adminMsg('Applied ' + (layout.name || 'Layout') + '. Review the pars below, then save.', true);
-    finishCourseLayoutsAction(detail.requestId, true, { layout });
   }
 
   async function adminSaveCourseLayoutFromReact(detail) {
@@ -136,22 +156,39 @@ export function installCourseLayoutsController({ api, adminApi, adminMsg }) {
     if (!courseId) { adminMsg('Pick a course first', false); finishCourseLayoutsAction(detail.requestId, false); return; }
     if (!holes.length) { adminMsg('Add at least one hole', false); finishCourseLayoutsAction(detail.requestId, false); return; }
     if (holes.some((h) => !(h.par >= 1 && h.par <= 15))) { adminMsg('Every hole needs a par 1-15', false); finishCourseLayoutsAction(detail.requestId, false); return; }
-    const r = layout.id
-      ? await adminApi('/admin/layouts/' + encodeURIComponent(layout.id), { method: 'PATCH', body: { name, holes } })
-      : await adminApi('/admin/layouts', { method: 'POST', body: { course_id: Number(courseId), name, holes } });
-    adminMsg(r.ok ? ((layout.id ? 'Updated' : 'Saved') + ' layout "' + name + '"') : 'Save layout failed (' + r.status + ')', r.ok);
-    finishCourseLayoutsAction(detail.requestId, r.ok);
-    if (r.ok) await loadCourseLayouts({ courseId });
+    try {
+      const r = layout.id
+        ? await adminApi('/admin/layouts/' + encodeURIComponent(layout.id), { method: 'PATCH', body: { name, holes } })
+        : await adminApi('/admin/layouts', { method: 'POST', body: { course_id: Number(courseId), name, holes } });
+      let msg = (layout.id ? 'Updated' : 'Saved') + ' layout "' + name + '"';
+      if (!r.ok) {
+        const payload = await r.json().catch(() => ({}));
+        msg = payload.error === 'verified_layout_locked'
+          ? 'Verified tee-sign holes on this layout cannot be removed — edit par or keep all verified holes.'
+          : 'Save layout failed (' + r.status + ')';
+      }
+      adminMsg(msg, r.ok);
+      finishCourseLayoutsAction(detail.requestId, r.ok);
+      if (r.ok) await loadCourseLayouts({ courseId });
+    } catch {
+      adminMsg('Save layout failed', false);
+      finishCourseLayoutsAction(detail.requestId, false);
+    }
   }
 
   async function adminDeleteCourseLayoutFromReact(detail) {
     const layout = detail.layout || {};
     const courseId = layout.course_id || detail.courseId;
     if (layout.id == null) return;
-    const r = await adminApi('/admin/layouts/' + encodeURIComponent(layout.id), { method: 'DELETE' });
-    adminMsg(r.ok ? 'Deleted layout' : 'Delete failed (' + r.status + ')', r.ok);
-    finishCourseLayoutsAction(detail.requestId, r.ok);
-    if (r.ok && courseId) await loadCourseLayouts({ courseId });
+    try {
+      const r = await adminApi('/admin/layouts/' + encodeURIComponent(layout.id), { method: 'DELETE' });
+      adminMsg(r.ok ? 'Deleted layout' : 'Delete failed (' + r.status + ')', r.ok);
+      finishCourseLayoutsAction(detail.requestId, r.ok);
+      if (r.ok && courseId) await loadCourseLayouts({ courseId });
+    } catch {
+      adminMsg('Delete failed', false);
+      finishCourseLayoutsAction(detail.requestId, false);
+    }
   }
 
   window.addEventListener('gvdg:admin-course-layouts-load-request', async (event) => {

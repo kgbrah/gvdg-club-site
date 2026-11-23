@@ -66,7 +66,7 @@ function formBody(form) {
     editing,
     endpointId: editing ? Number(form.id) : null,
     labelText: label || `Endpoint ${form.id || ""}`,
-    valid: Boolean(label && /^https?:\/\//.test(endpointUrl)),
+    valid: Boolean(label && /^https:\/\//.test(endpointUrl)),
   };
 }
 
@@ -123,6 +123,7 @@ export function AdminDataArchiveDestinationForm() {
 
   function submit(event) {
     event.preventDefault();
+    if (busy) return;
     setNotice("");
     const payload = formBody(form);
     const requestId = `data-archive-destination-save-${requestCounter.current += 1}`;
@@ -188,13 +189,13 @@ export function AdminDataArchiveDestinationForm() {
     h("div", { key: "auth-token" }, [
       h("label", { htmlFor: "dxAuthToken", key: "label" }, "Auth token (optional)"),
       h("input", {
-        autoComplete: "off",
+        autoComplete: "new-password",
         id: "dxAuthToken",
         key: "input",
         maxLength: 4096,
         onChange: (event) => updateField("authToken", event.target.value),
         placeholder: tokenPlaceholder(form),
-        type: "text",
+        type: "password",
         value: form.authToken,
       }),
     ]),

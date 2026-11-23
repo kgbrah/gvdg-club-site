@@ -127,25 +127,35 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
   const live = eventStatus === "live";
 
   function toggleMember(memberId) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(memberId)) next.delete(memberId);
-      else next.add(memberId);
-      return next;
-    });
+    const next = new Set(selectedIds);
+    if (next.has(memberId)) next.delete(memberId);
+    else next.add(memberId);
+    setSelected(next);
+    if (next.size <= 40) setError("");
   }
 
   function selectAllShown() {
-    setSelected((current) => {
-      const next = new Set(current);
-      for (const member of available) next.add(member.memberId);
-      return next;
-    });
+    const next = new Set(selectedIds);
+    let hitCap = false;
+    for (const member of available) {
+      if (next.has(member.memberId)) continue;
+      if (next.size >= 40) {
+        hitCap = true;
+        break;
+      }
+      next.add(member.memberId);
+    }
+    setSelected(next);
+    setError(hitCap ? "Select 40 or fewer members at a time." : "");
   }
 
   function submit(event) {
     event.preventDefault();
     if (busy) return;
+    if (selectedIds.length > 40) {
+      setError("Select 40 or fewer members at a time.");
+      return;
+    }
     if (teamEvent && teams.length && !team.trim()) {
       setError("Pick a team before adding these players.");
       return;
@@ -221,7 +231,10 @@ export function AdminRegistrationMemberPicker({ eventStatus }) {
         className: "admin-btn secondary",
         disabled: busy || !selectedIds.length,
         key: "clear",
-        onClick: () => setSelected(new Set()),
+        onClick: () => {
+          setSelected(new Set());
+          setError("");
+        },
         type: "button",
       }, "Clear"),
     ]),

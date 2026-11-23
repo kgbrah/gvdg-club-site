@@ -4,7 +4,7 @@
 import React from "react";
 import { adminRequest } from "./admin-api.js";
 import { AutocompleteInput } from "../shared/autocomplete.js";
-import { currentAdminRoute } from "./admin-shell-state.js";
+import { currentAdminActiveTab, currentAdminAuthGateState, currentAdminRoute } from "./admin-shell-state.js";
 
 const h = React.createElement;
 
@@ -139,7 +139,10 @@ export function AdminWalletBalances() {
       return next;
     });
   }
+  const [adminReady, setAdminReady] = React.useState(() => currentAdminAuthGateState().status === "panel");
+  const [activeTab, setActiveTab] = React.useState(() => currentAdminActiveTab());
   const load = React.useCallback(async () => {
+    if (!adminReady) return;
     try {
       const response = await adminRequest("/admin/wallets/balances");
       const data = await response.json().catch(() => ({}));
@@ -150,13 +153,32 @@ export function AdminWalletBalances() {
     } catch {
       setState((current) => ({ ...current, status: "error" }));
     }
-  }, []);
+  }, [adminReady]);
   React.useEffect(() => {
-    load();
-    const again = (event) => { if (event.detail?.ok === true) load(); };
-    window.addEventListener("gvdg:admin-wallet-adjustment-result", again);
-    return () => window.removeEventListener("gvdg:admin-wallet-adjustment-result", again);
+    const updateAuth = (event) => {
+      const detail = event.detail && typeof event.detail === "object" ? event.detail : currentAdminAuthGateState();
+      setAdminReady(detail.status === "panel");
+    };
+    const updateTab = (event) => {
+      const tab = event.detail && typeof event.detail.tab === "string" ? event.detail.tab : currentAdminActiveTab();
+      setActiveTab(tab);
+    };
+    const refreshAfterAdjustment = (event) => { if (event.detail?.ok === true) void load(); };
+    const refreshBalances = () => { void load(); };
+    window.addEventListener("gvdg:admin-auth-gate", updateAuth);
+    window.addEventListener("gvdg:admin-active-tab", updateTab);
+    window.addEventListener("gvdg:admin-wallet-adjustment-result", refreshAfterAdjustment);
+    window.addEventListener("gvdg:admin-wallet-balances-refresh", refreshBalances);
+    return () => {
+      window.removeEventListener("gvdg:admin-auth-gate", updateAuth);
+      window.removeEventListener("gvdg:admin-active-tab", updateTab);
+      window.removeEventListener("gvdg:admin-wallet-adjustment-result", refreshAfterAdjustment);
+      window.removeEventListener("gvdg:admin-wallet-balances-refresh", refreshBalances);
+    };
   }, [load]);
+  React.useEffect(() => {
+    if (adminReady && activeTab === "wallets") void load();
+  }, [adminReady, activeTab, load]);
 
   const rows = visibleWalletRows(state.members, { query, showZero });
   function adjust(member) {

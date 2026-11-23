@@ -20,12 +20,16 @@ export async function handleAdminLeagues(
       const existing = await env.DB.prepare("SELECT * FROM leagues WHERE name = ? COLLATE NOCASE LIMIT 1").bind(name).first();
       if (existing) return json({ league: existing, duplicate: true }, 200, origin);
     }
-    const row = await db.createLeague(env.DB, { name, season: asStr(b.season, 40), format: asStr(b.format, 20), description: asStr(b.description, 2000), created_by: adminId });
+    const format = b.format == null || b.format === "" ? null : asStr(b.format, 40);
+    if (b.format != null && b.format !== "" && !format) return json({ error: "invalid_league" }, 400, origin);
+    const row = await db.createLeague(env.DB, { name, season: asStr(b.season, 40), format, description: asStr(b.description, 2000), created_by: adminId });
     return json({ league: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {
     const b = (await readJson(request)) ?? {};
-    const row = await db.updateLeague(env.DB, id, { name: asStr(b.name, 120), season: asStr(b.season, 40), format: asStr(b.format, 20), description: asStr(b.description, 2000) });
+    const format = b.format == null || b.format === "" ? null : asStr(b.format, 40);
+    if (b.format != null && b.format !== "" && !format) return json({ error: "invalid_league" }, 400, origin);
+    const row = await db.updateLeague(env.DB, id, { name: asStr(b.name, 120), season: asStr(b.season, 40), format, description: asStr(b.description, 2000) });
     return row ? json({ league: row }, 200, origin) : json({ error: "not_found" }, 404, origin);
   }
   if (method === "DELETE" && id != null) {
