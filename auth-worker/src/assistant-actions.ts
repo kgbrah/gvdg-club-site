@@ -13,6 +13,7 @@ const ALLOWED_PAGES = new Set([
   "events.html",
   "gvdg-members.html",
   "index.html",
+  "lost-found.html",
   "pro-shop.html",
   "ryder-cup.html",
   "score.html",
@@ -107,6 +108,7 @@ export function suggestCrottsActions(opts: {
   const wantsMembers = /\b(log ?in|sign in|members page|my season|my stats|dashboard)\b/.test(text);
   const wantsRyder = /\bryder\b/.test(text);
   const wantsShop = /\b(shop|pro shop|store credit|wallet)\b/.test(text);
+  const wantsLostFound = /\blost\s*(?:&|and)?\s*found\b|\b(lost|found)\s+(a\s+|my\s+)?(disc|putter|driver|midrange|bag)\b/.test(text);
   const wantsContact = /\b(email|contact|reach (the )?club)\b/.test(text);
 
   if (wantsWatch || wantsScore) {
@@ -137,6 +139,7 @@ export function suggestCrottsActions(opts: {
   if (wantsMembers) proposed.push({ id: "members", label: "Open members", href: "gvdg-members.html" });
   if (wantsRyder) proposed.push({ id: "ryder", label: "Ryder Cup scoreboard", href: "ryder-cup.html" });
   if (wantsShop) proposed.push({ id: "shop", label: "Open the Pro Shop", href: "pro-shop.html" });
+  if (wantsLostFound) proposed.push({ id: "lost-found", label: "Open Lost & Found", href: "lost-found.html" });
   if (wantsContact) proposed.push({ id: "email", label: "Email the club", href: CLUB_MAIL });
 
   return sanitizeCrottsActions(proposed);

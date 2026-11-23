@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronLeft, ChevronRight, CircleDollarSign, Disc3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleDollarSign, Disc3, Pause, Play } from "lucide-react";
 
 import { nextCircularIndex, useAnimatedCount, useRevealOnce, useSwipe } from "./interaction-hooks.js";
 
@@ -103,10 +103,13 @@ export function HomeHeroSection() {
   const [current, setCurrent] = React.useState(1);
   const warm = usePageLoaded();
   const [paused, setPaused] = React.useState(false);
+  const [focusPaused, setFocusPaused] = React.useState(false);
+  const [manualPaused, setManualPaused] = React.useState(false);
   const swipeHandlers = useSwipe((step) => setCurrent((slide) => nextCircularIndex(slide, step, HERO_SLIDES)));
+  const effectivePaused = paused || focusPaused || manualPaused;
 
   React.useEffect(() => {
-    if (paused) return undefined;
+    if (effectivePaused) return undefined;
     if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return undefined;
     }
@@ -114,13 +117,17 @@ export function HomeHeroSection() {
       setCurrent((slide) => nextCircularIndex(slide, 1, HERO_SLIDES));
     }, 5000);
     return () => window.clearInterval(intervalId);
-  }, [paused]);
+  }, [effectivePaused]);
 
   return h("section", {
     className: "hero",
     "data-react-home-hero": "ready",
     onMouseEnter: () => setPaused(true),
     onMouseLeave: () => setPaused(false),
+    onFocus: () => setFocusPaused(true),
+    onBlur: (event) => {
+      if (!event?.currentTarget?.contains?.(event.relatedTarget)) setFocusPaused(false);
+    },
     ...swipeHandlers,
   }, [
     h("div", { className: "hero-bg-pattern", key: "pattern" }),
@@ -152,6 +159,15 @@ export function HomeHeroSection() {
         onClick: () => setCurrent(index),
         type: "button",
       }))),
+    h("button", {
+      "aria-label": manualPaused ? "Play hero slideshow" : "Pause hero slideshow",
+      "aria-pressed": manualPaused ? "true" : "false",
+      className: "carousel-pause",
+      key: "pause",
+      onClick: () => setManualPaused((value) => !value),
+      title: manualPaused ? "Play slideshow" : "Pause slideshow",
+      type: "button",
+    }, h(manualPaused ? Play : Pause, { "aria-hidden": "true", size: 18 })),
     h("div", { className: "hero-content", key: "content" }, [
       h("p", { className: "hero-kicker", key: "kicker" }, "Eastern North Carolina · since 2004"),
       h("h1", { className: "hero-title", key: "title", "aria-label": "Greenville Disc Golf Club" }, [

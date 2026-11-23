@@ -54,7 +54,7 @@ function sceneRange(date) {
     const last = ymd(endYear, endMonth, Number(span[5]));
     return start <= last ? { start, end: addDays(last, 1) } : null;
   }
-  const match = String(date || "").match(/\b([A-Za-z]{3})\s+(\d{1,2})(?:-(\d{1,2}))?,\s+(\d{4})\b/);
+  const match = String(date || "").match(/\b([A-Za-z]{3})\s+(\d{1,2})(?:[–-](\d{1,2}))?,\s+(\d{4})\b/);
   if (!match) return null;
   const month = MONTHS[match[1].toLowerCase()];
   const startDay = Number(match[2]);

@@ -153,7 +153,10 @@ function loadPayPalSdk(config) {
     script.src = "https://www.paypal.com/sdk/js?client-id=" +
       encodeURIComponent(config.clientId) + "&currency=USD&intent=capture";
     script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
+    script.onerror = () => {
+      paypalSdkPromise = null;
+      resolve(false);
+    };
     document.head.appendChild(script);
   });
   return paypalSdkPromise;
@@ -586,46 +589,45 @@ export function ProShopApp() {
       notify("That product is no longer available.", "error");
       return;
     }
-    setCart((current) => {
-      const key = productKey(productId);
-      const next = new Map(current);
-      const quantity = next.get(key) || 0;
-      if (quantity >= stockQty(product)) {
-        notify("That is all the stock available for this product.", "error");
-        return current;
-      }
-      next.set(key, quantity + 1);
-      cartRef.current = next;
-      checkoutKeyRef.current = null;
-      notify("");
-      return next;
-    });
+    const key = productKey(productId);
+    const next = new Map(cartRef.current);
+    const quantity = next.get(key) || 0;
+    if (quantity >= stockQty(product)) {
+      notify("That is all the stock available for this product.", "error");
+      return;
+    }
+    next.set(key, quantity + 1);
+    cartRef.current = next;
+    checkoutKeyRef.current = null;
+    setCart(next);
+    notify("");
   }
 
   function changeQty(productId, delta) {
     const product = findProduct(productsRef.current, productId);
     if (!isPurchasableProduct(product)) {
-      setCart((current) => {
-        const next = new Map(current);
-        next.delete(productKey(productId));
-        cartRef.current = next;
-        checkoutKeyRef.current = null;
-        return next;
-      });
+      const next = new Map(cartRef.current);
+      next.delete(productKey(productId));
+      cartRef.current = next;
+      checkoutKeyRef.current = null;
+      setCart(next);
       notify("That product is no longer available.", "error");
       return;
     }
-    setCart((current) => {
-      const key = productKey(productId);
-      const next = new Map(current);
-      const quantity = (next.get(key) || 0) + delta;
-      if (quantity <= 0) next.delete(key);
-      else if (quantity <= stockQty(product)) next.set(key, quantity);
-      else notify("That is all the stock available for this product.", "error");
-      cartRef.current = next;
-      checkoutKeyRef.current = null;
-      return next;
-    });
+    const key = productKey(productId);
+    const next = new Map(cartRef.current);
+    const quantity = (next.get(key) || 0) + delta;
+    if (quantity <= 0) {
+      next.delete(key);
+    } else if (quantity <= stockQty(product)) {
+      next.set(key, quantity);
+    } else {
+      notify("That is all the stock available for this product.", "error");
+      return;
+    }
+    cartRef.current = next;
+    checkoutKeyRef.current = null;
+    setCart(next);
   }
 
   async function payWithPaypal() {
@@ -748,27 +750,31 @@ export function ProShopApp() {
   }, [api, guest.contact, guest.name, loadProducts, notify, pruneCart, token]);
 
   const approvePayPalOrder = React.useCallback(async (data) => {
-    const response = await api("/shop/pay/capture", {
-      body: { orderId: data.orderID },
-      method: "POST",
-      token: token || undefined,
-    });
-    const body = await response.json().catch(() => ({}));
-    if (response.ok) {
-      const empty = new Map();
-      cartRef.current = empty;
-      setCart(empty);
-      notify("PayPal payment received. The club will have your order ready for pickup.", "success");
-      await loadWallet();
-      await loadProducts();
-      return;
+    try {
+      const response = await api("/shop/pay/capture", {
+        body: { orderId: data.orderID },
+        method: "POST",
+        token: token || undefined,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const empty = new Map();
+        cartRef.current = empty;
+        setCart(empty);
+        notify("PayPal payment received. The club will have your order ready for pickup.", "success");
+        await loadWallet();
+        await loadProducts();
+        return;
+      }
+      if (body.error === "insufficient_stock" || body.error === "product_unavailable") {
+        notify("One item is no longer available. Refreshing inventory.", "error");
+        await loadProducts();
+        return;
+      }
+      notify("PayPal payment could not be confirmed. Please contact the club if you were charged.", "error");
+    } catch {
+      notify("PayPal payment could not be confirmed. Please contact the club if you were charged.", "error");
     }
-    if (body.error === "insufficient_stock" || body.error === "product_unavailable") {
-      notify("One item is no longer available. Refreshing inventory.", "error");
-      await loadProducts();
-      return;
-    }
-    notify("PayPal payment could not be confirmed. Please contact the club if you were charged.", "error");
   }, [api, loadProducts, loadWallet, notify, token]);
 
   React.useEffect(() => {

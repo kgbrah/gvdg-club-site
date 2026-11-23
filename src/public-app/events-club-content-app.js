@@ -53,12 +53,16 @@ function inlineNodes(text, keyPrefix) {
       nodes.push(h("strong", { key: `${keyPrefix}-strong-${index}` }, match[1]));
     } else {
       const href = safeExternalUrl(match[3]);
-      nodes.push(h("a", {
-        href,
-        key: `${keyPrefix}-link-${index}`,
-        rel: "noopener noreferrer",
-        target: "_blank",
-      }, match[2]));
+      if (href) {
+        nodes.push(h("a", {
+          href,
+          key: `${keyPrefix}-link-${index}`,
+          rel: "noopener noreferrer",
+          target: "_blank",
+        }, match[2]));
+      } else {
+        nodes.push(match[2]);
+      }
     }
     last = re.lastIndex;
     index += 1;
@@ -156,8 +160,15 @@ function FundraiserCard({ fundraiser }) {
 
   return h("article", { className: "fundraiser-card", "data-react-events-fundraiser": "true" }, [
     h("h3", { className: "fundraiser-title", key: "title" }, title),
-    goal > 0 ? h("div", { className: "fr-bar", key: "bar" },
-      h("div", { className: "fr-bar-fill", style: { width: `${pct}%` } })) : null,
+    goal > 0 ? h("div", {
+      "aria-label": `${title} progress`,
+      "aria-valuemax": 100,
+      "aria-valuemin": 0,
+      "aria-valuenow": pct,
+      className: "fr-bar",
+      key: "bar",
+      role: "progressbar",
+    }, h("div", { className: "fr-bar-fill", style: { width: `${pct}%` } })) : null,
     goal > 0 ? h("div", { className: "fr-progress", key: "progress" },
       `${currency(raised)} of ${currency(goal)} (${pct}%)`) : null,
     fundraiser && fundraiser.body_md

@@ -36,8 +36,10 @@ const state = {
   hub: EMPTY_HUB,
   installed: false,
   loading: false,
+  loadRequestId: 0,
   previousResults: [],
   refreshTimer: null,
+  routeGeneration: 0,
   liveTimer: null,
 };
 
@@ -286,7 +288,10 @@ async function loadCourseData(api) {
           const courses = Array.isArray(data?.courses) ? data.courses : [];
           return { courses, index: buildCourseIndex(courses) };
         })
-        .catch(() => ({ courses: [], index: new Map() })),
+        .catch(() => {
+          if (state.courseData?.api === api) state.courseData = null;
+          return { courses: [], index: new Map() };
+        }),
     };
   }
   return state.courseData.promise;
@@ -337,8 +342,10 @@ function publishLoadedHub(feed, events, courseIndex) {
 }
 
 async function loadHub({ quiet = false } = {}) {
-  if (state.loading) return;
+  if (state.loading && quiet) return;
+  const requestId = (state.loadRequestId += 1);
   state.loading = true;
+  const generation = state.routeGeneration;
   const api = publicApiBase();
   if (!quiet) {
     publishEventsView("status");
@@ -346,14 +353,19 @@ async function loadHub({ quiet = false } = {}) {
   }
   try {
     const courseData = await loadCourseData(api);
+    let okCount = 0;
     const [feed, eventsData, openData] = await Promise.all([
-      fetchPublicJson(api, "/club-feed").catch(() => ({ events: [], clubEvents: [] })),
-      fetchPublicJson(api, `/events?limit=${EVENTS_PAGE_LIMIT}&offset=0`).catch(() => ({ events: [] })),
-      fetchPublicJson(api, "/registration/open").catch(() => ({ events: [] })),
+      fetchPublicJson(api, "/club-feed").then((data) => { okCount += 1; return data; }).catch(() => ({ events: [], clubEvents: [] })),
+      fetchPublicJson(api, `/events?limit=${EVENTS_PAGE_LIMIT}&offset=0`).then((data) => { okCount += 1; return data; }).catch(() => ({ events: [] })),
+      fetchPublicJson(api, "/registration/open").then((data) => { okCount += 1; return data; }).catch(() => ({ events: [] })),
     ]);
+    if (okCount === 0) throw new Error("hub_load_failed");
+    const route = currentEventsRoute();
+    if (requestId !== state.loadRequestId || generation !== state.routeGeneration || route?.view === "event" || route?.view === "league") return;
     publishLoadedHub(feed, attachOpenFields(eventsData?.events || [], openData?.events || []), courseData.index);
   } catch {
-    if (!quiet) {
+    const route = currentEventsRoute();
+    if (!quiet && requestId === state.loadRequestId && generation === state.routeGeneration && route?.view !== "event" && route?.view !== "league") {
       publishEventsLastUpdated(null);
       publishEventsStatus({
         message: "We couldn't load the calendar right now. Please try again.",
@@ -363,7 +375,7 @@ async function loadHub({ quiet = false } = {}) {
       publishEventsView("status");
     }
   } finally {
-    state.loading = false;
+    if (requestId === state.loadRequestId) state.loading = false;
   }
 }
 
@@ -444,6 +456,7 @@ async function applyManage(eventId, token) {
 }
 
 function handleRouteRequest(event) {
+  state.routeGeneration += 1;
   stopRefresh();
   const route = event?.detail?.route || currentEventsRoute();
   if (route?.view === "event" || route?.view === "league") return;

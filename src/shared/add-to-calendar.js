@@ -50,6 +50,7 @@ export function AddToCalendarButton({ item, className = "passkey-btn", label = "
     }
     function onKey(event) {
       if (event.key === "Escape") { event.preventDefault(); close(true); return; }
+      if (event.key === "Tab") { close(false); return; }
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
       const items = [...(menu.current?.querySelectorAll("[role=menuitem]") || [])];
       if (!items.length) return;

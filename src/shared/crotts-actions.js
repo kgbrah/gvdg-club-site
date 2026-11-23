@@ -2,6 +2,7 @@ const ALLOWED_PAGES = new Set([
   "events.html",
   "gvdg-members.html",
   "index.html",
+  "lost-found.html",
   "pro-shop.html",
   "ryder-cup.html",
   "score.html",

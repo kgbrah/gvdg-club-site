@@ -73,6 +73,7 @@ export async function reportDonation(cents, source, { token = readMemberToken(),
       body: JSON.stringify({ amountCents: cents, source }),
     });
     const data = await response.json().catch(() => ({}));
+    if (response.status === 401) return { ok: false, error: "unauthorized" };
     return response.ok ? { ok: true, donation: data.donation } : { ok: false, error: data.error || "failed" };
   } catch {
     return { ok: false, error: "offline" };
@@ -81,6 +82,7 @@ export async function reportDonation(cents, source, { token = readMemberToken(),
 
 const REPORT_ERRORS = {
   signed_out: "Sign in to the club app to earn karma for donations.",
+  unauthorized: "Your session expired. Sign in again to earn karma for donations.",
   too_many_pending: "You have 3 donations waiting for the club to confirm. You can add more once they're confirmed.",
   rate_limited: "That's a lot of donations today! Try again tomorrow.",
   invalid_amount: "Enter an amount from $1 to $1,000.",

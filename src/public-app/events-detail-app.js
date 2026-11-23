@@ -193,9 +193,16 @@ function LivePanel({ data }) {
       ? h("div", { className: "live-weather", key: "weather" }, h(WeatherStrip, { title: "Round weather", weather: snapshot.weather }))
       : null,
     liveCtps.length
-      ? h("ul", { className: "extras-list", key: "live-ctps" }, liveCtps.map((ctp) =>
-        h("li", { key: ctp.id || ctp.hole }, `CTP hole ${ctp.hole}${ctp.division ? ` (${ctp.division})` : ""} · Leader: ${ctp.leaderName}`),
-      ))
+      ? h("ul", { className: "extras-list", key: "live-ctps" }, liveCtps.map((ctp) => {
+        const leaderPlayer = ctp.leaderPlayerIndex != null
+          ? snapshot?.players?.find((player) => player.index === ctp.leaderPlayerIndex)
+          : null;
+        const leaderKarmaKey = ctp.karmaKey || leaderPlayer?.karmaKey || "";
+        return h("li", { key: ctp.id || ctp.hole }, [
+          `CTP hole ${ctp.hole}${ctp.division ? ` (${ctp.division})` : ""} · Leader: ${ctp.leaderName}`,
+          h(KarmaChip, { karmaKey: leaderKarmaKey, key: "karma" }),
+        ]);
+      }))
       : null,
     h(LiveStandings, { key: "standings", snapshot }),
     h(EventLiveChat, {

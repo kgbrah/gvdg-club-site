@@ -43,7 +43,7 @@ function loading(className, spinnerClassName, text) {
 }
 
 function ToggleButton({ expanded, label, onClick }) {
-  return h("button", { className: "toggle-btn" + (expanded ? " expanded" : ""), type: "button", onClick }, [
+  return h("button", { "aria-expanded": expanded ? "true" : "false", className: "toggle-btn" + (expanded ? " expanded" : ""), type: "button", onClick }, [
     h("span", { className: "toggle-text", key: "text" }, expanded ? "Show less" : label),
     icon(ChevronDown, { className: "toggle-icon", key: "icon", size: 20 }),
   ]);
