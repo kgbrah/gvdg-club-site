@@ -1,9 +1,9 @@
-/* In-app camera (Marketplace, Lost & Found and My Bag photos): src/public-app/camera-sheet.js. Loaded by pro-shop.html,
-   lost-found.html and gvdg-members.html. Black like a phone camera; the club's yellow marks Done. */
+/* In-app camera (Marketplace, Lost & Found, My Bag and Admin Shop photos): src/public-app/camera-sheet.js.
+   Loaded by pro-shop.html, lost-found.html, gvdg-members.html and admin.html. Black like a phone camera; the club's yellow marks Done. */
 .gv-camera {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 12000;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);

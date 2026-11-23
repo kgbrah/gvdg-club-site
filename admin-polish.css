@@ -215,7 +215,7 @@ body.admin-page #adminPanel { padding: 0; border: 0; background: transparent; bo
 .admin-page .admin-btn.danger-strong { color: var(--light); border-color: var(--over); background: var(--over); }
 .admin-page .admin-btn.danger-strong:hover { box-shadow: inset 0 0 0 1px var(--over); }
 
-.admin-page :is(.admin-pane, #adminNavigationReactApp, .admin-dialog) :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="button"], [type="submit"], [type="hidden"]) {
+.admin-page :is(.admin-pane, #adminNavigationReactApp, .admin-dialog) :is(input, select, textarea):not([type="checkbox"], [type="radio"], [type="button"], [type="submit"], [type="hidden"], .admin-sr-only) {
   min-height: 44px;
   min-width: 0;
   max-width: 100%;
@@ -1109,3 +1109,60 @@ body.admin-page.player-theme-active {
 @media (prefers-reduced-motion: reduce) { .admin-page .wallet-row-chevron { transition: none; } }
 .admin-page button.wallet-row { row-gap: .15rem; }
 .admin-page button.wallet-row .wallet-row-full { grid-column: 1 / -1; }
+
+/* Admin -> Shop: in-app camera capture + file upload buttons for adding products directly from a phone. */
+.admin-page .admin-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-width: 0;
+  min-height: 0;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.admin-page .admin-product-image-input {
+  position: relative;
+  display: grid;
+  gap: .45rem;
+  margin-top: .5rem;
+}
+.admin-page .admin-product-photo-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+}
+.admin-page .admin-product-photo-actions > :only-child { grid-column: 1 / -1; }
+.admin-page .admin-product-photo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .38rem;
+  width: 100%;
+  min-height: 44px;
+  line-height: 1.15;
+}
+.admin-page .admin-product-photo-btn svg { flex: none; }
+.admin-page .admin-product-image-preview {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+  margin-top: .55rem;
+}
+.admin-page .admin-product-image-preview-body {
+  display: grid;
+  gap: .35rem;
+  flex: 1 1 11rem;
+  min-width: 0;
+  justify-items: start;
+}
+.admin-page .admin-product-image-preview-note {
+  margin: 0;
+  color: var(--text-secondary);
+}
+body.admin-page .gv-camera button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
