@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { calendarEventFromClub, calendarEventFromPdga, eventCalendarIcs } from "../src/shared/event-calendar.js";
+import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration, eventCalendarIcs } from "../src/shared/event-calendar.js";
 
 test("a PDGA event becomes an all-day calendar span", () => {
   const item = calendarEventFromPdga({
@@ -72,4 +72,22 @@ test("a PDGA event spanning months (a league) goes on the calendar for its whole
   const newYear = calendarEventFromPdga({ name: "Ice Bowl", date: "Dec 31, 2026 – Jan 1, 2027", url: "https://www.pdga.com/tour/event/1" });
   assert.deepEqual([newYear.start, newYear.end], ["20261231", "20270102"]);
   assert.equal(calendarEventFromPdga({ name: "Two days", date: "Nov 22-23, 2026", url: "x" }).end, "20261124");
+});
+
+test("a PDGA registration event becomes an all-day calendar item with division and URL", () => {
+  const item = calendarEventFromPdgaRegistration({
+    eventId: 96414,
+    name: "Greenville Winter Classic",
+    start: "2026-12-12",
+    end: "2026-12-13",
+    location: "Greenville, NC",
+    division: "MA1",
+    url: "https://www.pdga.com/tour/event/96414",
+  });
+  assert.equal(item.allDay, true);
+  assert.equal(item.start, "20261212");
+  assert.equal(item.end, "20261214");
+  assert.match(item.description, /Division: MA1/);
+  assert.match(item.description, /PDGA: https:\/\/www\.pdga\.com\/tour\/event\/96414/);
+  assert.equal(calendarEventFromPdgaRegistration({ name: "Bad", start: "12/12/2026" }), null);
 });

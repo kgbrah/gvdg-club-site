@@ -164,6 +164,23 @@ export function downloadCalendarFile(item) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** A PDGA event a club member is registered for (from /pdga-registrations: ISO start / end dates). */
+export function calendarEventFromPdgaRegistration(event) {
+  const start = String(event?.start || "");
+  const end = String(event?.end || start);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || !event?.name) return null;
+  const url = String(event.url || "");
+  return allDayItem({
+    uid: `gvdg-pdga-${slug(String(event.eventId || event.name))}@gvdgclub.com`,
+    summary: event.name,
+    location: event.location || "",
+    description: [event.division ? "Division: " + event.division : "", url ? "PDGA: " + url : ""].filter(Boolean).join("\n"),
+    url,
+    start: start.replace(/-/g, ""),
+    end: addDays(end.replace(/-/g, ""), 1),
+  });
+}
+
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "Nov 21, 2026", "Nov 21–22, 2026", "Sep 13 – Nov 29, 2026", "Dec 30, 2026 – Jan 2, 2027" from ISO dates. */

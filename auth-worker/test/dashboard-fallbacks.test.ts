@@ -67,8 +67,9 @@ describe("dashboard D1 fallback reads", () => {
       pdga: "90000001",
       name: "GVDG QA Dashboard",
       official_rating: 935,
-      live_rating: null,
-      events: [],
+      live_rating: 941,
+      peak_rating: 958,
+      events_count: 3,
     });
   });
 });

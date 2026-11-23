@@ -12,6 +12,7 @@
 // internal pdga.com endpoints (e.g. /api/v1/feat/...), nothing PDGA hasn't documented for developers.
 
 import type { D1Like } from "./db-types.js";
+import { purgePdgaLiveCaches } from "./pdga-live-api.js";
 import type { KVLike } from "./ratelimit.js";
 
 export const PDGA_ATTRIBUTION = "Player, event, and course data provided by PDGA";
@@ -335,12 +336,13 @@ export async function lookupPdgaEvent(env: PdgaApiEnv, eventId: number): Promise
 }
 
 /**
- * Delete PDGA data past its cache time: player records older than PDGA_PLAYER_CACHE_MAX_MS and expired nearby-event
- * lists (pdga-events.ts, D1KV namespace "pdgaevents", one hour).
+ * Delete PDGA data past its cache time: player records older than PDGA_PLAYER_CACHE_MAX_MS, expired nearby-event
+ * lists (pdga-events.ts, D1KV namespace "pdgaevents", one hour), and expired PDGA Live API caches.
  */
 export async function purgePdgaCaches(env: { DB: D1Like }, now = Date.now()): Promise<{ players: number; events: number }> {
   const players = await env.DB.prepare("DELETE FROM pdga_api_players WHERE fetched_at < ?").bind(now - PDGA_PLAYER_CACHE_MAX_MS).run();
   const events = await env.DB.prepare("DELETE FROM kv_store WHERE ns = ? AND expires_at IS NOT NULL AND expires_at <= ?").bind("pdgaevents", now).run();
+  await purgePdgaLiveCaches(env.DB, now);
   return { players: Number(players.meta?.changes) || 0, events: Number(events.meta?.changes) || 0 };
 }
 

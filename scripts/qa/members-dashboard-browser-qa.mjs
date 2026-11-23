@@ -316,7 +316,8 @@ async function captureState(browser, origin, viewport, slug) {
   if (mountedAtHome.length) throw new Error(`Hidden screens rendered on Home: ${mountedAtHome.join(", ")}`);
   await page.waitForSelector('[data-react-wallet="ready"]', { timeout: 10_000 });
   await page.waitForSelector('[data-react-home-jobs="ready"]', { timeout: 10_000 });
-  await waitForText(page, "[data-react-home-hero] [data-react-pdga-rating='true']", "935", "React PDGA official rating");
+  await waitForText(page, "[data-react-home-hero] [data-react-live-rating='true']", "941", "React PDGA live rating estimate");
+  await waitForText(page, "[data-react-home-hero] [data-react-pdga-rating='true']", "941", "React home hero PDGA pill");
   await waitForText(page, "[data-react-home-hero]", "QA Admin", "React home name");
   await waitForText(page, "[data-react-wallet]", "$12.50", "React wallet balance");
   await waitForText(page, "[data-react-home-next]", "GVDG QA Doubles", "React next event");
@@ -386,8 +387,9 @@ async function captureState(browser, origin, viewport, slug) {
   await page.waitForSelector('[data-react-pdga-dashboard="ready"]', { timeout: 10_000 });
   await waitForText(page, "#membersReactRatingPanel", "935", "React PDGA official rating");
   await waitForText(page, "#membersReactRatingPanel", "As of 2026-07-01", "React PDGA rating date");
-  // PDGA's terms: Stats shows no PDGA event history or round ratings.
-  if (await page.locator("#membersReactRatingPanel .dash-event").count()) throw new Error("Stats still lists PDGA events.");
+  await waitForText(page, "#membersReactRatingPanel [data-react-live-rating='true']", "941", "React PDGA live rating estimate");
+  await page.locator("#membersReactRatingPanel .dash-collapse > summary").click();
+  await waitForText(page, "#membersReactRatingPanel .dash-event", "GVDG QA Monthly", "React PDGA recent tournament");
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   // A layout-calibrated casual round names its basis (club evidence only; no PDGA baselines).

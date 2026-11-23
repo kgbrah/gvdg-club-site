@@ -1,5 +1,5 @@
-// /pdga-stats now comes only from PDGA's official API: the official rating and its date (PDGA's terms; no rounds or
-// event history).
+// /pdga-stats combines PDGA's official REST API (official rating + date) with documented PDGA Live API
+// round ratings and detailed /api/v1/ throw/putting stats.
 const stats = {
   pdga: "90000001",
   name: "GVDG QA Dashboard",
@@ -7,13 +7,90 @@ const stats = {
   rating_date: "2026-07-01",
   previous_rating: null,
   previous_rating_date: null,
-  live_rating: null,
-  peak_rating: null,
-  events_count: 0,
-  events: [],
-  play_rounds: [],
+  live_rating: 941,
+  peak_rating: 958,
+  events_count: 2,
+  events: [
+    {
+      tournament: "GVDG QA Monthly",
+      date: "2026-06-20",
+      epoch: 1781913600,
+      division: "MA1",
+      eventId: "900001",
+      rounds: [{ rating: 958, score: 54, round: "1" }],
+    },
+    {
+      tournament: "GVDG QA League",
+      date: "2026-05-12",
+      epoch: 1778544000,
+      division: "MA1",
+      eventId: "900002",
+      rounds: [{ rating: 924, score: 57, round: "1" }],
+    },
+  ],
+  play: {
+    holes: 36,
+    aces: 0,
+    eagles: 1,
+    birdies: 9,
+    pars: 18,
+    bogeys: 7,
+    doubles_plus: 1,
+    birdie_hit: 9,
+    par_hit: 18,
+    fir_hit: 24,
+    fir_att: 32,
+    c1r_hit: 14,
+    c1r_att: 36,
+    c2r_hit: 22,
+    c2r_att: 36,
+    parked_hit: 4,
+    parked_att: 36,
+    scramble_hit: 4,
+    scramble_att: 7,
+    c1_putt_hit: 26,
+    c1_putt_att: 29,
+    c1x_putt_hit: 14,
+    c1x_putt_att: 17,
+    c2_putt_hit: 2,
+    c2_putt_att: 8,
+  },
+  play_rounds: [
+    {
+      tournament: "GVDG QA Monthly",
+      date: "2026-06-20",
+      division: "MA1",
+      round: "1",
+      group_format: "singles",
+      scoring_style: "stroke",
+      breakdown: {
+        holes: 36,
+        birdies: 9,
+        pars: 18,
+        bogeys: 7,
+        doubles_plus: 1,
+        eagles: 1,
+        fir_hit: 24,
+        fir_att: 32,
+        c1r_hit: 14,
+        c1r_att: 36,
+        c2r_hit: 22,
+        c2r_att: 36,
+        parked_hit: 4,
+        parked_att: 36,
+        scramble_hit: 4,
+        scramble_att: 7,
+        c1_putt_hit: 26,
+        c1_putt_att: 29,
+        c1x_putt_hit: 14,
+        c1x_putt_att: 17,
+        c2_putt_hit: 2,
+        c2_putt_att: 8,
+      },
+    },
+  ],
   source: "pdga-api",
-  stats_version: 4,
+  stats_version: 5,
 };
 
 const myRatings = {
@@ -247,6 +324,7 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     if (pathName === "/my-live-rounds") return route.fulfill(json({ rounds: [] }));
     if (pathName === "/payments/config") return route.fulfill(json({ enabled: false }));
     if (pathName === "/registration/open") return route.fulfill(json({ events: openEvents }));
+    if (pathName === "/pdga-registrations") return route.fulfill(json({ mine: [], club: [] }));
     if (pathName === "/my-registrations") return route.fulfill(json({ registrations: [] }));
     if (pathName === "/casual-rounds" && method === "GET") return route.fulfill(json({ requests: state.casualRequests }));
     if (pathName === "/casual-rounds" && method === "POST") {

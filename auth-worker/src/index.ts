@@ -22,6 +22,8 @@ import { handleAssistant } from "./assistant-route.js";
 import { handleWebAuthnRoute } from "./webauthn-routes.js";
 import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";
 import { handlePdgaStats } from "./pdga.js";
+import { handlePdgaLiveEvent } from "./pdga-live-routes.js";
+import { handlePdgaRegistrations, handlePdgaRegistrationStatus, refreshPdgaRegistrations } from "./pdga-registrations.js";
 import { handleClubFeed } from "./feeds.js";
 import { handleMembershipApply } from "./membership-apply.js";
 import { handleMembershipPublic } from "./membership-dues.js";
@@ -183,6 +185,14 @@ export default {
       if (pathname === "/tee-signs" && method === "POST") return await handleTeeSignUpload(request, env, origin, ctx);
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
+      if (pathname === "/pdga-registrations" && method === "GET") return await handlePdgaRegistrations(request, env, origin);
+      if (pathname === "/admin/pdga-registrations/status" && method === "GET") {
+        return await handlePdgaRegistrationStatus(request, env, origin);
+      }
+      const pdgaLiveMatch = /^\/pdga\/live\/event\/([^/]+)$/.exec(pathname);
+      if (pdgaLiveMatch && method === "GET") {
+        return await handlePdgaLiveEvent(request, env, origin, pdgaLiveMatch[1]!);
+      }
       if (pathname === "/pdga/player" && method === "GET") return await handlePdgaPlayerLookup(request, env, origin);
       if (pathname === "/pdga/membership" && method === "GET") return await handlePdgaMembership(request, env, origin);
       if (pathname === "/karma" && method === "GET") return await handleKarma(env, origin, request);
@@ -286,6 +296,13 @@ export default {
             } catch (error) {
               pdgaError = error;
               console.error(JSON.stringify({ message: "pdga_events_refresh_failed", cron: controller.cron, error: error instanceof Error ? error.stack : String(error) }));
+            }
+            try {
+              const regResult = await refreshPdgaRegistrations(env, Date.now(), { skipPurge: true });
+              console.log(JSON.stringify({ message: "pdga_registrations_refresh", cron: controller.cron, ...regResult }));
+            } catch (error) {
+              pdgaError = pdgaError ?? error;
+              console.error(JSON.stringify({ message: "pdga_registrations_refresh_failed", cron: controller.cron, error: error instanceof Error ? error.stack : String(error) }));
             }
             let leagueError: unknown = null;
             try {

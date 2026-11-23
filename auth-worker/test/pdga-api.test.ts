@@ -310,7 +310,7 @@ describe("features using the official API when the club's login is set", () => {
     }
   });
 
-  it("no longer serves the scraped registration lists or the PDGA baseline admin", async () => {
+  it("keeps pdga-baselines gone and gates registration status behind auth", async () => {
     const env = { ...apiEnv(), ROSTER: kv(), JWT_SECRET: "x".repeat(40), ALLOWED_ORIGINS: ORIGIN } as unknown as Env;
     for (const path of ["/pdga-registrations", "/admin/pdga-registrations/status", "/admin/pdga-baselines"]) {
       const response = await worker.fetch(new Request("https://worker" + path, { headers: { Origin: ORIGIN } }), env);

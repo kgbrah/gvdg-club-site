@@ -27,6 +27,7 @@ import { countdownLabel, countdownParts, relativeEventWhen } from "../shared/eve
 import { SIGNUP_LINK } from "../shared/outside-link.js";
 import { DonateDollar } from "../shared/donate-prompt.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref } from "../shared/pdga-credit.js";
+import { PdgaLivePanel } from "./pdga-live-panel.js";
 
 const h = React.createElement;
 
@@ -440,6 +441,9 @@ export function EventsEventDetailApp() {
       // A finished club event's results: $1 for the club, or No thanks (remembered for this event).
       event.status === "final" ? h(DonateDollar, { key: "donate", promptKey: "event:" + event.id, className: "event-donate",
         text: "Thanks for playing! Chip in $1 to help the club run events like this one?" }) : null,
+      event.pdga_event_id && event.status !== "live"
+        ? h(PdgaLivePanel, { apiBase: data.apiBase || "", key: `pdga-live-${event.pdga_event_id}`, pdgaEventId: event.pdga_event_id })
+        : null,
       h(DetailFacts, { course, courseSummary: data.courseSummary, event, key: "facts" }),
       event.notes ? h("div", { className: "detail-notes", key: "notes" }, String(event.notes)) : null,
       event.status === "scheduled" || (event.pdga_event_id && event.status === "live")
