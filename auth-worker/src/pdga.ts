@@ -7,7 +7,18 @@ import type { Env } from "./env.js";
 import { clientIp, json } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { emptyPlayTotals, sumPlayTotals, type PlayTotals } from "./play-stats.js";
-import { cachedPdgaPlayers, lookupPdgaPlayer, normalPdgaNumber, pdgaApiConfigured, type PdgaApiEnv, type PdgaPlayer } from "./pdga-api.js";
+import {
+  cachedPdgaPlayers,
+  cachedPdgaPlayerStats,
+  lookupPdgaPlayer,
+  lookupPdgaPlayerStats,
+  normalPdgaNumber,
+  pdgaApiConfigured,
+  pdgaPlayerStatsUrl,
+  type PdgaAnnualStat,
+  type PdgaApiEnv,
+  type PdgaPlayer,
+} from "./pdga-api.js";
 import {
   applyPdgaLiveStatsToTotals,
   fetchPdgaLiveEvent,
@@ -15,9 +26,37 @@ import {
   fetchPdgaLiveScoreStats,
   playTotalsFromLivePlayerRound,
   type PdgaLiveApiEnv,
+  type PdgaLiveStatItem,
 } from "./pdga-live-api.js";
 
-export interface PdgaRound { rating: number; score: number | null; round: string }
+export interface PdgaRoundStatRatio { hit: number; opp: number }
+export interface PdgaRoundThrowStats {
+  fwh?: PdgaRoundStatRatio;
+  c1r?: PdgaRoundStatRatio;
+  c2r?: PdgaRoundStatRatio;
+  parked?: PdgaRoundStatRatio;
+  scramble?: PdgaRoundStatRatio;
+  c1p?: PdgaRoundStatRatio;
+  c1x?: PdgaRoundStatRatio;
+  c2p?: PdgaRoundStatRatio;
+  ob?: { count: number; holes: number };
+}
+export interface PdgaRound {
+  rating: number | null;
+  score: number | null;
+  round: string;
+  to_par?: number | null;
+  date?: string | null;
+  complete?: boolean;
+  holes?: number;
+  aces?: number;
+  eagles?: number;
+  birdies?: number;
+  pars?: number;
+  bogeys?: number;
+  doubles_plus?: number;
+  stats?: PdgaRoundThrowStats | null;
+}
 export interface PdgaPlayRound {
   tournament: string;
   date: string;
@@ -27,7 +66,20 @@ export interface PdgaPlayRound {
   group_format: "singles" | "doubles";
   scoring_style: "stroke" | "matchplay";
 }
-export interface PdgaEvent { tournament: string; date: string; epoch: number; division: string; eventId?: string | null; rounds: PdgaRound[] }
+export interface PdgaEvent {
+  tournament: string;
+  date: string;
+  epoch: number;
+  division: string;
+  eventId?: string | null;
+  place?: number | null;
+  total?: number | null;
+  to_par?: number | null;
+  average_rating?: number | null;
+  dnf?: boolean;
+  live_url?: string | null;
+  rounds: PdgaRound[];
+}
 export interface PdgaStats {
   pdga: string;
   name: string | null;
@@ -39,6 +91,7 @@ export interface PdgaStats {
   peak_rating: number | null;
   events_count: number;
   events: PdgaEvent[];
+  annual_stats?: PdgaAnnualStat[];
   play?: PlayTotals;
   play_rounds?: PdgaPlayRound[];
   live_stats?: { ob_count: number; ob_holes: number } | null;
@@ -47,10 +100,11 @@ export interface PdgaStats {
   source?: "pdga-api";
 }
 
-export const PDGA_STATS_VERSION = 5;
+export const PDGA_STATS_VERSION = 6;
 const RECENT_RATED_ROUNDS = 8;
-const MAX_PLAYER_EVENTS = 6;
-const MAX_SCORE_STATS_ROUNDS = 6;
+const MAX_PLAYER_EVENTS = 12;
+const MAX_SCORE_STATS_ROUNDS = 10;
+const ANNUAL_STATS_YEARS = 3;
 const STAGING_QA_PDGA = "90000001";
 const STAGING_QA_PLAY: PlayTotals = {
   ...emptyPlayTotals(),
@@ -85,6 +139,7 @@ export function statsFromPlayer(pdga: string, player: PdgaPlayer | null): PdgaSt
     peak_rating: null,
     events_count: 0,
     events: [],
+    annual_stats: [],
     play: emptyPlayTotals(),
     play_rounds: [],
     live_stats: null,
@@ -104,10 +159,93 @@ function qaStats(pdga: string): PdgaStats | null {
     live_rating: 941,
     peak_rating: 958,
     events_count: 3,
+    annual_stats: [
+      {
+        year: 2026,
+        divisionCode: "MA1",
+        divisionName: "Mixed Amateur 1",
+        classification: "A",
+        rating: 935,
+        events: 8,
+        points: 412,
+        prize: 240,
+        playersDefeated: 185,
+        wins: 2,
+        url: pdgaPlayerStatsUrl(pdga, 2026),
+      },
+      {
+        year: 2025,
+        divisionCode: "MA1",
+        divisionName: "Mixed Amateur 1",
+        classification: "A",
+        rating: 924,
+        events: 11,
+        points: 530,
+        prize: 190,
+        playersDefeated: 210,
+        wins: 1,
+        url: pdgaPlayerStatsUrl(pdga, 2025),
+      },
+    ],
     events: [
-      { tournament: "GVDG QA Monthly", date: "2026-06-20", epoch: 1781913600, division: "MA1", eventId: "900001", rounds: [{ rating: 958, score: 54, round: "1" }] },
-      { tournament: "GVDG QA League", date: "2026-05-12", epoch: 1778544000, division: "MA1", eventId: "900002", rounds: [{ rating: 941, score: 56, round: "1" }] },
-      { tournament: "GVDG QA Flex", date: "2026-04-18", epoch: 1776470400, division: "MA1", eventId: "900003", rounds: [{ rating: 924, score: 58, round: "1" }] },
+      {
+        tournament: "GVDG QA Monthly",
+        date: "2026-06-20",
+        epoch: 1781913600,
+        division: "MA1",
+        eventId: "900001",
+        place: 2,
+        total: 108,
+        to_par: -6,
+        average_rating: 950,
+        dnf: false,
+        live_url: "https://www.pdga.com/live/event/900001/MA1/scores",
+        rounds: [{
+          rating: 958,
+          score: 54,
+          round: "1",
+          to_par: -3,
+          date: "2026-06-20",
+          complete: true,
+          holes: 18,
+          birdies: 6,
+          pars: 9,
+          bogeys: 3,
+          stats: {
+            fwh: { hit: 14, opp: 18 },
+            c1r: { hit: 8, opp: 18 },
+            c1x: { hit: 9, opp: 10 },
+          },
+        }],
+      },
+      {
+        tournament: "GVDG QA League",
+        date: "2026-05-12",
+        epoch: 1778544000,
+        division: "MA1",
+        eventId: "900002",
+        place: 4,
+        total: 56,
+        to_par: -1,
+        average_rating: 941,
+        dnf: false,
+        live_url: "https://www.pdga.com/live/event/900002/MA1/scores",
+        rounds: [{ rating: 941, score: 56, round: "1", to_par: -1, date: "2026-05-12", complete: true }],
+      },
+      {
+        tournament: "GVDG QA Flex",
+        date: "2026-04-18",
+        epoch: 1776470400,
+        division: "MA1",
+        eventId: "900003",
+        place: 7,
+        total: 58,
+        to_par: 1,
+        average_rating: 924,
+        dnf: false,
+        live_url: "https://www.pdga.com/live/event/900003/MA1/scores",
+        rounds: [{ rating: 924, score: 58, round: "1", to_par: 1, date: "2026-04-18", complete: true }],
+      },
     ],
     play: STAGING_QA_PLAY,
     play_rounds: [
@@ -173,6 +311,47 @@ async function allLiveCacheFresh(db: D1Like, keys: readonly string[], now: numbe
   }
 }
 
+const ROUND_STAT_KEY_MAP: Record<number, keyof Omit<PdgaRoundThrowStats, "ob">> = {
+  1: "fwh",
+  2: "c1r",
+  3: "c2r",
+  4: "parked",
+  5: "scramble",
+  6: "c1p",
+  7: "c1x",
+  8: "c2p",
+};
+
+function roundThrowStats(
+  statsList: readonly PdgaLiveStatItem[] | null | undefined,
+  ob: { obCount: number; obHoles: number },
+): PdgaRoundThrowStats | null {
+  const out: PdgaRoundThrowStats = {};
+  let has = false;
+  for (const item of statsList ?? []) {
+    if (!item || !Number.isFinite(item.statOpportunityCount) || item.statOpportunityCount <= 0) continue;
+    if (item.statCount == null || !Number.isFinite(item.statCount) || item.statCount < 0) continue;
+    const key = ROUND_STAT_KEY_MAP[item.statId];
+    if (!key) continue;
+    out[key] = { hit: item.statCount, opp: item.statOpportunityCount };
+    has = true;
+  }
+  if (ob.obHoles > 0) {
+    out.ob = { count: ob.obCount, holes: ob.obHoles };
+    has = true;
+  }
+  return has ? out : null;
+}
+
+function recentStatsYears(now: number): number[] {
+  let yr = new Date(now).getUTCFullYear();
+  try {
+    const parsed = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).format(new Date(now)));
+    if (Number.isInteger(parsed) && parsed >= 1975 && parsed <= 2100) yr = parsed;
+  } catch { /* UTC year fallback */ }
+  return Array.from({ length: ANNUAL_STATS_YEARS }, (_, i) => yr - i);
+}
+
 async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly MatchedLinkRow[], now: number): Promise<PdgaStats> {
   if (!links.length) return baseStats;
   const liveEnv = env as unknown as PdgaLiveApiEnv;
@@ -181,7 +360,7 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
   const events: PdgaEvent[] = [];
   const playRounds: PdgaPlayRound[] = [];
   const ratedDescending: number[] = [];
-  const pendingStatFetches: { playRound: PdgaPlayRound; scoreId: number; completed: boolean }[] = [];
+  const pendingStatFetches: { playRound: PdgaPlayRound; eventRound: PdgaRound | null; scoreId: number; completed: boolean }[] = [];
 
   for (const link of links) {
     const isCompleted = Number(link.watch_completed) === 1 || (Boolean(link.event_end) && link.event_end < today);
@@ -209,11 +388,30 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
     }
 
     for (const s of sortedScores) {
-      if (!s.dnf && s.round !== 13 && s.roundRating != null) {
-        eventRounds.push({ rating: s.roundRating, score: s.roundScore, round: String(s.round) });
-      }
       if (s.dnf) continue;
       const breakdown = playTotalsFromLivePlayerRound(s);
+      let eventRound: PdgaRound | null = null;
+      if (s.round !== 13 && (s.roundRating != null || s.roundScore != null || breakdown.holes > 0)) {
+        eventRound = {
+          rating: s.roundRating,
+          score: s.roundScore,
+          round: String(s.round),
+          to_par: s.roundToPar,
+          date: s.roundDate,
+          complete: s.roundComplete,
+          ...(breakdown.holes > 0 ? {
+            holes: breakdown.holes,
+            aces: breakdown.aces,
+            eagles: breakdown.eagles,
+            birdies: breakdown.birdies,
+            pars: breakdown.pars,
+            bogeys: breakdown.bogeys,
+            doubles_plus: breakdown.doubles_plus,
+          } : {}),
+          stats: null,
+        };
+        eventRounds.push(eventRound);
+      }
       if (breakdown.holes > 0) {
         const playRound: PdgaPlayRound = {
           tournament: resolvedName,
@@ -228,20 +426,45 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
         if (s.round !== 13 && s.scoreId != null && s.scoreId > 0 && pendingStatFetches.length < MAX_SCORE_STATS_ROUNDS) {
           pendingStatFetches.push({
             playRound,
+            eventRound,
             scoreId: s.scoreId,
             completed: isCompleted || s.roundComplete,
           });
         }
+      } else if (eventRound && s.round !== 13 && s.scoreId != null && s.scoreId > 0 && pendingStatFetches.length < MAX_SCORE_STATS_ROUNDS) {
+        pendingStatFetches.push({
+          playRound: {
+            tournament: resolvedName,
+            date: s.roundDate || eventDate,
+            division,
+            round: String(s.round),
+            breakdown,
+            group_format: "singles",
+            scoring_style: "stroke",
+          },
+          eventRound,
+          scoreId: s.scoreId,
+          completed: isCompleted || s.roundComplete,
+        });
       }
     }
 
     if (eventRounds.length) {
+      const liveUrl = division
+        ? `https://www.pdga.com/live/event/${encodeURIComponent(String(link.event_id))}/${encodeURIComponent(division)}/scores`
+        : `https://www.pdga.com/live/event/${encodeURIComponent(String(link.event_id))}`;
       events.push({
         tournament: resolvedName,
         date: eventDate,
         epoch,
         division,
         eventId: String(link.event_id),
+        place: playerRes.place ?? playerRes.runningPlace,
+        total: playerRes.total,
+        to_par: playerRes.toPar,
+        average_rating: playerRes.averageRoundRating,
+        dnf: playerRes.dnf,
+        live_url: liveUrl,
         rounds: eventRounds,
       });
     }
@@ -255,6 +478,7 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
     const ob = applyPdgaLiveStatsToTotals(task.playRound.breakdown, statItems);
     obCount += ob.obCount;
     obHoles += ob.obHoles;
+    if (task.eventRound) task.eventRound.stats = roundThrowStats(statItems, ob);
   }
 
   const recentRated = ratedDescending.slice(0, RECENT_RATED_ROUNDS);
@@ -276,7 +500,7 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
   };
 }
 
-/** GET /pdga-stats?pdga=<digits>: official rating + Live API round ratings & stats (temporary cache, IP-rate-limited). */
+/** GET /pdga-stats?pdga=<digits>: official rating + annual stats + Live API round ratings & stats (temporary cache, IP-rate-limited). */
 export async function handlePdgaStats(request: Request, env: Env, origin: string | null): Promise<Response> {
   const raw = (new URL(request.url).searchParams.get("pdga") ?? "").trim();
   const headers = { "Cache-Control": "private, max-age=300" };
@@ -288,6 +512,7 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   const now = Date.now();
   const db = env.DB as unknown as D1Like;
   const apiEnv = env as unknown as PdgaApiEnv;
+  const targetYears = recentStatsYears(now);
   const links = await loadMatchedEventLinks(db, pdga, now).catch(() => []);
   const expectedLiveKeys = links.flatMap((link) => (
     link.watch_name ? [`player:${link.result_id}`] : [`player:${link.result_id}`, `event:${link.event_id}`]
@@ -305,8 +530,15 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
 
   // Fresh cached records are free; only uncached external fetches count toward the per-IP rate limit.
   const cached = await cachedPdgaPlayers(apiEnv, [pdga], now).catch(() => new Map<string, PdgaPlayer | null>());
-  if (cached.has(pdga) && liveCached) {
-    const base = statsFromPlayer(pdga, cached.get(pdga) ?? null);
+  const cachedPlayer = cached.has(pdga) ? (cached.get(pdga) ?? null) : undefined;
+  const cachedAnnual = cachedPlayer !== undefined && cachedPlayer != null
+    ? await cachedPdgaPlayerStats(apiEnv, pdga, targetYears, now).catch(() => new Map<number, PdgaAnnualStat[]>())
+    : new Map<number, PdgaAnnualStat[]>();
+  const annualCached = cachedPlayer === null || (cachedPlayer !== undefined && cachedAnnual.size === targetYears.length);
+
+  if (cachedPlayer !== undefined && annualCached && liveCached) {
+    const base = statsFromPlayer(pdga, cachedPlayer);
+    if (cachedPlayer) base.annual_stats = await lookupPdgaPlayerStats(apiEnv, pdga, targetYears, now).catch(() => []);
     const enriched = await enrichFromLiveApi(env, base, links, now).catch(() => base);
     return json(enriched, 200, origin, headers);
   }
@@ -315,8 +547,11 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
 
   let base: PdgaStats;
   try {
-    const player = cached.has(pdga) ? cached.get(pdga) ?? null : await lookupPdgaPlayer(apiEnv, pdga);
+    const player = cachedPlayer !== undefined ? cachedPlayer : await lookupPdgaPlayer(apiEnv, pdga);
     base = statsFromPlayer(pdga, player);
+    if (player) {
+      base.annual_stats = await lookupPdgaPlayerStats(apiEnv, pdga, targetYears, now).catch(() => []);
+    }
   } catch (error) {
     console.warn(JSON.stringify({ message: "pdga_stats_api_failed", error: error instanceof Error ? error.message : String(error) }));
     return json({ error: "pdga_unavailable" }, 503, origin);

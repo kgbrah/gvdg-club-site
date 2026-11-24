@@ -285,7 +285,7 @@ export default {
             // PDGA's API license allows temporary caching only: drop PDGA data past its cache time, hourly.
             try {
               const purged = await purgePdgaCaches(env, Date.now());
-              if (purged.players || purged.events) console.log(JSON.stringify({ message: "pdga_cache_purged", ...purged }));
+              if (purged.players || purged.events || purged.playerStats) console.log(JSON.stringify({ message: "pdga_cache_purged", ...purged }));
             } catch (error) {
               console.error(JSON.stringify({ message: "pdga_cache_purge_failed", error: error instanceof Error ? error.stack : String(error) }));
             }

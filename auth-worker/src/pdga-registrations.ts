@@ -26,8 +26,9 @@ import { getMember, readInBatches, type KVListLike } from "./roster.js";
 export const WATCH_STATES = ["NC", "VA", "SC"] as const;
 export type WatchState = (typeof WATCH_STATES)[number];
 export const WATCH_DAYS_AHEAD = 120;
-export const WATCH_DAYS_BACK = 21;
-export const EVENTS_PER_TICK = 4;
+export const WATCH_DAYS_BACK = 180;
+export const RECENT_DONE_DAYS = 14;
+export const EVENTS_PER_TICK = 6;
 const SOON_DAYS = 14;
 const REREAD_MINUTES = 55;
 const RECENT_DONE_RECHECK_MS = 6 * 60 * 60_000;
@@ -102,6 +103,7 @@ async function syncWatchEventsFromRestApi(env: Env, state: WatchState, now: numb
   let listed = 0;
   let removed = 0;
   const today = clubDay(now);
+  const recentDoneCutoff = clubDay(now, -RECENT_DONE_DAYS);
   const watchExpires = now + WATCH_TTL_MS;
 
   const backWindow = clubDay(now, -WATCH_DAYS_BACK);
@@ -129,14 +131,15 @@ async function syncWatchEventsFromRestApi(env: Env, state: WatchState, now: numb
         const start = event.startDate || startDate;
         const end = event.endDate || start;
         const location = [event.city, event.state].filter(Boolean).join(", ");
+        const initialCompleted = end < recentDoneCutoff ? 1 : 0;
         return db.prepare(`INSERT INTO pdga_watch_events
-            (event_id, state, name, tier, location, start_date, end_date, listed_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (event_id, state, name, tier, location, start_date, end_date, listed_at, completed, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(event_id) DO UPDATE SET
               state = excluded.state, name = excluded.name, tier = excluded.tier, location = excluded.location,
               start_date = excluded.start_date, end_date = excluded.end_date,
               listed_at = excluded.listed_at, expires_at = excluded.expires_at`)
-          .bind(event.id, state, event.name.slice(0, 160), event.tier.slice(0, 24), location.slice(0, 120), start, end, now, watchExpires);
+          .bind(event.id, state, event.name.slice(0, 160), event.tier.slice(0, 24), location.slice(0, 120), start, end, now, initialCompleted, watchExpires);
       });
       for (let i = 0; i < statements.length; i += 50) await runBatch(db, statements.slice(i, i + 50));
 
@@ -218,6 +221,7 @@ export async function refreshPdgaRegistrations(
 
   const today = clubDay(now);
   const backWindow = clubDay(now, -WATCH_DAYS_BACK);
+  const recentDoneCutoff = clubDay(now, -RECENT_DONE_DAYS);
   const soon = clubDay(now, SOON_DAYS);
   const stale = now - REREAD_MINUTES * 60_000;
   const doneRecheck = now - RECENT_DONE_RECHECK_MS;
@@ -226,20 +230,25 @@ export async function refreshPdgaRegistrations(
     `SELECT event_id, start_date, end_date, completed
        FROM pdga_watch_events
       WHERE expires_at > ? AND end_date >= ?
-        AND ((completed = 0 AND (read_at IS NULL OR read_at < ?))
-          OR (completed = 1 AND end_date >= ? AND (read_at IS NULL OR read_at < ?)))
+        AND (
+          (completed = 0 AND (read_at IS NULL OR read_at < ?))
+          OR (completed = 1 AND end_date >= ? AND (read_at IS NULL OR read_at < ?))
+          OR (completed = 1 AND end_date < ? AND read_at IS NULL)
+        )
       ORDER BY
         CASE
           WHEN completed = 0 AND start_date <= ? THEN 0
           WHEN completed = 0 AND read_at IS NULL THEN 1
           WHEN completed = 0 THEN 2
-          ELSE 3
+          WHEN completed = 1 AND end_date >= ? THEN 3
+          ELSE 4
         END,
         read_at IS NOT NULL,
-        read_at,
-        start_date
+        CASE WHEN completed = 0 THEN start_date END ASC,
+        CASE WHEN completed = 1 THEN start_date END DESC,
+        read_at
       LIMIT ?`,
-  ).bind(now, backWindow, stale, backWindow, doneRecheck, soon, EVENTS_PER_TICK)
+  ).bind(now, backWindow, stale, recentDoneCutoff, doneRecheck, recentDoneCutoff, soon, recentDoneCutoff, EVENTS_PER_TICK)
     .all<{ event_id: number; start_date: string; end_date: string; completed: number }>()).results ?? [];
 
   let read = 0;
@@ -265,9 +274,8 @@ export async function refreshPdgaRegistrations(
 
       const startDate = eventInfo.startDate || row.start_date;
       const endDate = eventInfo.endDate || row.end_date || startDate;
-      const isCompleted = endDate < today
-        && eventInfo.highestCompletedRound != null
-        && eventInfo.highestCompletedRound >= eventInfo.rounds
+      const isCompleted = endDate < recentDoneCutoff
+        || (endDate < today && eventInfo.highestCompletedRound != null && eventInfo.highestCompletedRound >= eventInfo.rounds)
         ? 1 : 0;
 
       const divCodes = eventInfo.divisions.filter((d) => d.players > 0).map((d) => d.division);

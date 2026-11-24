@@ -412,8 +412,21 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "#membersReactRatingPanel", "935", "React PDGA official rating");
   await waitForText(page, "#membersReactRatingPanel", "As of 2026-07-01", "React PDGA rating date");
   await waitForText(page, "#membersReactRatingPanel [data-react-live-rating='true']", "941", "React PDGA live rating estimate");
+  await waitForText(page, "#membersReactRatingPanel [data-pdga-annual-row='2026-MA1']", "8 events", "React PDGA official annual stats");
+  const historyHref = await page.locator("#membersReactRatingPanel").getByRole("link", { name: "Full ratings history" }).getAttribute("href");
+  if (historyHref !== "https://www.pdga.com/player/90000001/history") {
+    throw new Error(`Unexpected PDGA history link: ${historyHref}`);
+  }
   await page.locator("#membersReactRatingPanel .dash-collapse > summary").click();
   await waitForText(page, "#membersReactRatingPanel .dash-event", "GVDG QA Monthly", "React PDGA recent tournament");
+  const firstEventDetails = page.locator("#membersReactRatingPanel .dash-event-details").first();
+  await firstEventDetails.locator("summary").click();
+  await waitForText(page, "#membersReactRatingPanel .dash-event-details", "54 (-3)", "PDGA Live round score breakdown");
+  await waitForText(page, "#membersReactRatingPanel .dash-round-chips", "FWH 78%", "PDGA Live round throw stat chip");
+  const liveScorecardHref = await firstEventDetails.getByRole("link", { name: "PDGA Live scorecard" }).getAttribute("href");
+  if (liveScorecardHref !== "https://www.pdga.com/live/event/900001/MA1/scores") {
+    throw new Error(`Unexpected PDGA Live scorecard link: ${liveScorecardHref}`);
+  }
   await page.waitForSelector('[data-react-club-ratings="ready"]', { timeout: 10_000 });
   await waitForText(page, "[data-react-club-ratings]", "906", "React club ratings");
   // A layout-calibrated casual round names its basis (club evidence only; no PDGA baselines).

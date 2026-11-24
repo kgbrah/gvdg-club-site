@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { groupPdgaEventsByYear, pdgaEventTitle, pdgaEventYear } from "../src/members-app/pdga-dashboard.js";
+import {
+  formatPdgaAnnualSummary,
+  formatPdgaPlace,
+  formatPdgaToPar,
+  groupPdgaEventsByYear,
+  pdgaEventTitle,
+  pdgaEventYear,
+  pdgaRoundStatChips,
+} from "../src/members-app/pdga-dashboard.js";
 import { goingText, pdgaEventMeta, readPdgaRegistrations, tierLabel } from "../src/members-app/pdga-registrations.js";
 import { hasPdgaLiveDetailedStats, pdgaLiveObText, pdgaLivePositionText, pdgaLiveStatPctText } from "../src/public-app/pdga-live-panel.js";
 
@@ -20,7 +28,7 @@ test("pdga-registrations helpers format tiers, clubmates, and defend against mal
   );
 });
 
-test("pdga-dashboard helpers decode HTML entities and group events descending by year", () => {
+test("pdga-dashboard helpers decode HTML entities, format place/to-par/annual/stat chips, and group descending", () => {
   assert.equal(pdgaEventTitle("Greenville &amp; Classic &#039;26"), "Greenville & Classic '26");
   assert.equal(pdgaEventYear({ date: "Nov 1, 2026" }), "2026");
   const groups = groupPdgaEventsByYear([
@@ -28,6 +36,37 @@ test("pdga-dashboard helpers decode HTML entities and group events descending by
     { tournament: "New", date: "2026-06-20" },
   ]);
   assert.deepEqual(groups.map((g) => g.year), ["2026", "2025"]);
+
+  assert.equal(formatPdgaPlace(1), "1st");
+  assert.equal(formatPdgaPlace(2), "2nd");
+  assert.equal(formatPdgaPlace(3), "3rd");
+  assert.equal(formatPdgaPlace(11), "11th");
+  assert.equal(formatPdgaPlace(22), "22nd");
+  assert.equal(formatPdgaPlace(99, true), "DNF");
+  assert.equal(formatPdgaPlace(null), "");
+
+  assert.equal(formatPdgaToPar(0), "E");
+  assert.equal(formatPdgaToPar(-4), "-4");
+  assert.equal(formatPdgaToPar(3), "+3");
+  assert.equal(formatPdgaToPar(null), "");
+
+  assert.deepEqual(pdgaRoundStatChips({
+    fwh: { hit: 12, opp: 16 },
+    c1r: { hit: 0, opp: 0 }, // opp === 0 means no throw tracking -> omitted
+    c1x: { hit: 9, opp: 10 },
+    ob: { count: 2, holes: 18 },
+  }), [
+    { id: "fwh", label: "FWH", text: "FWH 75%" },
+    { id: "c1x", label: "C1X", text: "C1X 90%" },
+    { id: "ob", label: "OB", text: "OB 2" },
+  ]);
+
+  assert.deepEqual(formatPdgaAnnualSummary({
+    events: 8,
+    points: 412,
+    prize: 240,
+    wins: 2,
+  }), ["8 events", "412 pts", "$240 cash", "2 wins"]);
 });
 
 test("pdga-live-panel helpers handle ties, DNF, and missing throw tracking (opp === 0)", () => {

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { preRegistrationCsv } from "../src/admin-app/tournament-panel.js";
-import { PDGA_HOME, pdgaEventHref, pdgaPlayerHref } from "../src/shared/pdga-credit.js";
+import { PDGA_HOME, pdgaEventHref, pdgaLiveEventHref, pdgaPlayerHistoryHref, pdgaPlayerHref, pdgaPlayerStatsHref } from "../src/shared/pdga-credit.js";
 import { formatPdgaTier, isAmateurDivision, STANDARD_DIVISION_LIMITS } from "../src/shared/pdga-divisions.js";
 
 // PDGA Developer Program attribution: every screen showing PDGA data says "Player, event, and course data provided
@@ -12,7 +12,11 @@ import { formatPdgaTier, isAmateurDivision, STANDARD_DIVISION_LIMITS } from "../
 test("PDGA links point at pdga.com player and event pages, and nowhere else", () => {
   assert.equal(PDGA_HOME, "https://www.pdga.com");
   assert.equal(pdgaPlayerHref("#80024"), "https://www.pdga.com/player/80024");
+  assert.equal(pdgaPlayerStatsHref("#80024", 2026), "https://www.pdga.com/player/80024/stats/2026");
+  assert.equal(pdgaPlayerStatsHref("#80024"), "https://www.pdga.com/player/80024/stats");
+  assert.equal(pdgaPlayerHistoryHref("#80024"), "https://www.pdga.com/player/80024/history");
   assert.equal(pdgaEventHref(104547), "https://www.pdga.com/tour/event/104547");
+  assert.equal(pdgaLiveEventHref(104547, "MA1"), "https://www.pdga.com/live/event/104547/MA1/scores");
   assert.equal(pdgaEventHref("javascript:alert(1)"), "https://www.pdga.com/tour/event/1");
   assert.equal(pdgaEventHref(""), "");
   const credit = readFileSync("src/shared/pdga-credit.js", "utf8");
@@ -43,8 +47,12 @@ test("every screen that shows PDGA data carries the PDGA credit", () => {
 });
 
 test("PDGA event names and players link to their pdga.com pages", () => {
-  assert.match(readFileSync("src/members-app/pdga-dashboard.js", "utf8"), /pdgaPlayerHref\(pdgaNo\)/);
-  assert.match(readFileSync("src/members-app/pdga-dashboard.js", "utf8"), /pdgaEventHref\(event\.eventId\)/);
+  const dash = readFileSync("src/members-app/pdga-dashboard.js", "utf8");
+  assert.match(dash, /pdgaPlayerHref\(pdgaNo\)/);
+  assert.match(dash, /pdgaPlayerStatsHref\(pdgaNo/);
+  assert.match(dash, /pdgaPlayerHistoryHref\(pdgaNo\)/);
+  assert.match(dash, /pdgaEventHref\(event\.eventId\)/);
+  assert.match(dash, /pdgaLiveEventHref\(event\.eventId/);
   assert.match(readFileSync("src/members-app/overview-dashboard.js", "utf8"), /h\(PdgaLink, \{ href: pdgaPlayerHref\(context\.pdgaNo\) \}, meta\)/);
   assert.match(readFileSync("src/members-app/pdga-events-panel.js", "utf8"), /h\(PdgaLink, \{ className: "register-name", href: event\.pdgaUrl/);
   assert.match(readFileSync("src/members-app/pdga-registrations.js", "utf8"), /h\(PdgaLink, \{ className: "register-name", href: event\.url/);

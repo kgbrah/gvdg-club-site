@@ -28,11 +28,13 @@ function memoryKv() {
 async function env(
   players: Record<string, Record<string, unknown>> = {},
   liveHandlers: Record<string, unknown> = {},
+  annualStats: Record<string, Record<string, unknown>[]> = {},
 ) {
   const { DatabaseSync } = await import("node:sqlite");
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`
     CREATE TABLE pdga_api_players (pdga_number TEXT PRIMARY KEY, data TEXT, fetched_at INTEGER NOT NULL);
+    CREATE TABLE pdga_api_player_stats (pdga_number TEXT NOT NULL, year INTEGER NOT NULL, data TEXT, fetched_at INTEGER NOT NULL, PRIMARY KEY (pdga_number, year));
     CREATE TABLE pdga_live_cache (cache_key TEXT PRIMARY KEY, etag TEXT, payload TEXT NOT NULL, fetched_at INTEGER NOT NULL, expires_at INTEGER NOT NULL);
     CREATE TABLE pdga_watch_events (
       event_id INTEGER PRIMARY KEY, state TEXT NOT NULL, name TEXT NOT NULL, tier TEXT NOT NULL DEFAULT '',
@@ -62,7 +64,14 @@ async function env(
     calls.push(url);
     if (url.endsWith("/services/json/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
     if (url.startsWith(API)) {
-      const numbers = (new URL(url).searchParams.get("pdga_number") ?? "").split(",");
+      const parsed = new URL(url);
+      if (parsed.pathname === "/services/json/player-statistics") {
+        const year = parsed.searchParams.get("year") ?? "";
+        const pdgaNo = parsed.searchParams.get("pdga_number") ?? "";
+        const rows = (annualStats[year] ?? []).filter((r) => !pdgaNo || String(r.pdga_number ?? "") === pdgaNo);
+        return Response.json({ sessid: "s", status: rows.length ? 0 : 1, players: rows });
+      }
+      const numbers = (parsed.searchParams.get("pdga_number") ?? "").split(",");
       return Response.json({ players: numbers.flatMap((number) => players[number] ? [players[number]] : []) });
     }
     for (const [needle, body] of Object.entries(liveHandlers)) {
@@ -112,9 +121,11 @@ describe("GET /pdga-stats", () => {
       events: [], play_rounds: [], source: "pdga-api", stats_version: PDGA_STATS_VERSION });
   });
 
-  it("enriches /pdga-stats with documented PDGA Live round ratings and /api/v1/ throw/putting stats, then serves from temporary cache", async () => {
+  it("enriches /pdga-stats with annual REST stats, documented PDGA Live round details, and /api/v1/ throw/putting stats, then serves from temporary cache", async () => {
+    const currentYear = String(new Date().getUTCFullYear());
     const { env: target, sqlite, calls } = await env(
-      { "80024": { pdga_number: "80024", first_name: "Ada", last_name: "Lovelace", membership_status: "current", rating: "941", rating_effective_date: "2026-11-11" } },
+      { "80024": { pdga_number: "80024", first_name: "Ada", last_name: "Lovelace",
+        membership_status: "current", rating: "941", rating_effective_date: "2026-11-11" } },
       {
         "live_results_fetch_player?ResultID=555": {
           data: {
@@ -123,6 +134,10 @@ describe("GET /pdga-stats", () => {
             PDGANum: 80024,
             Name: "Ada Lovelace",
             Division: "FPO",
+            Place: 2,
+            Total: 106,
+            ToPar: -6,
+            AverageRoundRating: 961,
             Scores: [
               {
                 ScoreID: 8801,
@@ -172,6 +187,23 @@ describe("GET /pdga-stats", () => {
           { statId: 9, statCount: 2, statOpportunityCount: 18, statValue: 11.11 },
         ],
       },
+      {
+        [currentYear]: [
+          {
+            pdga_number: "80024",
+            year: currentYear,
+            division_code: "FPO",
+            division_name: "Pro Open Women",
+            class: "P",
+            rating: "941",
+            events: "6",
+            points: "340.5",
+            prize: "$150.00",
+            players_defeated: "48",
+            wins: "1",
+          },
+        ],
+      },
     );
     const future = Date.now() + 86_400_000;
     sqlite.prepare("INSERT INTO pdga_watch_events (event_id, state, name, start_date, end_date, listed_at, completed, expires_at) VALUES (96414, 'NC', 'Greenville &amp; Open', '2026-11-01', '2026-11-02', 1, 1, ?)").run(future);
@@ -189,6 +221,21 @@ describe("GET /pdga-stats", () => {
       live_stats: { ob_count: 3, ob_holes: 36 },
       stats_version: PDGA_STATS_VERSION,
       source: "pdga-api",
+      annual_stats: [
+        {
+          year: Number(currentYear),
+          divisionCode: "FPO",
+          divisionName: "Pro Open Women",
+          classification: "P",
+          rating: 941,
+          events: 6,
+          points: 340.5,
+          prize: 150,
+          playersDefeated: 48,
+          wins: 1,
+          url: `https://www.pdga.com/player/80024/stats/${currentYear}`,
+        },
+      ],
     });
     expect(body.events).toEqual([
       {
@@ -197,9 +244,53 @@ describe("GET /pdga-stats", () => {
         epoch: Math.floor(Date.parse("2026-11-01T12:00:00Z") / 1000),
         division: "FPO",
         eventId: "96414",
+        place: 2,
+        total: 106,
+        to_par: -6,
+        average_rating: 961,
+        dnf: false,
+        live_url: "https://www.pdga.com/live/event/96414/FPO/scores",
         rounds: [
-          { rating: 952, score: 54, round: "1" },
-          { rating: 970, score: 52, round: "2" },
+          {
+            rating: 952,
+            score: 54,
+            round: "1",
+            to_par: -2,
+            date: "2026-11-01",
+            complete: true,
+            holes: 3,
+            aces: 0,
+            eagles: 0,
+            birdies: 1,
+            pars: 1,
+            bogeys: 1,
+            doubles_plus: 0,
+            stats: {
+              fwh: { hit: 12, opp: 16 },
+              c1x: { hit: 8, opp: 10 },
+              ob: { count: 1, holes: 18 },
+            },
+          },
+          {
+            rating: 970,
+            score: 52,
+            round: "2",
+            to_par: -4,
+            date: "2026-11-02",
+            complete: true,
+            holes: 3,
+            aces: 0,
+            eagles: 0,
+            birdies: 2,
+            pars: 1,
+            bogeys: 0,
+            doubles_plus: 0,
+            stats: {
+              fwh: { hit: 14, opp: 16 },
+              c1r: { hit: 10, opp: 18 },
+              ob: { count: 2, holes: 18 },
+            },
+          },
         ],
       },
     ]);

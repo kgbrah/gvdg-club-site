@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
 import {
-  lookupPdgaPlayer, lookupPdgaPlayers, normalPdgaNumber, PdgaApiError, purgePdgaCaches, resetPdgaApiSession, searchPdgaEvents, type PdgaApiEnv,
+  lookupPdgaPlayer, lookupPdgaPlayers, lookupPdgaPlayerStats, normalPdgaNumber, parsePdgaAnnualStat, PdgaApiError, pdgaPlayerStatsUrl, purgePdgaCaches, resetPdgaApiSession, searchPdgaEvents, type PdgaApiEnv,
 } from "../src/pdga-api.js";
 import { freshPdgaEventCopy, refreshClubPdgaEventCopies, stampPdgaEvent } from "../src/pdga-event-cache.js";
 import { listNearbyPdgaEvents, pdgaApiEventDate, pdgaApiTierLabel } from "../src/pdga-events.js";
@@ -63,6 +63,7 @@ type Call = { url: string; method: string; headers: Record<string, string>; body
 function fakePdga(options: {
   players?: Record<string, Record<string, unknown>>;
   events?: Record<string, unknown>[];
+  playerStats?: Record<string, Record<string, unknown>[]>;
   refuseFirst?: boolean;
   limited?: boolean;
 } = {}) {
@@ -89,6 +90,12 @@ function fakePdga(options: {
       const numbers = (path.searchParams.get("pdga_number") ?? "").split(",");
       const players = numbers.flatMap((number) => options.players?.[number] ? [options.players[number]] : []);
       return Response.json({ sessid: "abc", status: 0, players, not_found: numbers.filter((number) => !options.players?.[number]) });
+    }
+    if (path.pathname === "/services/json/player-statistics") {
+      const year = path.searchParams.get("year") ?? "";
+      const pdgaNo = path.searchParams.get("pdga_number") ?? "";
+      const rows = (options.playerStats?.[year] ?? []).filter((r) => !pdgaNo || String(r.pdga_number ?? "") === pdgaNo);
+      return Response.json({ sessid: "abc", status: rows.length ? 0 : 1, players: rows });
     }
     if (path.pathname === "/services/json/event") {
       const offset = Number(path.searchParams.get("offset") ?? 0);
@@ -250,13 +257,61 @@ describe("features using the official API when the club's login is set", () => {
     expect(rows().map((row) => (row as { rating: number }).rating)).toEqual([948]);
   });
 
-  it("purges PDGA player records and nearby-event lists past their cache time", async () => {
+  it("purges PDGA player records, annual stats, and nearby-event lists past their cache time", async () => {
     vi.stubGlobal("fetch", fakePdga({ players: { "80024": player("80024", 941) } }).handler);
     await lookupPdgaPlayer(apiEnv(), "80024");
     db.raw.exec("INSERT INTO kv_store (ns, key, value, expires_at) VALUES ('pdgaevents', 'old', '[]', 1), ('pdgaevents', 'fresh', '[]', 9999999999999), ('ratelimit', 'x', '1', 1)");
-    expect(await purgePdgaCaches({ DB: db as never }, Date.now())).toEqual({ players: 0, events: 1 });
-    expect(await purgePdgaCaches({ DB: db as never }, Date.now() + 6 * 3_600_000 + 1)).toEqual({ players: 1, events: 0 });
+    expect(await purgePdgaCaches({ DB: db as never }, Date.now())).toEqual({ players: 0, events: 1, playerStats: 0 });
+    expect(await purgePdgaCaches({ DB: db as never }, Date.now() + 6 * 3_600_000 + 1)).toEqual({ players: 1, events: 0, playerStats: 0 });
     expect(db.raw.prepare("SELECT ns, key FROM kv_store ORDER BY ns, key").all()).toEqual([{ ns: "pdgaevents", key: "fresh" }, { ns: "ratelimit", key: "x" }]);
+  });
+
+  it("fetches /services/json/player-statistics per year, parses fields, caches temporarily, and purges hourly", async () => {
+    expect(pdgaPlayerStatsUrl("80024", 2026)).toBe("https://www.pdga.com/player/80024/stats/2026");
+    expect(pdgaPlayerStatsUrl("80024")).toBe("https://www.pdga.com/player/80024/stats");
+    expect(parsePdgaAnnualStat({ pdga_number: "80024", year: "2026", division_code: "ma1", class: "A", rating: "941", events_played: "8", points: "412.5", prize: "$1,250.25", players_defeated: "120", wins: "2" })).toEqual({
+      year: 2026,
+      divisionCode: "MA1",
+      divisionName: null,
+      classification: "A",
+      rating: 941,
+      events: 8,
+      points: 412.5,
+      prize: 1250.25,
+      playersDefeated: 120,
+      wins: 2,
+      url: "https://www.pdga.com/player/80024/stats/2026",
+    });
+    expect(parsePdgaAnnualStat({ year: "2026", division_code: "MA1" })).toBeNull();
+
+    const pdga = fakePdga({
+      playerStats: {
+        "2026": [
+          { pdga_number: "80024", year: "2026", division_code: "FPO", division_name: "Pro Open Women", class: "P", rating: "941", events: "5", points: "220", prize: "$300", wins: "1" },
+          { pdga_number: "80024", year: "2026", division_code: "FP40", division_name: "Pro Masters 40+ Women", class: "P", rating: "941", events: "2", points: "80", prize: "$50", wins: "0" },
+        ],
+      },
+    });
+    vi.stubGlobal("fetch", pdga.handler);
+    const stats = await lookupPdgaPlayerStats(apiEnv(), "80024", [2026, 2025], NOW);
+    expect(stats.map((row) => [row.year, row.divisionCode, row.events, row.prize])).toEqual([
+      [2026, "FPO", 5, 300],
+      [2026, "FP40", 2, 50],
+    ]);
+    expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(2);
+
+    // Within 1h/6h cache window: zero extra API calls.
+    const cachedAgain = await lookupPdgaPlayerStats(apiEnv(), "80024", [2026, 2025], NOW + 30 * 60_000);
+    expect(cachedAgain).toHaveLength(2);
+    expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(2);
+
+    // Past 1h: empty year (2025) re-fetches while non-empty year (2026) stays cached up to 6h.
+    await lookupPdgaPlayerStats(apiEnv(), "80024", [2026, 2025], NOW + 65 * 60_000);
+    expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(3);
+
+    // Hourly purge deletes expired playerStats past 6h (year 2026 purged first; +65m row follows at +8h).
+    expect(await purgePdgaCaches({ DB: db as never }, NOW + 7 * 3_600_000)).toMatchObject({ playerStats: 1 });
+    expect(await purgePdgaCaches({ DB: db as never }, NOW + 8 * 3_600_000)).toMatchObject({ playerStats: 1 });
   });
 
   it("re-reads the club's PDGA events from the API, and clears PDGA data from events two weeks past", async () => {

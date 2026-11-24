@@ -27,7 +27,7 @@ import { WorkdaysHomeCard } from "./workdays-home-card.js";
 import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration } from "../shared/event-calendar.js";
 import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
 import { KarmaChip } from "../shared/karma.js";
-import { PdgaCredit, PdgaLink, pdgaEventHref, pdgaPlayerHref } from "../shared/pdga-credit.js";
+import { PdgaCredit, PdgaLink, pdgaEventHref, pdgaPlayerHistoryHref, pdgaPlayerHref } from "../shared/pdga-credit.js";
 import { PdgaMembershipCard, pdgaMembershipNeedsAttention } from "../shared/pdga-membership.js";
 import { checkPdgaMembershipAgain, usePdgaMembership } from "./pdga-membership.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
@@ -289,9 +289,10 @@ function RatingMove({ stats, status }) {
   ]);
 }
 
-function PdgaHistory({ stats }) {
+function PdgaHistory({ stats, pdgaNo }) {
   const events = Array.isArray(stats?.events) ? stats.events : [];
   if (!events.length) return null;
+  const historyHref = pdgaPlayerHistoryHref(pdgaNo);
   return h("details", { className: "dash-collapse player-story-history", key: "history" }, [
     h("summary", { className: "dash-collapse-summary", key: "summary" }, `PDGA events (${events.length})`),
     h("div", { className: "player-story-events", key: "list" }, events.slice(0, 6).map((event, index) =>
@@ -306,7 +307,13 @@ function PdgaHistory({ stats }) {
         ]),
       ]),
     )),
-  ]);
+    historyHref ? h("p", { className: "player-card-meta pdga-history-more", key: "more" }, h("a", {
+      className: "pdga-link",
+      href: historyHref,
+      rel: "noopener noreferrer",
+      target: "_blank",
+    }, "Full PDGA history on PDGA.com")) : null,
+  ].filter(Boolean));
 }
 
 export function MemberOverviewDashboard() {
@@ -364,7 +371,7 @@ export function MemberOverviewDashboard() {
       h(LastRoundCard, { token, onCasualHistory: setPlayedCasual, key: "recent" }),
       h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
       h(NextPdgaCard, { key: "next-pdga", token }),
-      h(PdgaHistory, { stats: pdgaState.stats, key: "history" }),
+      h(PdgaHistory, { stats: pdgaState.stats, pdgaNo: context.pdgaNo, key: "history" }),
       // Renewal nudge: only when the member's PDGA membership has lapsed or ends soon.
       pdgaMembershipNeedsAttention(pdgaMembership)
         ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true, credit: false, onCheckAgain: checkPdgaMembershipAgain })) : null,

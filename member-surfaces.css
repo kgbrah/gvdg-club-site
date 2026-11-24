@@ -1500,3 +1500,146 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
   flex: none;
   accent-color: var(--accent);
 }
+
+/* Official PDGA season totals, expanded Live round breakdowns, and deep-links (tokens only). */
+#members .pdga-profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .85rem;
+  margin-bottom: .45rem;
+}
+#members .pdga-profile-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  font-weight: 700;
+}
+#members .pdga-source-note {
+  margin: 0 0 .85rem;
+  color: var(--text-secondary);
+  font-size: .82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+#members .pdga-annual-section {
+  display: grid;
+  gap: .5rem;
+  margin: 0 0 .9rem;
+}
+#members .pdga-annual-section .dash-subtitle {
+  margin: 0;
+}
+#members .pdga-annual-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15.5rem), 1fr));
+  gap: .55rem;
+}
+#members .pdga-annual-row {
+  display: grid;
+  gap: .28rem;
+  padding: .68rem .75rem;
+  border: 1px solid var(--member-line);
+  border-radius: .65rem;
+  background: var(--member-panel);
+  min-width: 0;
+}
+#members .pdga-annual-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  color: var(--text-primary);
+}
+#members .pdga-annual-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .84rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#members .dash-event-details {
+  margin-top: .5rem;
+  padding-top: .45rem;
+  border-top: 1px solid var(--member-line);
+}
+#members .dash-event-details > summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: .8rem;
+  font-weight: 700;
+  list-style-position: inside;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+#members .dash-round-list {
+  display: grid;
+  gap: .45rem;
+  margin-top: .45rem;
+}
+#members .dash-round-item {
+  display: grid;
+  gap: .25rem;
+  padding: .5rem .6rem;
+  border: 1px solid var(--member-line);
+  border-radius: .5rem;
+  background: var(--member-paper);
+  min-width: 0;
+}
+#members .dash-round-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .3rem .6rem;
+}
+#members .dash-round-label {
+  color: var(--text-secondary);
+  font-size: .82rem;
+  font-weight: 700;
+}
+#members .dash-round-score-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-variant-numeric: tabular-nums;
+}
+#members .dash-round-score {
+  color: var(--text-primary);
+  font-size: .92rem;
+}
+#members .dash-round-mix {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .8rem;
+}
+#members .dash-round-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem;
+}
+#members .dash-round-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: .12rem .42rem;
+  border: 1px solid var(--member-line);
+  border-radius: 999px;
+  background: var(--member-panel);
+  color: var(--text-primary);
+  font-size: .74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+#members .dash-event-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .85rem;
+  margin-top: .45rem;
+}
+#members .pdga-history-more {
+  margin: .5rem 0 0;
+  font-size: .84rem;
+}
