@@ -219,7 +219,7 @@ test("sw.js precaches public-app/chunks and retains previous public chunks acros
 
 test("sw.js offline navigation falls back to scoring-app.html (with query), gvdg-members.html, and Response.error() when uncached", async () => {
   const caches = new MemoryCaches();
-  const cache = await caches.open("gvdg-club-v375");
+  const cache = await caches.open("gvdg-club-v376");
   await cache.put("scoring-app.html", fakeResponse("<html>scoring app shell</html>", { type: "text/html" }));
   await cache.put("gvdg-members.html", fakeResponse("<html>members shell</html>", { type: "text/html" }));
 

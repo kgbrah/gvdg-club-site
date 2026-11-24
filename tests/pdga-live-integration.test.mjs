@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -89,4 +90,22 @@ test("pdga-live-panel helpers handle ties, DNF, and missing throw tracking (opp 
   assert.equal(pdgaLiveObText({ obRate: { hit: null, opp: 18, value: 5.56 } }), "5.6%");
   assert.equal(hasPdgaLiveDetailedStats([{ scores: [{ stats: null }] }]), false);
   assert.equal(hasPdgaLiveDetailedStats([{ scores: [{ stats: { fwh: { hit: 1, opp: 2, value: 50 } } }] }]), true);
+});
+
+test("pdga-live-panel splits round controls, gives lb-wrap scroll-region semantics, and locks grid overflow in CSS", () => {
+  const panelSource = readFileSync("src/shared/pdga-live-panel.js", "utf8");
+  const memberCss = readFileSync("member-surfaces.css", "utf8");
+  const publicCss = readFileSync("public-polish.css", "utf8");
+
+  assert.match(panelSource, /className: "pdga-live-block"/);
+  assert.match(panelSource, /pdga-live-controls pdga-live-rounds/);
+  assert.match(panelSource, /role: "region"/);
+  assert.match(panelSource, /tabIndex: 0/);
+  assert.match(memberCss, /#members \.pdga-live-drawer\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(memberCss, /#members \.pdga-live-drawer > \.player-btn\s*\{[^}]*width:\s*100%/);
+  assert.match(memberCss, /#members \.pdga-live-panel\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(memberCss, /#members \.pdga-live-block\s*\{[^}]*min-width:\s*0/);
+  assert.match(memberCss, /#members \.pdga-live-panel \.lb-wrap\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(publicCss, /\[data-pdga-live-panel\] \.pdga-live-block\s*\{[^}]*min-width:\s*0/);
+  assert.match(publicCss, /\[data-pdga-live-panel\] \.lb-wrap\s*\{[^}]*overflow-x:\s*auto/);
 });
