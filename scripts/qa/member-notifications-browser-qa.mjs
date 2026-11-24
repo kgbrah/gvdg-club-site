@@ -12,7 +12,7 @@ const member = { sub: "m_qa", name: "Taylor Morgan", pdgaNo: "123456", isAdmin: 
 const shots = process.env.GVDG_NOTIFY_IMAGES || join(tmpdir(), "gvdg-member-notifications");
 const apiRoot = "/fixture";
 const calls = [];
-let server = { devices: [], prefs: { bagTags: true } };
+let server = { devices: [], prefs: { bagTags: true, messages: true, announcements: true } };
 
 async function readBody(request) {
   const chunks = [];
@@ -88,22 +88,28 @@ async function open(mode, mock) {
 }
 
 for (const mode of ["light", "dark"]) {
-  server = { devices: [], prefs: { bagTags: true } };
+  server = { devices: [], prefs: { bagTags: true, messages: true, announcements: true } };
   calls.length = 0;
   const view = await open(mode, {});
   const { page } = view;
   const master = page.locator("[data-member-switch='notifications']");
   assert.equal(await master.getAttribute("aria-checked"), "false");
+  assert.equal(await page.locator("[data-member-switch='announcements']").count(), 0, "announcements category hidden until notifications are on");
   assert.equal(await page.locator("[data-member-switch='bag-tags']").count(), 0, "category hidden until notifications are on");
   await master.scrollIntoViewIfNeeded();
   await page.screenshot({ path: join(shots, "notifications-off-" + mode + ".png"), animations: "disabled" });
   await master.click();
   await page.locator("[data-member-notifications='on']").waitFor();
   assert.equal(await master.getAttribute("aria-checked"), "true");
+  const ann = page.locator("[data-member-switch='announcements']");
+  assert.equal(await ann.getAttribute("aria-checked"), "true", "Club announcements default on");
   const bag = page.locator("[data-member-switch='bag-tags']");
   assert.equal(await bag.getAttribute("aria-checked"), "true", "Bag tag challenges default on");
-  assert.deepEqual(calls.find((c) => c.method === "PUT").body.prefs, { bagTags: true });
+  assert.deepEqual(calls.find((c) => c.method === "PUT").body.prefs, { bagTags: true, messages: true, announcements: true });
   await page.screenshot({ path: join(shots, "notifications-on-" + mode + ".png"), animations: "disabled" });
+  await ann.click();
+  await page.waitForFunction(() => document.querySelector("[data-member-switch='announcements']")?.getAttribute("aria-checked") === "false");
+  assert.equal(server.prefs.announcements, false, "announcements preference saved to the server");
   await bag.click();
   await page.waitForFunction(() => document.querySelector("[data-member-switch='bag-tags']")?.getAttribute("aria-checked") === "false");
   assert.equal(server.prefs.bagTags, false, "preference saved to the server");
@@ -124,7 +130,7 @@ await denied.context.close();
 const unsupported = await open("light", { supported: false });
 await unsupported.page.locator("[data-member-notifications='unsupported']").waitFor();
 await unsupported.context.close();
-server = { devices: [], prefs: { bagTags: true }, unconfigured: true };
+server = { devices: [], prefs: { bagTags: true, messages: true, announcements: true }, unconfigured: true };
 const off = await open("light", {});
 await off.page.locator("[data-member-notifications='unconfigured']").waitFor();
 await off.context.close();

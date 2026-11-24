@@ -22,6 +22,7 @@ import { EmailReminderCard, WelcomeCard } from "./welcome-card.js";
 import { BagTagPanel } from "./bag-tag-panel.js";
 import { InboxHomeAlert } from "./inbox-home-alert.js";
 import { useInboxSummary } from "./inbox-summary.js";
+import { AnnouncementsHomeCard } from "./announcements-home-card.js";
 import { WorkdaysHomeCard } from "./workdays-home-card.js";
 import { calendarEventFromClub, calendarEventFromPdga, calendarEventFromPdgaRegistration } from "../shared/event-calendar.js";
 import { GoingLine, pdgaEventMeta, readPdgaRegistrations } from "./pdga-registrations.js";
@@ -349,6 +350,7 @@ export function MemberOverviewDashboard() {
         h(BagTagPanel, { key: "bag-tags", token, compact: true }),
       ]),
     ]),
+    h(AnnouncementsHomeCard, { token, key: "announcements" }),
     h(WorkdaysHomeCard, { token, key: "workdays" }),
     h(HomeJobs, {
       events: registration.state.events,

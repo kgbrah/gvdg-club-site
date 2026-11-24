@@ -62,6 +62,7 @@ import { handleVoiceDisc } from "./voice-disc-route.js";
 import { handleBag } from "./bag-routes.js";
 import { handleMyDonations } from "./club-donations.js";
 import { handleMemberWorkdays } from "./club-workdays.js";
+import { handleMemberAnnouncements } from "./club-announcements.js";
 import { runLostFoundTick } from "./lf-process.js";
 import { sendMembershipRenewalReminders } from "./membership-renewal.js";
 import { handlePdgaPlayerLookup } from "./tournament-routes.js";
@@ -172,7 +173,7 @@ export default {
       if (pathname === "/my-play-export" && method === "GET") return await handleMyPlayExport(request, env, origin);
       if (pathname === "/my-ratings" && method === "GET") return await handleMyRatings(request, env, origin);
       if (pathname === "/my-live-rounds" && method === "GET") return await handleMyLiveRounds(request, env, origin);
-      if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin);
+      if (pathname === "/board" || pathname.startsWith("/board/")) return await handleBoard(request, env, origin, ctx);
       if (pathname === "/my-registrations" && method === "GET") return await handleMyRegistrations(request, env, origin);
       if (pathname === "/set-pin" && method === "POST") return await handleSetPin(request, env, origin);
       if (pathname === "/profile" && method === "POST") return await handleProfile(request, env, origin);
@@ -209,6 +210,8 @@ export default {
       if (pathname === "/me/donations") return await handleMyDonations(request, env, origin, method, ctx);
       const workdays = await handleMemberWorkdays(request, env, origin, pathname, method, ctx);
       if (workdays) return workdays;
+      const announcements = await handleMemberAnnouncements(request, env, origin, pathname, method);
+      if (announcements) return announcements;
       const bag = await handleBag(request, env, origin, pathname, method);
       if (bag) return bag;
       const market = await handleMarket(request, env, origin, pathname, method, ctx);

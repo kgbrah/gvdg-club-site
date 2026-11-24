@@ -7,6 +7,7 @@ import { asInt } from "./input.js";
 import { getMember } from "./roster.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { sanitizeProfilePhoto } from "./profile-photo.js";
+import { broadcastClubAnnouncement } from "./club-announcements.js";
 
 const BOARD_LIMIT = 15;
 
@@ -32,7 +33,12 @@ async function boardAuthorPhotos(env: Env, posts: Record<string, unknown>[]): Pr
   return out;
 }
 
-export async function handleBoard(request: Request, env: Env, origin: string | null): Promise<Response> {
+export async function handleBoard(
+  request: Request,
+  env: Env,
+  origin: string | null,
+  ctx?: ExecutionContext,
+): Promise<Response> {
   const claims = await requireAuth(request, env);
   if (!claims) return json({ error: "unauthorized" }, 401, origin);
   const seg = new URL(request.url).pathname.split("/").filter(Boolean);
@@ -55,6 +61,17 @@ export async function handleBoard(request: Request, env: Env, origin: string | n
     }
     const member = await getMember(env.ROSTER, claims.sub);
     const row = await db.createBoardPost(env.DB, { parent_id: parentId, member_id: claims.sub, author_name: member?.name ?? "Member", body });
+    const rowId = asInt((row as { id?: unknown } | null)?.id);
+    if (parentId == null && member?.isAdmin === true && bodyData.announce === true && rowId != null) {
+      await broadcastClubAnnouncement(ctx, env, {
+        kind: "announcement",
+        title: "Club board announcement",
+        body: body.slice(0, 180),
+        href: "/gvdg-members.html#board",
+        refKey: `board-announce-${rowId}`,
+        tag: `board-${rowId}`,
+      });
+    }
     return json({ post: row }, 201, origin);
   }
   if (method === "DELETE" && seg.length === 2) {

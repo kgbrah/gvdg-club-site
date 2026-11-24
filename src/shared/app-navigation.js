@@ -40,6 +40,7 @@ export const ADMIN_DESTINATIONS = [
   entry("scoring", "Live scoring", "events", { terms: "start round score cards putting scores scoring", context: "event" }),
   entry("results", "Results", "events", { terms: "finished standings finalize scores publish", context: "event", pane: "scoring" }),
   entry("members", "Members", "members", { terms: "roster profile PIN role access membership" }),
+  entry("announcements", "Announcements", "members", { terms: "announce announcement broadcast push notify members club news alert" }),
   entry("applications", "Member applications", "members", { terms: "approve reject pending requests membership", pane: "members", focus: "applications" }),
   // The club's Google Sheets bring in people, tiers, store credit, dues and bag tags: a Members tool (owner: "this
   // should be in MEMBERS"; it used to sit under Events › Import event).

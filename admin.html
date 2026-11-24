@@ -361,6 +361,7 @@
         body[data-admin-tab="wallets"] #apane-wallets,
         body[data-admin-tab="orders"] #apane-orders,
         body[data-admin-tab="members"] #apane-members,
+        body[data-admin-tab="announcements"] #apane-announcements,
         body[data-admin-tab="data-archive"] #apane-data-archive { display: block; }
         body[data-admin-tab="review-queue"] #apane-review-queue { display: block; }
         body[data-admin-tab="marketplace"] #apane-marketplace { display: block; }
@@ -855,6 +856,9 @@
                     <p class="al-note">Membership runs through December 31 and renews on January 1. Mark someone renewed after dues are in. Remove drops their login. Past scores stay. Members get a reminder push on December 1.</p>
                     <div id="adminMembersListReactApp"></div>
                 </div>
+            </div>
+            <div class="admin-pane" id="apane-announcements">
+                <div id="adminAnnouncementsReactApp"></div>
             </div>
             <div class="admin-pane" id="apane-more"><div id="adminMoreReactApp"></div></div>
             <div class="admin-pane" id="apane-review-queue"><div id="adminCommunityReactApp"></div></div>

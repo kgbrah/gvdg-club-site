@@ -20,6 +20,7 @@ import { handleTournamentAdmin } from "./tournament-routes.js";
 import { handleAdminPdgaPromo } from "./pdga-membership-routes.js";
 import { handleAdminDonations } from "./club-donations.js";
 import { handleAdminWorkdays } from "./club-workdays.js";
+import { handleAdminAnnouncements } from "./club-announcements.js";
 
 export async function handleClubAdmin(
   request: Request,
@@ -43,11 +44,12 @@ export async function handleClubAdmin(
   else if ((sub === "events" && (seg[3] === "tournament" || seg[3] === "pdga" || seg[3] === "pdga-results" || seg[3] === "pdga-players" || (seg[3] === "registrations" && (seg[5] === "zelle-received" || seg[5] === "offer"))))
     || sub === "pdga-events") response = await handleTournamentAdmin(request, env, origin, method, seg);
   else if (sub === "club-settings" && seg[2] === "pdga-promo") response = await handleAdminPdgaPromo(request, env, origin, method, adminId);
-  else if (sub === "events") response = await handleAdminEvents(request, env, origin, method, seg, adminId, id);
+  else if (sub === "events") response = await handleAdminEvents(request, env, origin, method, seg, adminId, id, ctx);
   else if (sub === "leagues" && method === "POST" && seg[3] === "nights" && id != null) response = await handleAdminLeagueNight(request, env, origin, adminId, id);
   else if (sub === "leagues") response = await handleAdminLeagues(request, env, origin, method, adminId, id);
-  else if (sub === "fundraisers") response = await handleAdminFundraisers(request, env, origin, method, adminId, id);
-  else if (sub === "meetings") response = await handleAdminMeetings(request, env, origin, method, adminId, id);
+  else if (sub === "fundraisers") response = await handleAdminFundraisers(request, env, origin, method, adminId, id, ctx);
+  else if (sub === "meetings") response = await handleAdminMeetings(request, env, origin, method, adminId, id, ctx);
+  else if (sub === "announcements") response = await handleAdminAnnouncements(request, env, origin, method, seg, adminId, ctx);
   else if (sub === "import" && method === "POST") response = await handleAdminImport(request, env, origin, adminId);
   else if (sub === "layouts") response = await handleAdminLayouts(request, env, origin, method, id);
   else if (sub === "members") response = await handleAdminMembers(request, env, origin, method, seg, adminId, ctx);

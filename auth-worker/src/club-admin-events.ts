@@ -13,6 +13,7 @@ import { defaultCtpPayoutNote } from "./admin-payout-notes.js";
 import { playersMatch } from "./player-identity.js";
 import { isTournament, type TournamentConfig } from "./tournament-routes.js";
 import { createWalletCreditOnce } from "./wallet-idempotency.js";
+import { broadcastClubAnnouncement } from "./club-announcements.js";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -152,6 +153,7 @@ export async function handleAdminEvents(
   seg: string[],
   adminId: string,
   id: number | null,
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (seg[3] === "players" && id != null) {
     if (method === "POST") {
@@ -451,6 +453,25 @@ export async function handleAdminEvents(
     const row = await db.createEvent(env.DB, { ...eventInput, created_by: adminId });
     const createdId = eventIdOf(row);
     if (createdId != null && scoring) await db.saveEventScoringConfig(env.DB, createdId, scoring.playFormat, scoring.live);
+    if (
+      createdId != null
+      && eventInput.status === "scheduled"
+      && eventInput.source !== "udisc"
+      && eventInput.source !== "pdga"
+      && eventInput.source !== "csv"
+      && (b as Record<string, unknown>).notify_members !== false
+    ) {
+      const noteText = asStr(eventInput.notes, 100);
+      const summary = [eventInput.date, noteText].filter(Boolean).join(" · ") || "Registration details are in the member app.";
+      await broadcastClubAnnouncement(ctx, env, {
+        kind: "event",
+        title: `New event: ${eventInput.name}`.slice(0, 80),
+        body: summary.slice(0, 180),
+        href: "/gvdg-members.html#events",
+        refKey: `event-announce-${createdId}`,
+        tag: `event-${createdId}`,
+      });
+    }
     return json(layout ? { event: row, layout } : { event: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {

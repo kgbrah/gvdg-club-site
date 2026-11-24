@@ -277,7 +277,7 @@ async function sendWorkdayVerifyNotice(
   const refKey = `workday-karma-${workday.id}`;
   await recordMemberNotices(env, memberIds, { kind: "workday", title, body, href, refKey }, 1000).catch(() => {});
   for (let i = 0; i < memberIds.length; i += 20) {
-    notifyMembers(ctx, env, memberIds.slice(i, i + 20), "messages", { title, body, url: href, tag: `workday-karma-${workday.id}` });
+    notifyMembers(ctx, env, memberIds.slice(i, i + 20), "announcements", { title, body, url: href, tag: `workday-karma-${workday.id}` });
   }
 }
 
@@ -493,7 +493,7 @@ export async function handleAdminWorkdays(
     const memberIds = activeMembers.map((m) => m.memberId);
     const notice = announceNotice(inserted);
     await recordMemberNotices(env, memberIds, { kind: "workday", ...notice }, 1000).catch(() => {});
-    notifyAllSubscribedMembers(ctx, env, "messages", { title: notice.title, body: notice.body, url: notice.href, tag: `workday-${inserted.id}` }, adminId);
+    notifyAllSubscribedMembers(ctx, env, "announcements", { title: notice.title, body: notice.body, url: notice.href, tag: `workday-${inserted.id}` });
 
     return json({ workday: adminWorkdayView(inserted, []), notifiedCount: memberIds.length }, 201, origin);
   }
@@ -601,7 +601,7 @@ export async function handleAdminWorkdays(
         };
         await recordMemberNotices(env, toNotify, { kind: "workday", ...note, href: "/gvdg-members.html#home", refKey: `workday-cancelled-${id}` }, 1000).catch(() => {});
         for (let i = 0; i < toNotify.length; i += 20) {
-          notifyMembers(ctx, env, toNotify.slice(i, i + 20), "messages", { ...note, url: "/gvdg-members.html#home", tag: `workday-cancelled-${id}` });
+          notifyMembers(ctx, env, toNotify.slice(i, i + 20), "announcements", { ...note, url: "/gvdg-members.html#home", tag: `workday-cancelled-${id}` });
         }
       }
     }

@@ -53,6 +53,7 @@ const probes = {
   scoring: "[data-react-admin-scoring-live='live']",
   results: "[data-react-admin-scoring-live='final']",
   members: "[data-react-admin-members-list='ready']",
+  announcements: "[data-admin-announcements='ready']",
   applications: "[data-react-admin-membership-applications='ready']",
   sheets: "[data-admin-sheet-import]",
   shop: "[data-react-admin-products-list='ready']",
@@ -138,6 +139,16 @@ const freshWorkdays = () => [{
 }];
 let workdays = freshWorkdays();
 let nextWorkdayId = 11;
+const freshAnnouncements = () => [{
+  id: 5,
+  title: "Spring Course Update",
+  body: "New tee signs are installed on the back nine.",
+  href: "/gvdg-members.html#home",
+  authorName: "Taylor Morgan",
+  createdAt: date + " 11:00:00",
+}];
+let announcements = freshAnnouncements();
+let nextAnnouncementId = 6;
 const donation = { id: 4, memberId: "m_jordan", memberName: "Jordan Reyes", amountCents: 1000, source: "club-card", status: "pending", karma: 0, createdAt: date + " 15:20:00", reviewedAt: null, reviewNote: "" };
 // Admin › Scoring › Live casual rounds: a ghost (quiet for a day) and a card out on the course now.
 const freshLiveRounds = () => [
@@ -338,6 +349,27 @@ function fixture(path, method, query, authorization, body) {
     const p = w?.participants.find((row) => row.memberId === decodeURIComponent(wdStatusOne[2]));
     if (p && body?.status) p.status = body.status;
     return { participant: p, workday: w };
+  }
+  if (path === "/admin/announcements" && method === "GET") {
+    return { announcements };
+  }
+  if (path === "/admin/announcements" && method === "POST") {
+    const item = {
+      id: nextAnnouncementId++,
+      title: body.title,
+      body: body.body,
+      href: body.href || "/gvdg-members.html#home",
+      authorName: "Taylor Morgan",
+      createdAt: date + " 12:30:00",
+    };
+    announcements = [item, ...announcements];
+    return { announcement: item, notifiedCount: 4 };
+  }
+  const annDelete = path.match(/^\/admin\/announcements\/(\d+)$/);
+  if (annDelete && method === "DELETE") {
+    const id = Number(annDelete[1]);
+    announcements = announcements.filter((row) => row.id !== id);
+    return { ok: true };
   }
   if (path === "/admin/lost-found/overview") return lostFoundOverview;
   if (path === "/admin/community/reviews") return { queue: reviewPending ? [review] : [], more: false };
@@ -1110,11 +1142,44 @@ async function verifyWorkdays() {
   }
 }
 
+async function verifyAnnouncements() {
+  announcements = freshAnnouncements();
+  nextAnnouncementId = 6;
+  const { page, context } = await newPage(variants[0]);
+  try {
+    await page.goto(origin + "/admin-preview.html#members", { waitUntil: "commit", timeout: 60_000 });
+    await page.getByRole("heading", { name: "Members", level: 1, exact: true }).waitFor();
+    const pane = await route(page, "announcements");
+    await pane.locator("[data-admin-announcement='5']").getByText("Spring Course Update").waitFor();
+    await pane.locator("#annTitle").fill("Bag Tag Kickoff");
+    await pane.locator("#annBody").fill("Meet at Pavilion 1 at 10 AM.");
+    await pane.locator("#annHref").selectOption("/gvdg-members.html#events");
+    const postedRes = page.waitForResponse((response) => response.url().endsWith("/admin/announcements") && response.request().method() === "POST");
+    await pane.getByRole("button", { name: "Post announcement & send push" }).click();
+    assert.equal((await postedRes).status(), 200);
+    await pane.getByText('Posted "Bag Tag Kickoff" and queued push notifications (4 active member(s)).').waitFor();
+    const createdCard = pane.locator("[data-admin-announcement='6']");
+    await createdCard.waitFor();
+    await fit(page, "390 announcements interactive");
+    await readable(page, "390 announcements interactive");
+    await shot(page, "announcements-interactive-390");
+    const deletedRes = page.waitForResponse((response) => response.url().endsWith("/admin/announcements/6") && response.request().method() === "DELETE");
+    await createdCard.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("dialog", { name: "Delete announcement?" }).getByRole("button", { name: "Delete", exact: true }).click();
+    assert.equal((await deletedRes).status(), 200);
+    await page.waitForFunction(() => document.querySelectorAll("[data-admin-announcement='6']").length === 0);
+    console.log("Admin announcements verified (list, post push announcement, delete)");
+  } finally {
+    await context.close();
+  }
+}
+
 try {
   for (const variant of variants) await verifyRoutes(variant);
   await verifyLeagueBagTags();
   await verifyShopCamera();
   await verifyWorkdays();
+  await verifyAnnouncements();
   for (const mode of ["error", "empty", "loading"]) {
     fixtureMode = mode;
     const { page, context } = await newPage(variants[0]);

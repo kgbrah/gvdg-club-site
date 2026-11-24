@@ -271,6 +271,16 @@ function initialTeeSign() {
 
 export async function installMemberDashboardApiRoutes(page, apiBase) {
   const state = {
+    announcements: [
+      {
+        id: 31,
+        title: "Spring Course Update",
+        body: "New tee signs are up on the back nine.",
+        href: "/gvdg-members.html#events",
+        authorName: "QA Admin",
+        createdAt: "2026-07-06T12:00:00Z",
+      },
+    ],
     boardPostBody: null,
     boardPosts: [initialBoardPost()],
     casualPostBody: null,
@@ -311,6 +321,9 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     const pathName = url.pathname;
     const method = request.method();
 
+    if (pathName === "/announcements" && method === "GET") {
+      return route.fulfill(json({ announcements: state.announcements }));
+    }
     if (pathName === "/workdays" && method === "GET") {
       return route.fulfill(json({ workdays: state.workdays }));
     }

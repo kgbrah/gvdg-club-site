@@ -3,6 +3,7 @@ import * as db from "./db.js";
 import { json, readJson } from "./http.js";
 import { asInt, asStr, jsonStringArray } from "./input.js";
 import { RYDER_CUP_LEAGUE_ID } from "./ryder-board.js";
+import { broadcastClubAnnouncement } from "./club-announcements.js";
 
 export async function handleAdminLeagues(
   request: Request,
@@ -64,12 +65,24 @@ export async function handleAdminFundraisers(
   method: string,
   adminId: string,
   id: number | null,
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (method === "POST") {
     const b = await readJson(request);
     const v = b && fundraiserInput(b);
     if (!v || !v.title) return json({ error: "invalid_fundraiser" }, 400, origin);
     const row = await db.createFundraiser(env.DB, { ...v, title: v.title, status: v.status ?? "active", created_by: adminId });
+    const rowId = asInt((row as { id?: unknown } | null)?.id);
+    if (rowId != null && (v.status ?? "active") === "active" && (b as Record<string, unknown>).notify_members !== false) {
+      await broadcastClubAnnouncement(ctx, env, {
+        kind: "announcement",
+        title: `Club campaign: ${v.title}`.slice(0, 80),
+        body: (v.body_md?.trim() || "New club fundraiser posted — open the app to view.").slice(0, 180),
+        href: "/gvdg-members.html#home",
+        refKey: `fundraiser-${rowId}`,
+        tag: `fundraiser-${rowId}`,
+      });
+    }
     return json({ fundraiser: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {
@@ -93,12 +106,24 @@ export async function handleAdminMeetings(
   method: string,
   adminId: string,
   id: number | null,
+  ctx?: ExecutionContext,
 ): Promise<Response | null> {
   if (method === "POST") {
     const b = await readJson(request);
     const date = b && asStr(b.date, 40), title = b && asStr(b.title, 200);
     if (!b || !date || !title) return json({ error: "invalid_meeting" }, 400, origin);
     const row = await db.createMeeting(env.DB, { date, title, minutes_md: asStr(b.minutes_md, 50000), action_items: jsonStringArray(b.action_items, 100), attendees: jsonStringArray(b.attendees, 100), created_by: adminId });
+    const rowId = asInt((row as { id?: unknown } | null)?.id);
+    if (rowId != null && (b as Record<string, unknown>).notify_members !== false) {
+      await broadcastClubAnnouncement(ctx, env, {
+        kind: "announcement",
+        title: `Meeting minutes: ${title}`.slice(0, 80),
+        body: `${date} club meeting notes are now posted.`.slice(0, 180),
+        href: "/gvdg-members.html#club",
+        refKey: `meeting-${rowId}`,
+        tag: `meeting-${rowId}`,
+      });
+    }
     return json({ meeting: row }, 201, origin);
   }
   if (method === "PATCH" && id != null) {
