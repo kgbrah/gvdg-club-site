@@ -435,17 +435,22 @@ export function playStatsByKind(rows, memberId) {
   };
 }
 
-export function pdgaRowsFromStats(stats, memberId, memberName) {
+export function pdgaRowsFromStats(stats, memberId, memberName, excludeEventIds = null) {
+  const excluded = excludeEventIds
+    ? new Set((Array.isArray(excludeEventIds) ? excludeEventIds : [...excludeEventIds]).map((id) => String(id)))
+    : null;
   const rounds = Array.isArray(stats && stats.play_rounds) ? stats.play_rounds : [];
   if (rounds.length) {
-    return rounds.map((round) => ({
-      breakdown: round.breakdown != null ? round.breakdown : round,
-      group_format: playRowGroup(round),
-      kind: "pdga",
-      member_id: memberId,
-      name: memberName || String(stats && stats.name || "Player"),
-      scoring_style: playRowStyle(round),
-    }));
+    return rounds
+      .filter((round) => !excluded || !round?.event_id || !excluded.has(String(round.event_id)))
+      .map((round) => ({
+        breakdown: round.breakdown != null ? round.breakdown : round,
+        group_format: playRowGroup(round),
+        kind: "pdga",
+        member_id: memberId,
+        name: memberName || String(stats && stats.name || "Player"),
+        scoring_style: playRowStyle(round),
+      }));
   }
   const play = stats && stats.play;
   if (!play || !num(play.holes)) return [];
@@ -457,6 +462,80 @@ export function pdgaRowsFromStats(stats, memberId, memberName) {
     name: memberName || String(stats.name || "Player"),
     scoring_style: "stroke",
   }];
+}
+
+/**
+ * Merge first-party club-hosted PDGA scoring rows (/play-stats) with the signed-in member's own PDGA Live
+ * rounds (/pdga-stats), deduplicating overlapping event IDs and suppressing club leaderboard ranks whenever
+ * external PDGA Live data is included.
+ */
+export function mergePdgaPlayPayload(clubPdgaPayload, pdgaStats, memberId, memberName, clubPdgaEventIds = []) {
+  const liveRows = pdgaRowsFromStats(pdgaStats, memberId, memberName, clubPdgaEventIds);
+  const hasClub = num(clubPdgaPayload?.mine?.totals?.holes) > 0;
+  if (!liveRows.length) {
+    return {
+      payload: clubPdgaPayload || null,
+      source: hasClub ? "club" : "none",
+      showRank: hasClub,
+    };
+  }
+  const livePayload = playStatsByKind(liveRows, memberId).pdga;
+  if (!hasClub) {
+    return {
+      payload: livePayload,
+      source: "live",
+      showRank: false,
+    };
+  }
+  const resolvedName = memberName || clubPdgaPayload?.mine?.name || pdgaStats?.name || "Player";
+  const views = {};
+  for (const group of PLAY_GROUPS) {
+    for (const style of PLAY_STYLES) {
+      const key = playViewKey(group, style);
+      const clubBucket = clubPdgaPayload?.views?.[key] || (key === "all-all" ? clubPdgaPayload : null);
+      const liveBucket = livePayload?.views?.[key] || null;
+      const combined = sumPlayTotals([
+        clubBucket?.mine?.totals || emptyPlayTotals(),
+        liveBucket?.mine?.totals || emptyPlayTotals(),
+      ]);
+      const categories = PLAY_CATEGORIES.map((category) => {
+        const hit = num(combined[category.hit]);
+        const att = num(combined[category.att]);
+        return {
+          field: 0,
+          group: category.group,
+          id: category.id,
+          invert: !!category.invert,
+          label: category.label,
+          leaders: [],
+          min: category.min,
+          mine: att
+            ? {
+              att,
+              field: 0,
+              hit,
+              memberId: memberId || "",
+              name: resolvedName,
+              pct: statPct(hit, att),
+              rank: null,
+            }
+            : null,
+          short: category.short || category.label,
+          tone: category.tone || null,
+        };
+      });
+      views[key] = {
+        categories,
+        mine: { memberId: memberId || "", name: resolvedName, totals: combined },
+      };
+    }
+  }
+  const all = views[playViewKey("all", "all")];
+  return {
+    payload: { ...all, views },
+    source: "mixed",
+    showRank: false,
+  };
 }
 
 export function scoreMixRows(categories) {

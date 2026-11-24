@@ -377,17 +377,28 @@ export function PdgaAnnualStats({ pdgaNo, rows, compact = false }) {
   ].filter(Boolean));
 }
 
-export function PdgaEventLinkForm({ pdgaNo, token, onLinked }) {
+const PDGA_SCAN_STATES = [
+  { code: "ALL", label: "NC / VA / SC" },
+  { code: "NC", label: "NC" },
+  { code: "VA", label: "VA" },
+  { code: "SC", label: "SC" },
+];
+
+export function PdgaEventFinder({ pdgaNo, token, onLinked, compact = false }) {
   const [value, setValue] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
+  const [stateCode, setStateCode] = React.useState("ALL");
+  const [busyMode, setBusyMode] = React.useState("");
+  const [linkingId, setLinkingId] = React.useState(null);
   const [status, setStatus] = React.useState("");
+  const [results, setResults] = React.useState([]);
+  const [scanRemaining, setScanRemaining] = React.useState(0);
   if (!pdgaNo || !token) return null;
 
-  async function submit(event) {
-    event.preventDefault();
-    const raw = value.trim();
-    if (!raw || busy) return;
-    setBusy(true);
+  const busy = Boolean(busyMode || linkingId);
+
+  async function linkEventInput(raw, targetId = null) {
+    if (targetId != null) setLinkingId(targetId);
+    else setBusyMode("link");
     setStatus("");
     try {
       const res = await requestJson("/pdga/link-event", {
@@ -395,8 +406,14 @@ export function PdgaEventLinkForm({ pdgaNo, token, onLinked }) {
         token,
         body: { event: raw },
       });
-      setValue("");
-      setStatus(`Added ${res?.linked?.name || "event"}${res?.linked?.division ? ` (${res.linked.division})` : ""}.`);
+      const linkedName = res?.linked?.name || "event";
+      const divNote = res?.linked?.division ? ` (${res.linked.division})` : "";
+      setStatus(`Added ${linkedName}${divNote}.`);
+      if (targetId != null) {
+        setResults((current) => current.map((item) => (item.eventId === targetId ? { ...item, linked: true } : item)));
+      } else {
+        setValue("");
+      }
       if (onLinked) void onLinked();
     } catch (error) {
       if (error?.status === 404 && error?.data?.error === "player_not_in_event") {
@@ -411,32 +428,148 @@ export function PdgaEventLinkForm({ pdgaNo, token, onLinked }) {
         setStatus("Could not load that event right now.");
       }
     } finally {
-      setBusy(false);
+      setLinkingId(null);
+      setBusyMode("");
     }
   }
 
-  return h("form", { className: "pdga-link-form", "data-pdga-link-form": "ready", onSubmit: submit }, [
-    h("div", { className: "pdga-link-row", key: "row" }, [
-      h("input", {
-        type: "text",
-        className: "form-input pdga-link-input",
-        value,
+  async function submit(event) {
+    event.preventDefault();
+    const raw = value.trim();
+    if (busy || (!raw && stateCode === "ALL")) return;
+    if (/^#?[1-9]\d{0,7}$/.test(raw) || /pdga\.com\/(?:tour|live)\/event\/[1-9]\d{0,7}/i.test(raw)) {
+      await linkEventInput(raw);
+      return;
+    }
+    setBusyMode("search");
+    setStatus("");
+    try {
+      const params = new URLSearchParams();
+      if (raw) params.set("q", raw);
+      if (stateCode && stateCode !== "ALL") params.set("state", stateCode);
+      params.set("live", "1");
+      const res = await requestJson(`/pdga/events/search?${params.toString()}`, { token });
+      const list = Array.isArray(res?.events) ? res.events : [];
+      setResults(list);
+      setStatus(list.length ? `Found ${list.length} matching PDGA ${list.length === 1 ? "event" : "events"}.` : "No matching PDGA events found. Try another name, state, or event #.");
+    } catch (error) {
+      setStatus(error?.status === 429 ? "Too many searches — try again in a few minutes." : "Could not search PDGA events right now.");
+    } finally {
+      setBusyMode("");
+    }
+  }
+
+  async function runScan() {
+    if (busy) return;
+    setBusyMode("scan");
+    setStatus("");
+    try {
+      const res = await requestJson("/pdga/scan-my-events", {
+        method: "POST",
+        token,
+        body: { state: stateCode },
+      });
+      const matched = Number(res?.matched) || 0;
+      const scanned = Number(res?.scanned) || 0;
+      const remaining = Math.max(0, Number(res?.remaining) || 0);
+      setScanRemaining(remaining);
+      if (matched > 0) {
+        setStatus(`Checked ${scanned} ${scanned === 1 ? "event" : "events"} — linked ${matched} ${matched === 1 ? "tournament" : "tournaments"}.`);
+        if (onLinked) void onLinked();
+      } else if (scanned > 0) {
+        setStatus(`Checked ${scanned} recent ${scanned === 1 ? "event" : "events"} — no new matches.${remaining > 0 ? ` ${remaining} more left to check.` : ""}`);
+      } else {
+        setStatus("All recent cached regional events were already checked.");
+      }
+    } catch (error) {
+      if (error?.status === 429) {
+        setStatus("Scanned recently — try again in a few minutes.");
+      } else {
+        setStatus("Could not scan PDGA Live rosters right now.");
+      }
+    } finally {
+      setBusyMode("");
+    }
+  }
+
+  const regionLabel = stateCode === "ALL" ? "NC/VA/SC" : stateCode;
+  const scanLabel = busyMode === "scan"
+    ? "Scanning…"
+    : scanRemaining > 0
+      ? `Scan more (${scanRemaining} left)`
+      : `Scan recent ${regionLabel}`;
+  const historyHref = pdgaPlayerHistoryHref(pdgaNo);
+
+  return h("div", { className: compact ? "pdga-finder compact" : "pdga-finder", "data-pdga-finder": "ready" }, [
+    h("div", { className: "pdga-finder-scan", key: "scan-row" }, [
+      h("select", {
+        "aria-label": "PDGA region",
+        className: "form-input pdga-finder-state",
         disabled: busy,
-        maxLength: 160,
-        placeholder: "PDGA event # or pdga.com URL",
-        "aria-label": "PDGA event ID or URL",
-        key: "input",
-        onChange: (event) => setValue(event.target.value),
-      }),
+        key: "state",
+        value: stateCode,
+        onChange: (event) => {
+          setStateCode(event.target.value);
+          setScanRemaining(0);
+        },
+      }, PDGA_SCAN_STATES.map((opt) => h("option", { key: opt.code, value: opt.code }, opt.label))),
       h("button", {
-        type: "submit",
-        className: "dashboard-action",
-        disabled: busy || !value.trim(),
-        key: "submit",
-      }, busy ? "Checking…" : "Find my rounds"),
+        type: "button",
+        className: "dashboard-action pdga-finder-scan-btn",
+        "data-pdga-scan": "true",
+        disabled: busy,
+        key: "scan",
+        onClick: () => { void runScan(); },
+      }, scanLabel),
+    ]),
+    h("form", { className: "pdga-link-form", "data-pdga-link-form": "ready", key: "form", onSubmit: submit }, [
+      h("div", { className: "pdga-link-row", key: "row" }, [
+        h("input", {
+          type: "text",
+          className: "form-input pdga-link-input",
+          value,
+          disabled: busy,
+          maxLength: 160,
+          placeholder: "Event name, PDGA #, or pdga.com URL",
+          "aria-label": "Search PDGA event or enter event ID",
+          key: "input",
+          onChange: (event) => setValue(event.target.value),
+        }),
+        h("button", {
+          type: "submit",
+          className: "dashboard-action",
+          disabled: busy || (!value.trim() && stateCode === "ALL"),
+          key: "submit",
+        }, busyMode === "search" ? "Searching…" : busyMode === "link" ? "Adding…" : "Find / Add"),
+      ]),
     ]),
     status ? h("p", { className: "pdga-source-note", role: "status", key: "status" }, status) : null,
+    results.length ? h("div", { className: "pdga-finder-results", key: "results" }, results.map((item) =>
+      h("div", { className: "pdga-finder-row", key: item.eventId }, [
+        h("div", { className: "pdga-finder-copy", key: "copy" }, [
+          h(PdgaLink, { as: "div", className: "pdga-finder-name", href: item.url, key: "name" }, pdgaEventTitle(item.name) || `PDGA Event #${item.eventId}`),
+          h("div", { className: "player-card-meta", key: "meta" }, [item.startDate, item.tier, item.location].filter(Boolean).join(" · ")),
+        ]),
+        h("button", {
+          type: "button",
+          className: "pdga-finder-load-btn",
+          disabled: busy || item.linked,
+          key: "load",
+          onClick: () => { void linkEventInput(String(item.eventId), item.eventId); },
+        }, linkingId === item.eventId ? "Checking…" : item.linked ? "Linked" : "Load rounds"),
+      ]),
+    )) : null,
+    historyHref ? h("p", { className: "pdga-finder-help", key: "help" }, h("a", {
+      className: "pdga-link",
+      href: historyHref,
+      rel: "noopener noreferrer",
+      target: "_blank",
+    }, "Find your event #s on PDGA.com")) : null,
   ].filter(Boolean));
+}
+
+export function PdgaEventLinkForm(props) {
+  return h(PdgaEventFinder, props);
 }
 
 function TournamentList({ events }) {

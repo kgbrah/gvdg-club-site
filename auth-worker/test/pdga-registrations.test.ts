@@ -283,4 +283,40 @@ describe("PDGA Live registrations & migration 0080", () => {
     await refreshPdgaRegistrations(env, now + 9 * 3_600_000);
     expect(liveReads).toEqual([601]);
   });
+
+  it("reads unread completed seasonal events even when many upcoming events are due (no starvation)", async () => {
+    resetPdgaApiSession();
+    const { sqlite, env } = await setupEnv();
+    const now = Math.floor(Date.now() / (3 * 3_600_000)) * (3 * 3_600_000);
+    const futureDay = new Date(now + 5 * 86_400_000).toISOString().slice(0, 10);
+    const pastDay = new Date(now - 240 * 86_400_000).toISOString().slice(0, 10);
+    const liveReads: number[] = [];
+
+    for (let i = 0; i < 8; i++) {
+      sqlite.prepare("INSERT INTO pdga_watch_events (event_id, state, name, start_date, end_date, listed_at, completed, expires_at) VALUES (?, 'NC', ?, ?, ?, 1, 0, ?)")
+        .run(700 + i, `Upcoming ${i}`, futureDay, futureDay, now + 86_400_000);
+    }
+    sqlite.prepare("INSERT INTO pdga_watch_events (event_id, state, name, start_date, end_date, listed_at, completed, expires_at) VALUES (801, 'NC', 'Earlier Season Event', ?, ?, 1, 1, ?)")
+      .run(pastDay, pastDay, now + 86_400_000);
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
+      if (url.startsWith(API_BASE + "/services/json/event")) return Response.json({ events: [] });
+      const evMatch = url.match(/live_results_fetch_event\?TournID=(\d+)/);
+      if (evMatch) {
+        const id = Number(evMatch[1]);
+        liveReads.push(id);
+        return Response.json({
+          data: { TournamentId: id, Name: `Event ${id}`, StartDate: id === 801 ? pastDay : futureDay, EndDate: id === 801 ? pastDay : futureDay, Divisions: [] },
+          hash: "e" + id,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const tick = await refreshPdgaRegistrations(env, now);
+    expect(tick.read).toBe(9);
+    expect(liveReads).toContain(801);
+  });
 });

@@ -11,6 +11,7 @@ import { emptyPlayTotals, sumPlayTotals, type PlayTotals } from "./play-stats.js
 import {
   cachedPdgaPlayers,
   cachedPdgaPlayerStats,
+  lookupPdgaEvent,
   lookupPdgaPlayer,
   lookupPdgaPlayers,
   lookupPdgaPlayerStats,
@@ -18,7 +19,9 @@ import {
   PDGA_ATTRIBUTION,
   pdgaApiConfigured,
   PdgaApiError,
+  pdgaEventUrl,
   pdgaPlayerStatsUrl,
+  searchPdgaEvents,
   type PdgaAnnualStat,
   type PdgaApiEnv,
   type PdgaPlayer,
@@ -32,6 +35,7 @@ import {
   PdgaLiveApiError,
   playTotalsFromLivePlayerRound,
   type PdgaLiveApiEnv,
+  type PdgaLiveEvent,
   type PdgaLiveStatItem,
 } from "./pdga-live-api.js";
 
@@ -64,6 +68,7 @@ export interface PdgaRound {
   stats?: PdgaRoundThrowStats | null;
 }
 export interface PdgaPlayRound {
+  event_id?: string;
   tournament: string;
   date: string;
   division: string;
@@ -422,6 +427,7 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
       }
       if (breakdown.holes > 0) {
         const playRound: PdgaPlayRound = {
+          event_id: String(link.event_id),
           tournament: resolvedName,
           date: s.roundDate || eventDate,
           division,
@@ -442,6 +448,7 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
       } else if (eventRound && s.round !== 13 && s.scoreId != null && s.scoreId > 0 && pendingStatFetches.length < MAX_SCORE_STATS_ROUNDS) {
         pendingStatFetches.push({
           playRound: {
+            event_id: String(link.event_id),
             tournament: resolvedName,
             date: s.roundDate || eventDate,
             division,
@@ -580,10 +587,121 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
   return json(enriched, 200, origin, headers);
 }
 
-const LINK_KEEP_DAYS = 180;
+const LINK_KEEP_DAYS = 365;
 const DAY_MS = 86_400_000;
 const RECENT_DONE_DAYS = 14;
 const WATCH_TTL_MS = 24 * 60 * 60_000;
+const SCAN_DEFAULT_STATES = ["NC", "VA", "SC"] as const;
+const SCAN_BATCH_SIZE = 8;
+const SCAN_LOOKAHEAD = 36;
+const SCAN_DAYS_BACK = 365;
+
+function easternYearNumber(now: number): number {
+  try {
+    const parsed = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).format(new Date(now)));
+    if (Number.isInteger(parsed) && parsed >= 1975 && parsed <= 2100) return parsed;
+  } catch { /* fallback below */ }
+  return new Date(now).getUTCFullYear();
+}
+
+function isCompletedEventDate(
+  endDate: string,
+  highestCompletedRound: number | null,
+  rounds: number,
+  now: number,
+): boolean {
+  const today = new Date(now).toISOString().slice(0, 10);
+  const recentDoneCutoff = new Date(now - RECENT_DONE_DAYS * DAY_MS).toISOString().slice(0, 10);
+  return endDate < recentDoneCutoff
+    || (endDate < today && highestCompletedRound != null && highestCompletedRound >= rounds);
+}
+
+async function findMemberResultInEvent(
+  liveEnv: PdgaLiveApiEnv,
+  eventId: number,
+  eventInfo: PdgaLiveEvent,
+  memberPdga: string,
+  isCompleted: boolean,
+  now: number,
+): Promise<{ resultId: number; division: string } | null> {
+  const divCodes = eventInfo.divisions.filter((d) => d.players > 0).map((d) => d.division);
+  if (!divCodes.length) return null;
+  const blocksByDiv = await fetchPdgaLiveDivisions(liveEnv, eventId, divCodes, 1, now, isCompleted);
+  for (const [divCode, blocks] of blocksByDiv) {
+    for (const block of blocks) {
+      for (const score of block.scores) {
+        if (score.pdgaNumber === memberPdga && score.resultId > 0) {
+          return { resultId: score.resultId, division: score.division || divCode };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+async function upsertMatchedEventLink(
+  db: D1Like,
+  opts: {
+    eventId: number;
+    memberId: string;
+    memberPdga: string;
+    matched: { resultId: number; division: string };
+    name: string;
+    tier: string;
+    location: string;
+    startDate: string;
+    endDate: string;
+    isCompleted: boolean;
+    now: number;
+  },
+): Promise<void> {
+  const parsedEnd = Date.parse(`${opts.endDate}T23:59:59Z`);
+  const linkExpires = (Number.isFinite(parsedEnd) ? parsedEnd : opts.now) + LINK_KEEP_DAYS * DAY_MS;
+  try {
+    await db.prepare(
+      `INSERT INTO pdga_member_event_links
+         (event_id, member_id, pdga_number, result_id, division, event_start, event_end, matched_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id, member_id) DO UPDATE SET
+         pdga_number = excluded.pdga_number, result_id = excluded.result_id,
+         division = excluded.division, event_start = excluded.event_start, event_end = excluded.event_end,
+         matched_at = excluded.matched_at, expires_at = excluded.expires_at`,
+    ).bind(
+      opts.eventId,
+      opts.memberId,
+      opts.memberPdga,
+      opts.matched.resultId,
+      opts.matched.division.slice(0, 24),
+      opts.startDate,
+      opts.endDate,
+      opts.now,
+      linkExpires,
+    ).run();
+
+    await db.prepare(
+      `INSERT INTO pdga_watch_events
+         (event_id, state, name, tier, location, start_date, end_date, listed_at, read_at, read_error, completed, expires_at)
+       VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+       ON CONFLICT(event_id) DO UPDATE SET
+         name = excluded.name, tier = excluded.tier, location = excluded.location,
+         start_date = excluded.start_date, end_date = excluded.end_date,
+         read_at = excluded.read_at, read_error = '', completed = excluded.completed, expires_at = excluded.expires_at`,
+    ).bind(
+      opts.eventId,
+      opts.name.slice(0, 160),
+      opts.tier.slice(0, 24),
+      opts.location.slice(0, 120),
+      opts.startDate,
+      opts.endDate,
+      opts.now,
+      opts.now,
+      opts.isCompleted ? 1 : 0,
+      opts.now + WATCH_TTL_MS,
+    ).run();
+  } catch (error) {
+    if (!isMissingTable(error)) throw error;
+  }
+}
 
 /** Accept a numeric PDGA tournament ID ("107755", "#107755") or a pdga.com tour/live event URL. */
 export function parsePdgaEventIdInput(raw: unknown): number | null {
@@ -617,7 +735,7 @@ export async function handlePdgaLinkEvent(request: Request, env: Env, origin: st
   const db = env.DB as unknown as D1Like;
   const liveEnv = env as unknown as PdgaLiveApiEnv;
 
-  let eventInfo;
+  let eventInfo: PdgaLiveEvent | null;
   try {
     eventInfo = await fetchPdgaLiveEvent(liveEnv, eventId, now);
   } catch (error) {
@@ -627,76 +745,34 @@ export async function handlePdgaLinkEvent(request: Request, env: Env, origin: st
   if (!eventInfo) return json({ error: "event_not_found" }, 404, origin);
 
   const today = new Date(now).toISOString().slice(0, 10);
-  const recentDoneCutoff = new Date(now - RECENT_DONE_DAYS * DAY_MS).toISOString().slice(0, 10);
   const startDate = eventInfo.startDate || today;
   const endDate = eventInfo.endDate || startDate;
-  const isCompleted = endDate < recentDoneCutoff
-    || (endDate < today && eventInfo.highestCompletedRound != null && eventInfo.highestCompletedRound >= eventInfo.rounds);
+  const isCompleted = isCompletedEventDate(endDate, eventInfo.highestCompletedRound, eventInfo.rounds, now);
 
-  const divCodes = eventInfo.divisions.filter((d) => d.players > 0).map((d) => d.division);
   let matched: { resultId: number; division: string } | null = null;
-  if (divCodes.length) {
-    let blocksByDiv;
-    try {
-      blocksByDiv = await fetchPdgaLiveDivisions(liveEnv, eventId, divCodes, 1, now, isCompleted);
-    } catch (error) {
-      const code = error instanceof PdgaLiveApiError && error.code === "rate_limited" ? 429 : 503;
-      return json({ error: code === 429 ? "rate_limited" : "pdga_unavailable" }, code, origin);
-    }
-    for (const [divCode, blocks] of blocksByDiv) {
-      for (const block of blocks) {
-        for (const score of block.scores) {
-          if (score.pdgaNumber === memberPdga && score.resultId > 0) {
-            matched = { resultId: score.resultId, division: score.division || divCode };
-            break;
-          }
-        }
-        if (matched) break;
-      }
-      if (matched) break;
-    }
+  try {
+    matched = await findMemberResultInEvent(liveEnv, eventId, eventInfo, memberPdga, isCompleted, now);
+  } catch (error) {
+    const code = error instanceof PdgaLiveApiError && error.code === "rate_limited" ? 429 : 503;
+    return json({ error: code === 429 ? "rate_limited" : "pdga_unavailable" }, code, origin);
   }
   if (!matched) {
     return json({ error: "player_not_in_event", eventName: eventInfo.name }, 404, origin);
   }
 
-  const parsedEnd = Date.parse(`${endDate}T23:59:59Z`);
-  const linkExpires = (Number.isFinite(parsedEnd) ? parsedEnd : now) + LINK_KEEP_DAYS * DAY_MS;
-
-  try {
-    await db.prepare(
-      `INSERT INTO pdga_member_event_links
-         (event_id, member_id, pdga_number, result_id, division, event_start, event_end, matched_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(event_id, member_id) DO UPDATE SET
-         pdga_number = excluded.pdga_number, result_id = excluded.result_id,
-         division = excluded.division, event_start = excluded.event_start, event_end = excluded.event_end,
-         matched_at = excluded.matched_at, expires_at = excluded.expires_at`,
-    ).bind(eventId, claims.sub, memberPdga, matched.resultId, matched.division.slice(0, 24), startDate, endDate, now, linkExpires).run();
-
-    await db.prepare(
-      `INSERT INTO pdga_watch_events
-         (event_id, state, name, tier, location, start_date, end_date, listed_at, read_at, read_error, completed, expires_at)
-       VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
-       ON CONFLICT(event_id) DO UPDATE SET
-         name = excluded.name, tier = excluded.tier, location = excluded.location,
-         start_date = excluded.start_date, end_date = excluded.end_date,
-         read_at = excluded.read_at, read_error = '', completed = excluded.completed, expires_at = excluded.expires_at`,
-    ).bind(
-      eventId,
-      eventInfo.name.slice(0, 160),
-      eventInfo.tier.slice(0, 24),
-      eventInfo.location.slice(0, 120),
-      startDate,
-      endDate,
-      now,
-      now,
-      isCompleted ? 1 : 0,
-      now + WATCH_TTL_MS,
-    ).run();
-  } catch (error) {
-    if (!isMissingTable(error)) throw error;
-  }
+  await upsertMatchedEventLink(db, {
+    eventId,
+    memberId: claims.sub,
+    memberPdga,
+    matched,
+    name: eventInfo.name,
+    tier: eventInfo.tier,
+    location: eventInfo.location,
+    startDate,
+    endDate,
+    isCompleted,
+    now,
+  });
 
   return json({
     ok: true,
@@ -708,6 +784,380 @@ export async function handlePdgaLinkEvent(request: Request, env: Env, origin: st
       endDate,
       resultId: matched.resultId,
     },
+    attribution: PDGA_ATTRIBUTION,
+  }, 200, origin, { "Cache-Control": "private, no-store" });
+}
+
+interface SearchWatchRow {
+  event_id: number;
+  name: string;
+  tier: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+}
+
+/**
+ * GET /pdga/events/search?q=&state=&year=&live=1: search cached watch events and, on demand, the official PDGA
+ * REST API (/services/json/event) so signed-in members can find and link their tournaments by name.
+ */
+export async function handlePdgaEventSearch(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+
+  const now = Date.now();
+  const params = new URL(request.url).searchParams;
+  const rawQ = (params.get("q") ?? "").trim().slice(0, 80);
+  const rawState = (params.get("state") ?? "").trim().toUpperCase();
+  const state = rawState === "ALL" || !rawState ? "" : /^[A-Z]{2}$/.test(rawState) ? rawState : "";
+  const defaultYear = easternYearNumber(now);
+  const rawYear = Number(params.get("year"));
+  const explicitYear = Number.isInteger(rawYear) && rawYear >= defaultYear - 3 && rawYear <= defaultYear + 1 ? rawYear : null;
+  const year = explicitYear ?? defaultYear;
+  const live = params.get("live") === "1";
+
+  const db = env.DB as unknown as D1Like;
+  const apiEnv = env as unknown as PdgaApiEnv;
+  const parsedEventId = parsePdgaEventIdInput(rawQ);
+  const likeTerm = rawQ ? `%${rawQ.toLowerCase().replace(/[\\%_]/g, "\\$&")}%` : "";
+
+  const conditions = ["expires_at > ?"];
+  const binds: (string | number)[] = [now];
+  if (state) {
+    conditions.push("state = ?");
+    binds.push(state);
+  }
+  if (explicitYear != null) {
+    conditions.push("substr(start_date, 1, 4) = ?");
+    binds.push(String(explicitYear));
+  }
+  if (rawQ) {
+    if (parsedEventId) {
+      conditions.push("(event_id = ? OR LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(location) LIKE ? ESCAPE '\\')");
+      binds.push(parsedEventId, likeTerm, likeTerm);
+    } else {
+      conditions.push("(LOWER(name) LIKE ? ESCAPE '\\' OR LOWER(location) LIKE ? ESCAPE '\\')");
+      binds.push(likeTerm, likeTerm);
+    }
+  }
+
+  let localRows: SearchWatchRow[] = [];
+  if (db && typeof db.prepare === "function") {
+    try {
+      localRows = (await db.prepare(
+        `SELECT event_id, name, tier, location, start_date, end_date
+           FROM pdga_watch_events
+          WHERE ${conditions.join(" AND ")}
+          ORDER BY start_date DESC, event_id DESC
+          LIMIT 25`,
+      ).bind(...binds).all<SearchWatchRow>()).results ?? [];
+    } catch (error) {
+      if (!isMissingTable(error)) throw error;
+    }
+  }
+
+  const byId = new Map<number, {
+    eventId: number;
+    name: string;
+    tier: string;
+    location: string;
+    startDate: string;
+    endDate: string;
+    url: string;
+  }>();
+  for (const row of localRows) {
+    const id = Number(row.event_id);
+    if (!Number.isInteger(id) || id <= 0) continue;
+    byId.set(id, {
+      eventId: id,
+      name: row.name,
+      tier: row.tier || "",
+      location: row.location || "",
+      startDate: row.start_date || "",
+      endDate: row.end_date || row.start_date || "",
+      url: pdgaEventUrl(id),
+    });
+  }
+
+  const shouldQueryRemote = pdgaApiConfigured(apiEnv)
+    && (live || byId.size < 8)
+    && (rawQ.length >= 2 || state !== "");
+  if (shouldQueryRemote) {
+    const limited = await kvRateLimited(env, "pdga-search:" + claims.sub, 20, 600);
+    if (limited) {
+      if (!byId.size) return json({ error: "rate_limited" }, 429, origin);
+    } else {
+      try {
+        const remote = parsedEventId
+          ? [await lookupPdgaEvent(apiEnv, parsedEventId)].filter((ev): ev is NonNullable<typeof ev> => ev != null)
+          : await searchPdgaEvents(apiEnv, {
+            startDate: `${year}-01-01`,
+            endDate: `${year}-12-31`,
+            ...(state ? { states: [state] } : {}),
+            ...(rawQ ? { eventName: rawQ } : {}),
+            maxPages: 1,
+          });
+        const qLower = rawQ.toLowerCase();
+        for (const ev of remote) {
+          const location = [ev.city, ev.state].filter(Boolean).join(", ");
+          if (rawQ && !parsedEventId) {
+            const haystack = `${ev.name} ${location} ${ev.id}`.toLowerCase();
+            if (!haystack.includes(qLower)) continue;
+          }
+          if (!byId.has(ev.id)) {
+            byId.set(ev.id, {
+              eventId: ev.id,
+              name: ev.name,
+              tier: ev.tier || "",
+              location,
+              startDate: ev.startDate || "",
+              endDate: ev.endDate || ev.startDate || "",
+              url: ev.url || pdgaEventUrl(ev.id),
+            });
+          }
+        }
+      } catch (error) {
+        if (!byId.size) {
+          const code = error instanceof PdgaApiError && error.code === "rate_limited" ? 429 : 503;
+          return json({ error: code === 429 ? "rate_limited" : "pdga_unavailable" }, code, origin);
+        }
+      }
+    }
+  }
+
+  const sorted = [...byId.values()]
+    .sort((a, b) => b.startDate.localeCompare(a.startDate) || b.eventId - a.eventId)
+    .slice(0, 20);
+
+  const linkedIds = new Set<number>();
+  if (sorted.length && db && typeof db.prepare === "function") {
+    try {
+      const ids = sorted.map((item) => item.eventId);
+      const placeholders = ids.map(() => "?").join(", ");
+      const linkedRows = (await db.prepare(
+        `SELECT event_id FROM pdga_member_event_links
+          WHERE member_id = ? AND expires_at > ? AND event_id IN (${placeholders})`,
+      ).bind(claims.sub, now, ...ids).all<{ event_id: number }>()).results ?? [];
+      for (const row of linkedRows) linkedIds.add(Number(row.event_id));
+    } catch (error) {
+      if (!isMissingTable(error)) throw error;
+    }
+  }
+
+  return json({
+    events: sorted.map((item) => ({ ...item, linked: linkedIds.has(item.eventId) })),
+    attribution: PDGA_ATTRIBUTION,
+  }, 200, origin, { "Cache-Control": "private, max-age=120" });
+}
+
+interface ScanCandidateRow {
+  event_id: number;
+  name: string;
+  tier: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+}
+
+/**
+ * POST /pdga/scan-my-events: authenticated, rate-limited on-demand scan of regional PDGA Live rosters
+ * using the official PDGA Live API so members don't have to wait for the hourly background cron.
+ */
+export async function handlePdgaScanMyEvents(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  const memberPdga = normalPdgaNumber(claims.member.pdgaNo);
+  if (!memberPdga) return json({ error: "pdga_not_linked" }, 400, origin);
+  if (await kvRateLimited(env, "pdga-scan:" + claims.sub, 8, 3600)) return json({ error: "rate_limited" }, 429, origin);
+
+  const body = (await readJson(request, 1024).catch(() => null)) as { state?: unknown; year?: unknown } | null;
+  const rawState = typeof body?.state === "string" ? body.state.trim().toUpperCase() : "ALL";
+  const targetStates = rawState === "ALL" || !rawState
+    ? [...SCAN_DEFAULT_STATES]
+    : /^[A-Z]{2}$/.test(rawState)
+      ? [rawState]
+      : null;
+  if (!targetStates) return json({ error: "invalid_state" }, 400, origin);
+
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  const currentYear = easternYearNumber(now);
+  const rawYear = Number(body?.year);
+  const hasYear = Number.isInteger(rawYear) && rawYear >= currentYear - 2 && rawYear <= currentYear;
+  const windowStart = hasYear ? `${rawYear}-01-01` : new Date(now - SCAN_DAYS_BACK * DAY_MS).toISOString().slice(0, 10);
+  const windowEnd = hasYear && rawYear < currentYear ? `${rawYear}-12-31` : today;
+
+  const db = env.DB as unknown as D1Like;
+  const apiEnv = env as unknown as PdgaApiEnv;
+  const liveEnv = env as unknown as PdgaLiveApiEnv;
+
+  const linkedSet = new Set<number>();
+  if (db && typeof db.prepare === "function") {
+    try {
+      const linkedRows = (await db.prepare(
+        "SELECT event_id FROM pdga_member_event_links WHERE member_id = ? AND expires_at > ?",
+      ).bind(claims.sub, now).all<{ event_id: number }>()).results ?? [];
+      for (const row of linkedRows) linkedSet.add(Number(row.event_id));
+    } catch (error) {
+      if (!isMissingTable(error)) throw error;
+    }
+  }
+
+  const loadCandidates = async () => {
+    if (!db || typeof db.prepare !== "function") return [] as ScanCandidateRow[];
+    try {
+      const statePlaceholders = targetStates.map(() => "?").join(", ");
+      const rows = (await db.prepare(
+        `SELECT event_id, name, tier, location, start_date, end_date
+           FROM pdga_watch_events
+          WHERE expires_at > ? AND state IN (${statePlaceholders}) AND start_date <= ? AND end_date >= ?
+          ORDER BY start_date DESC, event_id DESC
+          LIMIT 120`,
+      ).bind(now, ...targetStates, windowEnd, windowStart).all<ScanCandidateRow>()).results ?? [];
+      return rows.filter((row) => !linkedSet.has(Number(row.event_id)));
+    } catch (error) {
+      if (isMissingTable(error)) return [];
+      throw error;
+    }
+  };
+
+  let candidates = await loadCandidates();
+  const seedKey = `pdga-scan-seed:${targetStates.join(",")}:${windowStart}:${windowEnd}`;
+  const seededRecently = candidates.length < SCAN_BATCH_SIZE && pdgaApiConfigured(apiEnv)
+    ? Boolean(await env.RATELIMIT?.get?.(seedKey).catch(() => null))
+    : true;
+  if (!seededRecently) {
+    const restEvents = await searchPdgaEvents(apiEnv, {
+      startDate: windowStart,
+      endDate: windowEnd,
+      states: targetStates,
+      maxPages: 1,
+    }).catch(() => []);
+    await env.RATELIMIT?.put?.(seedKey, "1", { expirationTtl: 900 }).catch(() => {});
+    if (restEvents.length && db && typeof db.prepare === "function") {
+      try {
+        const watchExpires = now + WATCH_TTL_MS;
+        const writes = restEvents.slice(0, 80).map((ev) => {
+          const stRaw = String(ev.state || "").trim().toUpperCase();
+          const st = /^[A-Z]{2}$/.test(stRaw) ? stRaw : targetStates[0]!;
+          const start = ev.startDate || windowStart;
+          const end = ev.endDate || start;
+          const location = [ev.city, ev.state].filter(Boolean).join(", ");
+          const completed = isCompletedEventDate(end, null, 0, now) ? 1 : 0;
+          return db.prepare(
+            `INSERT INTO pdga_watch_events
+               (event_id, state, name, tier, location, start_date, end_date, listed_at, completed, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(event_id) DO UPDATE SET
+               state = excluded.state, name = excluded.name, tier = excluded.tier, location = excluded.location,
+               start_date = excluded.start_date, end_date = excluded.end_date,
+               listed_at = excluded.listed_at, expires_at = excluded.expires_at`,
+          ).bind(ev.id, st, ev.name.slice(0, 160), ev.tier.slice(0, 24), location.slice(0, 120), start, end, now, completed, watchExpires);
+        });
+        for (let i = 0; i < writes.length; i += 40) {
+          const slice = writes.slice(i, i + 40);
+          if (db.batch) await db.batch(slice);
+          else for (const stmt of slice) await stmt.run();
+        }
+        candidates = await loadCandidates();
+      } catch (error) {
+        if (!isMissingTable(error)) throw error;
+      }
+    }
+  }
+
+  const missPrefix = `pdga-scan-miss:${claims.sub}:`;
+  const inspected = candidates.slice(0, SCAN_LOOKAHEAD);
+  const toScan: ScanCandidateRow[] = [];
+  let unskippedCount = 0;
+  for (let i = 0; i < inspected.length; i += 12) {
+    const batch = inspected.slice(i, i + 12);
+    const flags = await Promise.all(
+      batch.map((row) => env.RATELIMIT?.get ? env.RATELIMIT.get(missPrefix + row.event_id).catch(() => null) : Promise.resolve(null)),
+    );
+    batch.forEach((row, idx) => {
+      if (flags[idx]) return;
+      unskippedCount += 1;
+      if (toScan.length < SCAN_BATCH_SIZE) toScan.push(row);
+    });
+  }
+
+  let scanned = 0;
+  let rateLimited = false;
+  let unavailable = false;
+  const linkedEvents: {
+    eventId: number;
+    name: string;
+    division: string;
+    startDate: string;
+    endDate: string;
+    resultId: number;
+  }[] = [];
+
+  for (const row of toScan) {
+    const eventId = Number(row.event_id);
+    try {
+      const eventInfo = await fetchPdgaLiveEvent(liveEnv, eventId, now);
+      if (!eventInfo) {
+        scanned += 1;
+        const done = (row.end_date || row.start_date || today) < today;
+        await env.RATELIMIT?.put?.(missPrefix + eventId, "1", { expirationTtl: done ? 21_600 : 1800 }).catch(() => {});
+        continue;
+      }
+      const startDate = eventInfo.startDate || row.start_date || today;
+      const endDate = eventInfo.endDate || row.end_date || startDate;
+      const isCompleted = isCompletedEventDate(endDate, eventInfo.highestCompletedRound, eventInfo.rounds, now);
+      const matched = await findMemberResultInEvent(liveEnv, eventId, eventInfo, memberPdga, isCompleted, now);
+      scanned += 1;
+      if (matched) {
+        linkedSet.add(eventId);
+        await upsertMatchedEventLink(db, {
+          eventId,
+          memberId: claims.sub,
+          memberPdga,
+          matched,
+          name: eventInfo.name || row.name,
+          tier: eventInfo.tier || row.tier,
+          location: eventInfo.location || row.location,
+          startDate,
+          endDate,
+          isCompleted,
+          now,
+        });
+        linkedEvents.push({
+          eventId,
+          name: eventInfo.name || row.name,
+          division: matched.division,
+          startDate,
+          endDate,
+          resultId: matched.resultId,
+        });
+      } else {
+        await env.RATELIMIT?.put?.(missPrefix + eventId, "1", { expirationTtl: isCompleted ? 21_600 : 1800 }).catch(() => {});
+      }
+    } catch (error) {
+      if (error instanceof PdgaLiveApiError && error.code === "rate_limited") {
+        rateLimited = true;
+        break;
+      }
+      if (error instanceof PdgaLiveApiError && error.code === "unavailable") {
+        unavailable = true;
+      }
+    }
+  }
+
+  if (scanned === 0 && toScan.length > 0 && (rateLimited || unavailable)) {
+    return json({ error: rateLimited ? "rate_limited" : "pdga_unavailable" }, rateLimited ? 429 : 503, origin);
+  }
+
+  const remaining = Math.max(0, (unskippedCount - toScan.length) + Math.max(0, candidates.length - inspected.length));
+  return json({
+    ok: true,
+    scanned,
+    matched: linkedEvents.length,
+    alreadyLinked: linkedSet.size,
+    remaining,
+    linkedEvents,
     attribution: PDGA_ATTRIBUTION,
   }, 200, origin, { "Cache-Control": "private, no-store" });
 }

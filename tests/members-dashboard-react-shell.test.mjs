@@ -148,7 +148,7 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.doesNotMatch(html, /\.dtab-off/);
   assert.doesNotMatch(html, /members-react-(shell|overview|ratings|registration|board|tee-signs|club)-ready/);
   assertNoLegacyMemberFallbacks(html);
-  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=249"><\/script>/);
+  assert.match(html, /<script type="module" src="members-app\/members-app\.js\?v=250"><\/script>/);
   assert.doesNotMatch(html, /matchplay-colors\.js/);
   assert.match(app, /createRoot\(pageChromeMount\)\.render\(profileKey.*h\(MemberPageChrome\)\)/);
   assert.match(app, /createRoot\(authMount\)\.render/);
@@ -364,8 +364,8 @@ test('member dashboard mounts a React-owned dashboard app without legacy fallbac
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /play-stats-filters/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /competitive/);
   assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /kind === "casual"/);
-  // PDGA Live scoring and throw/putting stats integrate alongside club scoring without merging into club ranks.
-  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats[\s\S]*pdgaRowsFromStats/);
+  // PDGA Live scoring and throw/putting stats integrate alongside club scoring without merging external data into club ranks.
+  assert.match(readFileSync('src/members-app/play-stats-panel.js', 'utf8'), /pdgaStats[\s\S]*mergePdgaPlayPayload/);
   assert.match(html, /\.play-score-mix/);
   assert.match(html, /\.play-stats-split/);
   assert.match(html, /\.play-stats-filters/);

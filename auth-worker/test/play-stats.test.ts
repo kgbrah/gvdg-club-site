@@ -1,7 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+import worker from "../src/index.js";
+import type { Env } from "../src/env.js";
+import { signSession } from "../src/jwt.js";
 import { holePlayStats, mergePartnerPlayInputs, parseBreakdown, parseThrowsBody, playStatsByKind, playStatsView, roundPlayStats, selectPlayStatsView, totalsFromPdgaScoreLine, withPlayBreakdown } from "../src/play-stats.js";
+import { putMember } from "../src/roster.js";
 
 const TEE = { lat: 35.6, lng: -77.37 };
 const BASKET = { lat: 35.6008, lng: -77.37 };
@@ -83,3 +87,68 @@ for (const fixture of golden.cases) {
     expect(holePlayStats(golden.hole, fixture.throws, fixture.score)).toMatchObject(fixture.expect);
   });
 }
+
+it("GET /play-stats exposes club-hosted PDGA events under both competitive and pdga with clubPdgaEventIds", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const sqlite = new DatabaseSync(":memory:");
+  const migDir = new URL("../migrations/", import.meta.url);
+  for (const file of readdirSync(migDir).filter((f) => f.endsWith(".sql")).sort()) {
+    sqlite.exec(readFileSync(new URL(file, migDir), "utf8"));
+  }
+  const prepare = (sql: string) => {
+    let bound: unknown[] = [];
+    const stmt = {
+      bind(...args: unknown[]) { bound = args; return stmt; },
+      async all() { return { results: sqlite.prepare(sql).all(...(bound as never[])), success: true }; },
+      async first() { return sqlite.prepare(sql).get(...(bound as never[])) ?? null; },
+      async run() { const info = sqlite.prepare(sql).run(...(bound as never[])); return { results: [], success: true, meta: { changes: Number(info.changes) } }; },
+    };
+    return stmt;
+  };
+  const kv = new Map<string, string>();
+  const ROSTER = {
+    async get(k: string) { return kv.get(k) ?? null; },
+    async put(k: string, v: string) { kv.set(k, v); },
+    async delete(k: string) { kv.delete(k); },
+    async list() { return { keys: [], list_complete: true }; },
+  };
+  const SECRET = "s".repeat(40);
+  await putMember(ROSTER, { memberId: "m1", name: "Ada", pdgaNo: "80024", pinHash: "x", mustChangePin: false });
+  await putMember(ROSTER, { memberId: "m2", name: "Grace", pdgaNo: "90011", pinHash: "x", mustChangePin: false });
+
+  const year = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric" }).format(new Date());
+  const eventDay = `${year}-05-10`;
+  sqlite.prepare("INSERT INTO events (id, type, name, date, status) VALUES (10, 'tournament', 'Club Sanctioned', ?, 'completed')").run(eventDay);
+  sqlite.prepare("INSERT INTO event_config (event_id, pdga_event_id) VALUES (10, 104547)").run();
+  sqlite.prepare("INSERT INTO events (id, type, name, date, status) VALUES (11, 'tournament', 'Club Weekly', ?, 'completed')").run(eventDay);
+
+  const bd1 = JSON.stringify({ holes: 18, birdies: 5, pars: 11, bogeys: 2, fir_hit: 10, fir_att: 14 });
+  const bd2 = JSON.stringify({ holes: 18, birdies: 3, pars: 12, bogeys: 3, fir_hit: 8, fir_att: 14 });
+  sqlite.prepare("INSERT INTO results (event_id, member_id, name, breakdown) VALUES (10, 'm1', 'Ada', ?)").run(bd1);
+  sqlite.prepare("INSERT INTO results (event_id, member_id, name, breakdown) VALUES (10, 'm2', 'Grace', ?)").run(bd2);
+  sqlite.prepare("INSERT INTO results (event_id, member_id, name, breakdown) VALUES (11, 'm1', 'Ada', ?)").run(bd2);
+
+  const env = {
+    DB: { prepare, async batch(stmts: { run(): Promise<unknown> }[]) { for (const s of stmts) await s.run(); return []; } },
+    ROSTER,
+    RATELIMIT: ROSTER,
+    JWT_SECRET: SECRET,
+    ALLOWED_ORIGINS: "http://localhost:8080",
+  } as unknown as Env;
+
+  const token = await signSession({ sub: "m1", mustChangePin: false }, SECRET, 3600);
+  const res = await worker.fetch(new Request("https://worker/play-stats", {
+    headers: { Origin: "http://localhost:8080", Authorization: "Bearer " + token },
+  }), env);
+  expect(res.status).toBe(200);
+  const jsonBody = await res.json() as {
+    competitive: { mine: { totals: { holes: number } } };
+    pdga: { mine: { totals: { holes: number } }; categories: { id: string; mine?: { rank?: number | null } }[] };
+    clubPdgaEventIds: string[];
+  };
+  expect(jsonBody.competitive.mine.totals.holes).toBe(36);
+  expect(jsonBody.pdga.mine.totals.holes).toBe(18);
+  expect(jsonBody.clubPdgaEventIds).toEqual(["104547"]);
+  const pdgaBirdie = jsonBody.pdga.categories.find((c) => c.id === "birdie");
+  expect(pdgaBirdie?.mine?.rank).toBe(1);
+});

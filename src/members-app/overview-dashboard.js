@@ -430,7 +430,7 @@ export function MemberOverviewDashboard() {
         ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true, credit: false, onCheckAgain: checkPdgaMembershipAgain })) : null,
       h(PdgaCredit, { key: "pdga-credit" }),
     ]),
-    h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats }),
+    h(PlayStatsPanel, { compact: true, key: "play-stats", pdgaStats: pdgaState.stats, onPdgaReload: pdgaState.reload }),
     h(HomeReturned, { key: "returned", token }),
   ]);
 }

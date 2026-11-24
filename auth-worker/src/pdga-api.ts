@@ -307,14 +307,18 @@ export type PdgaEventSearch = {
   endDate: string;                // YYYY-MM-DD
   states?: readonly string[];     // administrative_area codes, e.g. NC
   near?: { lat: number; lng: number; miles: number };
+  eventName?: string;
+  maxPages?: number;
 };
 
-/** PDGA events in a date range, by state or within a distance (nearest first), every page of them (up to 1000). */
+/** PDGA events in a date range, by state or within a distance (nearest first), up to maxPages (default 5 = 1000). */
 export async function searchPdgaEvents(env: PdgaApiEnv, search: PdgaEventSearch): Promise<(PdgaEventInfo & { lat: number | null; lng: number | null })[]> {
   const out: (PdgaEventInfo & { lat: number | null; lng: number | null })[] = [];
-  for (let offset = 0; offset < 1000; offset += 200) {
+  const maxOffset = Math.max(1, Math.min(5, search.maxPages ?? 5)) * 200;
+  for (let offset = 0; offset < maxOffset; offset += 200) {
     const params = new URLSearchParams({ start_date: search.startDate, end_date: search.endDate, limit: "200", offset: String(offset) });
     if (search.states?.length) params.set("administrative_area", search.states.join(","));
+    if (search.eventName?.trim()) params.set("event_name", search.eventName.trim());
     if (search.near) {
       params.set("latitude", String(search.near.lat));
       params.set("longitude", String(search.near.lng));
