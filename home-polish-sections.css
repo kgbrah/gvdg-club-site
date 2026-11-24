@@ -297,6 +297,8 @@ header .logo:hover .logo-image { transform: none; }
 #homeReactFooterApp footer p { max-width: none; color: var(--light); opacity: 0.75; }
 #homeReactFooterApp .footer-links { gap: 24px; margin-bottom: 12px; }
 #homeReactFooterApp .footer-links a { font-size: 0.85rem; font-weight: 600; }
+#homeReactFooterApp footer .footer-photo-credit { margin: 0.4rem 0 0; font-size: 0.82rem; opacity: 0.9; }
+#homeReactFooterApp footer .footer-photo-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 @media (max-width: 1000px) and (min-width: 769px) {
   #courses .courses-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

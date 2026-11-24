@@ -219,7 +219,7 @@ test("sw.js precaches public-app/chunks and retains previous public chunks acros
 
 test("sw.js offline navigation falls back to scoring-app.html (with query), gvdg-members.html, and Response.error() when uncached", async () => {
   const caches = new MemoryCaches();
-  const cache = await caches.open("gvdg-club-v370");
+  const cache = await caches.open("gvdg-club-v371");
   await cache.put("scoring-app.html", fakeResponse("<html>scoring app shell</html>", { type: "text/html" }));
   await cache.put("gvdg-members.html", fakeResponse("<html>members shell</html>", { type: "text/html" }));
 
@@ -348,7 +348,7 @@ test("Batch 8 PWA, cache-header, widget, and hero accessibility invariants hold 
 
   const indexHtml = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const homepagePolish = fs.readFileSync(path.join(ROOT, "homepage-polish.css"), "utf8");
-  assert.match(indexHtml, /home-app\/home-app\.js\?v=202/);
+  assert.match(indexHtml, /home-app\/home-app\.js\?v=203/);
   assert.match(indexHtml, /\.carousel-pause\s*\{[^}]*padding:\s*0/);
   assert.match(homepagePolish, /\.hero \.carousel-pause\s*\{[^}]*right:\s*156px;[^}]*padding:\s*0/);
 

@@ -15,7 +15,7 @@ test('homepage feeds are rendered by the home React bundle', () => {
   assert.match(html, /id="homeReactTournamentsApp"/);
   assert.match(html, /<div id="homeReactEventsApp"><\/div>/);
   assert.match(html, /<div id="homeReactTournamentsApp"><\/div>/);
-  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=202"><\/script>/);
+  assert.match(html, /<script type="module" src="home-app\/home-app\.js\?v=203"><\/script>/);
   assert.doesNotMatch(html, /<script type="module" src="home-feeds\.js"><\/script>/);
   assert.doesNotMatch(html, /<div id="homeReactEventsApp"><div class="event-list">/);
   assert.doesNotMatch(html, /<div id="homeReactTournamentsApp"><div class="tournament-list">/);
@@ -131,6 +131,10 @@ test('home React bundle owns membership contact and footer sections', () => {
   assert.match(community, /mailto:greenvillediscgolf@gmail\.com/);
   assert.doesNotMatch(community, /document\.|innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=/);
   assert.doesNotMatch(community, /🏆|💬|🎯|📊|📧|📱|📍|&copy;/);
+  assert.match(community, /TJ Braley/);
+  assert.match(community, /157256/);
+  assert.match(community, /https:\/\/www\.pdga\.com\/player\/157256/);
+  assert.match(community, /footer-photo-credit/);
 });
 
 test('home React bundle owns hero and about sections', () => {
@@ -171,6 +175,10 @@ test('home React bundle owns hero and about sections', () => {
   assert.match(heroAbout, /value: 22/);
   assert.match(heroAbout, /Disc3/);
   assert.match(heroAbout, /CircleDollarSign/);
+  assert.match(heroAbout, /TJ Braley/);
+  assert.match(heroAbout, /157256/);
+  assert.match(heroAbout, /https:\/\/www\.pdga\.com\/player\/157256/);
+  assert.match(heroAbout, /hero-photo-credit/);
   assert.doesNotMatch(heroAbout, /carousel-slide-about|about-carousel|AboutIndicator/);
   assert.doesNotMatch(heroAbout, /document\.|innerHTML|insertAdjacentHTML|replaceChildren|document\.createElement|querySelector|classList|textContent\s*=|data-count/);
   assert.doesNotMatch(heroAbout, /🥏|💰|‹|›/);
