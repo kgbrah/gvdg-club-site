@@ -6,6 +6,8 @@ import { KarmaChip } from "../shared/karma.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromPdgaRegistration, dateRangeText } from "../shared/event-calendar.js";
 import { PdgaCredit, PdgaLink } from "../shared/pdga-credit.js";
+import { OnDemandPdgaLiveDrawer, extractPdgaEventId } from "../shared/pdga-live-panel.js";
+import { resolveApiBase } from "../shared/api-base.js";
 
 const h = React.createElement;
 const TIERS = { L: "League", NT: "National Tour", M: "Major", ES: "Elite Series", XM: "Major" };
@@ -57,6 +59,7 @@ export function pdgaEventMeta(event) {
 
 export function PdgaRegistrationCard({ event, mine = false }) {
   const going = Array.isArray(event.going) ? event.going : [];
+  const liveId = extractPdgaEventId(event.eventId, event.url);
   return h("article", {
     className: "register-card pdga-registration-card", "data-pdga-mine": mine ? "true" : "false", "data-pdga-registration": event.eventId,
   }, [
@@ -72,6 +75,13 @@ export function PdgaRegistrationCard({ event, mine = false }) {
       h("a", { className: "passkey-btn", href: event.url, key: "pdga", rel: "noopener noreferrer", target: "_blank" }, "PDGA page"),
       h(AddToCalendarButton, { item: calendarEventFromPdgaRegistration(event), key: "cal" }),
     ]),
+    liveId ? h(OnDemandPdgaLiveDrawer, {
+      apiBase: resolveApiBase(),
+      eventId: liveId,
+      pdgaUrl: event.url,
+      division: event.division || "",
+      key: "live",
+    }) : null,
   ]);
 }
 

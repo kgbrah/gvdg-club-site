@@ -23,6 +23,7 @@ export interface PdgaEventCourse {
 }
 
 export interface PdgaEvent {
+  eventId?: number;
   name: string;
   date: string;
   tier: string;
@@ -96,6 +97,7 @@ async function apiPlacedPdgaEvents(env: Env, origin: { lat: number; lng: number 
       .map((event) => {
         const point = event.lat != null && event.lng != null ? { lat: event.lat, lng: event.lng } : null;
         return {
+          eventId: event.id,
           name: event.name, date: pdgaApiEventDate(event.startDate, event.endDate), tier: pdgaApiTierLabel(event.tier), course: "",
           place: [event.city, event.state].filter(Boolean).join(", "), pdgaUrl: event.url,
           url: clubRun.has(event.id) ? `/events#event/${clubRun.get(event.id)}` : event.registrationUrl || event.url,

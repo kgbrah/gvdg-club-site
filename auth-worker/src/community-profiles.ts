@@ -10,16 +10,17 @@ interface ProfileRow {
   displayName: string;
   bio: string;
   shareProgress: number;
+  sharePdga: number;
   revision: number;
 }
 
 const PROFILE_FIELDS = `member_id AS memberId, profile_key AS key, audience, display_name AS displayName, bio,
-  share_progress AS shareProgress, revision`;
+  share_progress AS shareProgress, share_pdga AS sharePdga, revision`;
 
 function mineView(row: ProfileRow | null) {
-  if (!row) return { key: null, audience: "private", displayName: "", bio: "", shareProgress: false, revision: 0 };
+  if (!row) return { key: null, audience: "private", displayName: "", bio: "", shareProgress: false, sharePdga: false, revision: 0 };
   const { memberId: _member, ...profile } = row;
-  return { ...profile, shareProgress: Boolean(profile.shareProgress) };
+  return { ...profile, shareProgress: Boolean(profile.shareProgress), sharePdga: Boolean(profile.sharePdga) };
 }
 
 export function profileByKey(db: D1Like, key: string) {
@@ -34,20 +35,21 @@ export async function communityProfileSettings(db: D1Like, owner: string) { retu
 
 export async function saveCommunityProfile(db: D1Like, owner: string, input: ProfileInput) {
   const share = Number(input.shareProgress);
+  const sharePdga = Number(input.sharePdga);
   const result = input.revision === 0 ? await db.prepare(`
-    INSERT INTO community_profiles(member_id, profile_key, audience, display_name, bio, share_progress)
-      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(member_id) DO NOTHING`)
-    .bind(owner, crypto.randomUUID(), input.audience, input.displayName, input.bio, share).run()
+    INSERT INTO community_profiles(member_id, profile_key, audience, display_name, bio, share_progress, share_pdga)
+      VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(member_id) DO NOTHING`)
+    .bind(owner, crypto.randomUUID(), input.audience, input.displayName, input.bio, share, sharePdga).run()
     : await db.prepare(`
     UPDATE community_profiles SET profile_key = CASE WHEN audience = 'public' AND ? != 'public' THEN ? ELSE profile_key END,
-      audience = ?, display_name = ?, bio = ?, share_progress = ?, revision = revision + 1,
+      audience = ?, display_name = ?, bio = ?, share_progress = ?, share_pdga = ?, revision = revision + 1,
       updated_at = datetime('now') WHERE member_id = ? AND revision = ?`)
-      .bind(input.audience, crypto.randomUUID(), input.audience, input.displayName, input.bio, share, owner, input.revision).run();
+      .bind(input.audience, crypto.randomUUID(), input.audience, input.displayName, input.bio, share, sharePdga, owner, input.revision).run();
   const row = await profileByOwner(db, owner);
   const current = mineView(row);
   if (!row) return null;
   if (result.meta?.changes || (row.audience === input.audience && row.displayName === input.displayName
-    && row.bio === input.bio && row.shareProgress === share && row.revision === input.revision + 1)) return current;
+    && row.bio === input.bio && row.shareProgress === share && row.sharePdga === sharePdga && row.revision === input.revision + 1)) return current;
   return null;
 }
 
@@ -67,8 +69,8 @@ async function isFriend(db: D1Like, viewer: string, target: string) {
     .bind(...pair(viewer, target)).first());
 }
 
-export async function viewCommunityProfile(db: D1Like, row: ProfileRow, viewer: string | null) {
-  const { memberId, key, audience, displayName, bio, shareProgress } = row;
+export async function viewCommunityProfile(db: D1Like, row: ProfileRow, viewer: string | null, memberPdga: string | null = null) {
+  const { memberId, key, audience, displayName, bio, shareProgress, sharePdga } = row;
   const self = viewer === memberId;
   if (!self) {
     if (audience === "private" || (audience !== "public" && !viewer)) return null;
@@ -76,7 +78,8 @@ export async function viewCommunityProfile(db: D1Like, row: ProfileRow, viewer: 
     if (audience === "friends" && (!viewer || !await isFriend(db, viewer, memberId))) return null;
   }
   const totals = shareProgress ? await communityRoundTotals(db, memberId) : null;
-  return { key, audience, displayName, bio, progress: totals ? { total: totals.club + totals.casual } : null };
+  const sharedPdga = sharePdga && memberPdga ? { pdgaNo: memberPdga } : {};
+  return { key, audience, displayName, bio, progress: totals ? { total: totals.club + totals.casual } : null, ...sharedPdga };
 }
 
 interface DirectoryRow { memberId: string; key: string; displayName: string; audience: Audience }

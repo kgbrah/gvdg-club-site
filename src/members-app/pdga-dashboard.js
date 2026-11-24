@@ -1,6 +1,6 @@
 import React from "react";
 
-import { requestJson } from "./api.js";
+import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import {
   PdgaLink,
   pdgaEventHref,
@@ -11,7 +11,6 @@ import {
 } from "../shared/pdga-credit.js";
 
 const h = React.createElement;
-const PDGA_REFRESH_MS = 15 * 60 * 1000;
 
 const HTML_ENTITY_MAP = {
   amp: "&",
@@ -30,6 +29,15 @@ const ROUND_STAT_CHIP_LABELS = [
   ["c1x", "C1X"],
   ["c2p", "C2P"],
 ];
+
+// Shared per-PDGA-number subscribers so refreshing or linking an event updates Home and Stats together.
+const pdgaStatsListeners = new Map();
+
+function notifyPdgaStatsChanged(pdgaNo, updater) {
+  const listeners = pdgaStatsListeners.get(String(pdgaNo || ""));
+  if (!listeners) return;
+  for (const listener of listeners) listener(updater);
+}
 
 export function pdgaEventTitle(value) {
   return String(value || "").replace(/&(#\d+|#x[\da-fA-F]+|amp|apos|quot|#039);/g, (match, entity) => {
@@ -114,9 +122,13 @@ export function formatPdgaAnnualSummary(row) {
   if (!row || typeof row !== "object") return [];
   const parts = [];
   if (row.events != null) parts.push(`${row.events} ${row.events === 1 ? "event" : "events"}`);
+  if (row.rounds != null) parts.push(`${row.rounds} ${row.rounds === 1 ? "round" : "rounds"}`);
   if (row.points != null) parts.push(`${row.points} pts`);
   if (row.prize != null && row.prize > 0) {
     parts.push(`$${Number(row.prize).toLocaleString(undefined, { maximumFractionDigits: 2 })} cash`);
+  }
+  if (row.playersDefeated != null && row.playersDefeated > 0) {
+    parts.push(`${row.playersDefeated} defeated`);
   }
   if (row.wins != null && row.wins > 0) parts.push(`${row.wins} ${row.wins === 1 ? "win" : "wins"}`);
   return parts;
@@ -161,63 +173,96 @@ function EventRatingRow({ ratings }) {
   ]);
 }
 
+function hasPdgaPayload(stats) {
+  return Boolean(
+    stats
+    && (stats.official_rating != null
+      || (Array.isArray(stats.annual_stats) && stats.annual_stats.length)
+      || (Array.isArray(stats.events) && stats.events.length)
+      || (Array.isArray(stats.play_rounds) && stats.play_rounds.length)),
+  );
+}
+
+/** Policy A hook: loads once from temporary D1 cache on mount and exposes explicit on-demand refresh/reload. */
 export function usePdgaStats(pdgaNo) {
-  const [state, setState] = React.useState({ status: pdgaNo ? "loading" : "empty", stats: null });
+  const [state, setState] = React.useState({
+    status: pdgaNo ? "loading" : "empty",
+    stats: null,
+    refreshing: false,
+    refreshMessage: "",
+  });
+  const activeControllerRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!pdgaNo) {
-      setState({ status: "empty", stats: null });
+      setState({ status: "empty", stats: null, refreshing: false, refreshMessage: "" });
       return undefined;
     }
 
-    const controller = new AbortController();
-    let lastRequestedAt = 0;
-    const load = (showLoading = false) => {
-      lastRequestedAt = Date.now();
-      if (showLoading) setState({ status: "loading", stats: null });
-      void requestJson(`/pdga-stats?pdga=${encodeURIComponent(pdgaNo)}`, { signal: controller.signal })
-        .then((stats) => {
-          const hasData = Boolean(
-            stats
-            && (stats.official_rating != null
-              || (Array.isArray(stats.annual_stats) && stats.annual_stats.length)
-              || (Array.isArray(stats.events) && stats.events.length)
-              || (Array.isArray(stats.play_rounds) && stats.play_rounds.length)),
-          );
-          if (!hasData) {
-            setState({ status: "missing", stats: null });
-            return;
-          }
-          setState({ status: "ready", stats });
-        })
-        .catch((error) => {
-          if (error.name !== "AbortError") {
-            lastRequestedAt = 0;
-            setState({ status: "error", stats: null });
-          }
-        });
+    const key = String(pdgaNo);
+    let listeners = pdgaStatsListeners.get(key);
+    if (!listeners) {
+      listeners = new Set();
+      pdgaStatsListeners.set(key, listeners);
+    }
+    const syncListener = (nextState) => {
+      setState(nextState);
     };
-    const refreshIfStale = () => {
-      if (Date.now() - lastRequestedAt >= PDGA_REFRESH_MS) load();
-    };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") refreshIfStale();
-    };
+    listeners.add(syncListener);
 
-    load(true);
-    const refreshTimer = window.setInterval(refreshIfStale, PDGA_REFRESH_MS);
-    window.addEventListener("focus", refreshIfStale);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    setState({ status: "loading", stats: null, refreshing: false, refreshMessage: "" });
+
+    void requestJson(`/pdga-stats?pdga=${encodeURIComponent(key)}`, { signal: controller.signal })
+      .then((stats) => {
+        if (controller.signal.aborted) return;
+        setState(hasPdgaPayload(stats)
+          ? { status: "ready", stats, refreshing: false, refreshMessage: "" }
+          : { status: "missing", stats: null, refreshing: false, refreshMessage: "" });
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") {
+          setState({ status: "error", stats: null, refreshing: false, refreshMessage: "" });
+        }
+      });
 
     return () => {
       controller.abort();
-      window.clearInterval(refreshTimer);
-      window.removeEventListener("focus", refreshIfStale);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      listeners.delete(syncListener);
+      if (!listeners.size) pdgaStatsListeners.delete(key);
     };
   }, [pdgaNo]);
 
-  return state;
+  const fetchLatest = React.useCallback(async (fresh = false) => {
+    if (!pdgaNo) return;
+    const key = String(pdgaNo);
+    const token = fresh ? storageGet(TOKEN_KEY) : null;
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    setState((current) => ({ ...current, refreshing: true, refreshMessage: "" }));
+    try {
+      const qs = `/pdga-stats?pdga=${encodeURIComponent(key)}${fresh ? "&fresh=1" : ""}`;
+      const stats = await requestJson(qs, { signal: controller.signal, ...(token ? { token } : {}) });
+      if (controller.signal.aborted) return;
+      const next = hasPdgaPayload(stats)
+        ? { status: "ready", stats, refreshing: false, refreshMessage: fresh ? "Updated from PDGA." : "" }
+        : { status: "missing", stats: null, refreshing: false, refreshMessage: "" };
+      notifyPdgaStatsChanged(key, () => next);
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      const msg = error?.status === 429
+        ? "Refreshed recently — try again in a few minutes."
+        : "Could not refresh from PDGA right now.";
+      setState((current) => ({ ...current, refreshing: false, refreshMessage: msg }));
+    }
+  }, [pdgaNo]);
+
+  const refresh = React.useCallback(() => fetchLatest(true), [fetchLatest]);
+  const reload = React.useCallback(() => fetchLatest(false), [fetchLatest]);
+
+  return { ...state, refresh, reload };
 }
 
 function RatingTile({ label, value, delta, live = false }) {
@@ -300,16 +345,17 @@ function eventCard(event, index) {
   return h(RecentEvent, { event, key: event.eventId || `${event.tournament || "event"}-${event.epoch || index}` });
 }
 
-function PdgaAnnualStats({ pdgaNo, rows }) {
+export function PdgaAnnualStats({ pdgaNo, rows, compact = false }) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return null;
+  const shown = compact ? list.slice(0, 2) : list;
   return h("section", {
-    className: "pdga-annual-section",
-    "data-pdga-annual-stats": "ready",
+    className: compact ? "pdga-annual-section compact" : "pdga-annual-section",
+    "data-pdga-annual-stats": compact ? "compact" : "ready",
     "aria-label": "PDGA season totals",
   }, [
-    h("h4", { className: "dash-subtitle", key: "title" }, "PDGA season totals"),
-    h("div", { className: "pdga-annual-list", key: "list" }, list.map((row) => {
+    compact ? null : h("h4", { className: "dash-subtitle", key: "title" }, "PDGA season totals"),
+    h("div", { className: "pdga-annual-list", key: "list" }, shown.map((row) => {
       const key = `${row.year}-${row.divisionCode}`;
       const summary = formatPdgaAnnualSummary(row).join(" · ");
       const yearHref = row.url || pdgaPlayerStatsHref(pdgaNo, row.year);
@@ -328,7 +374,69 @@ function PdgaAnnualStats({ pdgaNo, rows }) {
         }, `View ${row.year} on PDGA.com`) : null,
       ].filter(Boolean));
     })),
-  ]);
+  ].filter(Boolean));
+}
+
+export function PdgaEventLinkForm({ pdgaNo, token, onLinked }) {
+  const [value, setValue] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState("");
+  if (!pdgaNo || !token) return null;
+
+  async function submit(event) {
+    event.preventDefault();
+    const raw = value.trim();
+    if (!raw || busy) return;
+    setBusy(true);
+    setStatus("");
+    try {
+      const res = await requestJson("/pdga/link-event", {
+        method: "POST",
+        token,
+        body: { event: raw },
+      });
+      setValue("");
+      setStatus(`Added ${res?.linked?.name || "event"}${res?.linked?.division ? ` (${res.linked.division})` : ""}.`);
+      if (onLinked) void onLinked();
+    } catch (error) {
+      if (error?.status === 404 && error?.data?.error === "player_not_in_event") {
+        setStatus(`PDGA #${pdgaNo} wasn't found on that event's PDGA Live roster.`);
+      } else if (error?.status === 404) {
+        setStatus("Event wasn't found on PDGA Live.");
+      } else if (error?.status === 400) {
+        setStatus("Enter a PDGA event # (e.g. 107755) or pdga.com event URL.");
+      } else if (error?.status === 429) {
+        setStatus("Too many lookups — try again later.");
+      } else {
+        setStatus("Could not load that event right now.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return h("form", { className: "pdga-link-form", "data-pdga-link-form": "ready", onSubmit: submit }, [
+    h("div", { className: "pdga-link-row", key: "row" }, [
+      h("input", {
+        type: "text",
+        className: "form-input pdga-link-input",
+        value,
+        disabled: busy,
+        maxLength: 160,
+        placeholder: "PDGA event # or pdga.com URL",
+        "aria-label": "PDGA event ID or URL",
+        key: "input",
+        onChange: (event) => setValue(event.target.value),
+      }),
+      h("button", {
+        type: "submit",
+        className: "dashboard-action",
+        disabled: busy || !value.trim(),
+        key: "submit",
+      }, busy ? "Checking…" : "Find my rounds"),
+    ]),
+    status ? h("p", { className: "pdga-source-note", role: "status", key: "status" }, status) : null,
+  ].filter(Boolean));
 }
 
 function TournamentList({ events }) {
@@ -354,6 +462,7 @@ function TournamentList({ events }) {
 export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   const status = state.status;
   const stats = state.stats;
+  const token = storageGet(TOKEN_KEY);
   const extras = children ? [children] : [];
 
   if (!pdgaNo) {
@@ -373,15 +482,36 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
   if (status === "missing") {
     return dashboardShell("missing", [
       h("div", { className: "react-pdga-status", key: "status" }, `PDGA did not return a rating for #${pdgaNo}. Refresh in a few minutes.`),
+      token && state.refresh ? h("div", { className: "pdga-profile-links", key: "actions" }, [
+        h("button", {
+          type: "button",
+          className: "pdga-refresh-btn",
+          "data-pdga-refresh": "true",
+          disabled: state.refreshing,
+          key: "refresh",
+          onClick: () => { void state.refresh(); },
+        }, state.refreshing ? "Refreshing…" : "Refresh PDGA stats"),
+      ]) : null,
+      state.refreshMessage ? h("p", { className: "pdga-source-note", role: "status", key: "refresh-msg" }, state.refreshMessage) : null,
       ...extras,
-    ]);
+    ].filter(Boolean));
   }
 
   if (status === "error") {
     return dashboardShell("error", [
       h("div", { className: "react-pdga-status error", key: "status" }, "Could not load PDGA stats. Please refresh and try again."),
+      token && state.refresh ? h("div", { className: "pdga-profile-links", key: "actions" }, [
+        h("button", {
+          type: "button",
+          className: "pdga-refresh-btn",
+          "data-pdga-refresh": "true",
+          disabled: state.refreshing,
+          key: "refresh",
+          onClick: () => { void state.refresh(); },
+        }, state.refreshing ? "Refreshing…" : "Try again"),
+      ]) : null,
       ...extras,
-    ]);
+    ].filter(Boolean));
   }
 
   const events = Array.isArray(stats?.events) ? stats.events : [];
@@ -396,7 +526,7 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
     ? h(TournamentList, { events, key: "events" })
     : official != null && !compact
       ? h("p", { className: "pdga-source-note", key: "empty-history" }, [
-        "No recent regional PDGA Live rounds matched automatically yet. View all sanctioned finishes on ",
+        "No recent regional PDGA Live rounds matched automatically yet. Load a tournament below or view all sanctioned finishes on ",
         h("a", {
           className: "pdga-link",
           href: pdgaPlayerHistoryHref(pdgaNo),
@@ -444,7 +574,16 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
         rel: "noopener noreferrer",
         target: "_blank",
       }, `${currentYear} stats on PDGA.com`) : null,
+      token && state.refresh ? h("button", {
+        type: "button",
+        className: "pdga-refresh-btn",
+        "data-pdga-refresh": "true",
+        disabled: state.refreshing,
+        key: "refresh",
+        onClick: () => { void state.refresh(); },
+      }, state.refreshing ? "Refreshing…" : "Refresh PDGA stats") : null,
     ].filter(Boolean)),
+    state.refreshMessage ? h("p", { className: "pdga-source-note", role: "status", key: "refresh-msg" }, state.refreshMessage) : null,
     h("p", { className: "pdga-source-note", key: "source" },
       "Official ratings and season totals come from PDGA's API; recent round breakdowns come from PDGA Live. Club rounds and UDisc imports stay separate above."),
     h("div", { className: "dash-rating-row", key: "ratings" }, [
@@ -455,9 +594,10 @@ export function PdgaDashboard({ pdgaNo, state, children, compact = false }) {
       h(RatingTile, { label: "Events", value: stats?.events_count != null ? stats.events_count : events.length, key: "events" }),
     ]),
     h(PdgaAnnualStats, { pdgaNo, rows: annualStats, key: "annual" }),
+    h(PdgaEventLinkForm, { pdgaNo, token, onLinked: state.reload, key: "link-event" }),
     ...extras,
     history,
-  ]);
+  ].filter(Boolean));
 }
 
 function dashboardShell(status, children) {

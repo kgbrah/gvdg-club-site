@@ -12,6 +12,7 @@ import {
 } from "../src/members-app/pdga-dashboard.js";
 import { goingText, pdgaEventMeta, readPdgaRegistrations, tierLabel } from "../src/members-app/pdga-registrations.js";
 import { hasPdgaLiveDetailedStats, pdgaLiveObText, pdgaLivePositionText, pdgaLiveStatPctText } from "../src/public-app/pdga-live-panel.js";
+import { extractPdgaEventId } from "../src/shared/pdga-live-panel.js";
 
 test("pdga-registrations helpers format tiers, clubmates, and defend against malformed API payloads", () => {
   assert.deepEqual(readPdgaRegistrations(null), { mine: [], club: [] });
@@ -63,10 +64,17 @@ test("pdga-dashboard helpers decode HTML entities, format place/to-par/annual/st
 
   assert.deepEqual(formatPdgaAnnualSummary({
     events: 8,
+    rounds: 16,
     points: 412,
     prize: 240,
+    playersDefeated: 120,
     wins: 2,
-  }), ["8 events", "412 pts", "$240 cash", "2 wins"]);
+  }), ["8 events", "16 rounds", "412 pts", "$240 cash", "120 defeated", "2 wins"]);
+
+  assert.equal(extractPdgaEventId(107755, ""), 107755);
+  assert.equal(extractPdgaEventId(null, "https://www.pdga.com/tour/event/96414"), 96414);
+  assert.equal(extractPdgaEventId(undefined, "https://www.pdga.com/live/event/88001/MA1/scores"), 88001);
+  assert.equal(extractPdgaEventId(null, "https://example.com/other"), null);
 });
 
 test("pdga-live-panel helpers handle ties, DNF, and missing throw tracking (opp === 0)", () => {

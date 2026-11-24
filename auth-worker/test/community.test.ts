@@ -16,7 +16,7 @@ async function fixture() {
   const { DatabaseSync } = await import("node:sqlite");
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
-  for (const file of ["0001_init.sql", "0016_casual_rounds.sql", "0048_course_discovery.sql", "0054_community_discovery.sql"]) {
+  for (const file of ["0001_init.sql", "0016_casual_rounds.sql", "0048_course_discovery.sql", "0054_community_discovery.sql", "0084_community_share_pdga.sql"]) {
     sqlite.exec(readFileSync(new URL("../migrations/" + file, import.meta.url), "utf8"));
   }
   sqlite.exec("INSERT INTO courses (id, name) VALUES (1, 'Riverside'), (2, 'Woodland'), (3, 'County Park')");
@@ -49,7 +49,7 @@ async function fixture() {
   const roster = new Set(memberIds);
   const env = {
     DB: db, JWT_SECRET: SECRET,
-    ROSTER: { get: async (key: string) => roster.has(key.slice(7)) ? JSON.stringify({ memberId: key.slice(7), name: "Private roster name", pinVer: 3, isAdmin: key === "member:m_staff" }) : null },
+    ROSTER: { get: async (key: string) => roster.has(key.slice(7)) ? JSON.stringify({ memberId: key.slice(7), name: "Private roster name", pdgaNo: key === "member:m_alex" ? "80024" : undefined, pinVer: 3, isAdmin: key === "member:m_staff" }) : null },
     RATELIMIT: { get: async (key: string) => rate.get(key), put: async (key: string, value: string) => rate.set(key, value) },
   } as unknown as Env;
   const tokens = new Map(await Promise.all(memberIds.map(async (member) => [member, await signSession({ sub: member, mustChangePin: false, pinVer: 3 }, SECRET, 900)] as const)));
@@ -204,6 +204,26 @@ describe("course discovery and moderated reviews", () => {
     expect((await api("/admin/community/reviews/1", "m_staff", "PUT", { action: "hide", revision: 2 })).status).toBe(200);
     expect((await api(review, "m_alex", "DELETE", { revision: 2 })).status).toBe(200);
     expect(await (await api(publicRoute, "m_alex")).json()).toMatchObject({ reviews: [], mine: { state: "removed", text: "", rating: null } });
+  });
+
+  it("shares linked PDGA number on community profiles only when opted in", async () => {
+    const { api } = await fixture();
+    const first = await api("/me/community/profile", "m_alex", "PUT", {
+      audience: "public", displayName: "Ada PDGA", bio: "", shareProgress: false, sharePdga: true, revision: 0,
+    });
+    expect(first.status).toBe(200);
+    const saved = (await first.json() as { profile: { key: string; sharePdga: boolean; revision: number } }).profile;
+    expect(saved.sharePdga).toBe(true);
+    const publicView = await api("/community/profiles/" + saved.key, null);
+    expect(publicView.status).toBe(200);
+    expect(await publicView.json()).toMatchObject({ profile: { displayName: "Ada PDGA", pdgaNo: "80024" } });
+
+    const off = await api("/me/community/profile", "m_alex", "PUT", {
+      audience: "public", displayName: "Ada PDGA", bio: "", shareProgress: false, sharePdga: false, revision: saved.revision,
+    });
+    expect(off.status).toBe(200);
+    const unshared = await (await api("/community/profiles/" + saved.key, null)).json() as { profile: Record<string, unknown> };
+    expect("pdgaNo" in unshared.profile).toBe(false);
   });
 
   it("enforces per-account limits and rejects overlong mutation requests", async () => {

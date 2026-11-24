@@ -428,6 +428,15 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
 
     if (pathName === "/me") return route.fulfill(json({ sub: "member-1", isAdmin: true, name: "QA Admin", pdgaNo: "90000001" }));
     if (pathName === "/pdga-stats") return route.fulfill(json(stats));
+    if (pathName === "/pdga/link-event" && method === "POST") {
+      return route.fulfill(json({ ok: true, linked: { eventId: 900001, name: "GVDG QA Monthly", division: "MA1", startDate: "2026-06-20", endDate: "2026-06-20", resultId: 1 } }));
+    }
+    if (pathName === "/pdga/players/batch") {
+      return route.fulfill(json({ players: { "90000001": { pdgaNumber: "90000001", name: "QA Admin", rating: 935, ratingDate: "2026-07-01", classification: "A", membershipStatus: "current", url: "https://www.pdga.com/player/90000001" } }, attribution: "Player, event, and course data provided by PDGA" }));
+    }
+    if (pathName.startsWith("/pdga/live/event/")) {
+      return route.fulfill(json({ event: { tournId: 900001, name: "GVDG QA Monthly", divisions: [], roundsList: [] }, division: "", round: "1", blocks: [], pdgaLiveUrl: "https://www.pdga.com/live/event/900001" }));
+    }
     if (pathName.startsWith("/my-ratings")) return route.fulfill(json(myRatings));
     if (pathName === "/my-results") return route.fulfill(json({
       results: [
