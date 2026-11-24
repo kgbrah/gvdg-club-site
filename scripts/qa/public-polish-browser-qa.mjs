@@ -258,6 +258,15 @@ async function checkHome(page, profile) {
     const slide = document.querySelector(".carousel-slide-courses:not([inert])");
     return Math.abs(slide.getBoundingClientRect().left - slide.closest(".courses-carousel-container").getBoundingClientRect().left) < 1;
   });
+  for (const placement of ["hero", "footer"]) {
+    const credit = page.locator(`[data-home-photo-credit="${placement}"]`);
+    await credit.waitFor({ state: "visible" });
+    const text = await credit.innerText();
+    assert(text.includes("TJ Braley"), `${placement} photo credit names TJ Braley: ${text}`);
+    assert(text.includes("PDGA #157256"), `${placement} photo credit shows PDGA #157256: ${text}`);
+    const link = credit.getByRole("link", { name: "PDGA #157256" });
+    assert.equal(await link.getAttribute("href"), "https://www.pdga.com/player/157256");
+  }
   await screenshot(page, "interaction-home-courses");
 }
 

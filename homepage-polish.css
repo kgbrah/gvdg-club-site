@@ -122,11 +122,21 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
 .hero .carousel-pause { top: auto; bottom: 22px; left: auto; right: 156px; padding: 0; border-width: 1px; background: rgba(15,15,30,.3); transform: none; }
 .hero .carousel-pause:hover { transform: none; background: var(--primary-strong); }
 .club-rhythm {
-  grid-column: 2; grid-row: 1 / span 4; align-self: center;
+  grid-column: 2; grid-row: 1 / span 5; align-self: center;
   grid-template-columns: 1fr; gap: 0; margin: 0; padding: 8px 26px 0;
   border: 1px solid rgba(255,255,255,.22); border-radius: 14px;
   background: rgba(15,15,30,.72); backdrop-filter: blur(12px);
 }
+.hero-photo-credit {
+  grid-column: 1; justify-self: start;
+  display: inline-flex; align-items: center; gap: .45rem;
+  margin: 18px 0 0; padding: 6px 12px; border-radius: 999px;
+  background: rgba(15, 15, 30, .72); border: 1px solid rgba(255, 255, 255, .2);
+  color: var(--light); font-size: .78rem; line-height: 1.4; max-width: 100%;
+}
+.hero-photo-credit svg { flex: none; opacity: .9; }
+.hero-photo-credit a { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.hero-photo-credit a:hover { color: var(--accent); }
 .rhythm-card { background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.15); border-radius: 0; padding: 20px 0; backdrop-filter: none; }
 .rhythm-kicker { font-size: .62rem; letter-spacing: .14em; }
 .rhythm-title { font-size: 1.8rem; line-height: 1.15; margin: 7px 0 4px; letter-spacing: .035em; }
@@ -187,4 +197,5 @@ header .logo .logo-image, header.scrolled .logo .logo-image { height: 44px !impo
   .club-group-link { padding: 16px 0; gap: 14px; }
   .club-group-link span { font-size: .66rem; }
   .club-group-link strong { font-size: .68rem; }
+  .hero-photo-credit { align-self: flex-start; margin-top: 14px; font-size: .74rem; }
 }

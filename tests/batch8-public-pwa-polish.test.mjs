@@ -348,7 +348,7 @@ test("Batch 8 PWA, cache-header, widget, and hero accessibility invariants hold 
 
   const indexHtml = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const homepagePolish = fs.readFileSync(path.join(ROOT, "homepage-polish.css"), "utf8");
-  assert.match(indexHtml, /home-app\/home-app\.js\?v=202/);
+  assert.match(indexHtml, /home-app\/home-app\.js\?v=203/);
   assert.match(indexHtml, /\.carousel-pause\s*\{[^}]*padding:\s*0/);
   assert.match(homepagePolish, /\.hero \.carousel-pause\s*\{[^}]*right:\s*156px;[^}]*padding:\s*0/);
 
