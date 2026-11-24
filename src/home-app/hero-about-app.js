@@ -1,12 +1,16 @@
 import React from "react";
-import { ChevronLeft, ChevronRight, CircleDollarSign, Disc3, Pause, Play } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, CircleDollarSign, Disc3, Pause, Play } from "lucide-react";
 
+import { safeExternalUrl } from "../shared/safe-url.js";
 import { nextCircularIndex, useAnimatedCount, useRevealOnce, useSwipe } from "./interaction-hooks.js";
 
 const h = React.createElement;
 
 const HERO_SLIDES = 5;
 const FACEBOOK_GROUP_URL = "https://www.facebook.com/groups/243452675724939";
+const PHOTO_CREDIT_NAME = "TJ Braley";
+const PHOTO_CREDIT_PDGA = "157256";
+const PHOTO_CREDIT_URL = "https://www.pdga.com/player/157256";
 
 const CLUB_RHYTHM = [
   { kicker: "Every week", title: "Doubles", detail: "Show up and get a card." },
@@ -202,6 +206,22 @@ export function HomeHeroSection() {
         }, [
           h("span", { key: "copy" }, "Rain calls, who's playing"),
           h("strong", { key: "go" }, "Facebook group"),
+        ]),
+      ]),
+      h("p", {
+        className: "hero-photo-credit",
+        "data-home-photo-credit": "hero",
+        key: "photo-credit",
+      }, [
+        icon(Camera, { key: "icon", size: 14, strokeWidth: 2.2 }),
+        h("span", { key: "text" }, [
+          `Photos by ${PHOTO_CREDIT_NAME} · `,
+          h("a", {
+            href: safeExternalUrl(PHOTO_CREDIT_URL),
+            key: "pdga",
+            rel: "noopener noreferrer",
+            target: "_blank",
+          }, `PDGA #${PHOTO_CREDIT_PDGA}`),
         ]),
       ]),
     ]),
