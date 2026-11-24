@@ -82,7 +82,11 @@ export async function karmaOf(env: Env, personIds: readonly string[]): Promise<M
       .all<{ person_id: string; karma: number }>()).results ?? [];
     const adjusted = (await env.DB.prepare(adjustmentKarmaSql(chunk.length)).bind(...chunk)
       .all<{ person_id: string; karma: number }>()).results ?? [];
-    for (const row of [...given, ...played, ...adjusted]) {
+    const workdays = (await env.DB.prepare(
+      `SELECT member_id AS person_id, SUM(karma_awarded) AS karma FROM club_workday_signups
+       WHERE status = 'verified' AND karma_awarded > 0 AND member_id IN (${placeholders(chunk)}) GROUP BY member_id`,
+    ).bind(...chunk).all<{ person_id: string; karma: number }>()).results ?? [];
+    for (const row of [...given, ...played, ...adjusted, ...workdays]) {
       const base = out.get(row.person_id) ?? { karma: 0, returned: 0 };
       out.set(row.person_id, { ...base, karma: base.karma + (Number(row.karma) || 0) });
     }

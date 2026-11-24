@@ -59,19 +59,33 @@ export async function recordMemberNotices(
   env: Env,
   memberIds: readonly string[],
   notice: { kind: string; title: string; body: string; href: string; refKey: string },
+  maxRecipients = 20,
 ): Promise<void> {
-  const ids = [...new Set(memberIds.filter((id) => typeof id === "string" && id))].slice(0, 20);
+  const cap = Math.max(1, Math.min(1000, Math.floor(maxRecipients)));
+  const ids = [...new Set(memberIds.filter((id) => typeof id === "string" && id))].slice(0, cap);
   if (!ids.length) return;
   const kind = notice.kind.slice(0, 24);
   const title = notice.title.slice(0, 80);
   const body = notice.body.slice(0, 180);
   const href = notice.href.slice(0, 180);
   const refKey = notice.refKey.slice(0, 80);
+  const stmts: ReturnType<Env["DB"]["prepare"]>[] = [];
   for (let i = 0; i < ids.length; i += 15) {
     const chunk = ids.slice(i, i + 15);
-    await env.DB.prepare(
-      `INSERT OR IGNORE INTO member_notices (member_id, kind, title, body, href, ref_key) VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?)").join(", ")}`,
-    ).bind(...chunk.flatMap((memberId) => [memberId, kind, title, body, href, refKey])).run();
+    stmts.push(
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO member_notices (member_id, kind, title, body, href, ref_key) VALUES ${chunk.map(() => "(?, ?, ?, ?, ?, ?)").join(", ")}`,
+      ).bind(...chunk.flatMap((memberId) => [memberId, kind, title, body, href, refKey])),
+    );
+  }
+  if (stmts.length === 1) {
+    await stmts[0]!.run();
+    return;
+  }
+  for (let i = 0; i < stmts.length; i += 10) {
+    const slice = stmts.slice(i, i + 10);
+    if (typeof env.DB.batch === "function") await env.DB.batch(slice);
+    else for (const stmt of slice) await stmt.run();
   }
 }
 

@@ -295,7 +295,11 @@ async function captureAuthGate(browser, origin, viewport, slug) {
 }
 
 async function captureState(browser, origin, viewport, slug) {
-  const context = await browser.newContext({ viewport });
+  const context = await browser.newContext({
+    viewport,
+    permissions: ["geolocation"],
+    geolocation: { latitude: 35.9, longitude: -77.9 },
+  });
   const page = await context.newPage();
   const errors = collectPageErrors(page);
   const apiState = await installMemberDashboardApiRoutes(page, apiBase);
@@ -324,6 +328,23 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-home-last-round]", "GVDG QA Weekly", "React last club round");
   await waitForText(page, "[data-react-home-conditions]", "ECU North Rec Complex", "React home conditions");
   await waitForText(page, "[data-react-home-conditions]", "Wet", "React home wet condition");
+  await page.waitForSelector('[data-react-home-workdays="ready"]', { timeout: 10_000 });
+  const workdayCard = page.locator('[data-member-workday="21"]');
+  await waitForText(page, '[data-member-workday="21"]', "Course Cleanup & Mulching", "Member Home workday title");
+  await waitForText(page, '[data-member-workday="21"]', "+40 karma", "Member Home workday karma");
+  await waitForText(page, '[data-member-workday-roster="21"]', "Signed up (1)", "Member Home workday existing roster count");
+  await waitForText(page, '[data-member-workday-roster="21"]', "QA Cardmate", "Member Home workday existing participant");
+  await workdayCard.getByRole("button", { name: "Sign up", exact: true }).click();
+  await waitForText(page, '[data-member-workday-roster="21"]', "Signed up (2)", "Member Home workday updated roster count");
+  await waitForText(page, '[data-member-workday-roster="21"]', "QA Admin", "Member Home workday signed-up member");
+  await workdayCard.getByRole("button", { name: "Check in with GPS" }).click();
+  await waitForText(page, '[data-member-workday="21"]', "must be within 2,000 ft", "Member Home workday GPS out-of-range check-in");
+  for (let i = errors.length - 1; i >= 0; i -= 1) {
+    if (errors[i].includes("/workdays/21/check-in") && errors[i].includes("422")) errors.splice(i, 1);
+  }
+  await context.setGeolocation({ latitude: 35.6127, longitude: -77.3664 });
+  await workdayCard.getByRole("button", { name: "Check in with GPS" }).click();
+  await waitForText(page, '[data-member-workday="21"]', "GPS verified (120 ft)", "Member Home workday GPS in-range check-in");
   await page.waitForSelector('[data-react-member-banner="ready"]', { timeout: 10_000 });
   if (await page.locator("[data-react-admin-portal]").count()) {
     throw new Error("The Admin portal should not appear on Home.");

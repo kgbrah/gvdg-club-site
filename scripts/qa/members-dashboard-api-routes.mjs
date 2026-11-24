@@ -279,6 +279,30 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     nextTeeSignId: 702,
     teeSignPostBody: null,
     teeSigns: [initialTeeSign()],
+    workdays: [
+      {
+        id: 21,
+        title: "Course Cleanup & Mulching",
+        description: "Meet near hole 1 kiosk. Bring gloves.",
+        courseId: 1,
+        locationName: "ECU North Rec Complex",
+        workdayDate: "2026-07-06",
+        startTime: "9:00 AM",
+        karmaReward: 40,
+        radiusFt: 2000,
+        hasGps: true,
+        status: "active",
+        checkinOpen: true,
+        announcedAt: "2026-07-01T14:00:00Z",
+        signupCount: 1,
+        checkedInCount: 0,
+        verifiedCount: 0,
+        signups: [
+          { name: "QA Cardmate", karmaKey: "m_cardmate", status: "signed_up", signedUpAt: "2026-07-02T12:00:00Z", isMe: false },
+        ],
+        me: null,
+      },
+    ],
   };
 
   await page.route(`${apiBase}/**`, async (route) => {
@@ -286,6 +310,56 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     const url = new URL(request.url());
     const pathName = url.pathname;
     const method = request.method();
+
+    if (pathName === "/workdays" && method === "GET") {
+      return route.fulfill(json({ workdays: state.workdays }));
+    }
+    const wdSignupMatch = pathName.match(/^\/workdays\/(\d+)\/signup$/);
+    if (wdSignupMatch) {
+      const wd = state.workdays.find((row) => row.id === Number(wdSignupMatch[1]));
+      if (!wd) return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not_found" }) });
+      if (method === "POST") {
+        if (!wd.signups.some((s) => s.isMe)) {
+          wd.signups.push({ name: "QA Admin", karmaKey: "m_qa", status: "signed_up", signedUpAt: "2026-07-06T08:45:00Z", isMe: true });
+        }
+        wd.signupCount = wd.signups.length;
+        wd.me = { status: "signed_up", signedUpAt: "2026-07-06T08:45:00Z", gpsVerified: false, gpsDistanceFt: null, checkedInAt: null, verifiedAt: null, karmaAwarded: 0 };
+        return route.fulfill(json({ ok: true, workday: wd }));
+      }
+      if (method === "DELETE") {
+        wd.signups = wd.signups.filter((s) => !s.isMe);
+        wd.signupCount = wd.signups.length;
+        wd.me = null;
+        return route.fulfill(json({ ok: true, workday: wd }));
+      }
+    }
+    const wdCheckinMatch = pathName.match(/^\/workdays\/(\d+)\/check-in$/);
+    if (wdCheckinMatch && method === "POST") {
+      const wd = state.workdays.find((row) => row.id === Number(wdCheckinMatch[1]));
+      if (!wd) return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not_found" }) });
+      const body = request.postDataJSON() || {};
+      const latDiff = Math.abs(Number(body.lat) - 35.6127);
+      const lngDiff = Math.abs(Number(body.lng) - (-77.3664));
+      if (!Number.isFinite(latDiff) || !Number.isFinite(lngDiff) || latDiff > 0.01 || lngDiff > 0.01) {
+        return route.fulfill({
+          status: 422,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "too_far", distanceFt: 5400, radiusFt: wd.radiusFt }),
+        });
+      }
+      wd.signups = wd.signups.map((s) => (s.isMe ? { ...s, status: "checked_in" } : s));
+      wd.checkedInCount = wd.signups.filter((s) => s.status === "checked_in").length;
+      wd.me = {
+        status: "checked_in",
+        signedUpAt: "2026-07-06T08:45:00Z",
+        gpsVerified: true,
+        gpsDistanceFt: 120,
+        checkedInAt: "2026-07-06T09:02:00Z",
+        verifiedAt: null,
+        karmaAwarded: 0,
+      };
+      return route.fulfill(json({ ok: true, distanceFt: 120, radiusFt: wd.radiusFt, workday: wd }));
+    }
 
     if (pathName === "/me") return route.fulfill(json({ sub: "member-1", isAdmin: true, name: "QA Admin", pdgaNo: "90000001" }));
     if (pathName === "/pdga-stats") return route.fulfill(json(stats));

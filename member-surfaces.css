@@ -1350,3 +1350,103 @@ body.player-theme-glass[data-member-shell="members"] #members :is(.field-tile, .
 #members .members-controls .members-search-wrap .members-search { min-height: 44px; }
 #members .doubles-search-wrap { max-width: 400px; margin-bottom: 1rem; }
 #members .doubles-search-wrap .doubles-search-bar { margin-bottom: 0; max-width: none; }
+
+/* Club workday organizer card on Member Home: sign-up + live participant roster + GPS check-in. */
+#members .member-workdays-card { display: grid; gap: .75rem; margin: 0; }
+#members .member-workdays-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+#members .member-workdays-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin: 0;
+  color: var(--text-primary);
+  font: 800 1.04rem/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: -.01em;
+  text-transform: none;
+}
+#members .member-workdays-head svg { color: var(--primary); flex: none; }
+#members .member-workday-item {
+  display: grid;
+  gap: .55rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--member-line);
+  min-width: 0;
+}
+#members .member-workday-item:first-of-type { padding-top: 0; border-top: 0; }
+#members .member-workday-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .4rem .6rem;
+}
+#members .member-workday-title-wrap { display: grid; gap: .15rem; min-width: 0; flex: 1 1 11rem; }
+#members .member-workday-title {
+  margin: 0;
+  color: var(--text-primary);
+  font: 800 .98rem/1.25 Archivo, system-ui, sans-serif;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+#members .member-workday-karma {
+  flex: none;
+  background: var(--member-panel);
+  border: 1px solid var(--member-line);
+  color: var(--text-primary);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+#members .member-workday-desc { margin: 0; color: var(--text-secondary); }
+#members .member-workday-roster-box {
+  display: grid;
+  gap: .4rem;
+  padding: .6rem .7rem;
+  border: 1px solid var(--member-line);
+  border-radius: .6rem;
+  background: var(--member-panel);
+}
+body.player-theme-glass[data-member-shell="members"] #members .member-workday-roster-box {
+  background: color-mix(in srgb, var(--member-panel) 72%, transparent);
+}
+#members .member-workday-roster-head {
+  font: 750 .82rem/1.2 Archivo, system-ui, sans-serif;
+  color: var(--text-primary);
+}
+#members .member-workday-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .35rem;
+}
+#members .member-workday-person {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .25rem .5rem;
+  min-width: 0;
+  font-size: .88rem;
+  color: var(--text-primary);
+}
+#members .member-workday-name { font-weight: 700; overflow-wrap: normal; word-break: normal; }
+#members .member-workday-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
+#members .member-workday-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: .12rem .45rem;
+  border-radius: 999px;
+  border: 1px solid var(--member-line);
+  background: var(--member-paper);
+  color: var(--text-primary);
+  font: 700 .72rem/1.2 Archivo, system-ui, sans-serif;
+}
+#members .member-workday-tag.is-verified { border-color: var(--green-text); color: var(--green-text); }
+#members .member-workday-status {
+  margin: 0;
+  font-size: .86rem;
+  font-weight: 650;
+  color: var(--text-secondary);
+}
+#members .member-workday-status.is-verified { color: var(--green-text); }
+#members .member-workday-status.is-error { color: var(--over); }

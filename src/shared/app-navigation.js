@@ -34,6 +34,7 @@ export const ADMIN_DESTINATIONS = [
   entry("create", "New event", "events", { terms: "new create add tournament competition casual" }),
   entry("import", "Import event", "events", { terms: "PDGA UDisc import sync tournament" }),
   entry("leagues-mgmt", "League seasons", "events", { terms: "schedule doubles league night" }),
+  entry("workdays", "Workdays", "events", { terms: "workday volunteer cleanup course maintenance karma checkin gps announce" }),
   entry("registration", "Registration", "events", { terms: "event sign up roster entries fees payment payouts", context: "event" }),
   entry("check-in", "Check-in", "events", { terms: "check desk attendance arrival paid roster", context: "event", pane: "registration" }),
   entry("scoring", "Live scoring", "events", { terms: "start round score cards putting scores scoring", context: "event" }),

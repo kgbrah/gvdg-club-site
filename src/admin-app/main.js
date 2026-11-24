@@ -39,6 +39,7 @@ import { AdminScoringPanel } from "./scoring-panel.js";
 import { AdminOrderControls, AdminProductInventoryControls } from "./shop-controls.js";
 import { AdminTeeSignReviewControls, AdminTeeSignReviewList } from "./tee-sign-review.js";
 import { AdminTodayDashboard } from "./today-dashboard.js";
+import { AdminWorkdaysPanel } from "./workdays-panel.js";
 import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { AdminWalletBalances } from "./wallet-balances.js";
@@ -175,6 +176,11 @@ if (leagueNightFormMount) {
 const leaguesListMount = document.getElementById("adminLeaguesListReactApp");
 if (leaguesListMount) {
   flushSync(() => createRoot(leaguesListMount).render(h(AdminLeaguesList)));
+}
+
+const workdaysMount = document.getElementById("adminWorkdaysReactApp");
+if (workdaysMount) {
+  flushSync(() => createRoot(workdaysMount).render(h(AdminWorkdaysPanel)));
 }
 
 const bagTagsMount = document.getElementById("adminBagTagsReactApp");

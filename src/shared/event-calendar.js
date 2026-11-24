@@ -181,6 +181,26 @@ export function calendarEventFromPdgaRegistration(event) {
   });
 }
 
+/** Add-to-calendar item for an announced club workday. */
+export function calendarEventFromWorkday(workday) {
+  const start = String(workday?.workdayDate || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !workday?.title) return null;
+  const stamp = start.replace(/-/g, "");
+  return allDayItem({
+    uid: `gvdg-workday-${workday.id || slug(workday.title)}@gvdgclub.com`,
+    summary: workday.title,
+    location: workday.locationName || "",
+    description: [
+      workday.startTime ? `Start: ${workday.startTime}` : "",
+      workday.karmaReward ? `Reward: +${workday.karmaReward} karma` : "",
+      workday.description || "",
+    ].filter(Boolean).join("\n"),
+    url: "https://gvdgclub.com/gvdg-members.html#home",
+    start: stamp,
+    end: addDays(stamp, 1),
+  });
+}
+
 const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** "Nov 21, 2026", "Nov 21–22, 2026", "Sep 13 – Nov 29, 2026", "Dec 30, 2026 – Jan 2, 2027" from ISO dates. */

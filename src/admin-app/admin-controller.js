@@ -1025,14 +1025,15 @@ export function startAdminController() {
         let adminNeedsRequest = 0;
         async function refreshAdminNeeds() {
             const request = ++adminNeedsRequest;
-            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0, marketReports: 0, lostFoundReports: 0, karmaFlags: 0, donations: 0 };
-            const [tags, applications, signs, market, lostFound, donations] = await Promise.all([
+            const next = { bagRequests: 0, bagChallenges: 0, applications: 0, teeSigns: 0, marketReports: 0, lostFoundReports: 0, karmaFlags: 0, donations: 0, workdayCheckins: 0 };
+            const [tags, applications, signs, market, lostFound, donations, workdays] = await Promise.all([
                 adminApi('/admin/bag-tags').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/members/applications').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/tee-signs?status=candidate').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/market/summary').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/lost-found/summary').then(async (r) => r.ok ? r.json() : null).catch(() => null),
                 adminApi('/admin/donations').then(async (r) => r.ok ? r.json() : null).catch(() => null),
+                adminApi('/admin/workdays').then(async (r) => r.ok ? r.json() : null).catch(() => null),
             ]);
             if (request !== adminNeedsRequest) return;
             if (tags) {
@@ -1047,6 +1048,7 @@ export function startAdminController() {
                 next.karmaFlags = Number(lostFound.karmaFlags) || 0;
             }
             if (donations) next.donations = Array.isArray(donations.pending) ? donations.pending.length : 0;
+            if (workdays) next.workdayCheckins = Number(workdays.pendingCheckins) || 0;
             publishAdminNeeds(next);
         }
 
