@@ -141,7 +141,9 @@ body::before{
         .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.35rem 1.1rem; margin-bottom: 1rem; }
         footer .footer-links a { color: white; text-decoration: none; font-weight: 700; min-height: 44px; display: inline-flex; align-items: center; padding: 0.35rem 0.5rem; }
         footer .footer-links a:hover { color: var(--primary); }
-        .events-footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem 1.25rem; }
+        .events-footer { margin-top: 1.5rem; }
+        .events-footer-links { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.6rem 1.5rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
+        .events-footer-host { margin: 0; text-wrap: balance; }
         .events-footer a { color: var(--primary); font-weight: 700; }
         .membership-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; }
         .membership-next { margin-top: 0.9rem; color: rgba(255, 255, 255, 0.9); font-size: 0.98rem; }
@@ -549,12 +551,11 @@ p { font-size: clamp(0.9375rem, 2.5vw, 1.0625rem); }
     <section id="events">
         <h2 class="section-title fade-in visible">Upcoming Events</h2>
         <div id="homeReactEventsApp"></div>
-        <div class="events-footer" style="text-align: center; margin-top: 2rem;">
-            <p class="events-footer-links" style="color: var(--text-muted); font-size: 0.9rem;">
-                <a href="events.html">Club events and registration</a>
-                <span aria-hidden="true">·</span>
-                Want to host? <a href="#contact">Contact us</a>
-            </p>
+        <div class="events-footer">
+            <div class="events-footer-links">
+                <a class="events-footer-primary" href="events.html">Club events and registration</a>
+                <p class="events-footer-host">Want to host an event? <a href="#contact">Contact us</a></p>
+            </div>
         </div>
     </section>
 

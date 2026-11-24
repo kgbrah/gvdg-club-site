@@ -162,6 +162,13 @@ test('home React bundle owns hero and about sections', () => {
   assert.match(html, /\.hero \.carousel-arrow \{ display: none; \}/);
   assert.match(html, /linear-gradient\(180deg, rgba\(15, 15, 30, 0\.28\)/);
   assert.match(html, /Club events and registration/);
+  const eventsSectionMatch = html.match(/<section id="events">[\s\S]*?<\/section>/);
+  assert.ok(eventsSectionMatch, "#events section present");
+  assert.match(html, /class="events-footer-host">Want to host an event\? <a href="#contact">Contact us<\/a><\/p>/);
+  assert.doesNotMatch(eventsSectionMatch[0], /<span aria-hidden="true">·<\/span>/);
+  const homePolishSections = readFileSync("home-polish-sections.css", "utf8");
+  assert.match(homePolishSections, /#events \.events-footer-links/);
+  assert.match(homePolishSections, /#events \.events-footer-host/);
   assert.match(html, /#about \.about-content \.stats-grid \{ margin-top: 0; \}/);
   assert.match(heroAbout, /nextCircularIndex/);
   assert.match(heroAbout, /window\.setInterval/);
