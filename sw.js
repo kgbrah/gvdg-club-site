@@ -1,4 +1,4 @@
-const CACHE = "gvdg-club-v373";
+const CACHE = "gvdg-club-v374";
 // Member and public app screens past initial load are content-hashed chunks. They live in their own cache,
 // which keeps the chunks of this version and the one before it, so a page that was open across an update
 // can still open its screens (online or offline) after their files are gone from the server.

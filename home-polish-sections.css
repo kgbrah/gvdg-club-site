@@ -188,7 +188,20 @@ header .logo:hover .logo-image { transform: none; }
 #events .event-title { font-size: 1.45rem; line-height: 1.2; margin-bottom: 6px; }
 #events .event-description { font-size: 0.9rem; line-height: 1.6; }
 #events .event-date.tbd { background: var(--accent); color: var(--dark); }
-#events .events-footer a { color: var(--secondary-text); text-underline-offset: 4px; }
+#events .events-footer { margin-top: 20px; }
+#events .events-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 24px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: left;
+}
+#events .events-footer-host { margin: 0; text-wrap: balance; }
+#events .events-footer a { color: var(--secondary-text); font-weight: 700; text-underline-offset: 4px; }
 #events .no-events { border: 1px solid var(--border-color); border-radius: 14px; }
 
 #area-tournaments .container { max-width: none; padding: 0; }
@@ -352,6 +365,8 @@ header .logo:hover .logo-image { transform: none; }
   #events .event-title { font-size: 1.25rem; overflow-wrap: normal; word-break: normal; hyphens: none; }
   #events .event-description { font-size: 0.85rem; }
   #events .no-events { padding: 24px 16px; }
+  #events .events-footer { margin-top: 16px; }
+  #events .events-footer-links { flex-direction: column; align-items: flex-start; gap: 10px; }
   #area-tournaments .section-title { margin-bottom: 8px; }
   #area-tournaments .section-subtitle { font-size: 0.85rem; }
   #area-tournaments .tournament-item { padding: 14px 12px; gap: 12px; }
