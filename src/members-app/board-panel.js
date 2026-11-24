@@ -78,6 +78,7 @@ export function MemberBoardPanel() {
   const [state, setState] = React.useState({ status: token ? "loading" : "idle", posts: [], authors: {} });
   const [status, setStatus] = React.useState({ message: "", tone: "" });
   const [text, setText] = React.useState("");
+  const [announce, setAnnounce] = React.useState(false);
 
   const reload = React.useCallback(() => {
     if (!token) return;
@@ -103,10 +104,15 @@ export function MemberBoardPanel() {
     const trimmed = String(body || "").trim();
     if (!trimmed || !token) return;
     setStatus({ message: parentId ? "Saving reply…" : "Saving post…", tone: "" });
-    const response = await request("/board", { method: "POST", token, body: { body: trimmed, parent_id: parentId || null } }).catch(() => null);
+    const payload = { body: trimmed, parent_id: parentId || null };
+    if (!parentId && context.isAdmin === true && announce) payload.announce = true;
+    const response = await request("/board", { method: "POST", token, body: payload }).catch(() => null);
     if (response?.ok) {
       clear();
-      setStatus({ message: parentId ? "Reply posted." : "Post added.", tone: "success" });
+      setStatus({
+        message: payload.announce ? "Announcement posted and push sent." : parentId ? "Reply posted." : "Post added.",
+        tone: "success",
+      });
       reload();
     } else if (response?.status === 429) {
       setStatus({ message: "You're posting too fast. Give it a minute and try again.", tone: "error" });
@@ -142,7 +148,17 @@ export function MemberBoardPanel() {
       ]),
       h("span", { className: "board-count", key: "count" }, boardCount),
     ]),
-    h("form", { className: "board-compose", onSubmit: (event) => { event.preventDefault(); submitPost(text, null, () => setText("")); }, key: "compose" }, [
+    h("form", {
+      className: "board-compose",
+      onSubmit: (event) => {
+        event.preventDefault();
+        submitPost(text, null, () => {
+          setText("");
+          setAnnounce(false);
+        });
+      },
+      key: "compose",
+    }, [
       h("textarea", {
         rows: 3,
         maxLength: 4000,
@@ -151,6 +167,16 @@ export function MemberBoardPanel() {
         onChange: (event) => setText(event.target.value),
         key: "input",
       }),
+      context.isAdmin === true ? h("label", { className: "board-announce-opt", key: "announce" }, [
+        h("input", {
+          key: "check",
+          type: "checkbox",
+          checked: announce,
+          onChange: (event) => setAnnounce(event.target.checked),
+          "data-board-announce": "true",
+        }),
+        h("span", { key: "label" }, "Send push notification to members"),
+      ]) : null,
       h("button", { type: "submit", className: "passkey-btn", key: "button" }, "Post"),
     ]),
     h("div", { className: `board-status${status.tone ? ` ${status.tone}` : ""}`, role: "status", "aria-live": "polite", key: "status" }, status.message || (state.status === "loading" && !state.posts.length ? "Loading board…" : "")),

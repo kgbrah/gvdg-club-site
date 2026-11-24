@@ -1261,3 +1261,58 @@ body.admin-page .gv-camera button:focus-visible { outline: 3px solid var(--accen
   gap: .3rem;
   margin-top: .5rem;
 }
+
+/* Admin -> Members -> Announcements: compose club-wide push announcements & manage history. */
+.admin-page .admin-announcements-panel {
+  display: grid;
+  gap: 1rem;
+}
+.admin-page .admin-announcements-form {
+  display: grid;
+  gap: .75rem;
+}
+.admin-page .admin-announcements-field {
+  display: grid;
+  gap: .3rem;
+}
+.admin-page .admin-announcements-form > .admin-btn {
+  min-height: 44px;
+  justify-self: start;
+}
+.admin-page .admin-announcements-list {
+  display: grid;
+  gap: .75rem;
+}
+.admin-page .admin-announcement-card {
+  display: grid;
+  gap: .5rem;
+  min-width: 0;
+}
+.admin-page .admin-announcement-head {
+  display: grid;
+  gap: .2rem;
+}
+.admin-page .admin-announcement-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-announcement-meta {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-announcement-body {
+  margin: 0;
+  color: var(--text-secondary);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-announcement-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.admin-page .admin-announcement-actions .admin-btn {
+  min-height: 44px;
+}

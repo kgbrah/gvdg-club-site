@@ -201,14 +201,21 @@ describe("member push subscription endpoints", () => {
   it("subscribes devices (default on), toggles the preference for all, and only deletes its own", async () => {
     const t = await setup();
     const a = await device("a"); const b = await device("b");
-    expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a))).data).toEqual({ ok: true, prefs: { bagTags: true, messages: true } });
+    expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a))).data).toEqual({
+      ok: true,
+      prefs: { bagTags: true, messages: true, announcements: true },
+    });
     expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(b))).status).toBe(200);
     const info = (await call(t.env, `/me/push-subscription?endpoint=${encodeURIComponent(a.endpoint)}`, "GET", t.bo)).data;
-    expect(info).toMatchObject({ configured: true, devices: 2, subscribed: true, prefs: { bagTags: true, messages: true } });
+    expect(info).toMatchObject({ configured: true, devices: 2, subscribed: true, prefs: { bagTags: true, messages: true, announcements: true } });
     expect(info.publicKey).toBeTruthy();
     const toggled = (await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a, { bagTags: false }))).data.prefs;
-    expect(toggled).toEqual({ bagTags: false, messages: true });
+    expect(toggled).toEqual({ bagTags: false, messages: true, announcements: true });
     expect(rowsOf(t.db).map((r: any) => r.bag_tags)).toEqual([0, 0]);
+    const toggledAnn = (await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a, { announcements: false }))).data.prefs;
+    expect(toggledAnn).toEqual({ bagTags: false, messages: true, announcements: false });
+    // Invalid announcements pref type is rejected cleanly.
+    expect((await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(a, { announcements: "yes" }))).data.error).toBe("invalid_prefs");
     // A new device inherits the member's "off".
     const c = await device("c");
     await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(c));
@@ -400,5 +407,125 @@ describe("bag tag challenge pushes", () => {
     const { sendMemberPush } = await import("../src/member-push.js");
     await sendMemberPush(t.env, ["m_ada"], "bagTags", { title: "Hi", body: "Test", url: "/gvdg-members.html", tag: "test" });
     expect(svc.fn).not.toHaveBeenCalled();
+  });
+});
+
+describe("club-wide admin announcement pushes (including workdays)", () => {
+  it("pushes to all members with notifications enabled (respecting announcements pref) across announcements, workdays, events, campaigns, meetings, and board announcements", async () => {
+    const t = await setup();
+    const dev = {
+      admin: await device("admin"),
+      ada: await device("ada"),
+      bo: await device("bo"),
+      cy: await device("cy"),
+    };
+    await call(t.env, "/me/push-subscription", "PUT", t.admin, sub(dev.admin));
+    await call(t.env, "/me/push-subscription", "PUT", t.ada, sub(dev.ada, { messages: false, announcements: true }));
+    await call(t.env, "/me/push-subscription", "PUT", t.bo, sub(dev.bo, { announcements: false }));
+    await call(t.env, "/me/push-subscription", "PUT", t.cy, sub(dev.cy));
+
+    const svc = pushService(Object.values(dev));
+
+    // 1. Direct admin announcement pushes to everyone with announcements on (including admin and Ada who disabled DMs), skips Bo.
+    const posted = await call(t.env, "/admin/announcements", "POST", t.admin, {
+      title: "Course Closed Today",
+      body: "Heavy flooding on holes 10-14. Check back tomorrow.",
+      href: "/gvdg-members.html#home",
+    });
+    expect(posted.status).toBe(201);
+    expect(posted.data.notifiedCount).toBe(5);
+    expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.admin.endpoint, dev.cy.endpoint].sort());
+    expect(svc.sent[0]!.payload).toMatchObject({
+      kind: "member",
+      title: "Course Closed Today",
+      body: "Heavy flooding on holes 10-14. Check back tomorrow.",
+      url: "/gvdg-members.html#home",
+    });
+    const listMember = await call(t.env, "/announcements", "GET", t.cy);
+    expect(listMember.status).toBe(200);
+    expect(listMember.data.announcements[0]).toMatchObject({ title: "Course Closed Today", authorName: "Admin Person" });
+    svc.sent.length = 0;
+
+    // 2. Club workday announcement pushes under "announcements" (reaches Ada even though messages: false, and reaches admin).
+    const wd = await call(t.env, "/admin/workdays", "POST", t.admin, {
+      title: "Bridge Repair Day",
+      locationName: "Meadowbrook Park",
+      workdayDate: "2099-05-10",
+      startTime: "9:00 AM",
+      karmaReward: 30,
+    });
+    expect(wd.status).toBe(201);
+    expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.admin.endpoint, dev.cy.endpoint].sort());
+    expect(svc.sent[0]!.payload).toMatchObject({
+      kind: "member",
+      title: "Workday: Bridge Repair Day",
+      url: "/gvdg-members.html#home",
+    });
+    svc.sent.length = 0;
+
+    // 3. New scheduled manual event pushes, whereas UDisc import does not spam push.
+    const ev = await call(t.env, "/admin/events", "POST", t.admin, {
+      type: "tournament",
+      name: "Pitt County Classic",
+      status: "scheduled",
+      date: "2099-06-01",
+      source: "manual",
+    });
+    expect(ev.status).toBe(201);
+    expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.admin.endpoint, dev.cy.endpoint].sort());
+    expect(svc.sent[0]!.payload).toMatchObject({
+      kind: "member",
+      title: "New event: Pitt County Classic",
+      url: "/gvdg-members.html#events",
+    });
+    svc.sent.length = 0;
+
+    const udiscEv = await call(t.env, "/admin/events", "POST", t.admin, {
+      type: "league_round",
+      name: "UDisc Import Round",
+      status: "scheduled",
+      date: "2099-06-02",
+      source: "udisc",
+      external_url: "https://udisc.com/events/test-import",
+    });
+    expect(udiscEv.status).toBe(201);
+    expect(svc.sent).toHaveLength(0);
+
+    // 4. Fundraiser campaign & meeting minutes push to subscribed members.
+    const camp = await call(t.env, "/admin/fundraisers", "POST", t.admin, {
+      title: "Tee Sign Sponsor Drive",
+      body_md: "Help sponsor new hole signage.",
+    });
+    expect(camp.status).toBe(201);
+    expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.admin.endpoint, dev.cy.endpoint].sort());
+    expect(svc.sent[0]!.payload.title).toBe("Club campaign: Tee Sign Sponsor Drive");
+    svc.sent.length = 0;
+
+    const mtg = await call(t.env, "/admin/meetings", "POST", t.admin, {
+      date: "2026-05-01",
+      title: "May Board Meeting",
+    });
+    expect(mtg.status).toBe(201);
+    expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.admin.endpoint, dev.cy.endpoint].sort());
+    expect(svc.sent[0]!.payload).toMatchObject({ title: "Meeting minutes: May Board Meeting", url: "/gvdg-members.html#club" });
+    svc.sent.length = 0;
+
+    // 5. Admin message board post with announce: true pushes; non-admin with announce: true cannot broadcast push.
+    const nonAdminPost = await call(t.env, "/board", "POST", t.cy, { body: "Anyone playing doubles?", announce: true });
+    expect(nonAdminPost.status).toBe(201);
+    expect(svc.sent).toHaveLength(0);
+
+    const adminPost = await call(t.env, "/board", "POST", t.admin, { body: "Tee times shifted to 9:30 AM!", announce: true });
+    expect(adminPost.status).toBe(201);
+    expect(svc.sent.map((s) => s.endpoint).sort()).toEqual([dev.ada.endpoint, dev.admin.endpoint, dev.cy.endpoint].sort());
+    expect(svc.sent[0]!.payload).toMatchObject({
+      title: "Club board announcement",
+      body: "Tee times shifted to 9:30 AM!",
+      url: "/gvdg-members.html#board",
+    });
+
+    // 6. Admin can delete an announcement cleanly.
+    expect((await call(t.env, `/admin/announcements/${posted.data.announcement.id}`, "DELETE", t.admin)).status).toBe(200);
+    expect((await call(t.env, "/announcements", "GET", t.cy)).data.announcements).toEqual([]);
   });
 });

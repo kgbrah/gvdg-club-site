@@ -174,7 +174,7 @@ test("Batch 5 UI components preserve hooks order, error retries, navigation clea
   assert.doesNotMatch(apply, /existing\.unsubscribe\(\)/);
 
   const notify = readFileSync("src/members-app/notifications-panel.js", "utf8");
-  assert.match(notify, /prefs:\s*\{\s*bagTags,\s*messages\s*\}/);
+  assert.match(notify, /prefs:\s*\{\s*bagTags,\s*messages,\s*announcements\s*\}/);
   assert.match(notify, /if\s*\(!removed\.ok\)\s*throw/);
   assert.match(notify, /if\s*\(!json\?\.endpoint\)\s*throw/);
 

@@ -40,6 +40,7 @@ import { AdminOrderControls, AdminProductInventoryControls } from "./shop-contro
 import { AdminTeeSignReviewControls, AdminTeeSignReviewList } from "./tee-sign-review.js";
 import { AdminTodayDashboard } from "./today-dashboard.js";
 import { AdminWorkdaysPanel } from "./workdays-panel.js";
+import { AdminAnnouncementsPanel } from "./announcements-panel.js";
 import { AdminWalletAdjustmentForm } from "./wallet-form.js";
 import { AdminWalletRecentList } from "./wallet-recent-list.js";
 import { AdminWalletBalances } from "./wallet-balances.js";
@@ -181,6 +182,11 @@ if (leaguesListMount) {
 const workdaysMount = document.getElementById("adminWorkdaysReactApp");
 if (workdaysMount) {
   flushSync(() => createRoot(workdaysMount).render(h(AdminWorkdaysPanel)));
+}
+
+const announcementsMount = document.getElementById("adminAnnouncementsReactApp");
+if (announcementsMount) {
+  flushSync(() => createRoot(announcementsMount).render(h(AdminAnnouncementsPanel)));
 }
 
 const bagTagsMount = document.getElementById("adminBagTagsReactApp");

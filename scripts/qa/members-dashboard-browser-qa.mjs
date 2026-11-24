@@ -328,6 +328,9 @@ async function captureState(browser, origin, viewport, slug) {
   await waitForText(page, "[data-react-home-last-round]", "GVDG QA Weekly", "React last club round");
   await waitForText(page, "[data-react-home-conditions]", "ECU North Rec Complex", "React home conditions");
   await waitForText(page, "[data-react-home-conditions]", "Wet", "React home wet condition");
+  await page.waitForSelector('[data-react-home-announcements="ready"]', { timeout: 10_000 });
+  await waitForText(page, '[data-member-announcement="31"]', "Spring Course Update", "Member Home club announcement title");
+  await waitForText(page, '[data-member-announcement="31"]', "New tee signs are up on the back nine.", "Member Home club announcement body");
   await page.waitForSelector('[data-react-home-workdays="ready"]', { timeout: 10_000 });
   const workdayCard = page.locator('[data-member-workday="21"]');
   await waitForText(page, '[data-member-workday="21"]', "Course Cleanup & Mulching", "Member Home workday title");

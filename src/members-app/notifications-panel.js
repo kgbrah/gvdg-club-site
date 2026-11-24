@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Mail, Tag } from "lucide-react";
+import { Bell, Mail, Megaphone, Tag } from "lucide-react";
 
 import { TOKEN_KEY, request, storageGet } from "./api.js";
 
@@ -45,6 +45,7 @@ export function MemberNotificationsPanel() {
   const [state, setState] = React.useState("loading");
   const [bagTags, setBagTags] = React.useState(true);
   const [messages, setMessages] = React.useState(true);
+  const [announcements, setAnnouncements] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
   const publicKey = React.useRef(null);
@@ -59,6 +60,7 @@ export function MemberNotificationsPanel() {
       publicKey.current = info.data.publicKey;
       setBagTags(info.data.prefs?.bagTags !== false);
       setMessages(info.data.prefs?.messages !== false);
+      setAnnouncements(info.data.prefs?.announcements !== false);
       if (typeof Notification !== "undefined" && Notification.permission === "denied") { setState("denied"); return; }
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
@@ -88,10 +90,11 @@ export function MemberNotificationsPanel() {
       const subscription = (await registration.pushManager.getSubscription())
         || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey.current) });
       const json = subscription.toJSON();
-      const saved = await api(token, "/me/push-subscription", "PUT", { endpoint: json.endpoint, keys: json.keys, prefs: { bagTags, messages } });
+      const saved = await api(token, "/me/push-subscription", "PUT", { endpoint: json.endpoint, keys: json.keys, prefs: { bagTags, messages, announcements } });
       if (!saved.ok) throw new Error("subscribe failed");
       setBagTags(saved.data.prefs?.bagTags !== false);
       setMessages(saved.data.prefs?.messages !== false);
+      setAnnouncements(saved.data.prefs?.announcements !== false);
       setState("on");
     } catch {
       setMessage("Could not turn notifications on. Try again.");
@@ -149,13 +152,17 @@ export function MemberNotificationsPanel() {
     : state === "denied" ? "Blocked in your browser settings. Allow notifications for this site, then come back."
       : state === "unsupported" ? "This browser cannot show notifications. Install the app to your home screen."
         : state === "unconfigured" ? "Not turned on for the club yet."
-          : "Get a ping for messages and bag tag updates";
+          : "Get a ping for club announcements, messages, and bag tag updates";
 
   return h("div", { className: "member-notifications", "data-member-notifications": state }, [
     h(Switch, {
       key: "master", id: "notifications", icon: Bell, label: "Notifications", detail, on: state === "on",
       busy: busy || !["on", "off"].includes(state), onToggle: state === "on" ? turnOff : turnOn,
     }),
+    state === "on" ? h(Switch, {
+      key: "announcements", id: "announcements", icon: Megaphone, label: "Club announcements", detail: "Workdays, new events, campaigns, and club news",
+      on: announcements, busy, onToggle: () => togglePref("announcements", announcements, setAnnouncements),
+    }) : null,
     state === "on" ? h(Switch, {
       key: "messages", id: "messages", icon: Mail, label: "Messages", detail: "A ping when a member writes you",
       on: messages, busy, onToggle: () => togglePref("messages", messages, setMessages),

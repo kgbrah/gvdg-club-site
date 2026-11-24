@@ -8,6 +8,7 @@ test("members can opt in to push from Account and the service worker opens the m
   const sw = readFileSync("sw.js", "utf8");
   assert.match(panel, /\/me\/push-subscription/);
   assert.match(panel, /applicationServerKey/);
+  assert.match(panel, /Club announcements/);
   assert.match(panel, /Bag tag challenges/);
   assert.match(panel, /label: "Messages"/);
   assert.match(panel, /Notification\.requestPermission/);

@@ -1450,3 +1450,53 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
 }
 #members .member-workday-status.is-verified { color: var(--green-text); }
 #members .member-workday-status.is-error { color: var(--over); }
+
+/* Club announcements card on Member Home + admin push option on Message Board. */
+#members .member-announcements-card { display: grid; gap: .75rem; margin: 0; }
+#members .member-announcements-head { display: flex; align-items: center; gap: .45rem; }
+#members .member-announcements-head h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font: 800 1.04rem/1.2 Archivo, system-ui, sans-serif;
+  letter-spacing: -.01em;
+  text-transform: none;
+}
+#members .member-announcements-head svg { color: var(--primary); flex: none; }
+#members .member-announcement-item {
+  display: grid;
+  gap: .4rem;
+  padding-top: .7rem;
+  border-top: 1px solid var(--member-line);
+  min-width: 0;
+}
+#members .member-announcement-item:first-of-type { padding-top: 0; border-top: 0; }
+#members .member-announcement-title {
+  margin: 0;
+  color: var(--text-primary);
+  font: 800 .98rem/1.25 Archivo, system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+#members .member-announcement-body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .92rem;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+#members .board-announce-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 44px;
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+#members .board-announce-opt input {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--accent);
+}
