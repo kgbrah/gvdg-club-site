@@ -26,14 +26,17 @@ import { getMember, readInBatches, type KVListLike } from "./roster.js";
 export const WATCH_STATES = ["NC", "VA", "SC"] as const;
 export type WatchState = (typeof WATCH_STATES)[number];
 export const WATCH_DAYS_AHEAD = 120;
-export const WATCH_DAYS_BACK = 180;
+export const WATCH_DAYS_BACK = 365;
 export const RECENT_DONE_DAYS = 14;
-export const EVENTS_PER_TICK = 6;
+export const EVENTS_PER_TICK = 12;
+const UPCOMING_QUOTA = 6;
+const COMPLETED_QUOTA = 6;
 const SOON_DAYS = 14;
 const REREAD_MINUTES = 55;
+const FAR_UPCOMING_REREAD_MS = 12 * 60 * 60_000;
 const RECENT_DONE_RECHECK_MS = 6 * 60 * 60_000;
 const WATCH_TTL_MS = 24 * 60 * 60_000;
-const LINK_KEEP_DAYS = 180;
+const LINK_KEEP_DAYS = 365;
 const DAY_MS = 86_400_000;
 const CLUB_TIME_ZONE = "America/New_York";
 
@@ -224,32 +227,54 @@ export async function refreshPdgaRegistrations(
   const recentDoneCutoff = clubDay(now, -RECENT_DONE_DAYS);
   const soon = clubDay(now, SOON_DAYS);
   const stale = now - REREAD_MINUTES * 60_000;
+  const farStale = now - FAR_UPCOMING_REREAD_MS;
   const doneRecheck = now - RECENT_DONE_RECHECK_MS;
 
-  const due = (await db.prepare(
+  type DueWatchRow = { event_id: number; start_date: string; end_date: string; completed: number };
+  // Balance active/upcoming events against completed seasonal backfill so neither bucket starves the other.
+  const upcomingDue = (await db.prepare(
     `SELECT event_id, start_date, end_date, completed
        FROM pdga_watch_events
-      WHERE expires_at > ? AND end_date >= ?
+      WHERE expires_at > ? AND end_date >= ? AND completed = 0
         AND (
-          (completed = 0 AND (read_at IS NULL OR read_at < ?))
-          OR (completed = 1 AND end_date >= ? AND (read_at IS NULL OR read_at < ?))
-          OR (completed = 1 AND end_date < ? AND read_at IS NULL)
+          read_at IS NULL
+          OR (start_date <= ? AND read_at < ?)
+          OR (start_date > ? AND read_at < ?)
         )
       ORDER BY
-        CASE
-          WHEN completed = 0 AND start_date <= ? THEN 0
-          WHEN completed = 0 AND read_at IS NULL THEN 1
-          WHEN completed = 0 THEN 2
-          WHEN completed = 1 AND end_date >= ? THEN 3
-          ELSE 4
-        END,
+        CASE WHEN start_date <= ? THEN 0 WHEN read_at IS NULL THEN 1 ELSE 2 END,
         read_at IS NOT NULL,
-        CASE WHEN completed = 0 THEN start_date END ASC,
-        CASE WHEN completed = 1 THEN start_date END DESC,
+        start_date ASC,
         read_at
       LIMIT ?`,
-  ).bind(now, backWindow, stale, recentDoneCutoff, doneRecheck, recentDoneCutoff, soon, recentDoneCutoff, EVENTS_PER_TICK)
-    .all<{ event_id: number; start_date: string; end_date: string; completed: number }>()).results ?? [];
+  ).bind(now, backWindow, soon, stale, soon, farStale, soon, EVENTS_PER_TICK)
+    .all<DueWatchRow>()).results ?? [];
+
+  const completedDue = (await db.prepare(
+    `SELECT event_id, start_date, end_date, completed
+       FROM pdga_watch_events
+      WHERE expires_at > ? AND end_date >= ? AND completed = 1
+        AND (
+          (end_date >= ? AND (read_at IS NULL OR read_at < ?))
+          OR (end_date < ? AND read_at IS NULL)
+        )
+      ORDER BY
+        CASE WHEN end_date >= ? THEN 0 ELSE 1 END,
+        read_at IS NOT NULL,
+        start_date DESC,
+        read_at
+      LIMIT ?`,
+  ).bind(now, backWindow, recentDoneCutoff, doneRecheck, recentDoneCutoff, recentDoneCutoff, EVENTS_PER_TICK)
+    .all<DueWatchRow>()).results ?? [];
+
+  const upcomingPicked = upcomingDue.slice(0, UPCOMING_QUOTA);
+  const completedPicked = completedDue.slice(0, Math.min(COMPLETED_QUOTA, EVENTS_PER_TICK - upcomingPicked.length));
+  const extraUpcoming = upcomingDue.slice(upcomingPicked.length, EVENTS_PER_TICK - completedPicked.length);
+  const remainingSlots = EVENTS_PER_TICK - upcomingPicked.length - extraUpcoming.length - completedPicked.length;
+  const extraCompleted = remainingSlots > 0
+    ? completedDue.slice(completedPicked.length, completedPicked.length + remainingSlots)
+    : [];
+  const due = [...upcomingPicked, ...extraUpcoming, ...completedPicked, ...extraCompleted];
 
   let read = 0;
   let matched = 0;

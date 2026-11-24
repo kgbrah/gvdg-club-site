@@ -21,7 +21,13 @@ import { handleDiscColor } from "./disc-color-routes.js";
 import { handleAssistant } from "./assistant-route.js";
 import { handleWebAuthnRoute } from "./webauthn-routes.js";
 import { handleMyTeeSigns, handleTeeSignUpload } from "./tee-sign-routes.js";
-import { handlePdgaLinkEvent, handlePdgaPlayersBatch, handlePdgaStats } from "./pdga.js";
+import {
+  handlePdgaEventSearch,
+  handlePdgaLinkEvent,
+  handlePdgaPlayersBatch,
+  handlePdgaScanMyEvents,
+  handlePdgaStats,
+} from "./pdga.js";
 import { handlePdgaLiveEvent } from "./pdga-live-routes.js";
 import { handlePdgaRegistrations, handlePdgaRegistrationStatus, refreshPdgaRegistrations } from "./pdga-registrations.js";
 import { handleClubFeed } from "./feeds.js";
@@ -187,7 +193,9 @@ export default {
       if (pathname === "/tee-signs" && method === "POST") return await handleTeeSignUpload(request, env, origin, ctx);
       if (pathname === "/my-tee-signs" && method === "GET") return await handleMyTeeSigns(request, env, origin);
       if (pathname === "/pdga-stats" && method === "GET") return await handlePdgaStats(request, env, origin);
+      if (pathname === "/pdga/events/search" && method === "GET") return await handlePdgaEventSearch(request, env, origin);
       if (pathname === "/pdga/link-event" && method === "POST") return await handlePdgaLinkEvent(request, env, origin);
+      if (pathname === "/pdga/scan-my-events" && method === "POST") return await handlePdgaScanMyEvents(request, env, origin);
       if (pathname === "/pdga/players/batch" && method === "GET") return await handlePdgaPlayersBatch(request, env, origin);
       if (pathname === "/pdga-registrations" && method === "GET") return await handlePdgaRegistrations(request, env, origin);
       if (pathname === "/admin/pdga-registrations/status" && method === "GET") {

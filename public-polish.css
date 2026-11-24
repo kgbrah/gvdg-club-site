@@ -1486,7 +1486,11 @@
 [data-page="lost-found"] .market-card-photo { text-decoration: none; }
 
 /* PDGA Live event panel on event detail page */
+[data-pdga-live-panel] { min-width: 0; max-width: 100%; }
+[data-pdga-live-panel] .pdga-live-block { min-width: 0; max-width: 100%; }
+[data-pdga-live-panel] .lb-wrap { display: block; width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 [data-pdga-live-panel] .detail-actions { margin-bottom: 12px; }
+[data-pdga-live-panel] .pdga-live-controls + .pdga-live-rounds { padding-top: 8px; border-top: 1px solid var(--line, var(--border-color)); }
 [data-pdga-live-panel] .event-action-btn[aria-pressed="true"] {
   background: var(--primary-strong);
   border-color: var(--primary-strong);

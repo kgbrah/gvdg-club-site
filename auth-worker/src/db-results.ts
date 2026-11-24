@@ -224,36 +224,39 @@ export async function listMemberCasualResults(db: D1Like, memberId: string, opts
 export async function listSeasonPlayRows(db: D1Like, year: number) {
   const start = `${year}-01-01`;
   const end = `${year + 1}-01-01`;
-  const events = (
-    await db
-      .prepare(
-        `SELECT r.member_id AS member_id, r.name AS name, r.breakdown AS breakdown, 'competitive' AS kind,
-                CASE
-                  WHEN json_extract(r.scoring_group, '$.targetType') = 'pair' THEN 'doubles'
-                  WHEN json_extract(ec.live_scoring_config, '$.groupFormat') = 'doubles' THEN 'doubles'
-                  WHEN ec.play_format = 'doubles' THEN 'doubles'
-                  WHEN e.format = 'doubles' THEN 'doubles'
-                  ELSE 'singles'
-                END AS group_format,
-                CASE
-                  WHEN r.match_result IS NOT NULL AND TRIM(r.match_result) != '' AND r.match_result != 'null' THEN 'matchplay'
-                  WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'matchplay' THEN 'matchplay'
-                  WHEN e.format = 'matchplay' THEN 'matchplay'
-                  WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'putting' THEN 'putting'
-                  WHEN e.format = 'putting' THEN 'putting'
-                  ELSE 'stroke'
-                END AS scoring_style
-         FROM results r JOIN events e ON e.id = r.event_id
-         LEFT JOIN event_config ec ON ec.event_id = e.id
-         WHERE r.member_id IS NOT NULL
-           AND r.member_id NOT LIKE 'g_%'
-           AND r.member_id NOT LIKE 'op_%'
-           AND COALESCE(e.date, r.created_at) >= ?
-           AND COALESCE(e.date, r.created_at) < ?`,
-      )
-      .bind(start, end)
-      .all()
-  ).results;
+  const eventsSql = (includePdgaEventId: boolean) =>
+    `SELECT r.member_id AS member_id, r.name AS name, r.breakdown AS breakdown, 'competitive' AS kind,
+            ${includePdgaEventId ? "ec.pdga_event_id AS pdga_event_id," : "NULL AS pdga_event_id,"}
+            CASE
+              WHEN json_extract(r.scoring_group, '$.targetType') = 'pair' THEN 'doubles'
+              WHEN json_extract(ec.live_scoring_config, '$.groupFormat') = 'doubles' THEN 'doubles'
+              WHEN ec.play_format = 'doubles' THEN 'doubles'
+              WHEN e.format = 'doubles' THEN 'doubles'
+              ELSE 'singles'
+            END AS group_format,
+            CASE
+              WHEN r.match_result IS NOT NULL AND TRIM(r.match_result) != '' AND r.match_result != 'null' THEN 'matchplay'
+              WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'matchplay' THEN 'matchplay'
+              WHEN e.format = 'matchplay' THEN 'matchplay'
+              WHEN json_extract(ec.live_scoring_config, '$.scoringStyle') = 'putting' THEN 'putting'
+              WHEN e.format = 'putting' THEN 'putting'
+              ELSE 'stroke'
+            END AS scoring_style
+     FROM results r JOIN events e ON e.id = r.event_id
+     LEFT JOIN event_config ec ON ec.event_id = e.id
+     WHERE r.member_id IS NOT NULL
+       AND r.member_id NOT LIKE 'g_%'
+       AND r.member_id NOT LIKE 'op_%'
+       AND COALESCE(e.date, r.created_at) >= ?
+       AND COALESCE(e.date, r.created_at) < ?`;
+  let events;
+  try {
+    events = (await db.prepare(eventsSql(true)).bind(start, end).all()).results;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!/no such column.*pdga_event_id/i.test(msg)) throw error;
+    events = (await db.prepare(eventsSql(false)).bind(start, end).all()).results;
+  }
   const casual = (
     await db
       .prepare(

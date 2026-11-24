@@ -1679,7 +1679,7 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
 #members .pdga-link-form {
   display: grid;
   gap: .4rem;
-  margin-top: .65rem;
+  margin-top: .5rem;
 }
 #members .pdga-link-row {
   display: flex;
@@ -1691,6 +1691,96 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
   flex: 1 1 12rem;
   min-width: 0;
   min-height: 44px;
+}
+#members .pdga-finder {
+  display: grid;
+  gap: .5rem;
+  margin-top: .55rem;
+  min-width: 0;
+  max-width: 100%;
+}
+#members .pdga-finder-scan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  align-items: stretch;
+}
+#members .pdga-finder-state {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 6.5rem;
+  min-height: 44px;
+}
+#members .pdga-finder-scan-btn {
+  flex: 1 1 10.5rem;
+  min-width: 0;
+  min-height: 44px;
+}
+#members .pdga-finder-results {
+  display: grid;
+  gap: .45rem;
+  min-width: 0;
+}
+#members .pdga-finder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .45rem .6rem;
+  padding: .55rem .7rem;
+  border: 1px solid var(--member-line);
+  border-radius: .55rem;
+  background: var(--member-paper);
+  min-width: 0;
+}
+#members .pdga-finder-copy {
+  flex: 1 1 11rem;
+  min-width: 0;
+}
+#members .pdga-finder-name {
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+#members .pdga-finder-load-btn {
+  min-height: 38px;
+  padding: .3rem .75rem;
+  border: 1px solid var(--member-line);
+  border-radius: .5rem;
+  background: var(--member-panel);
+  color: var(--secondary-text);
+  font: 700 .8rem/1.2 inherit;
+  cursor: pointer;
+}
+#members .pdga-finder-load-btn:disabled {
+  opacity: .6;
+  cursor: default;
+}
+#members .pdga-finder-help {
+  margin: 0;
+  font-size: .82rem;
+}
+#members .pdga-scoring-season {
+  display: grid;
+  gap: .45rem;
+  margin-bottom: .75rem;
+  padding: .65rem .75rem;
+  border: 1px solid var(--member-line);
+  border-radius: .6rem;
+  background: var(--member-paper);
+  min-width: 0;
+}
+#members .pdga-scoring-season-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+}
+#members .pdga-scoring-empty,
+#members .pdga-inline-finder {
+  margin-top: .55rem;
+  min-width: 0;
 }
 
 #members .member-pdga {
@@ -1753,18 +1843,34 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
 
 #members .pdga-live-drawer {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: .6rem;
   margin-top: .55rem;
   min-width: 0;
+  max-width: 100%;
+}
+#members .pdga-live-drawer > .player-btn {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 #members .pdga-live-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: .6rem;
   padding: .75rem;
   border: 1px solid var(--member-line);
   border-radius: .65rem;
   background: var(--member-paper);
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#members .pdga-live-panel > *,
+#members .pdga-live-block {
+  min-width: 0;
+  max-width: 100%;
 }
 #members .pdga-live-panel .roster-title {
   margin: 0;
@@ -1774,6 +1880,10 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
   display: flex;
   flex-wrap: wrap;
   gap: .4rem;
+}
+#members .pdga-live-controls + .pdga-live-rounds {
+  padding-top: .45rem;
+  border-top: 1px solid var(--member-line);
 }
 #members .pdga-live-controls .event-action-btn {
   min-height: 38px;
@@ -1790,22 +1900,43 @@ body.player-theme-glass[data-member-shell="members"] #members .member-workday-ro
   color: var(--secondary-text);
 }
 #members .pdga-live-panel .lb-wrap {
+  display: block;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
 }
 #members .pdga-live-panel .lb-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: .82rem;
+  font-size: .8rem;
   font-variant-numeric: tabular-nums;
 }
 #members .pdga-live-panel .lb-table th,
 #members .pdga-live-panel .lb-table td {
-  padding: .38rem .45rem;
+  padding: .36rem .34rem;
   border-bottom: 1px solid var(--member-line);
   text-align: left;
   white-space: nowrap;
+}
+#members .pdga-live-panel .lb-table :is(th, td):first-child {
+  padding-left: .15rem;
+}
+#members .pdga-live-panel .lb-table :is(th, td):last-child {
+  padding-right: .15rem;
+}
+#members .pdga-live-panel .lb-table :is(th, td):nth-child(n+3) {
+  text-align: right;
+}
+@media (max-width: 480px) {
+  #members .pdga-live-panel .lb-table {
+    font-size: .76rem;
+  }
+  #members .pdga-live-panel .lb-table th,
+  #members .pdga-live-panel .lb-table td {
+    padding: .34rem .26rem;
+  }
 }
 #members .pdga-live-panel .lb-empty,
 #members .pdga-live-foot p {

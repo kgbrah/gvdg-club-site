@@ -30,6 +30,7 @@ async function env(
   players: Record<string, Record<string, unknown>> = {},
   liveHandlers: Record<string, unknown> = {},
   annualStats: Record<string, Record<string, unknown>[]> = {},
+  eventSearchRows: Record<string, unknown>[] = [],
 ) {
   const { DatabaseSync } = await import("node:sqlite");
   const sqlite = new DatabaseSync(":memory:");
@@ -71,6 +72,19 @@ async function env(
         const pdgaNo = parsed.searchParams.get("pdga_number") ?? "";
         const rows = (annualStats[year] ?? []).filter((r) => !pdgaNo || String(r.pdga_number ?? "") === pdgaNo);
         return Response.json({ sessid: "s", status: rows.length ? 0 : 1, players: rows });
+      }
+      if (parsed.pathname === "/services/json/event") {
+        const eventId = parsed.searchParams.get("tournament_id");
+        const stateFilter = parsed.searchParams.get("administrative_area");
+        const nameFilter = (parsed.searchParams.get("event_name") ?? "").toLowerCase();
+        const states = stateFilter ? new Set(stateFilter.split(",")) : null;
+        const matchedEvents = eventSearchRows.filter((ev) => {
+          if (eventId && String(ev.tournament_id ?? "") !== eventId) return false;
+          if (states && !states.has(String(ev.state_prov ?? ""))) return false;
+          if (nameFilter && !String(ev.tournament_name ?? "").toLowerCase().includes(nameFilter)) return false;
+          return true;
+        });
+        return Response.json({ events: matchedEvents });
       }
       const numbers = (parsed.searchParams.get("pdga_number") ?? "").split(",");
       return Response.json({ players: numbers.flatMap((number) => players[number] ? [players[number]] : []) });
@@ -464,6 +478,119 @@ describe("GET /pdga-stats", () => {
       play: { holes: 54, fir_hit: 34, fir_att: 48 },
     });
     expect(calls).toEqual([]);
+  });
+
+  it("searches PDGA events (GET /pdga/events/search) and scans rosters on demand (POST /pdga/scan-my-events)", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const pastDay = new Date(Date.now() - 10 * 86_400_000).toISOString().slice(0, 10);
+    const { env: target, calls, sqlite } = await env(
+      {},
+      {
+        "live_results_fetch_event?TournID=200101": {
+          data: {
+            TournamentId: 200101,
+            Name: "Carolina Classic",
+            StartDate: pastDay,
+            EndDate: pastDay,
+            LocationShort: "Greenville, NC",
+            FormattedTier: "B-tier",
+            Rounds: 1,
+            HighestCompletedRound: 1,
+            Divisions: [{ Division: "MA1", Players: 12 }],
+          },
+          hash: "e200101",
+        },
+        "live_results_fetch?TournID=200101&Divisions=MA1": {
+          data: { MA1: { division: "MA1", scores: [{ ResultID: 9101, PDGANum: 80024, Name: "Ada Lovelace", RoundScore: 54 }] } },
+          hash: "d200101",
+        },
+        "live_results_fetch_player?ResultID=9101": {
+          data: {
+            ResultID: 9101, TournID: 200101, PDGANum: 80024, Division: "MA1", Place: 3, Total: 54, ToPar: -3,
+            Scores: [{
+              ScoreID: 99101,
+              Round: 1,
+              RoundDate: pastDay,
+              RoundScore: 54,
+              RoundToPar: -3,
+              RoundComplete: true,
+              RoundRating: 945,
+              HoleScores: Object.fromEntries(Array.from({ length: 18 }, (_, i) => [String(i + 1), 3])),
+              Layout: { Detail: Object.fromEntries(Array.from({ length: 18 }, (_, i) => [String(i + 1), { Par: 3 }])) },
+            }],
+          },
+          hash: "p9101",
+        },
+        "live_results_fetch_event?TournID=200102": {
+          data: {
+            TournamentId: 200102,
+            Name: "Virginia Open",
+            StartDate: pastDay,
+            EndDate: pastDay,
+            LocationShort: "Richmond, VA",
+            FormattedTier: "A-tier",
+            Rounds: 1,
+            HighestCompletedRound: 1,
+            Divisions: [{ Division: "MPO", Players: 10 }],
+          },
+          hash: "e200102",
+        },
+        "live_results_fetch?TournID=200102&Divisions=MPO": {
+          data: { MPO: { division: "MPO", scores: [{ ResultID: 9202, PDGANum: 99999, Name: "Other Player", RoundScore: 50 }] } },
+          hash: "d200102",
+        },
+      },
+      {},
+      [
+        { tournament_id: "200101", tournament_name: "Carolina Classic", tier: "B", city: "Greenville", state_prov: "NC", start_date: pastDay, end_date: pastDay },
+        { tournament_id: "200102", tournament_name: "Virginia Open", tier: "A", city: "Richmond", state_prov: "VA", start_date: pastDay, end_date: pastDay },
+      ],
+    );
+    await (target.ROSTER as unknown as { put: (k: string, v: string) => Promise<void> }).put(
+      "member:m_a",
+      JSON.stringify({ memberId: "m_a", name: "Ada Lovelace", pdgaNo: "80024", pinVer: 1, mustChangePin: false }),
+    );
+    const tokenA = await signSession({ sub: "m_a", mustChangePin: false, pinVer: 1 }, "x".repeat(40), 900);
+
+    expect((await worker.fetch(new Request("https://worker/pdga/events/search?q=Carolina", { headers: { Origin: ORIGIN } }), target)).status).toBe(401);
+    const searchRes = await worker.fetch(new Request("https://worker/pdga/events/search?q=Carolina&state=NC&live=1", {
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+    }), target);
+    expect(searchRes.status).toBe(200);
+    const searchJson = await searchRes.json() as { events: { eventId: number; name: string; linked: boolean }[] };
+    expect(searchJson.events).toHaveLength(1);
+    expect(searchJson.events[0]).toMatchObject({ eventId: 200101, name: "Carolina Classic", linked: false });
+
+    const scanRes = await worker.fetch(new Request("https://worker/pdga/scan-my-events", {
+      method: "POST",
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+      body: JSON.stringify({ state: "ALL" }),
+    }), target);
+    expect(scanRes.status).toBe(200);
+    const scanJson = await scanRes.json() as { ok: boolean; scanned: number; matched: number; linkedEvents: { eventId: number; division: string }[] };
+    expect(scanJson).toMatchObject({ ok: true, scanned: 2, matched: 1 });
+    expect(scanJson.linkedEvents[0]).toMatchObject({ eventId: 200101, division: "MA1" });
+
+    // Linked event exposes event_id on play_rounds and appears linked in subsequent search.
+    const statsJson = await (await stats(target, "pdga=80024")).json() as { play_rounds?: { event_id?: string }[] };
+    expect(statsJson.play_rounds?.[0]?.event_id).toBe("200101");
+
+    const searchAfter = await (await worker.fetch(new Request("https://worker/pdga/events/search?q=Carolina&state=NC", {
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+    }), target)).json() as { events: { linked: boolean }[] };
+    expect(searchAfter.events[0]?.linked).toBe(true);
+
+    // Repeat scan skips recently missed event 200102 without re-fetching it.
+    const beforeMissSkip = calls.length;
+    const scan2 = await (await worker.fetch(new Request("https://worker/pdga/scan-my-events", {
+      method: "POST",
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+      body: JSON.stringify({ state: "ALL" }),
+    }), target)).json() as { scanned: number; matched: number };
+    expect(scan2).toMatchObject({ scanned: 0, matched: 0 });
+    expect(calls.length).toBe(beforeMissSkip);
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM pdga_member_event_links WHERE member_id = 'm_a'").get()).toEqual({ n: 1 });
+    void today;
   });
 });
 

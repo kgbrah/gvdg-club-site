@@ -143,15 +143,17 @@ export function PdgaLivePanel({ apiBase, pdgaEventId, showEmptyState = false, in
 
   return h("section", { className: "pdga-live-panel", "data-pdga-live-panel": hasAnyScores ? "ready" : "empty" }, [
     h("h3", { className: "roster-title", key: "title" }, "PDGA Live results"),
-    (divisions.length > 1 || rounds.length > 1 || hasStats)
-      ? h("div", { className: "detail-actions pdga-live-controls", key: "controls" }, [
-        ...divisions.map((div) => h("button", {
-          type: "button",
-          className: "event-action-btn",
-          "aria-pressed": div.division === activeDiv ? "true" : "false",
-          key: `div-${div.division}`,
-          onClick: () => setSelection({ eventId: id, division: div.division, round: "" }),
-        }, div.division)),
+    divisions.length > 1
+      ? h("div", { className: "detail-actions pdga-live-controls", key: "divisions" }, divisions.map((div) => h("button", {
+        type: "button",
+        className: "event-action-btn",
+        "aria-pressed": div.division === activeDiv ? "true" : "false",
+        key: `div-${div.division}`,
+        onClick: () => setSelection({ eventId: id, division: div.division, round: "" }),
+      }, div.division)))
+      : null,
+    (rounds.length > 1 || hasStats)
+      ? h("div", { className: "detail-actions pdga-live-controls pdga-live-rounds", key: "rounds" }, [
         ...rounds.map((r) => {
           const val = String(r.number);
           return h("button", {
@@ -180,9 +182,15 @@ export function PdgaLivePanel({ apiBase, pdgaEventId, showEmptyState = false, in
       const columns = statsMode
         ? ["Pos", "Player", ...STAT_COLUMNS.map((c) => c.label), "OB"]
         : ["Pos", "Player", "Thru", "Round", "To Par", "Rating"];
-      return h("div", { key: `${block.division || "div"}-${block.pool || blockIndex}` }, [
+      return h("div", { className: "pdga-live-block", key: `${block.division || "div"}-${block.pool || blockIndex}` }, [
         blocks.length > 1 && block.pool ? h("h4", { className: "division-name", key: "pool" }, `Pool ${block.pool}`) : null,
-        h("div", { className: "lb-wrap", key: "wrap" }, h("table", { className: "lb-table" }, [
+        h("div", {
+          className: "lb-wrap",
+          key: "wrap",
+          role: "region",
+          tabIndex: 0,
+          "aria-label": statsMode ? "PDGA Live throw stats" : "PDGA Live leaderboard",
+        }, h("table", { className: "lb-table" }, [
           h("thead", { key: "head" }, h("tr", null, columns.map((label) => h("th", { key: label }, label)))),
           h("tbody", { key: "body" }, scores.map((row, index) => {
             const toPar = Number(row.toPar);

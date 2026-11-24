@@ -431,6 +431,32 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     if (pathName === "/pdga/link-event" && method === "POST") {
       return route.fulfill(json({ ok: true, linked: { eventId: 900001, name: "GVDG QA Monthly", division: "MA1", startDate: "2026-06-20", endDate: "2026-06-20", resultId: 1 } }));
     }
+    if (pathName === "/pdga/events/search" && method === "GET") {
+      return route.fulfill(json({
+        events: [{
+          eventId: 900001,
+          name: "GVDG QA Monthly",
+          tier: "B",
+          location: "Greenville, NC",
+          startDate: "2026-06-20",
+          endDate: "2026-06-20",
+          url: "https://www.pdga.com/tour/event/900001",
+          linked: false,
+        }],
+        attribution: "Player, event, and course data provided by PDGA",
+      }));
+    }
+    if (pathName === "/pdga/scan-my-events" && method === "POST") {
+      return route.fulfill(json({
+        ok: true,
+        scanned: 2,
+        matched: 1,
+        alreadyLinked: 1,
+        remaining: 0,
+        linkedEvents: [{ eventId: 900001, name: "GVDG QA Monthly", division: "MA1", startDate: "2026-06-20", endDate: "2026-06-20", resultId: 1 }],
+        attribution: "Player, event, and course data provided by PDGA",
+      }));
+    }
     if (pathName === "/pdga/players/batch") {
       return route.fulfill(json({ players: { "90000001": { pdgaNumber: "90000001", name: "QA Admin", rating: 935, ratingDate: "2026-07-01", classification: "A", membershipStatus: "current", url: "https://www.pdga.com/player/90000001" } }, attribution: "Player, event, and course data provided by PDGA" }));
     }
@@ -445,6 +471,7 @@ export async function installMemberDashboardApiRoutes(page, apiBase) {
     }));
     if (pathName === "/play-stats") return route.fulfill(json({
       year: 2026,
+      clubPdgaEventIds: [],
       competitive: {
         mine: { memberId: "member-1", name: "QA Admin", totals: { holes: 18, aces: 0, eagles: 1, birdies: 3, pars: 8, bogeys: 5, doubles_plus: 1, birdie_hit: 3, par_hit: 8 } },
         categories: [

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -13,6 +14,7 @@ import {
 import { goingText, pdgaEventMeta, readPdgaRegistrations, tierLabel } from "../src/members-app/pdga-registrations.js";
 import { hasPdgaLiveDetailedStats, pdgaLiveObText, pdgaLivePositionText, pdgaLiveStatPctText } from "../src/public-app/pdga-live-panel.js";
 import { extractPdgaEventId } from "../src/shared/pdga-live-panel.js";
+import { mergePdgaPlayPayload } from "../src/shared/play-stats.js";
 
 test("pdga-registrations helpers format tiers, clubmates, and defend against malformed API payloads", () => {
   assert.deepEqual(readPdgaRegistrations(null), { mine: [], club: [] });
@@ -89,4 +91,60 @@ test("pdga-live-panel helpers handle ties, DNF, and missing throw tracking (opp 
   assert.equal(pdgaLiveObText({ obRate: { hit: null, opp: 18, value: 5.56 } }), "5.6%");
   assert.equal(hasPdgaLiveDetailedStats([{ scores: [{ stats: null }] }]), false);
   assert.equal(hasPdgaLiveDetailedStats([{ scores: [{ stats: { fwh: { hit: 1, opp: 2, value: 50 } } }] }]), true);
+});
+
+test("pdga-live-panel splits round controls, gives lb-wrap scroll-region semantics, and locks grid overflow in CSS", () => {
+  const panelSource = readFileSync("src/shared/pdga-live-panel.js", "utf8");
+  const memberCss = readFileSync("member-surfaces.css", "utf8");
+  const publicCss = readFileSync("public-polish.css", "utf8");
+
+  assert.match(panelSource, /className: "pdga-live-block"/);
+  assert.match(panelSource, /pdga-live-controls pdga-live-rounds/);
+  assert.match(panelSource, /role: "region"/);
+  assert.match(panelSource, /tabIndex: 0/);
+  assert.match(memberCss, /#members \.pdga-live-drawer\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(memberCss, /#members \.pdga-live-drawer > \.player-btn\s*\{[^}]*width:\s*100%/);
+  assert.match(memberCss, /#members \.pdga-live-panel\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(memberCss, /#members \.pdga-live-block\s*\{[^}]*min-width:\s*0/);
+  assert.match(memberCss, /#members \.pdga-live-panel \.lb-wrap\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(publicCss, /\[data-pdga-live-panel\] \.pdga-live-block\s*\{[^}]*min-width:\s*0/);
+  assert.match(publicCss, /\[data-pdga-live-panel\] \.lb-wrap\s*\{[^}]*overflow-x:\s*auto/);
+});
+
+test("mergePdgaPlayPayload merges club-hosted PDGA scoring with live rounds without double counting or external ranks", () => {
+  const empty = mergePdgaPlayPayload(null, null, "m1", "Ada", []);
+  assert.equal(empty.source, "none");
+  assert.equal(empty.showRank, false);
+
+  const clubOnly = {
+    mine: { memberId: "m1", name: "Ada", totals: { holes: 18, birdies: 5, pars: 11, bogeys: 2, birdie_hit: 5, par_hit: 11 } },
+    categories: [],
+    views: {
+      "all-all": { mine: { memberId: "m1", name: "Ada", totals: { holes: 18, birdies: 5, pars: 11, bogeys: 2, birdie_hit: 5, par_hit: 11 } }, categories: [] },
+      "singles-stroke": { mine: { memberId: "m1", name: "Ada", totals: { holes: 18, birdies: 5, pars: 11, bogeys: 2, birdie_hit: 5, par_hit: 11 } }, categories: [] },
+    },
+  };
+  const onlyClub = mergePdgaPlayPayload(clubOnly, null, "m1", "Ada", ["104547"]);
+  assert.equal(onlyClub.source, "club");
+  assert.equal(onlyClub.showRank, true);
+  assert.equal(onlyClub.payload.mine.totals.holes, 18);
+
+  const pdgaStats = {
+    name: "Ada",
+    play_rounds: [
+      { event_id: "104547", group_format: "singles", scoring_style: "stroke", breakdown: { holes: 18, birdies: 5, pars: 11, bogeys: 2 } },
+      { event_id: "107755", group_format: "singles", scoring_style: "stroke", breakdown: { holes: 18, birdies: 4, pars: 12, bogeys: 2 } },
+    ],
+  };
+  const liveOnly = mergePdgaPlayPayload(null, pdgaStats, "m1", "Ada", []);
+  assert.equal(liveOnly.source, "live");
+  assert.equal(liveOnly.showRank, false);
+  assert.equal(liveOnly.payload.mine.totals.holes, 36);
+
+  const mixed = mergePdgaPlayPayload(clubOnly, pdgaStats, "m1", "Ada", ["104547"]);
+  assert.equal(mixed.source, "mixed");
+  assert.equal(mixed.showRank, false);
+  // 18 holes from club 104547 + 18 holes from live 107755 (104547 deduped out of live)
+  assert.equal(mixed.payload.mine.totals.holes, 36);
+  assert.equal(mixed.payload.mine.totals.birdies, 9);
 });

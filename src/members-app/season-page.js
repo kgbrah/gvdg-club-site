@@ -200,7 +200,7 @@ function SeasonPageBody({ resultsOnly = false } = {}) {
       h(StatTile, { label: "Avg round rating", value: page.clubRating == null ? "-" : String(page.clubRating), key: "rating" }),
     ]) : null,
     h(RatingTrend, { ratings: state.ratings, status: state.status, pdgaStats: pdgaState.stats, key: "trend" }),
-    h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats }),
+    h(PlayStatsPanel, { key: "play-stats", pdgaStats: pdgaState.stats, onPdgaReload: pdgaState.reload }),
     h("div", { className: "stats-leagues", id: "stats-leagues", key: "leagues" }, [
       h(ActiveStandingsPanel, { key: "active-standings" }),
       page?.standings.length

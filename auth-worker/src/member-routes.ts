@@ -145,7 +145,16 @@ export async function handlePlayStats(request: Request, env: Env, origin: string
   const yearParam = Number(new URL(request.url).searchParams.get("year"));
   const year = Number.isInteger(yearParam) && yearParam >= 2000 && yearParam <= 2100 ? yearParam : easternYear();
   const rows = await readD1OrFallback(() => db.listSeasonPlayRows(env.DB, year), () => []);
-  const tagged = (Array.isArray(rows) ? rows : []).map((raw) => {
+  const tagged: {
+    breakdown: unknown;
+    group_format: unknown;
+    kind: "casual" | "competitive" | "pdga";
+    member_id: unknown;
+    name: unknown;
+    scoring_style: unknown;
+  }[] = [];
+  const clubPdgaEventIds = new Set<string>();
+  for (const raw of Array.isArray(rows) ? rows : []) {
     const row = (raw || {}) as {
       member_id?: unknown;
       name?: unknown;
@@ -153,8 +162,9 @@ export async function handlePlayStats(request: Request, env: Env, origin: string
       kind?: unknown;
       group_format?: unknown;
       scoring_style?: unknown;
+      pdga_event_id?: unknown;
     };
-    return {
+    const base = {
       breakdown: row.breakdown,
       group_format: row.group_format,
       kind: playRowKind(row),
@@ -162,8 +172,17 @@ export async function handlePlayStats(request: Request, env: Env, origin: string
       name: row.name,
       scoring_style: row.scoring_style,
     };
-  });
-  return json({ year, ...playStatsByKind(tagged, claims.sub) }, 200, origin);
+    tagged.push(base);
+    const pdgaEventId = Number(row.pdga_event_id);
+    if (Number.isInteger(pdgaEventId) && pdgaEventId > 0) {
+      // First-party GVDG scoring from club-hosted PDGA events also populates the PDGA scoring tab & club ranks.
+      tagged.push({ ...base, kind: "pdga" });
+      if (String(row.member_id || "") === claims.sub) {
+        clubPdgaEventIds.add(String(pdgaEventId));
+      }
+    }
+  }
+  return json({ year, ...playStatsByKind(tagged, claims.sub), clubPdgaEventIds: [...clubPdgaEventIds] }, 200, origin);
 }
 
 export async function handleMyRatings(request: Request, env: Env, origin: string | null): Promise<Response> {

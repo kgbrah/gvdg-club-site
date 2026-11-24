@@ -27,6 +27,7 @@ test("PDGA links point at pdga.com player and event pages, and nowhere else", ()
 test("every screen that shows PDGA data carries the PDGA credit", () => {
   const screens = {
     "src/members-app/overview-dashboard.js": "Home: PDGA official rating, Next PDGA",
+    "src/members-app/play-stats-panel.js": "PDGA scoring tab inline season summary & finder",
     "src/members-app/season-page.js": "Stats: PDGA official rating",
     "src/members-app/pdga-events-panel.js": "Nearby PDGA events",
     "src/members-app/pdga-registrations.js": "Clubmates at PDGA events & My PDGA events",
