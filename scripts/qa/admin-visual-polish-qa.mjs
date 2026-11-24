@@ -71,6 +71,7 @@ const probes = {
   marketplace: "[data-admin-marketplace='ready'] .admin-market-report",
   donations: "[data-admin-donations='ready']",
   "lost-found": "[data-admin-lost-found='ready'] [data-admin-lf-report]",
+  workdays: "[data-admin-workdays='ready']",
 };
 assert.deepEqual(Object.keys(probes).sort(), ADMIN_DESTINATIONS.map((item) => item.key).sort());
 
@@ -83,6 +84,60 @@ let reviewPending = true;
 // A donation a member reported (owner: "Let's make ALL donations reward +10 karma per dollar"; an admin confirms).
 let donationPending = true;
 let productRequests = [];
+const freshWorkdays = () => [{
+  id: 10,
+  title: "Saturday Course Cleanup",
+  description: "Clear fairway brush on holes 4-7 and spread mulch.",
+  courseId: 7,
+  locationName: course.name,
+  workdayDate: date,
+  startTime: "9:00 AM",
+  karmaReward: 25,
+  radiusFt: 2000,
+  hasGps: true,
+  status: "active",
+  checkinOpen: true,
+  announcedAt: date + " 10:00:00",
+  signupCount: 2,
+  checkedInCount: 1,
+  verifiedCount: 0,
+  participants: [
+    {
+      id: 1,
+      memberId: "m_jordan",
+      memberName: "Jordan Reyes",
+      karmaKey: "m_jordan",
+      status: "checked_in",
+      signedUpAt: date + " 08:15:00",
+      gpsVerified: true,
+      gpsDistanceFt: 185,
+      gpsAccuracyM: 12,
+      checkedInAt: date + " 08:50:00",
+      verifiedAt: null,
+      verifiedBy: null,
+      karmaAwarded: 0,
+      adminNote: null,
+    },
+    {
+      id: 2,
+      memberId: "m_avery",
+      memberName: "Avery Brooks",
+      karmaKey: "m_avery",
+      status: "signed_up",
+      signedUpAt: date + " 08:20:00",
+      gpsVerified: false,
+      gpsDistanceFt: null,
+      gpsAccuracyM: null,
+      checkedInAt: null,
+      verifiedAt: null,
+      verifiedBy: null,
+      karmaAwarded: 0,
+      adminNote: null,
+    },
+  ],
+}];
+let workdays = freshWorkdays();
+let nextWorkdayId = 11;
 const donation = { id: 4, memberId: "m_jordan", memberName: "Jordan Reyes", amountCents: 1000, source: "club-card", status: "pending", karma: 0, createdAt: date + " 15:20:00", reviewedAt: null, reviewNote: "" };
 // Admin › Scoring › Live casual rounds: a ghost (quiet for a day) and a card out on the course now.
 const freshLiveRounds = () => [
@@ -208,6 +263,82 @@ function fixture(path, method, query, authorization, body) {
   if (path === "/admin/lost-found/summary") return { openReports: 1 };
   if (path === "/admin/donations") return { pending: donationPending ? [donation] : [], recent: donationPending ? [] : [{ ...donation, status: "confirmed", karma: 100, reviewedAt: date + " 16:00:00" }], karmaPerDollar: 10 };
   if (path === "/admin/donations/4/review" && method === "POST") { donationPending = false; return { donation: { ...donation, status: "confirmed", karma: 100 } }; }
+  if (path === "/admin/workdays" && method === "GET") {
+    const pendingCheckins = workdays.reduce((sum, w) => sum + ((w.status === "open" || w.status === "active")
+      ? w.participants.filter((p) => p.status === "checked_in" && p.gpsVerified).length : 0), 0);
+    return { workdays, pendingCheckins };
+  }
+  if (path === "/admin/workdays" && method === "POST") {
+    const saved = {
+      id: nextWorkdayId++,
+      title: body.title,
+      description: body.description || null,
+      courseId: body.courseId || null,
+      locationName: body.locationName,
+      workdayDate: body.workdayDate,
+      startTime: body.startTime || null,
+      karmaReward: Number(body.karmaReward) || 25,
+      radiusFt: Number(body.radiusFt) || 2000,
+      hasGps: body.lat != null && body.lng != null,
+      status: body.status || "open",
+      checkinOpen: body.status === "active" || body.workdayDate <= date,
+      announcedAt: date + " 12:00:00",
+      signupCount: 0,
+      checkedInCount: 0,
+      verifiedCount: 0,
+      participants: [],
+    };
+    workdays = [saved, ...workdays];
+    return { workday: saved, notifiedCount: 4 };
+  }
+  const wdPatch = path.match(/^\/admin\/workdays\/(\d+)$/);
+  if (wdPatch && method === "PATCH") {
+    const w = workdays.find((row) => row.id === Number(wdPatch[1]));
+    if (w && body.status) {
+      w.status = body.status;
+      w.checkinOpen = body.status === "active" || (body.status === "open" && w.workdayDate <= date);
+    }
+    return { workday: w };
+  }
+  const wdVerifyAll = path.match(/^\/admin\/workdays\/(\d+)\/verify-all-gps$/);
+  if (wdVerifyAll && method === "POST") {
+    const w = workdays.find((row) => row.id === Number(wdVerifyAll[1]));
+    let count = 0;
+    if (w) {
+      for (const p of w.participants) {
+        if (p.status === "checked_in" && p.gpsVerified) {
+          p.status = "verified";
+          p.karmaAwarded = w.karmaReward;
+          p.verifiedAt = date + " 12:30:00";
+          count += 1;
+        }
+      }
+      w.checkedInCount = w.participants.filter((p) => p.status === "checked_in").length;
+      w.verifiedCount = w.participants.filter((p) => p.status === "verified").length;
+    }
+    return { verifiedCount: count, workday: w };
+  }
+  const wdVerifyOne = path.match(/^\/admin\/workdays\/(\d+)\/participants\/([^/]+)\/verify$/);
+  if (wdVerifyOne && method === "POST") {
+    const w = workdays.find((row) => row.id === Number(wdVerifyOne[1]));
+    const p = w?.participants.find((row) => row.memberId === decodeURIComponent(wdVerifyOne[2]));
+    if (w && p) {
+      p.status = "verified";
+      p.karmaAwarded = w.karmaReward;
+      p.verifiedAt = date + " 12:30:00";
+      p.adminNote = body?.note || null;
+      w.checkedInCount = w.participants.filter((row) => row.status === "checked_in").length;
+      w.verifiedCount = w.participants.filter((row) => row.status === "verified").length;
+    }
+    return { participant: p, workday: w };
+  }
+  const wdStatusOne = path.match(/^\/admin\/workdays\/(\d+)\/participants\/([^/]+)\/status$/);
+  if (wdStatusOne && method === "POST") {
+    const w = workdays.find((row) => row.id === Number(wdStatusOne[1]));
+    const p = w?.participants.find((row) => row.memberId === decodeURIComponent(wdStatusOne[2]));
+    if (p && body?.status) p.status = body.status;
+    return { participant: p, workday: w };
+  }
   if (path === "/admin/lost-found/overview") return lostFoundOverview;
   if (path === "/admin/community/reviews") return { queue: reviewPending ? [review] : [], more: false };
   if (path === "/admin/community/reviews/3" && method === "PUT") { reviewPending = false; return { ok: true }; }
@@ -425,6 +556,8 @@ async function verifyRoutes(variant) {
   reviewPending = true;
   checkedIn = false;
   liveRounds = freshLiveRounds();
+  workdays = freshWorkdays();
+  nextWorkdayId = 11;
   try {
     await page.goto(origin + "/admin-preview.html#today", { waitUntil: "commit", timeout: 60_000 });
     await page.getByRole("heading", { name: "Today", level: 1 }).waitFor({ timeout: 60_000 });
@@ -936,10 +1069,52 @@ async function verifyShopCamera() {
   console.log("Admin shop camera verified (live capture, stamp autofill, product POST, app fallback, no-camera desktop)");
 }
 
+async function verifyWorkdays() {
+  workdays = freshWorkdays();
+  nextWorkdayId = 11;
+  const { page, context } = await newPage(variants[0]);
+  try {
+    await page.goto(origin + "/admin-preview.html#today", { waitUntil: "commit", timeout: 60_000 });
+    await page.getByRole("heading", { name: "Today", level: 1, exact: true }).waitFor();
+    await page.locator(".admin-needs-row, [data-admin-needs-item], button, a").filter({ hasText: "Workday check-in to verify" }).first().waitFor();
+    const pane = await route(page, "workdays");
+    const card = pane.locator("[data-admin-workday='10']");
+    await card.waitFor();
+    const jordanRow = card.locator("[data-admin-workday-participant='m_jordan']");
+    await jordanRow.getByText("GPS verified (185 ft)").waitFor();
+    const verifiedRes = page.waitForResponse((response) => response.url().endsWith("/admin/workdays/10/participants/m_jordan/verify") && response.request().method() === "POST");
+    await jordanRow.getByRole("button", { name: "Verify & award +25 karma" }).click();
+    assert.equal((await verifiedRes).status(), 200);
+    await jordanRow.getByText("Verified · +25 karma awarded").waitFor();
+
+    await pane.locator("#wdTitle").fill("Tee Pad Mulch Day");
+    await pane.locator("#wdKarma").fill("40");
+    await pane.locator("#wdLocation").fill("River Park Front 9");
+    await pane.locator("#wdLat").fill("35.6127");
+    await pane.locator("#wdLng").fill("-77.3664");
+    await pane.locator("#wdStatus").selectOption("active");
+    await pane.locator("#wdDesc").fill("Bring wheelbarrows and rakes.");
+    const announcedRes = page.waitForResponse((response) => response.url().endsWith("/admin/workdays") && response.request().method() === "POST");
+    await pane.getByRole("button", { name: "Announce workday & notify members" }).click();
+    assert.equal((await announcedRes).status(), 200);
+    await pane.getByText('Announced "Tee Pad Mulch Day" (+40 karma) to 4 active member(s).').waitFor();
+    const newCard = pane.locator("[data-admin-workday='11']");
+    await newCard.waitFor();
+    await newCard.getByText("+40 karma").waitFor();
+    await fit(page, "390 workdays interactive");
+    await readable(page, "390 workdays interactive");
+    await shot(page, "workdays-interactive-390");
+    console.log("Admin workdays verified (Needs you link, GPS participant verify +25 karma, announce +40 karma)");
+  } finally {
+    await context.close();
+  }
+}
+
 try {
   for (const variant of variants) await verifyRoutes(variant);
   await verifyLeagueBagTags();
   await verifyShopCamera();
+  await verifyWorkdays();
   for (const mode of ["error", "empty", "loading"]) {
     fixtureMode = mode;
     const { page, context } = await newPage(variants[0]);

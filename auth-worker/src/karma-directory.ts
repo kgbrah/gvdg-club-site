@@ -1,7 +1,7 @@
 // Karma next to every player's name, across the app and the public site. Karma is the Lost & Found ledger (+10 for a
-// disc returned), confirmed club donations from marketplace sales (+1 a dollar), and +1 for every round finished in the
-// app (roundKarmaSql), less any admin penalty for gaming it (karma_adjustments, karma-watch.ts): the same total as
-// karmaOf. A total can be negative.
+// disc returned), confirmed club donations (+10 a dollar), verified club workday participation (admin-set reward),
+// and +1 for every round finished in the app (roundKarmaSql), less any admin penalty for gaming it (karma_adjustments,
+// karma-watch.ts): the same total as karmaOf. A total can be negative.
 //
 //   GET /karma (public) -> { players: { [playerKey]: karma }, traders: { [traderKey]: karma } }
 //
@@ -56,7 +56,7 @@ export function adjustmentKarmaSql(members: number | null = null): string {
 }
 
 export async function karmaDirectory(env: Env): Promise<KarmaDirectory> {
-  const [ledger, donations, rounds, adjustments] = await Promise.all([
+  const [ledger, donations, rounds, adjustments, workdays] = await Promise.all([
     env.DB.prepare("SELECT person_id, SUM(delta) AS karma FROM lf_karma GROUP BY person_id").all<{ person_id: string; karma: number }>(),
     // Confirmed donations: the marketplace's gifts and direct ones (club_donations), +10 karma a dollar.
     env.DB.prepare(`SELECT person_id, SUM(karma) AS karma FROM (
@@ -67,9 +67,11 @@ export async function karmaDirectory(env: Env): Promise<KarmaDirectory> {
       .all<{ person_id: string; karma: number }>(),
     env.DB.prepare(roundKarmaSql()).all<{ person_id: string; karma: number }>(),
     env.DB.prepare(adjustmentKarmaSql()).all<{ person_id: string; karma: number }>(),
+    env.DB.prepare("SELECT member_id AS person_id, SUM(karma_awarded) AS karma FROM club_workday_signups WHERE status = 'verified' AND karma_awarded > 0 GROUP BY member_id")
+      .all<{ person_id: string; karma: number }>(),
   ]);
   const totals = new Map<string, number>();
-  for (const row of [...(ledger.results ?? []), ...(donations.results ?? []), ...(rounds.results ?? []), ...(adjustments.results ?? [])]) {
+  for (const row of [...(ledger.results ?? []), ...(donations.results ?? []), ...(rounds.results ?? []), ...(adjustments.results ?? []), ...(workdays.results ?? [])]) {
     totals.set(row.person_id, (totals.get(row.person_id) ?? 0) + (Number(row.karma) || 0));
   }
   const owners = [...totals].filter(([, karma]) => karma !== 0);
@@ -90,6 +92,17 @@ export async function karmaDirectory(env: Env): Promise<KarmaDirectory> {
 }
 
 const CACHE_SECONDS = 300;
+
+/** Clear the short-lived edge cache of GET /karma after a workday verification or other karma change. */
+export async function bustKarmaCache(request?: Request): Promise<void> {
+  const cache = typeof caches !== "undefined" ? (caches as unknown as { default?: Cache }).default : undefined;
+  if (!cache || !request) return;
+  try {
+    await cache.delete(new Request(new URL("/karma", request.url).toString(), { method: "GET" }));
+  } catch {
+    /* the short TTL bounds staleness */
+  }
+}
 
 /** The directory, built at most every few minutes (it reads whole tables, and D1 reads are metered on the Free plan). */
 export async function handleKarma(env: Env, origin: string | null, request?: Request): Promise<Response> {

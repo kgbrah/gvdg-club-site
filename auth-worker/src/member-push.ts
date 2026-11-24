@@ -44,6 +44,29 @@ function memberUrl(url: string): string {
   return "/gvdg-members.html";
 }
 
+async function deliverMemberPushRows(env: Env, keys: PushCryptoKeys, rows: readonly SubRow[], note: MemberPushNote): Promise<void> {
+  if (!rows.length) return;
+  const payload = text.encode(JSON.stringify({
+    kind: "member",
+    title: note.title.slice(0, 80),
+    body: note.body.slice(0, 180),
+    url: memberUrl(note.url),
+    tag: note.tag.slice(0, 80),
+  }));
+  for (let i = 0; i < rows.length; i += 15) {
+    await Promise.all(rows.slice(i, i + 15).map(async (row) => {
+      try {
+        const status = await postPush(keys, row, payload);
+        if (status === 404 || status === 410) {
+          await env.DB.prepare("DELETE FROM member_push_subscriptions WHERE endpoint = ?").bind(row.endpoint).run();
+        }
+      } catch {
+        /* one dead phone does not stop the others */
+      }
+    }));
+  }
+}
+
 /** Fire-and-forget: the caller's request never waits on, or fails because of, a push. */
 export function notifyMembers(ctx: WaitCtx, env: Env, memberIds: readonly string[], category: PushCategory, note: MemberPushNote): void {
   const job = sendMemberPush(env, memberIds, category, note).catch(() => {});
@@ -67,27 +90,52 @@ export async function sendMemberPush(env: Env, memberIds: readonly string[], cat
       `SELECT endpoint, member_id, p256dh, auth FROM member_push_subscriptions
        WHERE member_id IN (${marks}) AND ${column} = 1 ORDER BY created_at LIMIT 60`,
     ).bind(...ids).all<SubRow>();
-    const rows = listed.results ?? [];
-    if (!rows.length) return;
-    const payload = text.encode(JSON.stringify({
-      kind: "member",
-      title: note.title.slice(0, 80),
-      body: note.body.slice(0, 180),
-      url: memberUrl(note.url),
-      tag: note.tag.slice(0, 80),
-    }));
-    await Promise.all(rows.map(async (row) => {
-      try {
-        const status = await postPush(keys, row, payload);
-        if (status === 404 || status === 410) {
-          await env.DB.prepare("DELETE FROM member_push_subscriptions WHERE endpoint = ?").bind(row.endpoint).run();
-        }
-      } catch {
-        /* one dead phone does not stop the others */
-      }
-    }));
+    await deliverMemberPushRows(env, keys, listed.results ?? [], note);
   } catch {
     /* alerts are optional */
+  }
+}
+
+/** Broadcast a push notification to subscribed members (capped at 40 endpoints to fit Worker subrequest budgets). */
+export async function sendBroadcastMemberPush(
+  env: Env,
+  category: PushCategory,
+  note: MemberPushNote,
+  excludeMemberId?: string,
+): Promise<void> {
+  try {
+    const keys = await keysOf(env);
+    if (!keys) return;
+    const column = CATEGORY_COLUMN[category];
+    const stmt = excludeMemberId
+      ? env.DB.prepare(
+        `SELECT endpoint, member_id, p256dh, auth FROM member_push_subscriptions
+         WHERE ${column} = 1 AND member_id != ? ORDER BY created_at LIMIT 40`,
+      ).bind(excludeMemberId)
+      : env.DB.prepare(
+        `SELECT endpoint, member_id, p256dh, auth FROM member_push_subscriptions
+         WHERE ${column} = 1 ORDER BY created_at LIMIT 40`,
+      );
+    const listed = await stmt.all<SubRow>();
+    await deliverMemberPushRows(env, keys, listed.results ?? [], note);
+  } catch {
+    /* alerts are optional */
+  }
+}
+
+/** Fire-and-forget club-wide member broadcast push. */
+export function notifyAllSubscribedMembers(
+  ctx: WaitCtx,
+  env: Env,
+  category: PushCategory,
+  note: MemberPushNote,
+  excludeMemberId?: string,
+): void {
+  const job = sendBroadcastMemberPush(env, category, note, excludeMemberId).catch(() => {});
+  try {
+    ctx?.waitUntil?.(job);
+  } catch {
+    /* the promise still settles on its own */
   }
 }
 

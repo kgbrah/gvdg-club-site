@@ -1166,3 +1166,98 @@ body.admin-page.player-theme-active {
   color: var(--text-secondary);
 }
 body.admin-page .gv-camera button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+/* Admin -> Workdays: announcement builder, roster & GPS/admin verification. */
+.admin-page .admin-workdays {
+  display: grid;
+  gap: 1rem;
+}
+.admin-page .admin-workday-gps-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: .5rem;
+  align-items: end;
+}
+.admin-page .admin-workday-gps-row > .admin-btn {
+  min-height: 44px;
+  width: 100%;
+}
+.admin-page .admin-workdays-list {
+  display: grid;
+  gap: .85rem;
+}
+.admin-page .admin-workday-card {
+  display: grid;
+  gap: .65rem;
+  min-width: 0;
+}
+.admin-page .admin-workday-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .5rem .75rem;
+}
+.admin-page .admin-workday-title {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-workday-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  align-items: center;
+}
+.admin-page .admin-workday-karma {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--admin-hairline);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: .2rem .55rem;
+  font-size: .78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.admin-page .admin-workday-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.admin-page .admin-workday-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+.admin-page .admin-workday-actions .admin-btn {
+  min-height: 44px;
+}
+.admin-page .admin-workday-roster {
+  display: grid;
+  gap: .5rem;
+  border-top: 1px solid var(--admin-hairline);
+  padding-top: .65rem;
+}
+.admin-page .admin-workday-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: .5rem;
+}
+.admin-page .admin-workday-participant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem .75rem;
+  padding: .55rem .65rem;
+  border: 1px solid var(--admin-hairline);
+  border-radius: .6rem;
+  background: var(--bg-secondary);
+}
+.admin-page .admin-workday-note-label {
+  display: grid;
+  gap: .3rem;
+  margin-top: .5rem;
+}

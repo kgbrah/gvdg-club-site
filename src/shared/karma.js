@@ -43,6 +43,14 @@ let current = readStored();
 let pending = null;
 const listeners = new Set();
 
+/** Clear the cached directory (after earning karma or verifying a workday) and fetch a fresh copy. */
+export function invalidateKarmaDirectory(fetcher = globalThis.fetch) {
+  current = null;
+  pending = null;
+  try { globalThis.sessionStorage?.removeItem(STORE_KEY); } catch { /* ignore storage errors */ }
+  return loadKarmaDirectory(fetcher);
+}
+
 /** The directory (fresh within FRESH_MS); never throws: no connection keeps the last copy, or none. */
 export function loadKarmaDirectory(fetcher = globalThis.fetch) {
   if (current && Date.now() - current.at < FRESH_MS) return Promise.resolve(current.data);

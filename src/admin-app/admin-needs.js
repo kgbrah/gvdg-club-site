@@ -14,6 +14,7 @@ const EMPTY_NEEDS = {
   lostFoundReports: 0,
   karmaFlags: 0,
   donations: 0,
+  workdayCheckins: 0,
 };
 
 const MORE_TABS = new Set(["bag-tags", "members", "tee-signs", "lost-found"]);
@@ -47,6 +48,7 @@ export function publishAdminNeeds(partial) {
     lostFoundReports: countOf(source.lostFoundReports),
     karmaFlags: countOf(source.karmaFlags),
     donations: countOf(source.donations),
+    workdayCheckins: countOf(source.workdayCheckins),
   };
   window.dispatchEvent(new CustomEvent("gvdg:admin-needs", { detail: adminNeedsState }));
   return adminNeedsState;
@@ -62,6 +64,7 @@ export function adminNeedsItems(source) {
   const lostFoundReports = countOf(input.lostFoundReports);
   const karmaFlags = countOf(input.karmaFlags);
   const donations = countOf(input.donations);
+  const workdayCheckins = countOf(input.workdayCheckins);
   const orders = countOf(input.orders);
   const shelf = countOf(input.shelf);
   const shelfName = text(input.shelfName);
@@ -136,6 +139,15 @@ export function adminNeedsItems(source) {
       count: donations,
       label: donations === 1 ? "Donation to confirm" : "Donations to confirm",
       detail: "Check the club's PayPal",
+    });
+  }
+  if (workdayCheckins) {
+    items.push({
+      id: "workday-checkins",
+      tab: "workdays",
+      count: workdayCheckins,
+      label: workdayCheckins === 1 ? "Workday check-in to verify" : "Workday check-ins to verify",
+      detail: "GPS checked in, confirm karma",
     });
   }
   if (orders) {

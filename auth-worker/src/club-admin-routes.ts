@@ -19,6 +19,7 @@ import { handleSheetImport } from "./sheet-import.js";
 import { handleTournamentAdmin } from "./tournament-routes.js";
 import { handleAdminPdgaPromo } from "./pdga-membership-routes.js";
 import { handleAdminDonations } from "./club-donations.js";
+import { handleAdminWorkdays } from "./club-workdays.js";
 
 export async function handleClubAdmin(
   request: Request,
@@ -57,6 +58,7 @@ export async function handleClubAdmin(
   else if (sub === "export") response = await handleAdminExport(request, env, origin, method, seg, adminId);
   else if (sub === "push") response = await handleAdminPush(request, env, origin, method, seg, adminId);
   else if (sub === "donations") response = await handleAdminDonations(request, env, origin, method, seg, adminId, ctx);
+  else if (sub === "workdays") response = await handleAdminWorkdays(request, env, origin, method, seg, adminId, ctx);
 
   return response ?? json({ error: "not_found" }, 404, origin);
 }
