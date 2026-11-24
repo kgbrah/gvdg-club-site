@@ -43,14 +43,23 @@ export function revision(value: unknown) {
 }
 
 export function profileInput(row: Record<string, unknown> | null) {
-  if (!row || !exact(row, ["audience", "displayName", "bio", "shareProgress", "revision"])) return null;
+  if (!row || !exact(row, ["audience", "displayName", "bio", "shareProgress", "sharePdga", "revision"])) return null;
   const audience = oneOf(row.audience, AUDIENCES);
   const displayName = safeText(row.displayName, 60);
   const bio = safeText(row.bio, 300);
   const rev = revision(row.revision);
   if (!audience || displayName === null || (audience !== "private" && !displayName) || bio === null
-    || rev === null || typeof row.shareProgress !== "boolean") return null;
-  return { audience, displayName, bio, shareProgress: audience !== "private" && row.shareProgress, revision: rev };
+    || rev === null || typeof row.shareProgress !== "boolean"
+    || (row.sharePdga !== undefined && typeof row.sharePdga !== "boolean")) return null;
+  const privateProfile = audience === "private";
+  return {
+    audience,
+    displayName,
+    bio,
+    shareProgress: !privateProfile && row.shareProgress,
+    sharePdga: !privateProfile && Boolean(row.sharePdga),
+    revision: rev,
+  };
 }
 export type ProfileInput = NonNullable<ReturnType<typeof profileInput>>;
 

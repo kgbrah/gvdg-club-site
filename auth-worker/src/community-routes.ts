@@ -4,6 +4,7 @@ import { adminGate, requireAuth } from "./authz.js";
 import { json, readJson, RequestBodyTooLargeError } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { getMember } from "./roster.js";
+import { normalPdgaNumber } from "./pdga-api.js";
 import {
   AMENITIES, CONDITIONS, CONNECTION_ACTIONS, MODERATION_ACTIONS, REPORT_REASONS, type Amenities,
   exact, metadataInput, oneOf, positiveId, profileInput, profileKey, reviewInput, revision, safeText,
@@ -72,8 +73,9 @@ export async function handleCommunityRoute(
       const row = await profileByKey(env.DB, key);
       if (!row) return fail("not_found", 404);
       const viewer = request.headers.has("Authorization") ? await activeMember(request, env) : null;
-      const profile = await viewCommunityProfile(env.DB, row, viewer);
-      if (!profile || !await getMember(env.ROSTER, row.memberId)) return fail("not_found", 404);
+      const member = await getMember(env.ROSTER, row.memberId);
+      const profile = member ? await viewCommunityProfile(env.DB, row, viewer, normalPdgaNumber(member.pdgaNo)) : null;
+      if (!profile) return fail("not_found", 404);
       // Karma shows with the name, so only where the name itself is shown.
       return respond({ profile: profile.displayName && profile.displayName !== "Member" ? { ...profile, karmaKey: karmaKey(row.memberId) } : profile });
     }

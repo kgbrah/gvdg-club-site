@@ -1,8 +1,11 @@
 import React from "react";
 import { KarmaChip } from "../shared/karma.js";
-import { request } from "./api.js";
+import { request, requestJson } from "./api.js";
 import { readMemberToken, TOKEN_KEY } from "../shared/member-session.js";
 import { memberConfirm } from "./member-dialogs.js";
+import { useMemberContext } from "./member-context.js";
+import { PdgaCredit, PdgaLink, pdgaPlayerHref, pdgaPlayerStatsHref } from "../shared/pdga-credit.js";
+import { formatPdgaAnnualSummary } from "./pdga-dashboard.js";
 import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
@@ -41,13 +44,64 @@ function field(label, element, props) {
   ]);
 }
 
-function profilePreview(profile) {
+function ProfilePreview({ profile }) {
+  const [pdgaState, setPdgaState] = React.useState({ status: "idle", stats: null });
+
+  React.useEffect(() => {
+    setPdgaState({ status: "idle", stats: null });
+  }, [profile.key, profile.pdgaNo]);
+
+  async function loadPdga() {
+    if (!profile.pdgaNo || pdgaState.status === "loading") return;
+    setPdgaState({ status: "loading", stats: null });
+    try {
+      const stats = await requestJson(`/pdga-stats?pdga=${encodeURIComponent(profile.pdgaNo)}`);
+      setPdgaState({ status: "ready", stats });
+    } catch {
+      setPdgaState({ status: "error", stats: null });
+    }
+  }
+
+  const stats = pdgaState.stats;
+  const topAnnual = Array.isArray(stats?.annual_stats) ? stats.annual_stats[0] : null;
+  const topAnnualSummary = topAnnual ? formatPdgaAnnualSummary(topAnnual).join(" · ") : "";
+
   return [
     h("h1", { className: "section-title", key: "name" }, [profile.displayName || "Club member", h(KarmaChip, { karmaKey: profile.karmaKey, key: "karma" })]),
     profile.bio ? h("p", { className: "community-body", key: "bio" }, profile.bio) : null,
     profile.progress ? h("p", { className: "dash-note", key: "progress" },
       profile.progress.total + " completed GVDG rounds") : null,
-  ];
+    profile.pdgaNo ? h("div", { className: "community-pdga-card", key: "pdga" }, [
+      h("div", { className: "community-pdga-head", key: "head" }, [
+        h(PdgaLink, { href: pdgaPlayerHref(profile.pdgaNo), key: "link" }, `PDGA #${profile.pdgaNo}`),
+        pdgaState.status === "idle" || pdgaState.status === "error"
+          ? action("Load PDGA stats", {
+            className: "dashboard-action",
+            "data-profile-load-pdga": "true",
+            key: "load",
+            onClick: () => { void loadPdga(); },
+          })
+          : null,
+      ].filter(Boolean)),
+      pdgaState.status === "loading" ? note("Loading official PDGA stats…", "pdga-loading") : null,
+      pdgaState.status === "error" ? note("Could not load PDGA stats right now.", "pdga-error") : null,
+      pdgaState.status === "ready" && stats ? h("div", { className: "community-pdga-body", key: "body" }, [
+        stats.official_rating != null
+          ? h("p", { className: "community-body", key: "official" }, `Official rating: ${stats.official_rating}${stats.rating_date ? ` (${stats.rating_date})` : ""}`)
+          : h("p", { className: "dash-note", key: "official" }, "Official PDGA rating is unavailable."),
+        stats.live_rating != null
+          ? h("p", { className: "dash-note", key: "live" }, `Recent Live rating estimate: ${stats.live_rating}`)
+          : null,
+        topAnnual ? h("p", { className: "dash-note", key: "annual" }, [
+          `${topAnnual.year} ${topAnnual.divisionCode}`,
+          topAnnualSummary ? `: ${topAnnualSummary}` : "",
+          " · ",
+          h("a", { className: "pdga-link", href: topAnnual.url || pdgaPlayerStatsHref(profile.pdgaNo, topAnnual.year), rel: "noopener noreferrer", target: "_blank", key: "yr" }, "PDGA.com"),
+        ]) : null,
+        h(PdgaCredit, { key: "credit" }),
+      ].filter(Boolean)) : null,
+    ].filter(Boolean)) : null,
+  ].filter(Boolean);
 }
 
 export function PublicCommunityProfile({ profileKey }) {
@@ -86,12 +140,13 @@ export function PublicCommunityProfile({ profileKey }) {
   }, [profileKey]);
   return h("section", { className: "login-gate", "aria-label": "Shared member profile" },
     h("div", { className: "login-card community-shared-profile" }, [
-      state.profile ? profilePreview(state.profile) : h("h1", { className: "login-title", key: "title" }, state.pending ? "Loading profile…" : "Profile unavailable"),
+      state.profile ? h(ProfilePreview, { profile: state.profile, key: "preview" }) : h("h1", { className: "login-title", key: "title" }, state.pending ? "Loading profile…" : "Profile unavailable"),
       h("a", { className: "dashboard-action", href: "gvdg-members.html#community", key: "members" }, "Open the member app"),
     ]));
 }
 
 function ProfileSettings({ initial, save }) {
+  const { pdgaNo } = useMemberContext();
   const [form, setForm] = React.useState(initial);
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState("");
@@ -108,8 +163,12 @@ function ProfileSettings({ initial, save }) {
     setBusy(true);
     try {
       const updated = await save({
-        audience: form.audience, displayName: form.displayName, bio: form.bio,
-        shareProgress: form.audience !== "private" && form.shareProgress, revision: initial.revision,
+        audience: form.audience,
+        displayName: form.displayName,
+        bio: form.bio,
+        shareProgress: form.audience !== "private" && form.shareProgress,
+        sharePdga: form.audience !== "private" && Boolean(form.sharePdga),
+        revision: initial.revision,
       });
       if (updated) setForm(updated);
       setMessage("Profile settings saved.");
@@ -137,6 +196,11 @@ function ProfileSettings({ initial, save }) {
       h("input", { type: "checkbox", key: "check", checked: form.audience !== "private" && form.shareProgress,
         disabled: form.audience === "private", onChange: (event) => change("shareProgress", event.target.checked) }),
       " Share my total completed GVDG rounds with this audience",
+    ]),
+    h("label", { key: "pdga" }, [
+      h("input", { type: "checkbox", key: "check", checked: form.audience !== "private" && Boolean(form.sharePdga),
+        disabled: form.audience === "private" || !pdgaNo, onChange: (event) => change("sharePdga", event.target.checked) }),
+      pdgaNo ? ` Share my PDGA # (#${pdgaNo}) so viewers can load my PDGA stats on demand` : " Share my PDGA # (link your PDGA # in Account settings first)",
     ]),
     h("div", { className: "dashboard-actions", key: "actions" }, [
       action(busy ? "Saving…" : "Save profile settings", { key: "save", type: "submit", className: "dashboard-action primary", disabled: busy }),

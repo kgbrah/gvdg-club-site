@@ -3,8 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
+import { signSession } from "../src/jwt.js";
 import { resetPdgaApiSession } from "../src/pdga-api.js";
-import { PDGA_STATS_VERSION, statsFromPlayer } from "../src/pdga.js";
+import { PDGA_STATS_VERSION, parsePdgaEventIdInput, statsFromPlayer } from "../src/pdga.js";
 
 // PDGA Developer Program compliance: Worker reads PDGA data ONLY through PDGA's documented REST API
 // (api.pdga.com) and official PDGA Live API (https://www.pdga.com/dev/api/live), never scraping pdga.com HTML pages
@@ -229,6 +230,7 @@ describe("GET /pdga-stats", () => {
           classification: "P",
           rating: 941,
           events: 6,
+          rounds: null,
           points: 340.5,
           prize: 150,
           playersDefeated: 48,
@@ -310,6 +312,145 @@ describe("GET /pdga-stats", () => {
     const before = calls.length;
     for (let i = 0; i < 35; i++) expect((await stats(target, "pdga=80024")).status).toBe(200);
     expect(calls.length).toBe(before);
+  });
+
+  it("supports authenticated fresh=1 reload with per-member rate limiting (Policy A)", async () => {
+    let rating = 941;
+    const { env: target, calls } = await env(
+      { "80024": { pdga_number: "80024", first_name: "Ada", last_name: "Lovelace", membership_status: "current", rating: "941", rating_effective_date: "2026-11-11" } },
+    );
+    (target.ROSTER as unknown as { put: (k: string, v: string) => Promise<void> }).put(
+      "member:m_a",
+      JSON.stringify({ memberId: "m_a", name: "Ada Lovelace", pdgaNo: "80024", pinVer: 1, mustChangePin: false }),
+    );
+    expect((await stats(target, "pdga=80024")).status).toBe(200);
+    expect((await stats(target, "pdga=80024&fresh=1")).status).toBe(401);
+
+    const token = await signSession({ sub: "m_a", mustChangePin: false, pinVer: 1 }, "x".repeat(40), 900);
+    const freshCall = () => worker.fetch(new Request("https://worker/pdga-stats?pdga=80024&fresh=1", {
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + token },
+    }), target);
+    const before = calls.length;
+    const res = await freshCall();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(calls.length).toBeGreaterThan(before);
+
+    for (let i = 0; i < 5; i++) expect((await freshCall()).status).toBe(200);
+    expect((await freshCall()).status).toBe(429);
+    expect(rating).toBe(941);
+  });
+
+  it("links a PDGA event on demand (POST /pdga/link-event) and batch-looks up players (GET /pdga/players/batch)", async () => {
+    expect(parsePdgaEventIdInput("107755")).toBe(107755);
+    expect(parsePdgaEventIdInput("#107755")).toBe(107755);
+    expect(parsePdgaEventIdInput("https://www.pdga.com/tour/event/107755")).toBe(107755);
+    expect(parsePdgaEventIdInput("https://www.pdga.com/live/event/107755/MA1/scores")).toBe(107755);
+    expect(parsePdgaEventIdInput("https://evil.example/event/107755")).toBeNull();
+
+    const { env: target, calls, sqlite } = await env(
+      {
+        "80024": { pdga_number: "80024", first_name: "Ada", last_name: "Lovelace", membership_status: "current", rating: "941", classification: "P" },
+        "99901": { pdga_number: "99901", first_name: "Grace", last_name: "Hopper", membership_status: "current", rating: "970", classification: "P" },
+      },
+      {
+        "live_results_fetch_event?TournID=107755": {
+          data: {
+            TournamentId: 107755,
+            Name: "Carolina Clash",
+            StartDate: "2026-10-10",
+            EndDate: "2026-10-11",
+            LocationShort: "Raleigh, NC",
+            FormattedTier: "B-tier",
+            Rounds: 2,
+            HighestCompletedRound: 2,
+            Divisions: [{ Division: "FPO", DivisionName: "Pro Open Women", Players: 8 }],
+          },
+          hash: "e1",
+        },
+        "live_results_fetch?TournID=107755&Divisions=FPO": {
+          data: {
+            FPO: {
+              division: "FPO",
+              scores: [{ ResultID: 777, PDGANum: 80024, Name: "Ada Lovelace", RoundScore: 54 }],
+            },
+          },
+          hash: "d1",
+        },
+        "live_results_fetch_player?ResultID=777": {
+          data: {
+            ResultID: 777, TournID: 107755, PDGANum: 80024, Division: "FPO", Place: 1, Total: 105, ToPar: -7,
+            Scores: [{ ScoreID: 7771, Round: 1, RoundDate: "2026-10-10", RoundScore: 52, RoundToPar: -4, RoundComplete: true, RoundRating: 980 }],
+          },
+          hash: "p1",
+        },
+      },
+    );
+    await (target.ROSTER as unknown as { put: (k: string, v: string) => Promise<void> }).put(
+      "member:m_a",
+      JSON.stringify({ memberId: "m_a", name: "Ada Lovelace", pdgaNo: "80024", pinVer: 1, mustChangePin: false }),
+    );
+    await (target.ROSTER as unknown as { put: (k: string, v: string) => Promise<void> }).put(
+      "member:m_nopdga",
+      JSON.stringify({ memberId: "m_nopdga", name: "No PDGA", pinVer: 1, mustChangePin: false }),
+    );
+
+    const tokenA = await signSession({ sub: "m_a", mustChangePin: false, pinVer: 1 }, "x".repeat(40), 900);
+    const tokenNoPdga = await signSession({ sub: "m_nopdga", mustChangePin: false, pinVer: 1 }, "x".repeat(40), 900);
+
+    // Unauthenticated rejected
+    expect((await worker.fetch(new Request("https://worker/pdga/link-event", {
+      method: "POST", headers: { Origin: ORIGIN }, body: JSON.stringify({ event: "107755" }),
+    }), target)).status).toBe(401);
+    expect((await worker.fetch(new Request("https://worker/pdga/players/batch?numbers=80024", {
+      headers: { Origin: ORIGIN },
+    }), target)).status).toBe(401);
+
+    // Missing PDGA # on member rejected
+    expect((await worker.fetch(new Request("https://worker/pdga/link-event", {
+      method: "POST", headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenNoPdga }, body: JSON.stringify({ event: "107755" }),
+    }), target)).status).toBe(400);
+
+    // Missing event -> 404
+    expect((await worker.fetch(new Request("https://worker/pdga/link-event", {
+      method: "POST", headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA }, body: JSON.stringify({ event: "999999" }),
+    }), target)).status).toBe(404);
+
+    // Successful link creates expiring Section 6(a) record and immediately enriches /pdga-stats
+    const linkRes = await worker.fetch(new Request("https://worker/pdga/link-event", {
+      method: "POST", headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+      body: JSON.stringify({ event: "https://www.pdga.com/tour/event/107755" }),
+    }), target);
+    expect(linkRes.status).toBe(200);
+    expect(await linkRes.json()).toMatchObject({ ok: true, linked: { eventId: 107755, name: "Carolina Clash", division: "FPO", resultId: 777 } });
+    const row = sqlite.prepare("SELECT result_id, expires_at FROM pdga_member_event_links WHERE event_id = 107755 AND member_id = 'm_a'").get() as { result_id: number; expires_at: number };
+    expect(row.result_id).toBe(777);
+    expect(row.expires_at).toBeGreaterThan(Date.now());
+
+    const enriched = await (await stats(target, "pdga=80024")).json() as { events: { tournament: string }[] };
+    expect(enriched.events.map((e) => e.tournament)).toContain("Carolina Clash");
+
+    // Batch player lookup: validates input, fetches in 1 call, and reuses temporary cache
+    expect((await worker.fetch(new Request("https://worker/pdga/players/batch?numbers=bad", {
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+    }), target)).status).toBe(400);
+    const batchBefore = calls.filter((u) => u.includes("/services/json/players")).length;
+    const batchRes = await worker.fetch(new Request("https://worker/pdga/players/batch?numbers=80024,99901,11111", {
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+    }), target);
+    expect(batchRes.status).toBe(200);
+    expect(await batchRes.json()).toMatchObject({
+      players: {
+        "80024": { pdgaNumber: "80024", rating: 941 },
+        "99901": { pdgaNumber: "99901", name: "Grace Hopper", rating: 970, classification: "P" },
+        "11111": null,
+      },
+    });
+    expect(calls.filter((u) => u.includes("/services/json/players")).length).toBe(batchBefore + 1);
+    await worker.fetch(new Request("https://worker/pdga/players/batch?numbers=80024,99901", {
+      headers: { Origin: ORIGIN, Authorization: "Bearer " + tokenA },
+    }), target);
+    expect(calls.filter((u) => u.includes("/services/json/players")).length).toBe(batchBefore + 1);
   });
 
   it("rejects bad numbers, and answers the QA drive's member without calling PDGA", async () => {

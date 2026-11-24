@@ -269,18 +269,27 @@ describe("features using the official API when the club's login is set", () => {
   it("fetches /services/json/player-statistics per year, parses fields, caches temporarily, and purges hourly", async () => {
     expect(pdgaPlayerStatsUrl("80024", 2026)).toBe("https://www.pdga.com/player/80024/stats/2026");
     expect(pdgaPlayerStatsUrl("80024")).toBe("https://www.pdga.com/player/80024/stats");
-    expect(parsePdgaAnnualStat({ pdga_number: "80024", year: "2026", division_code: "ma1", class: "A", rating: "941", events_played: "8", points: "412.5", prize: "$1,250.25", players_defeated: "120", wins: "2" })).toEqual({
+    expect(parsePdgaAnnualStat({ pdga_number: "80024", year: "2026", division_code: "ma1", class: "A", rating: "941", events_played: "8", rounds_played: "16", points: "412.5", prize: "$1,250.25", players_defeated: "120", wins: "2" })).toEqual({
       year: 2026,
       divisionCode: "MA1",
       divisionName: null,
       classification: "A",
       rating: 941,
       events: 8,
+      rounds: 16,
       points: 412.5,
       prize: 1250.25,
       playersDefeated: 120,
       wins: 2,
       url: "https://www.pdga.com/player/80024/stats/2026",
+    });
+    expect(parsePdgaAnnualStat({ pdga_number: "80024", year: "2026", division_code: "mpo", tournaments: "4", round_count: "10", tour_points: "95", earnings: "$400", defeated: "50", first_place: "1" })).toMatchObject({
+      events: 4,
+      rounds: 10,
+      points: 95,
+      prize: 400,
+      playersDefeated: 50,
+      wins: 1,
     });
     expect(parsePdgaAnnualStat({ year: "2026", division_code: "MA1" })).toBeNull();
 
@@ -305,11 +314,15 @@ describe("features using the official API when the club's login is set", () => {
     expect(cachedAgain).toHaveLength(2);
     expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(2);
 
-    // Past 1h: empty year (2025) re-fetches while non-empty year (2026) stays cached up to 6h.
-    await lookupPdgaPlayerStats(apiEnv(), "80024", [2026, 2025], NOW + 65 * 60_000);
-    expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(3);
+    // Explicit refresh=true bypasses fresh cache and re-fetches both years.
+    await lookupPdgaPlayerStats(apiEnv(), "80024", [2026, 2025], NOW + 30 * 60_000, true);
+    expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(4);
 
-    // Hourly purge deletes expired playerStats past 6h (year 2026 purged first; +65m row follows at +8h).
+    // Past 1h: empty year (2025) re-fetches while non-empty year (2026) stays cached up to 6h.
+    await lookupPdgaPlayerStats(apiEnv(), "80024", [2026, 2025], NOW + 95 * 60_000);
+    expect(pdga.calls.filter((c) => c.url.includes("/player-statistics"))).toHaveLength(5);
+
+    // Hourly purge deletes expired playerStats past 6h (year 2026 purged first; +95m row follows at +8h).
     expect(await purgePdgaCaches({ DB: db as never }, NOW + 7 * 3_600_000)).toMatchObject({ playerStats: 1 });
     expect(await purgePdgaCaches({ DB: db as never }, NOW + 8 * 3_600_000)).toMatchObject({ playerStats: 1 });
   });

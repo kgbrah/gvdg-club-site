@@ -161,7 +161,7 @@ export function PlayStatsKindBlock({
   const hasShotSample = cards.some((row) => row.group === "throw" && row.mine?.att);
   const status = state?.status || "idle";
   const emptyCopy = selected === "pdga"
-    ? "PDGA Live scorecards and stats from recent events will fill this view. Club event ranks stay separate."
+    ? "PDGA Live scorecards and stats from recent events fill this view. Open PDGA events on Home or Stats to load a tournament by PDGA event #."
     : selected === "casual"
       ? "Finish a casual round to start those percentages. Mark lies for fairways, C1/C2, and putting."
       : "Finish a club event to start competitive percentages. Mark lies for fairways, C1/C2, and putting.";

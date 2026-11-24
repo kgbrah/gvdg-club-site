@@ -5,6 +5,8 @@ import { currentDashboardTab } from "./dashboard-router.js";
 import { AddToCalendarButton } from "../shared/add-to-calendar.js";
 import { calendarEventFromPdga } from "../shared/event-calendar.js";
 import { PdgaCredit, PdgaLink } from "../shared/pdga-credit.js";
+import { OnDemandPdgaLiveDrawer, extractPdgaEventId } from "../shared/pdga-live-panel.js";
+import { resolveApiBase } from "../shared/api-base.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
 
 const h = React.createElement;
@@ -37,6 +39,7 @@ function readPlayerOrigin() {
 function EventCard({ event }) {
   const miles = typeof event.miles === "number" ? `${event.miles.toFixed(1)} mi` : "";
   const where = [event.course, event.place].filter(Boolean).join(" · ");
+  const liveId = extractPdgaEventId(event.eventId, event.pdgaUrl);
   return h("article", { className: "register-card pdga-event-card", "data-event-state": "register" }, [
     h("div", { className: "register-head", key: "head" }, [
       h(PdgaLink, { className: "register-name", href: event.pdgaUrl, key: "name" }, event.name),
@@ -54,6 +57,12 @@ function EventCard({ event }) {
       }, "Register"),
       h(AddToCalendarButton, { item: calendarEventFromPdga(event), key: "cal" }),
     ]),
+    liveId ? h(OnDemandPdgaLiveDrawer, {
+      apiBase: resolveApiBase(),
+      eventId: liveId,
+      pdgaUrl: event.pdgaUrl,
+      key: "live",
+    }) : null,
   ]);
 }
 

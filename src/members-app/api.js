@@ -70,6 +70,9 @@ export async function requestJson(path, { signal, token = null, method = "GET", 
   if (!response.ok) {
     const error = new Error(`request failed: ${response.status}`);
     error.status = response.status;
+    if (typeof response.json === "function") {
+      error.data = await response.json().catch(() => null);
+    }
     throw error;
   }
   return response.json();

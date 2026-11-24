@@ -2,18 +2,22 @@
 // live rating estimate, recent PDGA events, and throw/putting stats from the official PDGA Live API
 // (pdga-live-api.ts). All PDGA responses are cached temporarily and purged hourly (License Section 6).
 
+import { requireAuth } from "./authz.js";
 import type { D1Like } from "./db-types.js";
 import type { Env } from "./env.js";
-import { clientIp, json } from "./http.js";
+import { clientIp, json, readJson } from "./http.js";
 import { kvRateLimited } from "./kv-rate-limit.js";
 import { emptyPlayTotals, sumPlayTotals, type PlayTotals } from "./play-stats.js";
 import {
   cachedPdgaPlayers,
   cachedPdgaPlayerStats,
   lookupPdgaPlayer,
+  lookupPdgaPlayers,
   lookupPdgaPlayerStats,
   normalPdgaNumber,
+  PDGA_ATTRIBUTION,
   pdgaApiConfigured,
+  PdgaApiError,
   pdgaPlayerStatsUrl,
   type PdgaAnnualStat,
   type PdgaApiEnv,
@@ -21,9 +25,11 @@ import {
 } from "./pdga-api.js";
 import {
   applyPdgaLiveStatsToTotals,
+  fetchPdgaLiveDivisions,
   fetchPdgaLiveEvent,
   fetchPdgaLivePlayer,
   fetchPdgaLiveScoreStats,
+  PdgaLiveApiError,
   playTotalsFromLivePlayerRound,
   type PdgaLiveApiEnv,
   type PdgaLiveStatItem,
@@ -100,7 +106,7 @@ export interface PdgaStats {
   source?: "pdga-api";
 }
 
-export const PDGA_STATS_VERSION = 6;
+export const PDGA_STATS_VERSION = 7;
 const RECENT_RATED_ROUNDS = 8;
 const MAX_PLAYER_EVENTS = 12;
 const MAX_SCORE_STATS_ROUNDS = 10;
@@ -167,6 +173,7 @@ function qaStats(pdga: string): PdgaStats | null {
         classification: "A",
         rating: 935,
         events: 8,
+        rounds: 16,
         points: 412,
         prize: 240,
         playersDefeated: 185,
@@ -180,6 +187,7 @@ function qaStats(pdga: string): PdgaStats | null {
         classification: "A",
         rating: 924,
         events: 11,
+        rounds: 22,
         points: 530,
         prize: 190,
         playersDefeated: 210,
@@ -500,14 +508,22 @@ async function enrichFromLiveApi(env: Env, baseStats: PdgaStats, links: readonly
   };
 }
 
-/** GET /pdga-stats?pdga=<digits>: official rating + annual stats + Live API round ratings & stats (temporary cache, IP-rate-limited). */
+/** GET /pdga-stats?pdga=<digits>[&fresh=1]: official rating + annual stats + Live API round ratings & stats (temporary cache, IP-rate-limited). */
 export async function handlePdgaStats(request: Request, env: Env, origin: string | null): Promise<Response> {
-  const raw = (new URL(request.url).searchParams.get("pdga") ?? "").trim();
-  const headers = { "Cache-Control": "private, max-age=300" };
+  const params = new URL(request.url).searchParams;
+  const raw = (params.get("pdga") ?? "").trim();
+  const fresh = params.get("fresh") === "1";
+  const headers = { "Cache-Control": fresh ? "private, no-store" : "private, max-age=300" };
   const qa = qaStats(raw);
   if (qa) return json(qa, 200, origin, headers);
   const pdga = normalPdgaNumber(raw);
   if (!pdga) return json({ error: "invalid_pdga" }, 400, origin);
+
+  if (fresh) {
+    const claims = await requireAuth(request, env);
+    if (!claims) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "pdga-fresh:" + claims.sub, 6, 3600)) return json({ error: "rate_limited" }, 429, origin);
+  }
 
   const now = Date.now();
   const db = env.DB as unknown as D1Like;
@@ -528,15 +544,15 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
     return json(enriched, 200, origin, { "Cache-Control": "no-store" });
   }
 
-  // Fresh cached records are free; only uncached external fetches count toward the per-IP rate limit.
-  const cached = await cachedPdgaPlayers(apiEnv, [pdga], now).catch(() => new Map<string, PdgaPlayer | null>());
+  // Policy A: default loads check the temporary 6h D1 cache first; fresh=1 re-queries official PDGA endpoints on demand.
+  const cached = fresh ? new Map<string, PdgaPlayer | null>() : await cachedPdgaPlayers(apiEnv, [pdga], now).catch(() => new Map<string, PdgaPlayer | null>());
   const cachedPlayer = cached.has(pdga) ? (cached.get(pdga) ?? null) : undefined;
-  const cachedAnnual = cachedPlayer !== undefined && cachedPlayer != null
+  const cachedAnnual = !fresh && cachedPlayer !== undefined && cachedPlayer != null
     ? await cachedPdgaPlayerStats(apiEnv, pdga, targetYears, now).catch(() => new Map<number, PdgaAnnualStat[]>())
     : new Map<number, PdgaAnnualStat[]>();
-  const annualCached = cachedPlayer === null || (cachedPlayer !== undefined && cachedAnnual.size === targetYears.length);
+  const annualCached = !fresh && (cachedPlayer === null || (cachedPlayer !== undefined && cachedAnnual.size === targetYears.length));
 
-  if (cachedPlayer !== undefined && annualCached && liveCached) {
+  if (!fresh && cachedPlayer !== undefined && annualCached && liveCached) {
     const base = statsFromPlayer(pdga, cachedPlayer);
     if (cachedPlayer) base.annual_stats = await lookupPdgaPlayerStats(apiEnv, pdga, targetYears, now).catch(() => []);
     const enriched = await enrichFromLiveApi(env, base, links, now).catch(() => base);
@@ -547,10 +563,10 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
 
   let base: PdgaStats;
   try {
-    const player = cachedPlayer !== undefined ? cachedPlayer : await lookupPdgaPlayer(apiEnv, pdga);
+    const player = cachedPlayer !== undefined ? cachedPlayer : await lookupPdgaPlayer(apiEnv, pdga, fresh ? "all" : "none");
     base = statsFromPlayer(pdga, player);
     if (player) {
-      base.annual_stats = await lookupPdgaPlayerStats(apiEnv, pdga, targetYears, now).catch(() => []);
+      base.annual_stats = await lookupPdgaPlayerStats(apiEnv, pdga, targetYears, now, fresh).catch(() => []);
     }
   } catch (error) {
     console.warn(JSON.stringify({ message: "pdga_stats_api_failed", error: error instanceof Error ? error.message : String(error) }));
@@ -562,4 +578,193 @@ export async function handlePdgaStats(request: Request, env: Env, origin: string
     return base;
   });
   return json(enriched, 200, origin, headers);
+}
+
+const LINK_KEEP_DAYS = 180;
+const DAY_MS = 86_400_000;
+const RECENT_DONE_DAYS = 14;
+const WATCH_TTL_MS = 24 * 60 * 60_000;
+
+/** Accept a numeric PDGA tournament ID ("107755", "#107755") or a pdga.com tour/live event URL. */
+export function parsePdgaEventIdInput(raw: unknown): number | null {
+  if (typeof raw === "number") return Number.isInteger(raw) && raw >= 1 && raw <= 99_999_999 ? raw : null;
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (!s) return null;
+  const direct = /^#?([1-9]\d{0,7})$/.exec(s);
+  if (direct) return Number(direct[1]);
+  const urlMatch = /^https?:\/\/(?:www\.)?pdga\.com\/(?:tour|live)\/event\/([1-9]\d{0,7})(?:[/?#]|$)/i.exec(s);
+  if (urlMatch) return Number(urlMatch[1]);
+  return null;
+}
+
+/**
+ * POST /pdga/link-event: look up a single PDGA event via the documented PDGA Live API on demand, confirm the
+ * signed-in member's PDGA # appears on its roster, and store ONLY an expiring Section 6(a) record ID link.
+ */
+export async function handlePdgaLinkEvent(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+  const memberPdga = normalPdgaNumber(claims.member.pdgaNo);
+  if (!memberPdga) return json({ error: "pdga_not_linked" }, 400, origin);
+  if (await kvRateLimited(env, "pdga-link:" + claims.sub, 12, 3600)) return json({ error: "rate_limited" }, 429, origin);
+
+  const body = await readJson(request, 1024);
+  const eventId = parsePdgaEventIdInput(body?.event);
+  if (!eventId) return json({ error: "invalid_pdga_event" }, 400, origin);
+
+  const now = Date.now();
+  const db = env.DB as unknown as D1Like;
+  const liveEnv = env as unknown as PdgaLiveApiEnv;
+
+  let eventInfo;
+  try {
+    eventInfo = await fetchPdgaLiveEvent(liveEnv, eventId, now);
+  } catch (error) {
+    const code = error instanceof PdgaLiveApiError && error.code === "rate_limited" ? 429 : 503;
+    return json({ error: code === 429 ? "rate_limited" : "pdga_unavailable" }, code, origin);
+  }
+  if (!eventInfo) return json({ error: "event_not_found" }, 404, origin);
+
+  const today = new Date(now).toISOString().slice(0, 10);
+  const recentDoneCutoff = new Date(now - RECENT_DONE_DAYS * DAY_MS).toISOString().slice(0, 10);
+  const startDate = eventInfo.startDate || today;
+  const endDate = eventInfo.endDate || startDate;
+  const isCompleted = endDate < recentDoneCutoff
+    || (endDate < today && eventInfo.highestCompletedRound != null && eventInfo.highestCompletedRound >= eventInfo.rounds);
+
+  const divCodes = eventInfo.divisions.filter((d) => d.players > 0).map((d) => d.division);
+  let matched: { resultId: number; division: string } | null = null;
+  if (divCodes.length) {
+    let blocksByDiv;
+    try {
+      blocksByDiv = await fetchPdgaLiveDivisions(liveEnv, eventId, divCodes, 1, now, isCompleted);
+    } catch (error) {
+      const code = error instanceof PdgaLiveApiError && error.code === "rate_limited" ? 429 : 503;
+      return json({ error: code === 429 ? "rate_limited" : "pdga_unavailable" }, code, origin);
+    }
+    for (const [divCode, blocks] of blocksByDiv) {
+      for (const block of blocks) {
+        for (const score of block.scores) {
+          if (score.pdgaNumber === memberPdga && score.resultId > 0) {
+            matched = { resultId: score.resultId, division: score.division || divCode };
+            break;
+          }
+        }
+        if (matched) break;
+      }
+      if (matched) break;
+    }
+  }
+  if (!matched) {
+    return json({ error: "player_not_in_event", eventName: eventInfo.name }, 404, origin);
+  }
+
+  const parsedEnd = Date.parse(`${endDate}T23:59:59Z`);
+  const linkExpires = (Number.isFinite(parsedEnd) ? parsedEnd : now) + LINK_KEEP_DAYS * DAY_MS;
+
+  try {
+    await db.prepare(
+      `INSERT INTO pdga_member_event_links
+         (event_id, member_id, pdga_number, result_id, division, event_start, event_end, matched_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(event_id, member_id) DO UPDATE SET
+         pdga_number = excluded.pdga_number, result_id = excluded.result_id,
+         division = excluded.division, event_start = excluded.event_start, event_end = excluded.event_end,
+         matched_at = excluded.matched_at, expires_at = excluded.expires_at`,
+    ).bind(eventId, claims.sub, memberPdga, matched.resultId, matched.division.slice(0, 24), startDate, endDate, now, linkExpires).run();
+
+    await db.prepare(
+      `INSERT INTO pdga_watch_events
+         (event_id, state, name, tier, location, start_date, end_date, listed_at, read_at, read_error, completed, expires_at)
+       VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, '', ?, ?)
+       ON CONFLICT(event_id) DO UPDATE SET
+         name = excluded.name, tier = excluded.tier, location = excluded.location,
+         start_date = excluded.start_date, end_date = excluded.end_date,
+         read_at = excluded.read_at, read_error = '', completed = excluded.completed, expires_at = excluded.expires_at`,
+    ).bind(
+      eventId,
+      eventInfo.name.slice(0, 160),
+      eventInfo.tier.slice(0, 24),
+      eventInfo.location.slice(0, 120),
+      startDate,
+      endDate,
+      now,
+      now,
+      isCompleted ? 1 : 0,
+      now + WATCH_TTL_MS,
+    ).run();
+  } catch (error) {
+    if (!isMissingTable(error)) throw error;
+  }
+
+  return json({
+    ok: true,
+    linked: {
+      eventId,
+      name: eventInfo.name,
+      division: matched.division,
+      startDate,
+      endDate,
+      resultId: matched.resultId,
+    },
+    attribution: PDGA_ATTRIBUTION,
+  }, 200, origin, { "Cache-Control": "private, no-store" });
+}
+
+/**
+ * GET /pdga/players/batch?numbers=123,456 (max 20): signed-in member on-demand batch PDGA lookup for Member Directory
+ * cards using 1 official REST API call (6h temporary cache).
+ */
+export async function handlePdgaPlayersBatch(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const claims = await requireAuth(request, env);
+  if (!claims) return json({ error: "unauthorized" }, 401, origin);
+
+  const raw = new URL(request.url).searchParams.get("numbers") ?? "";
+  const numbers = [...new Set(raw.split(",").map((part) => normalPdgaNumber(part)).filter((v): v is string => v != null))];
+  if (!numbers.length || numbers.length > 20) return json({ error: "invalid_numbers" }, 400, origin);
+
+  const now = Date.now();
+  const apiEnv = env as unknown as PdgaApiEnv;
+  const cached = await cachedPdgaPlayers(apiEnv, numbers, now).catch(() => new Map<string, PdgaPlayer | null>());
+  const allCached = numbers.every((num) => cached.has(num));
+
+  let resolved: Map<string, PdgaPlayer | null>;
+  if (allCached) {
+    resolved = cached;
+  } else {
+    if (!pdgaApiConfigured(apiEnv)) return json({ error: "pdga_unavailable" }, 503, origin);
+    if (await kvRateLimited(env, "pdga-batch:" + claims.sub, 20, 600)) return json({ error: "rate_limited" }, 429, origin);
+    try {
+      resolved = await lookupPdgaPlayers(apiEnv, numbers, now);
+    } catch (error) {
+      const code = error instanceof PdgaApiError && error.code === "rate_limited" ? 429 : 503;
+      return json({ error: code === 429 ? "rate_limited" : "pdga_unavailable" }, code, origin);
+    }
+  }
+
+  const players: Record<string, {
+    pdgaNumber: string;
+    name: string;
+    rating: number | null;
+    ratingDate: string | null;
+    classification: "P" | "A" | null;
+    membershipStatus: string;
+    url: string;
+  } | null> = {};
+
+  for (const num of numbers) {
+    const p = resolved.get(num) ?? null;
+    players[num] = p ? {
+      pdgaNumber: p.pdgaNumber,
+      name: p.name,
+      rating: p.rating,
+      ratingDate: p.ratingDate,
+      classification: p.classification,
+      membershipStatus: p.membershipStatus,
+      url: p.url,
+    } : null;
+  }
+
+  return json({ players, attribution: PDGA_ATTRIBUTION }, 200, origin, { "Cache-Control": "private, max-age=300" });
 }

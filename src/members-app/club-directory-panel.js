@@ -1,13 +1,15 @@
 import React from "react";
 import { KarmaChip } from "../shared/karma.js";
-import { PdgaLink, pdgaPlayerHref } from "../shared/pdga-credit.js";
+import { PdgaCredit, PdgaLink, pdgaPlayerHref } from "../shared/pdga-credit.js";
 import { CalendarDays, Search, Star, Trophy, Users } from "lucide-react";
 
+import { TOKEN_KEY, requestJson, storageGet } from "./api.js";
 import { memberFullName, memberInitials } from "./club-data.js";
 import { AutocompleteInput } from "../shared/autocomplete.js";
 
 const h = React.createElement;
 const PAGE_SIZE = 12;
+const BATCH_LIMIT = 20;
 const FILTERS = [
   { key: "all", label: "All Members" },
   { key: "founding", label: "Founding (2004)" },
@@ -63,16 +65,38 @@ function memberMatchesFilter(member, filter) {
   return true;
 }
 
-function MemberCard({ member }) {
+function dirRatingText(info) {
+  if (!info) return "Not found";
+  const parts = [info.rating != null ? `${info.rating} rated` : "Unrated"];
+  if (info.classification === "P") parts.push("Pro");
+  else if (info.classification === "A") parts.push("Am");
+  if (info.membershipStatus && info.membershipStatus !== "current") parts.push(info.membershipStatus);
+  return parts.join(" · ");
+}
+
+function MemberCard({ member, canLookup, ratingEntry, loading, onCheckRating }) {
   const fullName = memberFullName(member);
   const classNames = ["member-card", member.yearJoined === 2004 ? "founding" : "", member.special ? "special-badge" : ""].filter(Boolean).join(" ");
+  const hasEntry = ratingEntry !== undefined;
   return h("div", { className: classNames, "data-badge": member.special || undefined }, [
     h("div", { className: "member-avatar", key: "avatar" }, memberInitials(member)),
     h("div", { className: "member-name", key: "name" }, [fullName, h(KarmaChip, { key: "karma", pdga: member.pdga })]),
     h("div", { className: "member-since", key: "since" }, `Member since ${member.yearJoined}`),
-    member.pdga ? h("div", { className: "member-pdga", key: "pdga" }, h(PdgaLink, {
-      href: pdgaPlayerHref(member.pdga),
-    }, `PDGA #${member.pdga}`)) : null,
+    member.pdga ? h("div", { className: "member-pdga", key: "pdga" }, [
+      h(PdgaLink, { href: pdgaPlayerHref(member.pdga), key: "link" }, `PDGA #${member.pdga}`),
+      hasEntry
+        ? h("span", { className: "pdga-dir-rating", key: "rating" }, dirRatingText(ratingEntry))
+        : canLookup
+          ? h("button", {
+            type: "button",
+            className: "pdga-dir-check-btn",
+            disabled: loading,
+            "data-check-pdga-rating": String(member.pdga),
+            key: "check",
+            onClick: () => onCheckRating && onCheckRating(member.pdga),
+          }, loading ? "Checking…" : "Check rating")
+          : null,
+    ].filter(Boolean)) : null,
   ]);
 }
 
@@ -80,8 +104,13 @@ export function MemberDirectoryPanel({ data }) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [filter, setFilter] = React.useState("all");
   const [displayCount, setDisplayCount] = React.useState(PAGE_SIZE);
+  const [ratingsByPdga, setRatingsByPdga] = React.useState({});
+  const [loadingBatch, setLoadingBatch] = React.useState(false);
+  const [loadingSingle, setLoadingSingle] = React.useState("");
+  const [ratingError, setRatingError] = React.useState("");
   const members = data?.members || [];
   const yearData = data?.yearData || {};
+  const token = storageGet(TOKEN_KEY);
 
   const filtered = React.useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -101,8 +130,28 @@ export function MemberDirectoryPanel({ data }) {
   if (!data) return h("div", { className: "dash-note", "data-react-member-directory": "loading" }, "Loading member directory…");
 
   const visible = filtered.slice(0, displayCount);
+  const unloadedVisiblePdga = [...new Set(
+    visible.map((m) => m.pdga).filter((n) => n && ratingsByPdga[n] === undefined),
+  )].slice(0, BATCH_LIMIT);
   const nameSuggestions = members.map((member) => memberFullName(member));
   const remaining = Math.max(0, filtered.length - displayCount);
+
+  async function fetchPdgaBatch(numbers, single = "") {
+    if (!token || !numbers.length || loadingBatch || loadingSingle) return;
+    setRatingError("");
+    if (single) setLoadingSingle(single);
+    else setLoadingBatch(true);
+    try {
+      const result = await requestJson(`/pdga/players/batch?numbers=${encodeURIComponent(numbers.join(","))}`, { token });
+      setRatingsByPdga((current) => ({ ...current, ...(result?.players || {}) }));
+    } catch (error) {
+      setRatingError(error?.status === 429 ? "Rate limit reached — try again in a few minutes." : "PDGA ratings are unavailable right now.");
+    } finally {
+      if (single) setLoadingSingle("");
+      else setLoadingBatch(false);
+    }
+  }
+
   return h("section", { className: "react-member-directory", "data-react-member-directory": "ready", "aria-labelledby": "reactMemberDirectoryTitle" }, [
     h("h3", { className: "my-dashboard-title", id: "reactMemberDirectoryTitle", key: "title" }, "Member Directory"),
     h(DirectoryStats, { members, yearData, key: "stats" }),
@@ -126,9 +175,25 @@ export function MemberDirectoryPanel({ data }) {
         onClick: () => setFilter(item.key),
         key: item.key,
       }, item.label)),
-    ]),
+      token && unloadedVisiblePdga.length ? h("button", {
+        type: "button",
+        className: "members-filter-btn pdga-dir-batch-btn",
+        disabled: loadingBatch || Boolean(loadingSingle),
+        "data-directory-load-ratings": "true",
+        key: "load-pdga",
+        onClick: () => { void fetchPdgaBatch(unloadedVisiblePdga); },
+      }, loadingBatch ? "Loading PDGA…" : "Load PDGA ratings") : null,
+    ].filter(Boolean)),
+    ratingError ? h("p", { className: "dash-note", role: "alert", key: "rating-error" }, ratingError) : null,
     h("div", { className: "members-grid", key: "grid" }, visible.length
-      ? visible.map((member) => h(MemberCard, { member, key: `${memberFullName(member)}-${member.yearJoined}-${member.pdga || ""}` }))
+      ? visible.map((member) => h(MemberCard, {
+        member,
+        canLookup: Boolean(token),
+        ratingEntry: member.pdga ? ratingsByPdga[member.pdga] : undefined,
+        loading: loadingBatch || loadingSingle === String(member.pdga || ""),
+        onCheckRating: (pdga) => { void fetchPdgaBatch([pdga], String(pdga)); },
+        key: `${memberFullName(member)}-${member.yearJoined}-${member.pdga || ""}`,
+      }))
       : h("div", { className: "members-no-results" }, [
         h(Search, { size: 32, "aria-hidden": "true", key: "icon" }),
         h("p", { key: "text" }, "No members found."),
@@ -140,5 +205,6 @@ export function MemberDirectoryPanel({ data }) {
     }, `Show More (${remaining} remaining)`)) : null,
     h("div", { className: "members-count", role: "status", "aria-live": "polite", key: "count" },
       filtered.length ? `Showing ${Math.min(displayCount, filtered.length)} of ${filtered.length} members` : ""),
+    Object.keys(ratingsByPdga).length ? h(PdgaCredit, { key: "pdga-credit" }) : null,
   ]);
 }

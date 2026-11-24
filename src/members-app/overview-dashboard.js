@@ -10,7 +10,7 @@ import { HomeJobs } from "./home-jobs.js";
 import { useMemberContext } from "./member-context.js";
 import { historyLocked } from "./membership-needed.js";
 import { membershipHomeHint } from "../shared/membership-status.js";
-import { usePdgaStats, pdgaEventTitle } from "./pdga-dashboard.js";
+import { PdgaAnnualStats, PdgaEventLinkForm, pdgaEventTitle, usePdgaStats } from "./pdga-dashboard.js";
 import { PlayStatsPanel } from "./play-stats-panel.js";
 import { useRegistrationData } from "./registration-data.js";
 import { eventMeta, pickUpNext } from "./registration-utils.js";
@@ -30,6 +30,8 @@ import { KarmaChip } from "../shared/karma.js";
 import { PdgaCredit, PdgaLink, pdgaEventHref, pdgaPlayerHistoryHref, pdgaPlayerHref } from "../shared/pdga-credit.js";
 import { PdgaMembershipCard, pdgaMembershipNeedsAttention } from "../shared/pdga-membership.js";
 import { checkPdgaMembershipAgain, usePdgaMembership } from "./pdga-membership.js";
+import { OnDemandPdgaLiveDrawer, extractPdgaEventId } from "../shared/pdga-live-panel.js";
+import { resolveApiBase } from "../shared/api-base.js";
 import { SIGNUP_LINK } from "../shared/outside-link.js";
 import { shownProfilePhoto } from "../shared/profile-photo.js";
 
@@ -170,6 +172,7 @@ function NextPdgaCard({ token }) {
   }, [token]);
 
   if (mine) {
+    const liveId = extractPdgaEventId(mine.eventId, mine.url);
     return h("div", { className: "player-story-block", "data-react-home-pdga": "registered", key: "pdga" }, [
       h("h3", { key: "title" }, "Next PDGA"),
       h(PdgaLink, { as: "div", className: "player-event-name", href: mine.url, key: "name" }, mine.name),
@@ -181,11 +184,20 @@ function NextPdgaCard({ token }) {
         h(AddToCalendarButton, { className: "player-btn", item: calendarEventFromPdgaRegistration(mine), key: "cal", label: "Calendar" }),
         h("button", { className: "player-btn", key: "all", type: "button", onClick: () => selectDashboardTab("events") }, "All events"),
       ]),
-    ]);
+      liveId ? h(OnDemandPdgaLiveDrawer, {
+        apiBase: resolveApiBase(),
+        eventId: liveId,
+        pdgaUrl: mine.url,
+        division: mine.division || "",
+        buttonClassName: "player-btn",
+        key: "live",
+      }) : null,
+    ].filter(Boolean));
   }
   if (!event) return null;
   const miles = typeof event.miles === "number" ? `${event.miles.toFixed(1)} mi` : "";
   const meta = [event.date, event.course, miles].filter(Boolean).join(" · ");
+  const liveId = extractPdgaEventId(event.eventId, event.pdgaUrl);
   return h("div", { className: "player-story-block", "data-react-home-pdga": "ready", key: "pdga" }, [
     h("h3", { key: "title" }, "Next PDGA"),
     h(PdgaLink, { as: "div", className: "player-event-name", href: event.pdgaUrl, key: "name" }, event.name),
@@ -206,7 +218,14 @@ function NextPdgaCard({ token }) {
         onClick: () => selectDashboardTab("events"),
       }, "All events"),
     ]),
-  ]);
+    liveId ? h(OnDemandPdgaLiveDrawer, {
+      apiBase: resolveApiBase(),
+      eventId: liveId,
+      pdgaUrl: event.pdgaUrl,
+      buttonClassName: "player-btn",
+      key: "live",
+    }) : null,
+  ].filter(Boolean));
 }
 
 function LastRoundCard(props) {
@@ -269,44 +288,70 @@ function LastRoundCardBody({ token, onCasualHistory }) {
   ]);
 }
 
-function RatingMove({ stats, status }) {
-  if (status !== "ready" || stats?.official_rating == null) return null;
+function RatingMove({ stats, status, pdgaNo, refreshing, refreshMessage, onRefresh }) {
+  if (status !== "ready" || !stats) return null;
   const official = stats.official_rating;
+  const annual = Array.isArray(stats.annual_stats) ? stats.annual_stats : [];
+  if (official == null && !annual.length) return null;
   const previous = stats.previous_rating;
   let move = stats.rating_date ? `As of ${stats.rating_date}` : "Official rating";
   let tone = "";
-  if (previous != null && previous !== official) {
+  if (official != null && previous != null && previous !== official) {
     const delta = official - previous;
     tone = delta > 0 ? "up" : "down";
     move = `${delta > 0 ? "Up" : "Down"} ${Math.abs(delta)} from ${previous}`;
   }
   return h("div", { className: "player-story-block", key: "rating" }, [
-    h("h3", { key: "title" }, "PDGA official rating"),
-    h("div", { className: "player-story-rating", key: "row" }, [
+    h("div", { className: "player-job-head", key: "head" }, [
+      h("h3", { key: "title" }, "PDGA official rating"),
+      onRefresh ? h("button", {
+        type: "button",
+        className: "player-job-link pdga-refresh-btn",
+        "data-pdga-refresh": "true",
+        disabled: refreshing,
+        key: "refresh",
+        onClick: () => { void onRefresh(); },
+      }, refreshing ? "Refreshing…" : "Refresh") : null,
+    ].filter(Boolean)),
+    official != null ? h("div", { className: "player-story-rating", key: "row" }, [
       h("b", { key: "n" }, String(official)),
       h("span", { className: `player-story-move ${tone}`.trim(), key: "move" }, move),
-    ]),
-  ]);
+    ]) : null,
+    refreshMessage ? h("p", { className: "player-card-meta", role: "status", key: "msg" }, refreshMessage) : null,
+    annual.length ? h("div", { className: "pdga-home-annual", key: "annual" }, [
+      h(PdgaAnnualStats, { pdgaNo, rows: annual, compact: true, key: "list" }),
+      h("button", {
+        type: "button",
+        className: "player-job-link",
+        key: "stats-tab",
+        onClick: () => selectDashboardTab("season"),
+      }, "Full PDGA stats"),
+    ]) : null,
+  ].filter(Boolean));
 }
 
-function PdgaHistory({ stats, pdgaNo }) {
+function PdgaHistory({ stats, pdgaNo, token, onReload }) {
+  if (!pdgaNo) return null;
   const events = Array.isArray(stats?.events) ? stats.events : [];
-  if (!events.length) return null;
   const historyHref = pdgaPlayerHistoryHref(pdgaNo);
+  const summaryLabel = events.length ? `PDGA events (${events.length})` : "PDGA events & round loader";
   return h("details", { className: "dash-collapse player-story-history", key: "history" }, [
-    h("summary", { className: "dash-collapse-summary", key: "summary" }, `PDGA events (${events.length})`),
-    h("div", { className: "player-story-events", key: "list" }, events.slice(0, 6).map((event, index) =>
-      h("div", { className: "player-list-row", key: `${event.tournament || "event"}-${event.epoch || index}` }, [
-        h("div", { className: "member-list-copy", key: "copy" }, [
-          h(PdgaLink, { as: "div", className: "player-event-name", href: pdgaEventHref(event.eventId), key: "name" }, pdgaEventTitle(event.tournament) || "Event"),
-          h("div", { className: "player-card-meta", key: "meta" }, [event.date, event.division].filter(Boolean).join(" · ")),
+    h("summary", { className: "dash-collapse-summary", key: "summary" }, summaryLabel),
+    events.length
+      ? h("div", { className: "player-story-events", key: "list" }, events.slice(0, 6).map((event, index) =>
+        h("div", { className: "player-list-row", key: `${event.tournament || "event"}-${event.epoch || index}` }, [
+          h("div", { className: "member-list-copy", key: "copy" }, [
+            h(PdgaLink, { as: "div", className: "player-event-name", href: pdgaEventHref(event.eventId), key: "name" }, pdgaEventTitle(event.tournament) || "Event"),
+            h("div", { className: "player-card-meta", key: "meta" }, [event.date, event.division].filter(Boolean).join(" · ")),
+          ]),
+          h("div", { className: "player-score", key: "score" }, [
+            h("b", { key: "r" }, event.rounds?.[0]?.rating != null ? String(event.rounds[0].rating) : "—"),
+            h("span", { key: "l" }, "Round rating"),
+          ]),
         ]),
-        h("div", { className: "player-score", key: "score" }, [
-          h("b", { key: "r" }, event.rounds?.[0]?.rating != null ? String(event.rounds[0].rating) : "—"),
-          h("span", { key: "l" }, "Round rating"),
-        ]),
-      ]),
-    )),
+      ))
+      : h("p", { className: "player-card-meta", key: "empty" }, "No recent regional PDGA Live rounds matched yet. Load a tournament by PDGA event # below."),
+    h(PdgaEventLinkForm, { pdgaNo, token, onLinked: onReload, key: "link-form" }),
     historyHref ? h("p", { className: "player-card-meta pdga-history-more", key: "more" }, h("a", {
       className: "pdga-link",
       href: historyHref,
@@ -367,11 +412,19 @@ export function MemberOverviewDashboard() {
       key: "jobs",
     }),
     h("section", { className: "player-card player-story", "data-react-home-story": "ready", key: "story" }, [
-      h(RatingMove, { stats: pdgaState.stats, status: pdgaState.status, key: "rating" }),
+      h(RatingMove, {
+        stats: pdgaState.stats,
+        status: pdgaState.status,
+        pdgaNo: context.pdgaNo,
+        refreshing: pdgaState.refreshing,
+        refreshMessage: pdgaState.refreshMessage,
+        onRefresh: pdgaState.refresh,
+        key: "rating",
+      }),
       h(LastRoundCard, { token, onCasualHistory: setPlayedCasual, key: "recent" }),
       h(UpNextCard, { events: registration.state.events, registrations: registration.state.registrations, key: "up-next" }),
       h(NextPdgaCard, { key: "next-pdga", token }),
-      h(PdgaHistory, { stats: pdgaState.stats, pdgaNo: context.pdgaNo, key: "history" }),
+      h(PdgaHistory, { stats: pdgaState.stats, pdgaNo: context.pdgaNo, token, onReload: pdgaState.reload, key: "history" }),
       // Renewal nudge: only when the member's PDGA membership has lapsed or ends soon.
       pdgaMembershipNeedsAttention(pdgaMembership)
         ? h("div", { className: "player-story-block", key: "pdga-membership" }, h(PdgaMembershipCard, { data: pdgaMembership, compact: true, credit: false, onCheckAgain: checkPdgaMembershipAgain })) : null,

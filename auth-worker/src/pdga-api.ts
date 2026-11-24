@@ -348,6 +348,7 @@ export type PdgaAnnualStat = {
   classification: "P" | "A" | null;
   rating: number | null;
   events: number | null;
+  rounds: number | null;
   points: number | null;
   prize: number | null;
   playersDefeated: number | null;
@@ -386,11 +387,12 @@ export function parsePdgaAnnualStat(raw: unknown, fallbackYear?: number): PdgaAn
     divisionName: text(row.division_name)?.slice(0, 80) ?? null,
     classification,
     rating: ratingRaw != null && ratingRaw > 0 ? ratingRaw : null,
-    events: optNum(row.events ?? row.events_played),
-    points: optNum(row.points, 2),
-    prize: optNum(row.prize ?? row.cash, 2),
-    playersDefeated: optNum(row.players_defeated),
-    wins: optNum(row.wins),
+    events: optNum(row.events ?? row.events_played ?? row.tournaments ?? row.tournaments_played ?? row.event_count ?? row.events_count),
+    rounds: optNum(row.rounds ?? row.rounds_played ?? row.round_count),
+    points: optNum(row.points ?? row.tour_points, 2),
+    prize: optNum(row.prize ?? row.cash ?? row.earnings ?? row.total_prize ?? row.prize_money, 2),
+    playersDefeated: optNum(row.players_defeated ?? row.defeated ?? row.opponents_defeated),
+    wins: optNum(row.wins ?? row.first_place ?? row.victories),
     url: pdgaPlayerStatsUrl(pdgaNumber, year),
   };
 }
@@ -441,11 +443,12 @@ export async function lookupPdgaPlayerStats(
   pdgaNumber: string,
   years: readonly number[],
   now = Date.now(),
+  refresh = false,
 ): Promise<PdgaAnnualStat[]> {
   const num = normalPdgaNumber(pdgaNumber);
   const cleanYears = validYears(years);
   if (!num || !cleanYears.length) return [];
-  const cached = await cachedPdgaPlayerStats(env, num, cleanYears, now);
+  const cached = refresh ? new Map<number, PdgaAnnualStat[]>() : await cachedPdgaPlayerStats(env, num, cleanYears, now);
   const writes = [];
   for (const year of cleanYears) {
     if (cached.has(year)) continue;
