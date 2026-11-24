@@ -98,6 +98,12 @@ export function pdgaPlayerUrl(pdgaNumber: string | number): string {
   return "https://www.pdga.com/player/" + encodeURIComponent(String(pdgaNumber));
 }
 
+export function pdgaPlayerStatsUrl(pdgaNumber: string | number, year?: number | string): string {
+  const num = normalPdgaNumber(pdgaNumber) ?? encodeURIComponent(String(pdgaNumber));
+  const yr = year != null && /^\d{4}$/.test(String(year).trim()) ? String(year).trim() : "";
+  return yr ? `https://www.pdga.com/player/${num}/stats/${yr}` : `https://www.pdga.com/player/${num}/stats`;
+}
+
 export function pdgaEventUrl(eventId: string | number): string {
   return "https://www.pdga.com/tour/event/" + encodeURIComponent(String(eventId));
 }
@@ -335,15 +341,158 @@ export async function lookupPdgaEvent(env: PdgaApiEnv, eventId: number): Promise
   return parsePdgaEvent(events[0]);
 }
 
+export type PdgaAnnualStat = {
+  year: number;
+  divisionCode: string;
+  divisionName: string | null;
+  classification: "P" | "A" | null;
+  rating: number | null;
+  events: number | null;
+  points: number | null;
+  prize: number | null;
+  playersDefeated: number | null;
+  wins: number | null;
+  url: string;
+};
+
+function isMissingTable(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return /no such table|does not exist/i.test(msg);
+}
+
+function optNum(value: unknown, decimals = 0): number | null {
+  if (value == null || value === "") return null;
+  const cleaned = typeof value === "string" ? value.replace(/[$,\s]/g, "") : value;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n < 0) return null;
+  if (decimals === 0) return Math.round(n);
+  const factor = 10 ** decimals;
+  return Math.round(n * factor) / factor;
+}
+
+export function parsePdgaAnnualStat(raw: unknown, fallbackYear?: number): PdgaAnnualStat | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const pdgaNumber = normalPdgaNumber(row.pdga_number);
+  const year = Number(row.year ?? fallbackYear);
+  const divisionCode = text(row.division_code ?? row.division)?.toUpperCase() ?? null;
+  if (!pdgaNumber || !Number.isInteger(year) || year < 1975 || year > 2100 || !divisionCode) return null;
+  const rawClass = text(row.class ?? row.classification)?.toUpperCase();
+  const classification = rawClass === "P" || rawClass === "A" ? rawClass : null;
+  const ratingRaw = optNum(row.rating);
+  return {
+    year,
+    divisionCode: divisionCode.slice(0, 12),
+    divisionName: text(row.division_name)?.slice(0, 80) ?? null,
+    classification,
+    rating: ratingRaw != null && ratingRaw > 0 ? ratingRaw : null,
+    events: optNum(row.events ?? row.events_played),
+    points: optNum(row.points, 2),
+    prize: optNum(row.prize ?? row.cash, 2),
+    playersDefeated: optNum(row.players_defeated),
+    wins: optNum(row.wins),
+    url: pdgaPlayerStatsUrl(pdgaNumber, year),
+  };
+}
+
+function validYears(years: readonly number[]): number[] {
+  return [...new Set(years.filter((y) => Number.isInteger(y) && y >= 1975 && y <= 2100))];
+}
+
+/** Temporarily cached official PDGA annual statistics rows keyed by year (6h non-empty, 1h empty). */
+export async function cachedPdgaPlayerStats(
+  env: Pick<PdgaApiEnv, "DB">,
+  pdgaNumber: string,
+  years: readonly number[],
+  now = Date.now(),
+): Promise<Map<number, PdgaAnnualStat[]>> {
+  const num = normalPdgaNumber(pdgaNumber);
+  const cleanYears = validYears(years);
+  const found = new Map<number, PdgaAnnualStat[]>();
+  if (!num || !cleanYears.length || !env.DB || typeof env.DB.prepare !== "function") return found;
+  try {
+    const placeholders = cleanYears.map(() => "?").join(", ");
+    const res = await env.DB.prepare(
+      `SELECT year, data, fetched_at FROM pdga_api_player_stats WHERE pdga_number = ? AND year IN (${placeholders})`,
+    ).bind(num, ...cleanYears).all<{ year: number; data: string | null; fetched_at: number }>();
+    for (const row of res.results ?? []) {
+      const year = Number(row.year);
+      const age = now - Number(row.fetched_at);
+      if (!Number.isInteger(year) || age < 0) continue;
+      let rawList: unknown[] = [];
+      try {
+        const parsedJson = row.data ? JSON.parse(row.data) : [];
+        if (Array.isArray(parsedJson)) rawList = parsedJson;
+      } catch { continue; }
+      const parsed = rawList.map((item) => parsePdgaAnnualStat(item, year)).filter((item): item is PdgaAnnualStat => item != null);
+      const ttl = parsed.length ? FOUND_TTL_MS : MISSING_TTL_MS;
+      if (age > ttl) continue;
+      found.set(year, parsed);
+    }
+  } catch (error) {
+    if (!isMissingTable(error)) throw error;
+  }
+  return found;
+}
+
+/** Read official PDGA /services/json/player-statistics for one player across given years (temporary cache). */
+export async function lookupPdgaPlayerStats(
+  env: PdgaApiEnv,
+  pdgaNumber: string,
+  years: readonly number[],
+  now = Date.now(),
+): Promise<PdgaAnnualStat[]> {
+  const num = normalPdgaNumber(pdgaNumber);
+  const cleanYears = validYears(years);
+  if (!num || !cleanYears.length) return [];
+  const cached = await cachedPdgaPlayerStats(env, num, cleanYears, now);
+  const writes = [];
+  for (const year of cleanYears) {
+    if (cached.has(year)) continue;
+    const body = await apiGet(env, `/services/json/player-statistics?pdga_number=${encodeURIComponent(num)}&year=${year}`);
+    const rawPlayers = Array.isArray(body?.players) ? body!.players as unknown[] : [];
+    const matchingRaw = rawPlayers.filter((item) => normalPdgaNumber((item as Record<string, unknown>)?.pdga_number) === num);
+    const parsed = matchingRaw.map((item) => parsePdgaAnnualStat(item, year)).filter((item): item is PdgaAnnualStat => item != null);
+    cached.set(year, parsed);
+    if (env.DB && typeof env.DB.prepare === "function") {
+      try {
+        writes.push(
+          env.DB.prepare(
+            `INSERT INTO pdga_api_player_stats (pdga_number, year, data, fetched_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT(pdga_number, year) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`,
+          ).bind(num, year, JSON.stringify(matchingRaw), now),
+        );
+      } catch { /* ignore if DB mock rejects */ }
+    }
+  }
+  if (writes.length) {
+    try {
+      if (env.DB.batch) await env.DB.batch(writes);
+      else for (const write of writes) await write.run();
+    } catch (error) {
+      if (!isMissingTable(error)) throw error;
+    }
+  }
+  const all = [...cached.values()].flat();
+  return all.sort((a, b) => b.year - a.year || (b.events ?? -1) - (a.events ?? -1) || a.divisionCode.localeCompare(b.divisionCode));
+}
+
 /**
- * Delete PDGA data past its cache time: player records older than PDGA_PLAYER_CACHE_MAX_MS, expired nearby-event
- * lists (pdga-events.ts, D1KV namespace "pdgaevents", one hour), and expired PDGA Live API caches.
+ * Delete PDGA data past its cache time: player records & annual stats older than PDGA_PLAYER_CACHE_MAX_MS,
+ * expired nearby-event lists (pdga-events.ts, D1KV namespace "pdgaevents", one hour), and expired PDGA Live API caches.
  */
-export async function purgePdgaCaches(env: { DB: D1Like }, now = Date.now()): Promise<{ players: number; events: number }> {
+export async function purgePdgaCaches(env: { DB: D1Like }, now = Date.now()): Promise<{ players: number; events: number; playerStats: number }> {
   const players = await env.DB.prepare("DELETE FROM pdga_api_players WHERE fetched_at < ?").bind(now - PDGA_PLAYER_CACHE_MAX_MS).run();
   const events = await env.DB.prepare("DELETE FROM kv_store WHERE ns = ? AND expires_at IS NOT NULL AND expires_at <= ?").bind("pdgaevents", now).run();
+  let playerStats = 0;
+  try {
+    const statsRes = await env.DB.prepare("DELETE FROM pdga_api_player_stats WHERE fetched_at < ?").bind(now - PDGA_PLAYER_CACHE_MAX_MS).run();
+    playerStats = Number(statsRes.meta?.changes) || 0;
+  } catch (error) {
+    if (!isMissingTable(error)) throw error;
+  }
   await purgePdgaLiveCaches(env.DB, now);
-  return { players: Number(players.meta?.changes) || 0, events: Number(events.meta?.changes) || 0 };
+  return { players: Number(players.meta?.changes) || 0, events: Number(events.meta?.changes) || 0, playerStats };
 }
 
 /** For tests: forget the in-memory session. */

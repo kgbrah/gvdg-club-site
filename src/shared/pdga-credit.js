@@ -12,9 +12,28 @@ export function pdgaPlayerHref(pdgaNumber) {
   return number ? `${PDGA_HOME}/player/${number}` : "";
 }
 
+export function pdgaPlayerStatsHref(pdgaNumber, year) {
+  const number = String(pdgaNumber ?? "").replace(/\D/g, "");
+  if (!number) return "";
+  const yr = year != null && /^\d{4}$/.test(String(year).trim()) ? String(year).trim() : "";
+  return yr ? `${PDGA_HOME}/player/${number}/stats/${yr}` : `${PDGA_HOME}/player/${number}/stats`;
+}
+
+export function pdgaPlayerHistoryHref(pdgaNumber) {
+  const number = String(pdgaNumber ?? "").replace(/\D/g, "");
+  return number ? `${PDGA_HOME}/player/${number}/history` : "";
+}
+
 export function pdgaEventHref(eventId) {
   const id = String(eventId ?? "").replace(/\D/g, "");
   return id ? `${PDGA_HOME}/tour/event/${id}` : "";
+}
+
+export function pdgaLiveEventHref(eventId, division) {
+  const id = String(eventId ?? "").replace(/\D/g, "");
+  if (!id) return "";
+  const div = typeof division === "string" ? division.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "") : "";
+  return div ? `${PDGA_HOME}/live/event/${id}/${encodeURIComponent(div)}/scores` : `${PDGA_HOME}/live/event/${id}`;
 }
 
 /**

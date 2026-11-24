@@ -77,7 +77,7 @@ async function setupEnv() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("PDGA Live registrations & migration 0080", () => {
-  it("replays migrations 0001 through 0080 cleanly with foreign keys ON", async () => {
+  it("replays migrations 0001 through 0083 cleanly with foreign keys ON", async () => {
     const { DatabaseSync } = await import("node:sqlite");
     const sqlite = new DatabaseSync(":memory:");
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
@@ -87,10 +87,13 @@ describe("PDGA Live registrations & migration 0080", () => {
     }
     sqlite.exec("PRAGMA foreign_keys = ON");
     sqlite.exec("BEGIN");
-    sqlite.exec(readFileSync(new URL("0080_pdga_live_cache.sql", MIGRATIONS), "utf8"));
+    for (const file of files.filter((f) => f >= "0080_pdga_live_cache.sql")) {
+      sqlite.exec(readFileSync(new URL(file, MIGRATIONS), "utf8"));
+    }
     sqlite.exec("COMMIT");
     const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'pdga_%' ORDER BY name").all();
     expect(tables).toEqual([
+      { name: "pdga_api_player_stats" },
       { name: "pdga_api_players" },
       { name: "pdga_live_cache" },
       { name: "pdga_member_event_links" },
@@ -196,5 +199,88 @@ describe("PDGA Live registrations & migration 0080", () => {
       headers: { Origin: ORIGIN, Authorization: `Bearer ${adaToken}` },
     }), env)).json() as { mine: { going: unknown[] }[] };
     expect(regAfter.mine[0]!.going).toEqual([]);
+  });
+
+  it("backfills unread seasonal NC/VA/SC events within 180 days at lowest priority without re-polling them", async () => {
+    resetPdgaApiSession();
+    const { sqlite, env } = await setupEnv();
+    const now = Math.floor(Date.now() / (3 * 3_600_000)) * (3 * 3_600_000);
+    const futureDay = new Date(now + 10 * 86_400_000).toISOString().slice(0, 10);
+    const seasonPastDay = new Date(now - 90 * 86_400_000).toISOString().slice(0, 10);
+    const liveReads: number[] = [];
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/user/login")) return Response.json({ sessid: "s", session_name: "SESS", token: "t" });
+      if (url.startsWith(API_BASE + "/services/json/event")) {
+        return Response.json({
+          events: [
+            {
+              tournament_id: "601",
+              tournament_name: "Upcoming NC Open",
+              tier: "B",
+              city: "Greenville",
+              state_prov: "NC",
+              start_date: futureDay,
+              end_date: futureDay,
+            },
+            {
+              tournament_id: "602",
+              tournament_name: "Seasonal Past Classic",
+              tier: "C",
+              city: "Raleigh",
+              state_prov: "NC",
+              start_date: seasonPastDay,
+              end_date: seasonPastDay,
+            },
+          ],
+        });
+      }
+      const evMatch = url.match(/live_results_fetch_event\?TournID=(\d+)/);
+      if (evMatch) {
+        const id = Number(evMatch[1]);
+        liveReads.push(id);
+        const day = id === 602 ? seasonPastDay : futureDay;
+        return Response.json({
+          data: {
+            TournamentId: id,
+            Name: id === 602 ? "Seasonal Past Classic" : "Upcoming NC Open",
+            StartDate: day,
+            EndDate: day,
+            LocationShort: "NC",
+            FormattedTier: "C-Tier",
+            Divisions: [{ Division: "MA1", Players: 1, LatestRound: 1 }],
+          },
+          hash: "e",
+        });
+      }
+      if (url.includes("live_results_fetch?")) {
+        return Response.json({
+          data: { MA1: [{ division: "MA1", scores: [{ ResultID: 2001, PDGANum: 80024, HasPDGANum: 1, Division: "MA1", Name: "Ada" }] }] },
+          hash: "f",
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    const tick1 = await refreshPdgaRegistrations(env, now);
+    expect(tick1).toMatchObject({ state: "NC", listed: 2, read: 2, matched: 2, failed: 0 });
+    expect(liveReads).toEqual([601, 602]); // upcoming prioritized before older seasonal event
+
+    const pastLink = sqlite.prepare("SELECT result_id FROM pdga_member_event_links WHERE event_id = 602 AND member_id = 'm_ada'").get() as { result_id: number } | undefined;
+    expect(pastLink?.result_id).toBe(2001);
+
+    // Upcoming /pdga-registrations only lists upcoming events, never the 90-day-old one.
+    const adaToken = await signSession({ sub: "m_ada", mustChangePin: false }, SECRET, 3600);
+    const regJson = await (await worker.fetch(new Request("https://worker/pdga-registrations", {
+      headers: { Origin: ORIGIN, Authorization: `Bearer ${adaToken}` },
+    }), env)).json() as { mine: { eventId: number }[] };
+    expect(regJson.mine.map((e) => e.eventId)).toEqual([601]);
+
+    // Subsequent tick past DONE_RECHECK reads only upcoming 601 and never re-polls old 602.
+    liveReads.length = 0;
+    sqlite.prepare("DELETE FROM pdga_live_cache").run();
+    await refreshPdgaRegistrations(env, now + 9 * 3_600_000);
+    expect(liveReads).toEqual([601]);
   });
 });
