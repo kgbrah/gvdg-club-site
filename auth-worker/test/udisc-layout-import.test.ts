@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   attachUdiscUrlsFromIndex,
+  geoLabel,
   inheritMappedUdiscUrl,
   isPlaceholderLayout,
   isUdiscLayoutCron,
@@ -11,6 +12,7 @@ import {
   pickNextUdiscImportCourse,
   pickUdiscSearchMatch,
   planUdiscLayoutApply,
+  scoreUdiscUrl,
   UDISC_LAYOUT_IMPORT_CRON,
   UDISC_LOCAL_MISS,
 } from "../src/udisc-layout-import.js";
@@ -540,5 +542,10 @@ describe("bustCourseCatalogCache", () => {
     await expect(bustCourseCatalogCache()).resolves.toBe(true);
     expect(deleted).toEqual([COURSE_CATALOG_CACHE_NAME]);
     vi.unstubAllGlobals();
+  });
+
+  it("recognizes Pennsylvania locations in geoLabel and URL scoring", () => {
+    expect(geoLabel("Mechanicsburg, PA")).toBe("pennsylvania");
+    expect(scoreUdiscUrl({ name: "Adventure Park Disc Golf Course", location: "Mechanicsburg, PA" }, "https://udisc.com/courses/adventure-park-disc-golf-course-abcd")).toBeGreaterThan(0.9);
   });
 });

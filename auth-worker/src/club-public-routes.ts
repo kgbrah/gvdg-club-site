@@ -3,8 +3,12 @@ import * as db from "./db.js";
 import { computeLeagueStandings, computeRoundWinners, computeTeamStandings } from "./scoring.js";
 import { RYDER_CUP_LEAGUE_ID, buildRyderCupBoard, type RyderLeagueEvent } from "./ryder-board.js";
 import { verifySession } from "./jwt.js";
-import { bearer, json } from "./http.js";
+import { requireRoundActor } from "./authz.js";
+import { bearer, clientIp, json, readJson } from "./http.js";
+import { kvRateLimited } from "./kv-rate-limit.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
+import { DISCGOLFAPI_ATTRIBUTION } from "./imports/nearby-courses.js";
+import { findNearbyExternalCourses, materializeDiscoveredCourse } from "./nearby-course-discovery.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { publicFieldsByEvent } from "./event-field.js";
@@ -110,6 +114,74 @@ export async function handleClubPublic(
       last_run_at: state?.last_run_at ?? null,
       hydrated_at: state?.hydrated_at ?? null,
     }, 200, origin);
+  }
+  if (method === "GET" && pathname === "/courses/nearby") {
+    const url = new URL(request.url);
+    const rawLat = url.searchParams.get("lat");
+    const rawLng = url.searchParams.get("lng");
+    const lat = Number(rawLat);
+    const lng = Number(rawLng);
+    if (
+      !rawLat?.trim() ||
+      !rawLng?.trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 ||
+      Math.abs(lng) > 180 ||
+      (lat === 0 && lng === 0)
+    ) {
+      return json({ error: "location_required" }, 400, origin);
+    }
+    const rawMiles = url.searchParams.get("miles");
+    let miles = 50;
+    if (rawMiles != null && rawMiles.trim() !== "") {
+      const parsedMiles = Number(rawMiles);
+      if (!Number.isFinite(parsedMiles) || parsedMiles <= 0) {
+        return json({ error: "invalid_request" }, 400, origin);
+      }
+      miles = parsedMiles;
+    }
+    if (await kvRateLimited(env, "courses-nearby:" + clientIp(request), 60, 60)) {
+      return json({ error: "rate_limited" }, 429, origin);
+    }
+    const q = (url.searchParams.get("q") || "").trim().slice(0, 80);
+    try {
+      const result = await findNearbyExternalCourses(env, { lat, lng, miles, query: q });
+      return json(
+        { ...result, attribution: DISCGOLFAPI_ATTRIBUTION },
+        200,
+        origin,
+        { "Cache-Control": "private, max-age=300" },
+      );
+    } catch {
+      return json(
+        { courses: [], miles: Math.max(1, Math.min(250, Math.round(miles))), regions: [], attribution: DISCGOLFAPI_ATTRIBUTION },
+        200,
+        origin,
+        { "Cache-Control": "no-store" },
+      );
+    }
+  }
+  if (method === "POST" && pathname === "/courses/discover") {
+    const actor = await requireRoundActor(request, env);
+    if (!actor) return json({ error: "unauthorized" }, 401, origin);
+    if (await kvRateLimited(env, "course-discover:" + actor.sub, 15, 3600)) {
+      return json({ error: "rate_limited" }, 429, origin);
+    }
+    const b = (await readJson(request)) ?? {};
+    const source = typeof b.source === "string" ? b.source : "";
+    const sourceId = typeof b.source_id === "string" ? b.source_id : "";
+    const region = typeof b.region === "string" ? b.region : "";
+    const result = await materializeDiscoveredCourse(env, { source, sourceId, region });
+    if ("error" in result) {
+      return json({ error: result.error }, result.error === "not_found" ? 404 : 400, origin);
+    }
+    return json(
+      { ...result, attribution: DISCGOLFAPI_ATTRIBUTION },
+      result.created ? 201 : 200,
+      origin,
+      { "Cache-Control": "no-store" },
+    );
   }
   if (method === "GET" && pathname === "/pdga-events") {
     const url = new URL(request.url);

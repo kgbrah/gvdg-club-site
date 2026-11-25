@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
+  dedupeNearbyCandidates,
   defaultPar3Holes,
+  discGolfApiRegionUrl,
   discGolfApiUrl,
+  isDuplicateCourse,
   normalizeCourseName,
   parseDiscGolfApiCourses,
   planNearbyCourseImport,
+  regionsNearPoint,
+  uniqueCourseName,
 } from "../src/imports/nearby-courses.js";
 import { haversineMiles } from "../src/distance.js";
 
@@ -113,5 +118,54 @@ describe("haversineMiles club origin", () => {
     const miles = haversineMiles(CLUB_ORIGIN, { lat: 35.6264, lng: -77.375 });
     expect(miles).toBeGreaterThan(0);
     expect(miles).toBeLessThan(5);
+  });
+});
+
+describe("discGolfApiRegionUrl and regionsNearPoint", () => {
+  it("builds a region URL without country=US so border courses filed under CA still appear", () => {
+    expect(discGolfApiRegionUrl("pa")).toBe("https://io.discgolfapi.com/v1/courses?region=PA&limit=250&offset=0");
+  });
+
+  it("maps Pennsylvania, North Carolina, and ocean coordinates to expected regions", () => {
+    const philly = regionsNearPoint({ lat: 39.9526, lng: -75.1652 }, 25);
+    expect(philly).toContain("PA");
+    expect(philly).toContain("NJ");
+    expect(philly).toContain("DE");
+
+    const pgh = regionsNearPoint({ lat: 40.4406, lng: -79.9959 }, 35);
+    expect(pgh).toContain("PA");
+    expect(pgh).toContain("OH");
+    expect(pgh).toContain("WV");
+
+    expect(regionsNearPoint({ lat: 40.2732, lng: -76.8867 }, 25)).toContain("PA");
+    expect(regionsNearPoint({ lat: 42.1292, lng: -80.0851 }, 25)).toContain("PA");
+    expect(regionsNearPoint(CLUB_ORIGIN, 25)).toEqual(["NC"]);
+    expect(regionsNearPoint({ lat: 30, lng: -45 }, 50)).toEqual([]);
+  });
+});
+
+describe("dedupeNearbyCandidates and uniqueCourseName", () => {
+  it("keeps the higher-confidence DiscGolfAPI duplicate and drops bogus rows", () => {
+    const parsed = parseDiscGolfApiCourses({
+      courses: [
+        { id: "crs_tyler_low", name: "Tyler State Park - West", lat: 40.231, lon: -74.953, locality: "Newtown", region_code: "PA", holes: 18, confidence_score: 0.75, existence_status: "existing", operational_status: "open" },
+        { id: "crs_tyler_high", name: "Tyler State Park - West", lat: 40.231, lon: -74.959, locality: "Newtown", region_code: "PA", holes: 36, confidence_score: 0.85, existence_status: "existing", operational_status: "open" },
+        { id: "crs_popup", name: "Summer Pop-Up Course", lat: 40.2, lon: -75.1, locality: "Doylestown", region_code: "PA", holes: 9, confidence_score: 0.9, existence_status: "existing", operational_status: "open" },
+      ],
+    });
+    const deduped = dedupeNearbyCandidates(parsed);
+    expect(deduped.map((c) => c.source_id)).toEqual(["crs_tyler_high"]);
+  });
+
+  it("disambiguates matching names in different cities or states", () => {
+    const taken = new Set(["Creekside Park", "Creekside Park, Springfield"]);
+    expect(uniqueCourseName("Creekside Park", "Springfield, PA", taken)).toBe("Creekside Park, Springfield, PA");
+    expect(uniqueCourseName("Pinchot Park", "Lewisberry, PA", taken)).toBe("Pinchot Park");
+    expect(
+      isDuplicateCourse(
+        { name: "Pinchot Park", location: "Lewisberry, PA", lat: 40.07, lng: -76.89, holes: 18, miles: 0, region: "PA", source_id: "x", website: null },
+        { name: "Pinchot Park", location: "Lewisberry, NC", lat: 35.5, lng: -77.3 },
+      ),
+    ).toBe(false);
   });
 });

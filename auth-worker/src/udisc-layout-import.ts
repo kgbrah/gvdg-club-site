@@ -193,7 +193,17 @@ export function expandMatchName(value: string): string {
 }
 
 export function geoLabel(value: string): string | null {
+  const parts = String(value || "")
+    .split(",")
+    .map((part) => expandMatchName(part))
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    const tail = parts.at(-1) ?? "";
+    const state = STATE_ABBREV[tail] ?? matchStatePhrase(tail);
+    if (state) return state;
+  }
   const s = expandMatchName(value);
+  if (/\bpennsylvania\b/.test(s)) return "pennsylvania";
   if (/\bnorth carolina\b/.test(s)) return "north carolina";
   if (/\bsouth carolina\b/.test(s)) return "south carolina";
   if (/\bwest virginia\b/.test(s)) return "west virginia";
@@ -201,6 +211,10 @@ export function geoLabel(value: string): string | null {
   if (/\bmaryland\b/.test(s)) return "maryland";
   if (/\btennessee\b/.test(s)) return "tennessee";
   if (/\bgeorgia\b/.test(s)) return "georgia";
+  if (/\bnew jersey\b/.test(s)) return "new jersey";
+  if (/\bnew york\b/.test(s)) return "new york";
+  if (/\bdelaware\b/.test(s)) return "delaware";
+  if (/\bohio\b/.test(s)) return "ohio";
   return null;
 }
 

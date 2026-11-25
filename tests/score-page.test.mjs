@@ -154,9 +154,14 @@ test('casual round flow shows setup after layout selection', () => {
 test('casual round course pick searches and sorts mapped courses first', () => {
   const setup = scoreSetupSource();
   const pick = readFileSync('src/score-app/course-pick.js', 'utf8');
+  const controller = scoreControllerSource();
   const html = readFileSync('score.html', 'utf8');
   assert.match(setup, /function CoursePickView/);
   assert.match(setup, /filterCoursesForPick/);
+  assert.match(setup, /mergeDiscoveredCourses/);
+  assert.match(setup, /\/courses\/nearby/);
+  assert.match(setup, /sortByDistance/);
+  assert.match(controller, /\/courses\/discover/);
   assert.match(setup, /id: "courseSearch"/);
   assert.doesNotMatch(setup, /autoFocus:\s*true/);
   assert.match(pick, /Within 10 miles/);

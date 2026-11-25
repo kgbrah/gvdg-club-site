@@ -2,6 +2,7 @@ import React from "react";
 import { ArrowLeft, ChevronRight, LogOut, Navigation, PlayCircle, Search, Star } from "lucide-react";
 import {
   BROWSE_MAPPED_LIMIT,
+  BROWSE_NEARBY_LIMIT,
   CLUB_ORIGIN,
   COURSE_RANGE_DEFAULT,
   COURSE_RANGES,
@@ -9,6 +10,7 @@ import {
   coursesForPickScreen,
   filterCoursesForPick,
   googleMapsDirectionsUrl,
+  mergeDiscoveredCourses,
   readLastCourse,
   sortLayoutsForPick,
   teeSignCaptureHref,
@@ -187,9 +189,14 @@ function HomeView({ onStart, onJoin, onInvalidCode, onSignOut, onSignIn, onWatch
   ]);
 }
 
-function useDeviceOrigin() {
-  const [state, setState] = React.useState({ origin: null, status: "idle" });
+function useDeviceOrigin(initialOrigin = null, onOriginChange) {
+  const [state, setState] = React.useState(() => ({
+    origin: initialOrigin || null,
+    status: initialOrigin ? "ready" : "idle",
+  }));
   const request = React.useRef(0);
+  const onChangeRef = React.useRef(onOriginChange);
+  onChangeRef.current = onOriginChange;
   React.useEffect(() => () => { request.current += 1; }, []);
   function locate() {
     const id = ++request.current;
@@ -202,6 +209,7 @@ function useDeviceOrigin() {
       if (id !== request.current) return;
       const origin = mapCoordinates({ lat: position.coords?.latitude, lng: position.coords?.longitude });
       setState({ origin, status: origin ? "ready" : "unavailable" });
+      onChangeRef.current?.(origin || null);
     }, () => {
       if (id === request.current) setState({ origin: null, status: "unavailable" });
     }, { enableHighAccuracy: false, maximumAge: 120000, timeout: 10000 });
@@ -209,8 +217,60 @@ function useDeviceOrigin() {
   const reset = () => {
     request.current += 1;
     setState({ origin: null, status: "idle" });
+    onChangeRef.current?.(null);
   };
   return { ...state, locate, reset };
+}
+
+function targetSearchMiles(range) {
+  if (range === "all") return 100;
+  const parsed = Number(range);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(250, Math.max(10, Math.round(parsed))) : 25;
+}
+
+function useNearbyCourses(origin, range, online) {
+  const [state, setState] = React.useState({ key: "", status: "idle", courses: [], fetchedMiles: 0 });
+  const cacheRef = React.useRef({ key: "", miles: 0, courses: [] });
+  const originKey = origin ? `${origin.lat.toFixed(3)},${origin.lng.toFixed(3)}` : "";
+  const wantMiles = targetSearchMiles(range);
+
+  React.useEffect(() => {
+    if (!originKey || !online || !origin) {
+      setState({ key: "", status: "idle", courses: [], fetchedMiles: 0 });
+      return undefined;
+    }
+    if (cacheRef.current.key === originKey && cacheRef.current.miles >= wantMiles) {
+      setState({ key: originKey, status: "ready", courses: cacheRef.current.courses, fetchedMiles: cacheRef.current.miles });
+      return undefined;
+    }
+    const controller = new AbortController();
+    const base = resolveApiBase({ datasetKeys: ["apiBase"] });
+    const retained = cacheRef.current.key === originKey ? cacheRef.current.courses : [];
+    const retainedMiles = cacheRef.current.key === originKey ? cacheRef.current.miles : 0;
+    setState({ key: originKey, status: "loading", courses: retained, fetchedMiles: retainedMiles });
+    fetch(
+      `${base}/courses/nearby?lat=${encodeURIComponent(origin.lat)}&lng=${encodeURIComponent(origin.lng)}&miles=${encodeURIComponent(wantMiles)}`,
+      { cache: "no-store", headers: { Accept: "application/json" }, signal: controller.signal },
+    )
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("nearby_failed"))))
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        const courses = Array.isArray(data && data.courses) ? data.courses : [];
+        const miles = Number(data && data.miles) || wantMiles;
+        cacheRef.current = { key: originKey, miles, courses };
+        setState({ key: originKey, status: "ready", courses, fetchedMiles: miles });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setState((current) => ({ ...current, key: originKey, status: "error" }));
+        }
+      });
+    return () => controller.abort();
+  }, [origin, originKey, wantMiles, online]);
+
+  return originKey && online
+    ? (state.key === originKey ? state : { status: "loading", courses: [], fetchedMiles: 0 })
+    : { status: "idle", courses: [], fetchedMiles: 0 };
 }
 
 function useOnlineStatus() {
@@ -251,15 +311,16 @@ function useCourseTraffic() {
   return courses;
 }
 
-function CoursePickView({ courses, onBack, onSelect }) {
+function CoursePickView({ courses, initialOrigin, onOriginChange, onBack, onSelect }) {
   const [query, setQuery] = React.useState("");
   const [range, setRange] = React.useState(COURSE_RANGE_DEFAULT);
   const [rangeTouched, setRangeTouched] = React.useState(false);
   const [coverage, setCoverage] = React.useState("");
   const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [savedOnly, setSavedOnly] = React.useState(false);
-  const device = useDeviceOrigin();
+  const device = useDeviceOrigin(initialOrigin, onOriginChange);
   const online = useOnlineStatus();
+  const nearby = useNearbyCourses(device.origin, range, online);
   const favoriteState = useCourseFavorites();
   const { packs } = useCoursePacks();
   const [showSaved, setShowSaved] = React.useState(false);
@@ -268,11 +329,21 @@ function CoursePickView({ courses, onBack, onSelect }) {
   const savedIds = new Set(packs.map((pack) => String(pack.course.id)));
   const browsing = !query.trim();
   const sortOrigin = device.origin || CLUB_ORIGIN;
-  const filterOptions = { coverage, favoritesOnly, favoriteIds: favoriteState.favorites, savedOnly, savedIds };
-  const filtered = coursesForPickScreen(courses, query, range, sortOrigin, {
+  const sortByDistance = Boolean(device.origin);
+  const allCourses = React.useMemo(() => mergeDiscoveredCourses(courses, nearby.courses), [courses, nearby.courses]);
+  const filterOptions = { coverage, favoritesOnly, favoriteIds: favoriteState.favorites, savedOnly, savedIds, sortByDistance };
+  const filtered = coursesForPickScreen(allCourses, query, range, sortOrigin, {
     ...filterOptions, lastCourseId: browsing ? lastPlayed?.id : null,
   });
-  const hidden = browsing && range !== "all" && filterCoursesForPick(courses, "", range, sortOrigin, filterOptions).length > filtered.length;
+  const hidden = browsing && range !== "all" && filterCoursesForPick(allCourses, "", range, sortOrigin, filterOptions).length > filtered.length;
+  const wantMiles = targetSearchMiles(range);
+
+  React.useEffect(() => {
+    if (rangeTouched || !browsing || !device.origin || nearby.status !== "ready" || nearby.fetchedMiles < wantMiles) return;
+    if (filtered.length > 0) return;
+    if (range === "25") setRange("50");
+    else if (range === "50") setRange("100");
+  }, [rangeTouched, browsing, device.origin, nearby.status, nearby.fetchedMiles, wantMiles, filtered.length, range]);
 
   function onQuery(value) {
     setQuery(value);
@@ -281,6 +352,10 @@ function CoursePickView({ courses, onBack, onSelect }) {
   function toggleList(set, current) {
     set(!current);
     if (!current && !rangeTouched) setRange("all");
+  }
+  function resetLocation() {
+    device.reset();
+    if (!rangeTouched) setRange(COURSE_RANGE_DEFAULT);
   }
   if (showSaved) return h(SavedCoursesView, { onBack: () => setShowSaved(false) });
   return h("div", { className: "stack" }, [
@@ -297,13 +372,13 @@ function CoursePickView({ courses, onBack, onSelect }) {
         ])),
       ])
       : null,
-    h("div", { className: "course-filters", key: "filters" }, [
+    h("div", { className: "course-filters", key: "filters", role: "search", "aria-label": "Course filters" }, [
     h("label", { className: "lbl", htmlFor: "courseSearch", key: "searchLabel" }, "Search"),
     h("div", { className: "course-search", key: "search" }, [
       icon(Search, { size: 16, key: "icon" }),
       // Course names autocomplete (with their town); the list below still filters as you type.
       h(AutocompleteInput, {
-        suggestions: (courses || []).filter((course) => course?.name).map((course) => ({
+        suggestions: (allCourses || []).filter((course) => course?.name).map((course) => ({
           label: course.name, value: course.name, hint: course.location || "", key: "course-" + course.id,
         })),
         wrapperClassName: "course-search-ac",
@@ -318,7 +393,7 @@ function CoursePickView({ courses, onBack, onSelect }) {
     ]),
     h("div", { className: "course-map-holes", key: "tools" }, [
       h("button", { className: "btn ghost small", type: "button", key: "near", "aria-pressed": Boolean(device.origin),
-        disabled: device.status === "loading", onClick: device.origin ? device.reset : device.locate },
+        disabled: device.status === "loading", onClick: device.origin ? resetLocation : device.locate },
         device.status === "loading" ? "Finding location…" : device.origin ? "Use Greenville instead" : "Use my location"),
       favoriteState.available ? h("button", { className: "btn ghost small", key: "favorites", type: "button",
         "aria-pressed": favoritesOnly, onClick: () => toggleList(setFavoritesOnly, favoritesOnly) }, "Favorites") : null,
@@ -327,6 +402,8 @@ function CoursePickView({ courses, onBack, onSelect }) {
         "aria-pressed": savedOnly, onClick: () => toggleList(setSavedOnly, savedOnly) }, "Courses with downloads") : null,
     ]),
     device.status === "unavailable" ? h("p", { key: "location", className: "muted", role: "status" }, "Location unavailable. Showing distances from Greenville.") : null,
+    device.origin && nearby.status === "loading" ? h("p", { key: "nearbyLoading", className: "muted", role: "status" }, "Finding courses near your location…") : null,
+    device.origin && nearby.status === "error" ? h("p", { key: "nearbyError", className: "muted", role: "status" }, "Could not check courses outside the club catalog. Showing club courses.") : null,
     favoriteState.error ? h("p", { key: "favoriteError", className: "muted", role: "status" }, favoriteState.error) : null,
     h("label", { className: "lbl", key: "coverage" }, "Map coverage",
       h("select", { className: "field", value: coverage, onChange: (event) => setCoverage(event.target.value) }, [
@@ -355,15 +432,28 @@ function CoursePickView({ courses, onBack, onSelect }) {
     ]),
     ]),
     h("p", { className: "muted", key: "count" }, !online && !filtered.length ? "The course catalog needs a connection. You can open your saved layouts." :
+      device.origin && nearby.status === "loading" && !filtered.length ? "Finding courses near your location…" :
       filtered.length ? filtered.length + " course" + (filtered.length === 1 ? "" : "s") +
-        (hidden ? " · Showing up to " + BROWSE_MAPPED_LIMIT + " nearby mapped courses. Choose All courses to browse more." : "") : "No courses match your filters."),
+        (hidden ? (device.origin
+          ? " · Showing the " + BROWSE_NEARBY_LIMIT + " closest courses. Choose All courses to browse more."
+          : " · Showing up to " + BROWSE_MAPPED_LIMIT + " nearby mapped courses. Choose All courses to browse more.") : "") : "No courses match your filters."),
+    device.origin && nearby.status === "ready" && !filtered.length && range !== "all"
+      ? h("button", {
+        className: "btn ghost small", type: "button", key: "showAll",
+        onClick: () => { setRangeTouched(true); setRange("all"); },
+      }, "Show all courses")
+      : null,
     filtered.length
       ? filtered.map((course) => {
+          const isExternal = Boolean(course.external);
           const level = courseCoverage(course);
-          const favorite = favoriteState.favorites.has(String(course.id));
-          const last = lastPlayed && String(lastPlayed.id) === String(course.id);
-          const live = courseTrafficMatch(traffic, course);
-          const updated = Array.isArray(course.layouts) ? coursePackDate(course.layouts.map((layout) => layout.updated_at).filter(Boolean).sort().at(-1)) : "";
+          const favorite = !isExternal && favoriteState.favorites.has(String(course.id));
+          const last = !isExternal && lastPlayed && String(lastPlayed.id) === String(course.id);
+          const live = !isExternal ? courseTrafficMatch(traffic, course) : null;
+          const updated = !isExternal && Array.isArray(course.layouts) ? coursePackDate(course.layouts.map((layout) => layout.updated_at).filter(Boolean).sort().at(-1)) : "";
+          const metaText = isExternal
+            ? [courseSub(course, sortOrigin), course.holes ? course.holes + " holes" : ""].filter(Boolean).join(" · ")
+            : [courseSub(course, sortOrigin), updated ? "Layout updated " + updated : ""].filter(Boolean).join(" · ");
           return h(
             "div",
             { className: "tap-row", key: course.id || course.name },
@@ -374,19 +464,19 @@ function CoursePickView({ courses, onBack, onSelect }) {
                 [
                   h("div", { className: "grow", key: "content" }, [
                     h("div", { className: "title", key: "title" }, course.name),
-                    h(CourseMeta, { text: [courseSub(course, sortOrigin), updated ? "Layout updated " + updated : ""].filter(Boolean).join(" · "),
+                    h(CourseMeta, { text: metaText,
                       coverage: level, course: true, lastPlayed: last, traffic: live ? trafficSummary(live) : "", key: "meta" }),
                   ]),
                   h("div", { className: "chev", key: "chev" }, icon(ChevronRight)),
                 ],
               ),
-              favoriteState.available ? h("button", { className: "course-directions", key: "favorite", type: "button",
+              !isExternal && favoriteState.available ? h("button", { className: "course-directions", key: "favorite", type: "button",
                 disabled: favoriteState.loading || Boolean(favoriteState.busy), "aria-pressed": favorite,
                 "aria-label": (favorite ? "Remove " : "Add ") + course.name + (favorite ? " from favorites" : " to favorites"),
                 title: favorite ? "Remove favorite" : "Add favorite",
                 onClick: () => favoriteState.toggle(course.id),
               }, h(Star, { size: 18, fill: favorite ? "currentColor" : "none", "aria-hidden": true })) : null,
-              level !== "full" ? h("a", { className: "course-map-capture", key: "capture", href: teeSignCaptureHref(course) }, "Add a map") : null,
+              !isExternal && level !== "full" ? h("a", { className: "course-map-capture", key: "capture", href: teeSignCaptureHref(course) }, "Add a map") : null,
               h(DirectionsLink, { course, origin: sortOrigin, key: "dir" }),
             ],
           );

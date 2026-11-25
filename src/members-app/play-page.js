@@ -10,6 +10,8 @@ import { liveScoreHref, liveWatchHref } from "../shared/live-watch.js";
 import { formatUdiscWhen, recentPlayRounds, relClass } from "./play-page-model.js";
 import { myLayoutHandicaps } from "../shared/handicap.js";
 import { trafficHoleLine, trafficSummary } from "../shared/course-traffic.js";
+import { distanceMeters, formatDistance, point } from "../shared/course-geo.js";
+import { mergeDiscoveredCourses } from "../score-app/course-pick.js";
 import { memberConfirm } from "./member-dialogs.js";
 import { historyLocked, MembershipNeeded } from "./membership-needed.js";
 import { useMemberContext } from "./member-context.js";
@@ -68,6 +70,14 @@ function CourseSearch() {
   const [query, setQuery] = React.useState("");
   const [result, setResult] = React.useState({ courses: null, error: false });
   const [retry, loadAgain] = React.useReducer((count) => count + 1, 0);
+  const [loc, setLoc] = React.useState({ status: "idle", origin: null });
+  const [nearby, setNearby] = React.useState({ status: "idle", courses: [], miles: 0 });
+  const [opening, setOpening] = React.useState("");
+  const [openError, setOpenError] = React.useState("");
+  const nearbyAbortRef = React.useRef(null);
+
+  React.useEffect(() => () => nearbyAbortRef.current?.abort(), []);
+
   React.useEffect(() => {
     if (!open || result.courses) return undefined;
     const controller = new AbortController();
@@ -78,25 +88,154 @@ function CourseSearch() {
     });
     return () => controller.abort();
   }, [open, result.courses, retry]);
+
+  React.useEffect(() => {
+    if (!open || !loc.origin) {
+      setNearby({ status: "idle", courses: [], miles: 0 });
+      return undefined;
+    }
+    const controller = new AbortController();
+    nearbyAbortRef.current?.abort();
+    nearbyAbortRef.current = controller;
+    setNearby({ status: "loading", courses: [], miles: 0 });
+    const here = loc.origin;
+    const milesSteps = [25, 50, 100];
+    (async () => {
+      try {
+        let fetched = [];
+        let usedMiles = 25;
+        for (const radius of milesSteps) {
+          const data = await requestJson(
+            `/courses/nearby?lat=${encodeURIComponent(here.lat)}&lng=${encodeURIComponent(here.lng)}&miles=${radius}`,
+            { signal: controller.signal },
+          );
+          if (controller.signal.aborted) return;
+          fetched = Array.isArray(data?.courses) ? data.courses : [];
+          usedMiles = radius;
+          const catalogHits = (result.courses || []).some((row) => distanceMeters(here, row) <= radius * 1609.344);
+          if (fetched.length > 0 || catalogHits) break;
+        }
+        setNearby({ status: "ready", courses: fetched, miles: usedMiles });
+      } catch (error) {
+        if (!controller.signal.aborted && error?.name !== "AbortError") {
+          setNearby({ status: "error", courses: [], miles: 0 });
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [open, loc.origin]);
+
+  function toggleLocation() {
+    setOpenError("");
+    if (loc.origin) {
+      nearbyAbortRef.current?.abort();
+      setLoc({ status: "idle", origin: null });
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLoc({ status: "unavailable", origin: null });
+      return;
+    }
+    setLoc({ status: "locating", origin: null });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const origin = point({ lat: position.coords?.latitude, lng: position.coords?.longitude });
+        setLoc(origin ? { status: "ready", origin } : { status: "unavailable", origin: null });
+      },
+      () => setLoc({ status: "unavailable", origin: null }),
+      { enableHighAccuracy: false, maximumAge: 120000, timeout: 10000 },
+    );
+  }
+
+  async function openExternalCourse(row) {
+    if (opening) return;
+    setOpening(String(row.id));
+    setOpenError("");
+    try {
+      const response = await request("/courses/discover", {
+        method: "POST",
+        token: storageGet(TOKEN_KEY),
+        body: { source: row.source, source_id: row.source_id, region: row.region },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.course?.name) throw new Error("discover_failed");
+      window.location.href = "score.html?course=" + encodeURIComponent(data.course.name);
+    } catch {
+      setOpening("");
+      setOpenError("Could not open that course right now.");
+    }
+  }
+
+  const combined = React.useMemo(
+    () => mergeDiscoveredCourses(result.courses || [], nearby.courses),
+    [result.courses, nearby.courses],
+  );
   const term = query.trim().toLowerCase();
-  const matches = term ? (result.courses || []).filter((row) => [row.name, row.location].join(" ").toLowerCase().includes(term)).slice(0, 8) : [];
+  const origin = loc.origin;
+  const maxMeters = (nearby.miles || 50) * 1609.344;
+  let matches = [];
+  if (term) {
+    matches = combined
+      .filter((row) => [row.name, row.location].join(" ").toLowerCase().includes(term))
+      .map((row) => ({ row, meters: origin ? distanceMeters(origin, row) : Infinity }))
+      .sort((a, b) => a.meters - b.meters || String(a.row.name || "").localeCompare(String(b.row.name || "")))
+      .slice(0, 8);
+  } else if (origin) {
+    matches = combined
+      .map((row) => ({ row, meters: distanceMeters(origin, row) }))
+      .filter(({ meters }) => Number.isFinite(meters) && (nearby.status !== "ready" || meters <= maxMeters))
+      .sort((a, b) => a.meters - b.meters || String(a.row.name || "").localeCompare(String(b.row.name || "")))
+      .slice(0, 8);
+  }
+  const showExternalNote = matches.some(({ row }) => row.external);
+
   return h("details", { className: "player-card member-course-search", onToggle: (event) => setOpen(event.currentTarget.open) }, [
     h("summary", { key: "summary" }, h(MapPin, { size: 18, "aria-hidden": true }), "Find a course"),
     h("label", { className: "player-play-join", key: "search" }, [
       "Course name or town", h("input", { className: "form-input", type: "search", key: "input", value: query, onChange: (event) => setQuery(event.target.value) }),
     ]),
-    matches.length ? h("ul", { className: "member-search-matches", key: "matches" }, matches.map((row) => h("li", { key: row.id },
-      h("a", { href: "score.html?course=" + encodeURIComponent(row.name) }, [
-        h("span", { key: "copy" }, h("strong", null, row.name), row.location ? h("small", null, row.location) : null),
-        h(ChevronRight, { size: 17, "aria-hidden": true, key: "chevron" }),
-      ]),
-    ))) : result.error ? h("div", { className: "member-subactions", key: "status" }, [
+    h("div", { className: "member-course-tools", key: "tools" }, [
+      h("button", {
+        className: "dashboard-action",
+        type: "button",
+        key: "locate",
+        "aria-pressed": Boolean(origin),
+        disabled: loc.status === "locating",
+        onClick: toggleLocation,
+      }, loc.status === "locating" ? "Finding location…" : origin ? "Clear location" : "Use my location"),
+    ]),
+    loc.status === "unavailable" ? h("p", { className: "dash-note", role: "status", key: "locErr" }, "Location unavailable.") : null,
+    origin && nearby.status === "loading" ? h("p", { className: "dash-note", role: "status", key: "nearbyLoad" }, "Finding courses near your location…") : null,
+    origin && nearby.status === "error" ? h("p", { className: "dash-note", role: "status", key: "nearbyErr" }, "Could not check courses outside the club catalog.") : null,
+    openError ? h("p", { className: "dash-note", role: "alert", key: "openErr" }, openError) : null,
+    matches.length ? h("ul", { className: "member-search-matches", key: "matches" }, matches.map(({ row, meters }) => {
+      const sub = [row.location, Number.isFinite(meters) ? formatDistance(meters) : ""].filter(Boolean).join(" · ");
+      return h("li", { key: row.id },
+        row.external
+          ? h("button", {
+            className: "member-search-pick",
+            type: "button",
+            disabled: Boolean(opening),
+            onClick: () => { void openExternalCourse(row); },
+          }, [
+            h("span", { key: "copy" }, h("strong", null, opening === String(row.id) ? `Opening ${row.name}…` : row.name), sub ? h("small", null, sub) : null),
+            h(ChevronRight, { size: 17, "aria-hidden": true, key: "chevron" }),
+          ])
+          : h("a", { href: "score.html?course=" + encodeURIComponent(row.name) }, [
+            h("span", { key: "copy" }, h("strong", null, row.name), sub ? h("small", null, sub) : null),
+            h(ChevronRight, { size: 17, "aria-hidden": true, key: "chevron" }),
+          ]),
+      );
+    })) : result.error ? h("div", { className: "member-subactions", key: "status" }, [
       h("p", { className: "dash-note", role: "alert", key: "error" }, "Courses couldn’t load."),
       h("button", { className: "dashboard-action", type: "button", key: "retry", onClick: () => {
         setResult({ courses: null, error: false });
         loadAgain();
       } }, "Try again"),
-    ]) : term ? h("p", { className: "dash-note", role: "status", key: "status" }, result.courses ? "No matching courses." : "Loading courses…") : null,
+    ]) : (term || (origin && nearby.status === "ready"))
+      ? h("p", { className: "dash-note", role: "status", key: "status" }, result.courses ? "No matching courses." : "Loading courses…")
+      : null,
+    showExternalNote ? h("p", { className: "player-card-meta", key: "attr" }, "Course data supplied by DiscGolfAPI.") : null,
   ]);
 }
 

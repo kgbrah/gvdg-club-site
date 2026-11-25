@@ -11,6 +11,7 @@ export const COURSE_RANGES = [
 ];
 export const COURSE_RANGE_DEFAULT = "25";
 export const BROWSE_MAPPED_LIMIT = 12;
+export const BROWSE_NEARBY_LIMIT = 25;
 export const LAST_COURSE_KEY = "gvdg.lastCourse";
 
 export function milesFromClub(course, origin = CLUB_ORIGIN) {
@@ -90,6 +91,16 @@ export function filterCoursesForPick(courses, query, range, origin, options = {}
     return miles != null && miles <= maxMiles;
   });
   matched.sort((a, b) => {
+    if (options.sortByDistance) {
+      if (a.miles == null && b.miles == null) {
+        return COVERAGE_ORDER[b.coverage] - COVERAGE_ORDER[a.coverage] || compareNames(a.course, b.course);
+      }
+      if (a.miles == null) return 1;
+      if (b.miles == null) return -1;
+      if (a.miles !== b.miles) return a.miles - b.miles;
+      if (a.coverage !== b.coverage) return COVERAGE_ORDER[b.coverage] - COVERAGE_ORDER[a.coverage];
+      return compareNames(a.course, b.course);
+    }
     if (a.coverage !== b.coverage) return COVERAGE_ORDER[b.coverage] - COVERAGE_ORDER[a.coverage];
     if (a.miles == null && b.miles == null) return compareNames(a.course, b.course);
     if (a.miles == null) return 1;
@@ -98,6 +109,43 @@ export function filterCoursesForPick(courses, query, range, origin, options = {}
     return compareNames(a.course, b.course);
   });
   return matched.map((row) => row.course);
+}
+
+function normalizeCourseMatchName(name) {
+  return searchable(name)
+    .replace(/\bdisc\s*golf(\s*course)?\b/g, " ")
+    .replace(/\b(dgc|park)\b/g, " ")
+    .replace(/\bcc\b/g, " community college ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function mergeDiscoveredCourses(catalogCourses, nearbyCourses) {
+  const base = Array.isArray(catalogCourses) ? catalogCourses.slice() : [];
+  const extra = Array.isArray(nearbyCourses) ? nearbyCourses : [];
+  if (!extra.length) return base;
+  const seenIds = new Set(base.map((course) => String(course?.id)));
+  const out = base.slice();
+  for (const cand of extra) {
+    if (!cand || cand.id == null) continue;
+    const key = String(cand.id);
+    if (seenIds.has(key)) continue;
+    const candName = normalizeCourseMatchName(cand.name);
+    const dup = base.some((existing) => {
+      if (!existing) return false;
+      const dist = milesFromOrigin(cand, existing);
+      if (dist != null && dist <= 0.12) return true;
+      if (candName && candName === normalizeCourseMatchName(existing.name)) {
+        return dist == null || dist <= 5;
+      }
+      return false;
+    });
+    if (dup) continue;
+    seenIds.add(key);
+    out.push(cand);
+  }
+  return out;
 }
 
 export function courseSub(course, origin) {
@@ -156,12 +204,21 @@ export function coursesForPickScreen(courses, query, range, origin, options = {}
   const rows = filterCoursesForPick(courses, query, range, origin, options);
   let visible = rows;
   if (browsing && range !== "all" && !options.coverage && !options.favoritesOnly && !options.savedOnly) {
-    const mapped = rows.filter((course) => courseHasMap(course));
-    visible = (mapped.length ? mapped : rows).slice(0, BROWSE_MAPPED_LIMIT);
-    const lastId = options.lastCourseId;
-    if (lastId != null) {
-      const last = (Array.isArray(courses) ? courses : []).find((course) => String(course.id) === String(lastId));
-      if (last) visible = [last, ...visible.filter((course) => String(course.id) !== String(last.id))];
+    if (options.sortByDistance) {
+      visible = rows.slice(0, BROWSE_NEARBY_LIMIT);
+      const lastId = options.lastCourseId;
+      if (lastId != null) {
+        const last = rows.find((course) => String(course.id) === String(lastId));
+        if (last) visible = [last, ...visible.filter((course) => String(course.id) !== String(last.id))];
+      }
+    } else {
+      const mapped = rows.filter((course) => courseHasMap(course));
+      visible = (mapped.length ? mapped : rows).slice(0, BROWSE_MAPPED_LIMIT);
+      const lastId = options.lastCourseId;
+      if (lastId != null) {
+        const last = (Array.isArray(courses) ? courses : []).find((course) => String(course.id) === String(lastId));
+        if (last) visible = [last, ...visible.filter((course) => String(course.id) !== String(last.id))];
+      }
     }
   }
   return visible;

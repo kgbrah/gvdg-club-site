@@ -164,20 +164,28 @@ body .member-dialog-title {
 #members .member-join .player-btn { width: auto; min-width: 5.2rem; }
 #members .member-course-search summary { cursor: pointer; font-weight: 750; list-style-position: inside; }
 #members .member-course-search summary svg { vertical-align: -.2em; margin-inline: .25rem .36rem; }
+#members .member-course-search .member-course-tools { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .55rem; align-items: center; }
 #members .member-search-matches { list-style: none; margin-top: .55rem; }
-#members .member-search-matches a {
+#members .member-search-matches :is(a, button.member-search-pick) {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: .45rem;
+  width: 100%;
   min-height: 44px;
   padding: .52rem .25rem;
   color: var(--text-primary);
   text-decoration: none;
+  border: 0;
   border-top: 1px solid var(--member-line);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-#members .member-search-matches a small { display: block; font-size: .78rem; color: var(--member-muted); margin-top: .14rem; }
-#members .member-search-matches a:hover { background: var(--member-hover); }
+#members .member-search-matches :is(a, button.member-search-pick) small { display: block; font-size: .78rem; color: var(--member-muted); margin-top: .14rem; }
+#members .member-search-matches :is(a, button.member-search-pick):hover { background: var(--member-hover); }
+#members .member-search-matches button.member-search-pick:disabled { opacity: .65; cursor: progress; }
 #members .member-play-surface :is(.live-round-list, .handicap-list) { gap: 0; }
 #members .member-play-surface :is(.live-round-card, .handicap-row) {
   padding: .72rem .16rem;

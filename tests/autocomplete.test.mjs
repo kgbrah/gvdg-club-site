@@ -64,7 +64,7 @@ test("every member-app search uses the shared autocomplete", () => {
   uses("src/members-app/registration-events.js", /h\(AutocompleteInput, \{\s*suggestions: partnerNames/);
   uses("src/members-app/community-courses-panel.js", /h\(AutocompleteInput, \{[^}]*value: filter\.q,\s*suggestions: courseNames/);
   uses("src/members-app/practice-panels.js", /field\("Find in my bag", \{[^}]*suggestions: workspace\.data\.discs/);
-  uses("src/score-app/setup-flow.js", /h\(AutocompleteInput, \{\s*suggestions: \(courses \|\| \[\]\)/);
+  uses("src/score-app/setup-flow.js", /h\(AutocompleteInput, \{\s*suggestions: \(allCourses \|\| \[\]\)/);
   uses("src/score-app/setup-flow.js", /h\(AutocompleteInput, \{ className: "field", placeholder: "Layout name"/);
   uses("src/public-app/market-browse.js", /h\(AutocompleteInput, \{\s*suggestions: DISC_SUGGESTIONS/);
   uses("src/public-app/market-wanted.js", /h\(AutocompleteInput, \{ suggestions: DISC_SUGGESTIONS/);
