@@ -821,7 +821,7 @@ export async function hydrateCourseFromUdiscOnDemand(
       finished_at: now,
       error: "no_layouts",
     });
-    try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
+    try { await bustCourseCatalogCache(course.id); } catch { /* cache bust is best-effort */ }
     return { action: "skipped" };
   }
 
@@ -836,7 +836,7 @@ export async function hydrateCourseFromUdiscOnDemand(
     attempted_at: now,
     finished_at: now,
   });
-  try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
+  try { await bustCourseCatalogCache(course.id); } catch { /* cache bust is best-effort */ }
   return {
     action: "imported",
     udisc_url: resolved,
@@ -991,7 +991,7 @@ async function finish(env: Env, now: number, tick: UdiscLayoutImportTick): Promi
     /* progress table is best-effort */
   }
   if (tick.action === "imported" || tick.action === "hydrated") {
-    try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
+    try { await bustCourseCatalogCache(tick.course_id ?? null); } catch { /* cache bust is best-effort */ }
   }
   return tick;
 }

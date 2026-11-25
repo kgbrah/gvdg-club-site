@@ -32,9 +32,25 @@ async function listed<T>(
 const CATALOG_READ_TIMEOUT_MS = 4_000;
 
 /** Course, layout and published-map writes change GET /courses: drop the edge copy (best effort). */
-async function afterCatalogWrite<T>(write: Promise<T>): Promise<T> {
+function recordCourseId(row: unknown): number | null {
+  if (!row || typeof row !== "object") return null;
+  const id = Number((row as { id?: unknown }).id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function layoutCourseId(row: unknown): number | null {
+  if (!row || typeof row !== "object") return null;
+  const cid = Number((row as { course_id?: unknown }).course_id);
+  return Number.isInteger(cid) && cid > 0 ? cid : null;
+}
+
+async function afterCatalogWrite<T>(
+  write: Promise<T>,
+  courseId?: number | null | ((result: T) => number | null),
+): Promise<T> {
   const result = await write;
-  try { await bustCourseCatalogCache(); } catch { /* the 60s freshness window still bounds staleness */ }
+  const cid = typeof courseId === "function" ? courseId(result) : courseId;
+  try { await bustCourseCatalogCache(cid); } catch { /* the 60s freshness window still bounds staleness */ }
   return result;
 }
 
@@ -180,7 +196,7 @@ export async function createCourse(db: D1Like, c: CourseInput) {
       c.is_default ? 1 : 0,
       c.created_by ?? null,
     )
-    .first());
+    .first(), recordCourseId);
 }
 
 export async function createCourseIfNew(db: D1Like, c: CourseInput) {
@@ -198,7 +214,7 @@ export async function createCourseIfNew(db: D1Like, c: CourseInput) {
       c.is_default ? 1 : 0,
       c.created_by ?? null,
     )
-    .first());
+    .first(), recordCourseId);
 }
 
 export type CoursePatch = { name?: string | null; location?: string | null; udisc_url?: string | null; udisc_course_id?: string | null; lat?: number | null; lng?: number | null };
@@ -209,7 +225,7 @@ export async function updateCourse(db: D1Like, id: number, c: CoursePatch) {
       "UPDATE courses SET name=COALESCE(?,name), location=COALESCE(?,location), udisc_url=COALESCE(?,udisc_url), udisc_course_id=COALESCE(?,udisc_course_id), lat=COALESCE(?,lat), lng=COALESCE(?,lng) WHERE id=? RETURNING *",
     )
     .bind(c.name ?? null, c.location ?? null, c.udisc_url ?? null, c.udisc_course_id ?? null, c.lat ?? null, c.lng ?? null, id)
-    .first());
+    .first(), id);
 }
 
 export async function updateCourseUdiscUrls(db: D1Like, rows: readonly { id: number; udisc_url: string }[]): Promise<void> {
@@ -225,7 +241,7 @@ export async function updateCourseUdiscUrls(db: D1Like, rows: readonly { id: num
 }
 
 export async function deleteCourse(db: D1Like, id: number) {
-  await afterCatalogWrite(db.prepare("DELETE FROM courses WHERE id = ?").bind(id).run());
+  await afterCatalogWrite(db.prepare("DELETE FROM courses WHERE id = ?").bind(id).run(), id);
 }
 
 export async function listLayoutsCatalog(db: D1Like, courseId: number) {
@@ -247,12 +263,12 @@ export async function createLayout(
   if (l.expected_holes != null) {
     return afterCatalogWrite(db.prepare("INSERT INTO course_layouts (course_id, name, holes, total_par, expected_holes) VALUES (?, ?, ?, ?, ?) RETURNING *")
       .bind(l.course_id, l.name ?? "Main", holesJson, l.total_par ?? null, l.expected_holes)
-      .first());
+      .first(), l.course_id);
   }
   return afterCatalogWrite(db
     .prepare("INSERT INTO course_layouts (course_id, name, holes, total_par) VALUES (?, ?, ?, ?) RETURNING *")
     .bind(l.course_id, l.name ?? "Main", holesJson, l.total_par ?? null)
-    .first());
+    .first(), l.course_id);
 }
 
 export async function getLayout(db: D1Like, id: number) {
@@ -394,14 +410,14 @@ export async function updateLayout(
   if (l.expected_holes !== undefined) {
     return afterCatalogWrite(db.prepare(
       "UPDATE course_layouts SET name=COALESCE(?,name), holes=COALESCE(?,holes), total_par=COALESCE(?,total_par), expected_holes=? WHERE id=? RETURNING *",
-    ).bind(l.name ?? null, holesJson, l.total_par ?? null, l.expected_holes, id).first());
+    ).bind(l.name ?? null, holesJson, l.total_par ?? null, l.expected_holes, id).first(), layoutCourseId);
   }
   return afterCatalogWrite(db
     .prepare(
       "UPDATE course_layouts SET name=COALESCE(?,name), holes=COALESCE(?,holes), total_par=COALESCE(?,total_par) WHERE id=? RETURNING *",
     )
     .bind(l.name ?? null, holesJson, l.total_par ?? null, id)
-    .first());
+    .first(), layoutCourseId);
 }
 
 export async function deleteLayout(db: D1Like, id: number) {
@@ -441,11 +457,12 @@ export async function createPosition(db: D1Like, p: PositionInput) {
       .prepare("INSERT INTO course_positions (course_id, kind, label, lat, lng, color) VALUES (?, ?, ?, ?, ?, ?) RETURNING *")
       .bind(p.course_id, p.kind, p.label, p.lat ?? null, p.lng ?? null, p.color ?? null)
       .first(),
+    p.course_id,
   );
 }
 
 export async function deletePosition(db: D1Like, courseId: number, id: number) {
-  await afterCatalogWrite(db.prepare("DELETE FROM course_positions WHERE id = ? AND course_id = ?").bind(id, courseId).run());
+  await afterCatalogWrite(db.prepare("DELETE FROM course_positions WHERE id = ? AND course_id = ?").bind(id, courseId).run(), courseId);
 }
 
 export async function replacePositions(db: D1Like, courseId: number, positions: PositionInput[]) {
@@ -464,7 +481,7 @@ export async function replacePositions(db: D1Like, courseId: number, positions: 
       if (typeof db.batch === "function") await db.batch(chunk);
       else for (const stmt of chunk) await stmt.run();
     }
-  })());
+  })(), courseId);
   return listPositions(db, courseId);
 }
 
