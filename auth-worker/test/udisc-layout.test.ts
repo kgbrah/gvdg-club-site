@@ -113,6 +113,35 @@ describe("parseUdiscLayouts — turbo-stream decode", () => {
     expect(r.name).toBe("Front 9 White");
     expect(r.holes).toHaveLength(2);
   });
+
+  it("extracts holeDistance feet (and meters fallback) without trusting unitless distance", () => {
+    const pool = [
+      /* 0*/ [15],
+      /* 1*/ "name",
+      /* 2*/ "holes",
+      /* 3*/ "par",
+      /* 4*/ "holeDistance",
+      /* 5*/ "feet",
+      /* 6*/ "meters",
+      /* 7*/ "distance",
+      /* 8*/ "Main Layout",
+      /* 9*/ 3,
+      /*10*/ { _5: 11, _6: 12 }, // holeDistance { feet: 233.96, meters: 71.311 }
+      /*11*/ 233.96,
+      /*12*/ 71.311,
+      /*13*/ { _6: 14 }, // holeDistance { meters: 100 }
+      /*14*/ 100,
+      /*15*/ { _1: 8, _2: 16 },
+      /*16*/ [17, 18, 19],
+      /*17*/ { _3: 9, _4: 10 },
+      /*18*/ { _3: 9, _4: 13 },
+      /*19*/ { _3: 9, _7: 14 }, // unitless distance only -> ignored
+    ];
+    const { layouts } = parseUdiscLayouts(turboStreamHtml(pool), "https://udisc.com/courses/x");
+    expect(layouts[0]!.holes[0]!.distance_ft).toBe(234);
+    expect(layouts[0]!.holes[1]!.distance_ft).toBe(328);
+    expect(layouts[0]!.holes[2]!.distance_ft).toBeUndefined();
+  });
 });
 
 describe("parseUdiscLayouts — graceful degrade", () => {

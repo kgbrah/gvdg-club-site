@@ -1,6 +1,6 @@
 import React from "react";
 
-import { flightArc, flightPoint, holeMapLabel, HOLE_MAP_COMPACT_SIZE, HOLE_MAP_SIZE, HOLE_MAP_WATCH_SIZE, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectLooseHoleMap, projectMapPoint, SATELLITE_CREDIT, satelliteTileLayers, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
+import { flightArc, flightPoint, holeMapCredit, holeMapLabel, HOLE_MAP_COMPACT_SIZE, HOLE_MAP_SIZE, HOLE_MAP_WATCH_SIZE, latLngFromMapPoint, playerMarksOnMap, playerPhotoSrc, projectLooseHoleMap, projectMapPoint, SATELLITE_CREDIT, satelliteTileLayers, scoreChipAnchor, throwSegments } from "./hole-map-model.js";
 import { discColorPattern } from "./disc-color.js";
 import { HEATMAP_MIN_SAMPLES, HeatmapLayer, useHoleHeatmap } from "./hole-heatmap.js";
 import { safeExternalUrl } from "./safe-url.js";
@@ -565,6 +565,7 @@ export function HoleMap(props) {
   const large = Boolean(props.large);
   const size = props.size || (compact ? HOLE_MAP_COMPACT_SIZE : large ? HOLE_MAP_WATCH_SIZE : HOLE_MAP_SIZE);
   const map = projectLooseHoleMap(hole, {
+    courseAnchor: props.courseAnchor,
     fitViewport: props.fitted,
     focus: props.focus,
     height: size.height,
@@ -662,7 +663,7 @@ export function HoleMap(props) {
     focus: map.focus,
     heat: showHeat,
     key: "focus",
-    onFocus: props.onFocus,
+    onFocus: map.areaOnly ? undefined : props.onFocus,
     onHeat: heatAvailable ? () => setHeatOn((value) => !value) : undefined,
   });
   const lieControls = h(MapLieChip, {
@@ -679,7 +680,7 @@ export function HoleMap(props) {
   const credit = h("div", {
     className: "hole-map-credit" + (props.fitted ? " hole-map-credit-overlay" : ""),
     key: "credit",
-  }, SATELLITE_CREDIT);
+  }, holeMapCredit(hole) || SATELLITE_CREDIT);
   return h("div", {
     className: compact
       ? "hole-map-card hole-map-compact"
@@ -688,7 +689,7 @@ export function HoleMap(props) {
     h("div", { className: "hole-map-frame", key: "frame" }, [
       !props.schematic && h(SatelliteLayer, {
         bounds: map.bounds,
-        cachedHole: props.fitted ? hole : null,
+        cachedHole: props.fitted && !map.areaOnly ? hole : null,
         focus: map.focus,
         height: map.height,
         key: map.satelliteUrl || "satellite",
@@ -821,8 +822,8 @@ export function HoleMap(props) {
       props.fitted && !props.schematic ? credit : null,
     ]),
     h("div", { className: "hole-map-caption", key: "caption" }, [
-      h("span", { key: "tee" }, map.tee ? map.tee.label : "You"),
-      h("span", { key: "dist" }, map.distanceFt ? `${map.distanceFt} ft` : (map.loose ? "Around you" : "Map")),
+      h("span", { key: "tee" }, map.tee ? map.tee.label : (map.areaOnly ? "Course area" : "You")),
+      h("span", { key: "dist" }, map.distanceFt ? `${map.distanceFt} ft` : (map.areaOnly ? "No hole pins yet" : (map.loose ? "Around you" : "Map"))),
       h("span", { key: "basket" }, map.basket ? map.basket.label : ""),
     ]),
     !props.fitted ? credit : null,

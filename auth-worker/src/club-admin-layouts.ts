@@ -29,14 +29,36 @@ export async function handleAdminLayouts(
       if (!clean || clean.length === 0) return json({ error: "invalid_layout" }, 400, origin);
       const existing = (await db.getLayout(env.DB, id)) as { holes?: string } | null;
       const verifiedByHole = new Map<number, ReturnType<typeof verifiedOf>>();
+      const udiscDistByHole = new Map<number, number>();
       const storedHoleNums = new Set<number>();
-      try { for (const h of JSON.parse(existing?.holes ?? "[]") as LayoutHole[]) { storedHoleNums.add(Number(h.hole)); const v = verifiedOf(h); if (v) verifiedByHole.set(Number(h.hole), v); } } catch { storedHoleNums.clear(); verifiedByHole.clear(); }
+      try {
+        for (const h of JSON.parse(existing?.holes ?? "[]") as LayoutHole[]) {
+          const holeNum = Number(h.hole);
+          storedHoleNums.add(holeNum);
+          const v = verifiedOf(h);
+          if (v) verifiedByHole.set(holeNum, v);
+          if (typeof h.udisc_distance_ft === "number" && Number.isFinite(h.udisc_distance_ft) && h.udisc_distance_ft > 0) {
+            udiscDistByHole.set(holeNum, Math.round(h.udisc_distance_ft));
+          }
+        }
+      } catch {
+        storedHoleNums.clear();
+        verifiedByHole.clear();
+        udiscDistByHole.clear();
+      }
       if (verifiedByHole.size > 0) {
         const submitted = new Set(clean.map((h) => Number(h.hole)));
         const sameHoleSet = submitted.size === storedHoleNums.size && [...storedHoleNums].every((n) => submitted.has(n));
         if (!sameHoleSet) return json({ error: "verified_layout_locked" }, 409, origin);
       }
-      for (const h of clean) { const v = verifiedByHole.get(Number(h.hole)); if (v) h.verified = v; }
+      for (const h of clean) {
+        const holeNum = Number(h.hole);
+        const v = verifiedByHole.get(holeNum);
+        if (v) h.verified = v;
+        if (h.udisc_distance_ft == null && udiscDistByHole.has(holeNum)) {
+          h.udisc_distance_ft = udiscDistByHole.get(holeNum);
+        }
+      }
       ({ holes, total_par } = enrichHoles(clean));
     }
     const row = await db.updateLayout(env.DB, id, { name: asStr(b.name, 60), holes, total_par });

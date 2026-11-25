@@ -18,8 +18,9 @@ export interface LayoutHole {
   hole: number;
   par: number;
   par_source?: "placeholder" | "udisc" | "recorded";
-  tee?: ({ label?: string | null } & LatLng) | null;
-  target?: ({ label?: string | null } & LatLng) | null;
+  udisc_distance_ft?: number | null;
+  tee?: ({ label?: string | null; source?: string | null } & LatLng) | null;
+  target?: ({ label?: string | null; source?: string | null } & LatLng) | null;
   manual_distance?: number | null;
   verified?: VerifiedHole | null;
   distance_ft?: number | null;
@@ -45,7 +46,7 @@ export function verifiedOf(h: LayoutHole): VerifiedHole | null {
 
 /** Recompute each hole's effective par/distance_ft/distance_source and the layout's total par.
  *  Idempotent and STICKY: a hole with a verified (tee-sign) record always resolves to the verified
- *  par + distance (source 'tee_sign'); otherwise manual_distance > geo > par_estimate is used. */
+ *  par + distance (source 'tee_sign'); otherwise manual_distance > geo > udisc_distance_ft > par_estimate is used. */
 export function enrichHoles(holes: LayoutHole[]): EnrichedLayout {
   let total_par = 0;
   const out = (holes ?? []).map((h) => {
@@ -57,6 +58,7 @@ export function enrichHoles(holes: LayoutHole[]): EnrichedLayout {
       manual: h.manual_distance ?? null,
       tee: h.tee,
       target: h.target,
+      udisc: h.udisc_distance_ft ?? null,
       par,
     });
     return { ...h, par, verified: verified ?? null, distance_ft, distance_source: source };

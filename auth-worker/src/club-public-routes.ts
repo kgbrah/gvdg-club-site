@@ -9,6 +9,7 @@ import { kvRateLimited } from "./kv-rate-limit.js";
 import { RECORD_PAGE_DEFAULTS, asInt, parseWindow } from "./input.js";
 import { DISCGOLFAPI_ATTRIBUTION } from "./imports/nearby-courses.js";
 import { findNearbyExternalCourses, materializeDiscoveredCourse } from "./nearby-course-discovery.js";
+import { enrichCoursePinsFromOsm } from "./osm-course-map.js";
 import { handleTeeSignImage } from "./tee-sign-routes.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { publicFieldsByEvent } from "./event-field.js";
@@ -175,6 +176,16 @@ export async function handleClubPublic(
     const result = await materializeDiscoveredCourse(env, { source, sourceId, region });
     if ("error" in result) {
       return json({ error: result.error }, result.error === "not_found" ? 404 : 400, origin);
+    }
+    if (Number(result.course.mapped) !== 1 && typeof ctx?.waitUntil === "function") {
+      ctx.waitUntil(
+        enrichCoursePinsFromOsm(env, {
+          id: Number(result.course.id),
+          name: String(result.course.name || ""),
+          lat: typeof result.course.lat === "number" ? result.course.lat : null,
+          lng: typeof result.course.lng === "number" ? result.course.lng : null,
+        }).catch(() => {}),
+      );
     }
     return json(
       { ...result, attribution: DISCGOLFAPI_ATTRIBUTION },

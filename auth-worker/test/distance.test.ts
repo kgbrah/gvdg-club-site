@@ -46,6 +46,14 @@ describe("estimateDistance (precedence: tee_sign → manual → geo → par → 
     const r = estimateDistance({ tee: { lat: 35.0, lng: null }, target, par: 4 });
     expect(r).toEqual({ distance_ft: 400, source: "par_estimate" });
   });
+  it("uses imported udisc distance after geo and before par_estimate", () => {
+    expect(estimateDistance({ udisc: 234.6, par: 3 })).toEqual({ distance_ft: 235, source: "udisc" });
+    expect(estimateDistance({ tee, target, udisc: 235, par: 3 }).source).toBe("geo");
+    expect(estimateDistance({ manual: 300, udisc: 235, par: 3 })).toEqual({ distance_ft: 300, source: "manual" });
+    expect(estimateDistance({ verified: 410, udisc: 235, par: 3 })).toEqual({ distance_ft: 410, source: "tee_sign" });
+    expect(estimateDistance({ udisc: 0, par: 3 })).toEqual({ distance_ft: 250, source: "par_estimate" });
+    expect(estimateDistance({ udisc: Number.NaN, par: 4 })).toEqual({ distance_ft: 400, source: "par_estimate" });
+  });
   it("returns null when nothing is known", () => {
     expect(estimateDistance({})).toEqual({ distance_ft: null, source: null });
   });

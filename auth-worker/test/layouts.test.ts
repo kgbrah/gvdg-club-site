@@ -17,6 +17,17 @@ describe("parseScorableHoles", () => {
     });
   });
 
+  it("preserves optional marker source when present and omits it when absent", () => {
+    const holes = parseScorableHoles(JSON.stringify([
+      { hole: 1, par: 3, tee: { label: "Hole 1 tee", lat: 40.07, lng: -76.89, source: "osm" }, target: { label: "Hole 1 basket", lat: 40.071, lng: -76.89, source: "osm" } },
+      { hole: 2, par: 3, tee: { label: "Blue", lat: 35.6, lng: -77.37 } },
+    ]));
+    expect(holes[0]!.tee).toEqual({ label: "Hole 1 tee", lat: 40.07, lng: -76.89, source: "osm" });
+    expect(holes[0]!.target).toEqual({ label: "Hole 1 basket", lat: 40.071, lng: -76.89, source: "osm" });
+    expect(holes[1]!.tee).toEqual({ label: "Blue", lat: 35.6, lng: -77.37 });
+    expect(Object.prototype.hasOwnProperty.call(holes[1]!.tee, "source")).toBe(false);
+  });
+
   it("returns an empty list for invalid JSON", () => {
     expect(parseScorableHoles("{nope")).toEqual([]);
   });
@@ -111,5 +122,18 @@ describe("enrichHoles (compute per-hole distance + total par)", () => {
     expect(holes[0]!.par).toBe(5);
     expect(holes[0]!.distance_source).toBe("par_estimate"); // no verified distance → falls through
     expect(holes[0]!.distance_ft).toBe(600);
+  });
+
+  it("uses udisc_distance_ft when coords/manual/verified are absent, and respects precedence", () => {
+    const { holes } = enrichHoles([
+      { hole: 1, par: 3, udisc_distance_ft: 233.6 },
+      { hole: 2, par: 3, udisc_distance_ft: 234, manual_distance: 290 },
+      { hole: 3, par: 3, udisc_distance_ft: 234, tee: { lat: 35.0, lng: -82.4 }, target: { lat: 35.001, lng: -82.4 } },
+      { hole: 4, par: 3, udisc_distance_ft: 234, verified: { par: 4, distance_ft: 420, tee_sign_key: "k" } },
+    ]);
+    expect(holes[0]).toMatchObject({ distance_ft: 234, distance_source: "udisc" });
+    expect(holes[1]).toMatchObject({ distance_ft: 290, distance_source: "manual" });
+    expect(holes[2]!.distance_source).toBe("geo");
+    expect(holes[3]).toMatchObject({ distance_ft: 420, distance_source: "tee_sign" });
   });
 });

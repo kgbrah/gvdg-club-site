@@ -16,7 +16,12 @@ import {
   UDISC_LAYOUT_IMPORT_CRON,
   UDISC_LOCAL_MISS,
 } from "../src/udisc-layout-import.js";
-import { COURSE_CATALOG_CACHE_NAME, bustCourseCatalogCache } from "../src/course-catalog-cache.js";
+import {
+  COURSE_CATALOG_CACHE_NAME,
+  COURSE_CATALOG_CACHE_URL,
+  bustCourseCatalogCache,
+  courseCatalogCacheKey,
+} from "../src/course-catalog-cache.js";
 import { normalizeUdiscCourseUrl, parseUdiscCourseSearch, parseUdiscCourseUrls, parseUdiscDirectoryHits, udiscCourseSearchUrl, udiscIndexUrl, udiscNcIndexUrl, udiscSlugName } from "../src/imports/udisc.js";
 
 describe("isUdiscLayoutCron", () => {
@@ -535,13 +540,50 @@ describe("udiscIndexUrl", () => {
   });
 });
 
-describe("bustCourseCatalogCache", () => {
-  it("deletes the course catalog cache after a mapped import", async () => {
-    const deleted: string[] = [];
-    vi.stubGlobal("caches", { delete: async (name: string) => { deleted.push(name); return true; } });
+describe("bustCourseCatalogCache & udisc distance apply", () => {
+  it("deletes the canonical catalog key via caches.open + cache.delete (Cloudflare Workers API)", async () => {
+    const store = new Map<string, Response>();
+    store.set(COURSE_CATALOG_CACHE_URL, new Response("{}"));
+    const key1 = courseCatalogCacheKey(new Request("https://auth.gvdgclub.com/courses"));
+    const key2 = courseCatalogCacheKey(new Request("https://gvdgclub.com/api/courses"));
+    expect(key1.url).toBe(COURSE_CATALOG_CACHE_URL);
+    expect(key2.url).toBe(COURSE_CATALOG_CACHE_URL);
+
+    vi.stubGlobal("caches", {
+      open: async (name: string) => {
+        expect(name).toBe(COURSE_CATALOG_CACHE_NAME);
+        return {
+          delete: async (req: Request) => store.delete(req.url),
+        };
+      },
+    });
     await expect(bustCourseCatalogCache()).resolves.toBe(true);
-    expect(deleted).toEqual([COURSE_CATALOG_CACHE_NAME]);
+    expect(store.size).toBe(0);
     vi.unstubAllGlobals();
+  });
+
+  it("carries UDisc hole distance_ft through planUdiscLayoutApply when coords are absent", () => {
+    const plan = planUdiscLayoutApply({
+      existingLayouts: [{ id: 10, name: "Default (par 3s)", holes: JSON.stringify([{ hole: 1, par: 3 }]) }],
+      existingPositions: [],
+      layouts: [
+        {
+          name: "Main",
+          udisc_url: "https://udisc.com/courses/x-AAAA",
+          udisc_course_id: "1",
+          note: "",
+          positions: [],
+          holes: [{ hole: 1, par: 4, par_source: "udisc", distance_ft: 412, tee: null, target: null }],
+        },
+      ],
+    });
+    expect(plan.layouts[0]!.holes[0]).toMatchObject({
+      hole: 1,
+      par: 4,
+      udisc_distance_ft: 412,
+      distance_ft: 412,
+      distance_source: "udisc",
+    });
   });
 
   it("recognizes Pennsylvania locations in geoLabel and URL scoring", () => {

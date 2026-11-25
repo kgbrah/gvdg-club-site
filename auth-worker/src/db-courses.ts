@@ -266,6 +266,7 @@ export interface HoleMarker {
   label: string | null;
   lat: number | null;
   lng: number | null;
+  source?: string | null;
 }
 
 export interface ScorableHole {
@@ -285,12 +286,13 @@ function finiteCoord(value: unknown): number | null {
 
 export function holeMarker(value: unknown): HoleMarker | null {
   if (!value || typeof value !== "object") return null;
-  const source = value as { label?: unknown; lat?: unknown; lng?: unknown };
-  const label = typeof source.label === "string" && source.label.trim() ? source.label.trim() : null;
-  const lat = finiteCoord(source.lat);
-  const lng = finiteCoord(source.lng);
+  const markerObj = value as { label?: unknown; lat?: unknown; lng?: unknown; source?: unknown };
+  const label = typeof markerObj.label === "string" && markerObj.label.trim() ? markerObj.label.trim() : null;
+  const lat = finiteCoord(markerObj.lat);
+  const lng = finiteCoord(markerObj.lng);
   if (!label && lat == null && lng == null) return null;
-  return { label, lat, lng };
+  const source = typeof markerObj.source === "string" && markerObj.source.trim() ? markerObj.source.trim() : null;
+  return source ? { label, lat, lng, source } : { label, lat, lng };
 }
 
 export function parseScorableHoles(holesJson: string | unknown): ScorableHole[] {

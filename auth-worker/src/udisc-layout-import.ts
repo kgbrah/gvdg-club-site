@@ -50,6 +50,7 @@ export const KNOWN_UDISC_URLS: Record<string, string> = {
   "shaw air force base": "https://udisc.com/courses/shaw-afb-disc-golf-course-nDUf",
 };
 const UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 20_000 } as const;
+export const ON_DEMAND_UDISC_FETCH = { maxBytes: 3_000_000, timeoutMs: 4_500 } as const;
 const UDISC_INDEX_PAGES = 20;
 
 export function isUdiscLayoutCron(cron: string): boolean {
@@ -527,6 +528,7 @@ function holesFromUdisc(layout: UdiscLayout): LayoutHole[] {
     hole: hole.hole,
     par: hole.par,
     par_source: hole.par_source,
+    ...(hole.distance_ft != null ? { udisc_distance_ft: hole.distance_ft } : {}),
     tee: hole.tee,
     target: hole.target,
   }));
@@ -687,6 +689,162 @@ export async function runUdiscLayoutImportTick(env: Env): Promise<UdiscLayoutImp
   return finish(env, now, last);
 }
 
+async function applyParsedUdiscLayouts(
+  env: Env,
+  courseId: number,
+  resolvedUrl: string,
+  parsed: { udisc_course_id: string | null; layouts: UdiscLayout[] },
+): Promise<{ layouts: LayoutApply[]; positions: PositionInput[]; mapped: boolean }> {
+  const existingLayouts = (await db.listLayouts(env.DB, courseId)) as { id: number; name: string; holes?: unknown }[];
+  const existingPositions = (await db.listPositions(env.DB, courseId)) as {
+    kind: string;
+    label: string;
+    lat?: number | null;
+    lng?: number | null;
+  }[];
+  const plan = planUdiscLayoutApply({ existingLayouts, existingPositions, layouts: parsed.layouts });
+
+  await db.updateCourse(env.DB, courseId, { udisc_url: resolvedUrl, udisc_course_id: parsed.udisc_course_id });
+  const newPositions = plan.positions.filter((pos) => {
+    return !existingPositions.some((row) => row.kind === pos.kind && row.label.toLowerCase() === pos.label.toLowerCase());
+  });
+  for (const pos of newPositions) {
+    await db.createPosition(env.DB, { ...pos, course_id: courseId });
+  }
+  for (const layout of plan.layouts) {
+    if (layout.action === "update") {
+      // A distinct replacement layout need not have the same hole count as the regional template.
+      await db.updateLayout(env.DB, layout.layoutId, {
+        name: layout.name,
+        holes: layout.holes,
+        total_par: layout.total_par,
+        ...(layout.replacesTemplate ? { expected_holes: null } : {}),
+      });
+    } else {
+      await db.createLayout(env.DB, { course_id: courseId, name: layout.name, holes: layout.holes, total_par: layout.total_par });
+    }
+  }
+  return plan;
+}
+
+async function readUdiscImportRow(database: Env["DB"], courseId: number): Promise<UdiscImportRow | null> {
+  try {
+    return (await database.prepare("SELECT * FROM udisc_layout_imports WHERE course_id = ?").bind(courseId).first<UdiscImportRow>()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function bestEffortUpsertUdiscImport(
+  database: Env["DB"],
+  row: Parameters<typeof upsertUdiscImport>[1],
+): Promise<void> {
+  try {
+    await upsertUdiscImport(database, row);
+  } catch {
+    /* optional in tests that omit 0030_udisc_layout_imports */
+  }
+}
+
+export async function hydrateCourseFromUdiscOnDemand(
+  env: Env,
+  course: ImportCourse,
+): Promise<{ action: "imported" | "skipped" | "failed"; udisc_url?: string; layouts?: number; mapped?: boolean }> {
+  const prior = await readUdiscImportRow(env.DB, course.id);
+  const explicitUrl = normalizeUdiscCourseUrl(course.udisc_url) || knownUdiscUrl(course);
+  if (prior) {
+    if (prior.status === "imported" || prior.status === "skipped" || prior.status === "no_layouts") {
+      return { action: "skipped" };
+    }
+    if (prior.status === "no_url" && prior.error === UDISC_LOCAL_MISS && !explicitUrl) {
+      return { action: "skipped" };
+    }
+  }
+
+  const now = Date.now();
+  let resolved = explicitUrl;
+  if (!resolved) {
+    const fromApi = await searchUdiscCourseApi(course, ON_DEMAND_UDISC_FETCH);
+    if (fromApi && fromApi !== "fetch_failed") {
+      resolved = fromApi;
+    } else {
+      const fromBox = await searchUdiscDirectoryBox(course, ON_DEMAND_UDISC_FETCH);
+      if (fromBox && fromBox !== "fetch_failed") {
+        resolved = fromBox;
+      } else {
+        const hadFetchFailure = fromApi === "fetch_failed" || fromBox === "fetch_failed";
+        if (!hadFetchFailure) {
+          await bestEffortUpsertUdiscImport(env.DB, {
+            course_id: course.id,
+            status: "no_url",
+            attempts: UDISC_IMPORT_MAX_ATTEMPTS,
+            attempted_at: now,
+            finished_at: now,
+            error: UDISC_LOCAL_MISS,
+          });
+        }
+        return { action: hadFetchFailure ? "failed" : "skipped" };
+      }
+    }
+  }
+
+  let html: string;
+  try {
+    html = await safeFetch(resolved, ["udisc.com"], ON_DEMAND_UDISC_FETCH);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("fetch_failed_404")) {
+      await bestEffortUpsertUdiscImport(env.DB, {
+        course_id: course.id,
+        status: "no_url",
+        udisc_url: resolved,
+        attempts: UDISC_IMPORT_MAX_ATTEMPTS,
+        attempted_at: now,
+        finished_at: now,
+        error: "fetch_failed_404",
+      });
+      return { action: "skipped" };
+    }
+    return { action: "failed" };
+  }
+
+  const parsed = parseUdiscLayouts(html, resolved);
+  const attempts = (prior?.attempts ?? 0) + 1;
+  if (!parsed.layouts.length) {
+    await db.updateCourse(env.DB, course.id, { udisc_url: resolved, udisc_course_id: parsed.udisc_course_id });
+    await bestEffortUpsertUdiscImport(env.DB, {
+      course_id: course.id,
+      status: "no_layouts",
+      udisc_url: resolved,
+      attempts,
+      attempted_at: now,
+      finished_at: now,
+      error: "no_layouts",
+    });
+    try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
+    return { action: "skipped" };
+  }
+
+  const plan = await applyParsedUdiscLayouts(env, course.id, resolved, parsed);
+  await bestEffortUpsertUdiscImport(env.DB, {
+    course_id: course.id,
+    status: "imported",
+    udisc_url: resolved,
+    layouts_imported: plan.layouts.length,
+    mapped: plan.mapped ? 1 : 0,
+    attempts,
+    attempted_at: now,
+    finished_at: now,
+  });
+  try { await bustCourseCatalogCache(); } catch { /* cache bust is best-effort */ }
+  return {
+    action: "imported",
+    udisc_url: resolved,
+    layouts: plan.layouts.length,
+    mapped: plan.mapped,
+  };
+}
+
 async function importOneCourse(
   env: Env,
   now: number,
@@ -773,31 +931,7 @@ async function importOneCourse(
       };
     }
 
-    const existingLayouts = (await db.listLayouts(env.DB, next.id)) as { id: number; name: string; holes?: unknown }[];
-    const existingPositions = (await db.listPositions(env.DB, next.id)) as {
-      kind: string;
-      label: string;
-      lat?: number | null;
-      lng?: number | null;
-    }[];
-    const plan = planUdiscLayoutApply({ existingLayouts, existingPositions, layouts: parsed.layouts });
-
-    await db.updateCourse(env.DB, next.id, { udisc_url: resolved, udisc_course_id: parsed.udisc_course_id });
-    const newPositions = plan.positions.filter((pos) => {
-      return !existingPositions.some((row) => row.kind === pos.kind && row.label.toLowerCase() === pos.label.toLowerCase());
-    });
-    for (const pos of newPositions) {
-      await db.createPosition(env.DB, { ...pos, course_id: next.id });
-    }
-    for (const layout of plan.layouts) {
-      if (layout.action === "update") {
-        // A distinct replacement layout need not have the same hole count as the regional template.
-        await db.updateLayout(env.DB, layout.layoutId, { name: layout.name, holes: layout.holes, total_par: layout.total_par,
-          ...(layout.replacesTemplate ? { expected_holes: null } : {}) });
-      } else {
-        await db.createLayout(env.DB, { course_id: next.id, name: layout.name, holes: layout.holes, total_par: layout.total_par });
-      }
-    }
+    const plan = await applyParsedUdiscLayouts(env, next.id, resolved, parsed);
 
     await upsertUdiscImport(env.DB, {
       course_id: next.id,
@@ -867,34 +1001,43 @@ async function persistAttachedUrls(env: Env, rows: { id: number; udisc_url: stri
   return rows.length;
 }
 
-async function searchNearbyUdisc(course: ImportCourse): Promise<string | null | "fetch_failed"> {
-  const fromBox = await searchUdiscDirectoryBox(course);
+async function searchNearbyUdisc(
+  course: ImportCourse,
+  fetchOpts: { maxBytes?: number; timeoutMs?: number } = UDISC_FETCH,
+): Promise<string | null | "fetch_failed"> {
+  const fromBox = await searchUdiscDirectoryBox(course, fetchOpts);
   if (typeof fromBox === "string" && fromBox !== "fetch_failed") return fromBox;
-  const fromApi = await searchUdiscCourseApi(course);
+  const fromApi = await searchUdiscCourseApi(course, fetchOpts);
   if (typeof fromApi === "string" && fromApi !== "fetch_failed") return fromApi;
   if (fromBox === "fetch_failed" && fromApi === "fetch_failed") return "fetch_failed";
   return null;
 }
 
-async function searchUdiscDirectoryBox(course: ImportCourse): Promise<string | null | "fetch_failed"> {
+async function searchUdiscDirectoryBox(
+  course: ImportCourse,
+  fetchOpts: { maxBytes?: number; timeoutMs?: number } = UDISC_FETCH,
+): Promise<string | null | "fetch_failed"> {
   const lat = Number(course.lat);
   const lng = Number(course.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   let html: string;
   try {
-    html = await safeFetch(udiscIndexUrl({ lat, lng }, UDISC_LOCAL_MILES, 1), ["udisc.com"], UDISC_FETCH);
+    html = await safeFetch(udiscIndexUrl({ lat, lng }, UDISC_LOCAL_MILES, 1), ["udisc.com"], fetchOpts);
   } catch {
     return "fetch_failed";
   }
   return pickLocalDirectoryMatch(course, parseUdiscDirectoryHits(html));
 }
 
-async function searchUdiscCourseApi(course: ImportCourse): Promise<string | null | "fetch_failed"> {
+async function searchUdiscCourseApi(
+  course: ImportCourse,
+  fetchOpts: { maxBytes?: number; timeoutMs?: number } = UDISC_FETCH,
+): Promise<string | null | "fetch_failed"> {
   const term = String(course.name || "").trim();
   if (!term) return null;
   let text: string;
   try {
-    text = await safeFetch(udiscCourseSearchUrl(term), ["udisc.com"], UDISC_FETCH);
+    text = await safeFetch(udiscCourseSearchUrl(term), ["udisc.com"], fetchOpts);
   } catch {
     return "fetch_failed";
   }

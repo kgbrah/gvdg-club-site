@@ -32,6 +32,16 @@ export {
 export { parseUdiscStandings, udiscStandingsFromLoader, type UdiscPastEvent, type UdiscStandings, type UdiscStandingRow } from "./imports/udisc-standings.js";
 export { parseUdiscLeaderboard, tagStandingsFromBoards, udiscLeaderboardFromLoader } from "./imports/udisc-leaderboard.js";
 export {
+  OSM_API_HOST,
+  OSM_ATTRIBUTION,
+  OSM_BBOX_METERS,
+  OSM_MIN_HOLES,
+  OSM_USER_AGENT,
+  osmMapBboxUrl,
+  parseOsmDiscGolfHoles,
+  type OsmHolePins,
+} from "./imports/osm-disc-golf.js";
+export {
   CLUB_ORIGIN,
   DAY_TRIP_MILES,
   DISCGOLFAPI_ATTRIBUTION,

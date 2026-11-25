@@ -347,6 +347,14 @@ export function windBlowToDeg(windFromDeg) {
 
 const SATELLITE_EXPORT = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export";
 export const SATELLITE_CREDIT = "Imagery: Esri, Maxar, Earthstar Geographics";
+export const OSM_CREDIT = "Pins: © OpenStreetMap contributors";
+
+export function holeMapCredit(hole) {
+  if (hole?.tee?.source === "osm" || hole?.target?.source === "osm") {
+    return `${SATELLITE_CREDIT} · ${OSM_CREDIT}`;
+  }
+  return SATELLITE_CREDIT;
+}
 const BOUNDS_PAD_RATIO = 0.7;
 const BOUNDS_MIN_DEG = 0.00032;
 
@@ -570,6 +578,15 @@ export function projectHoleMap(hole, options = {}) {
 }
 
 const LOOSE_PAD_M = 90;
+const COURSE_AREA_PAD_M = 240;
+
+function validCourseAnchor(value) {
+  const pt = holePoint(value);
+  if (!pt) return null;
+  if (Math.abs(pt.lat) > 90 || Math.abs(pt.lng) > 180) return null;
+  if (pt.lat === 0 && pt.lng === 0) return null;
+  return pt;
+}
 
 function boundsAround(points, meters) {
   let minLat = Infinity;
@@ -608,9 +625,33 @@ export function projectLooseHoleMap(hole, options = {}) {
   const tee = holePoint(hole && hole.tee);
   const basket = holePoint(hole && hole.target);
   const anchors = uniquePoints([tee, basket]);
-  if (!anchors.length) return null;
   const width = finite(options.width) || 640;
   const height = finite(options.height) || 360;
+  const windFrom = finite(options.windFromDeg);
+  if (!anchors.length) {
+    const courseAnchor = validCourseAnchor(options.courseAnchor);
+    if (!courseAnchor) return null;
+    const areaBounds = boundsAround([courseAnchor], COURSE_AREA_PAD_M);
+    const bounds = options.fitViewport ? fitBoundsToSize(areaBounds, width, height) : areaBounds;
+    return {
+      width,
+      height,
+      bounds,
+      focus: "hole",
+      loose: true,
+      areaOnly: true,
+      satelliteUrl: satelliteImageUrl(bounds, width, height),
+      tee: null,
+      basket: null,
+      headingDeg: null,
+      teeRotationDeg: 0,
+      distanceFt: finite(hole && hole.distance_ft) || null,
+      windBlowToDeg: windBlowToDeg(windFrom),
+      windFromDeg: windFrom,
+      circle1: null,
+      circle2: null,
+    };
+  }
   const anchorBounds = anchors.length === 1
     ? boundsAround(anchors, LOOSE_PAD_M)
     : paddedBounds(
@@ -625,7 +666,6 @@ export function projectLooseHoleMap(hole, options = {}) {
   );
   const teePt = place(tee, (tee && tee.label) || "Tee");
   const basketPt = place(basket, (basket && basket.label) || "Basket");
-  const windFrom = finite(options.windFromDeg);
   return {
     width,
     height,
@@ -648,7 +688,9 @@ export function projectLooseHoleMap(hole, options = {}) {
 
 export function holeMapLabel(map, holeNumber) {
   if (!map) return "";
-  const hole = holeNumber ? `Hole ${holeNumber} map` : "Hole map";
+  const hole = map.areaOnly
+    ? (holeNumber ? `Hole ${holeNumber} course area map` : "Course area map")
+    : (holeNumber ? `Hole ${holeNumber} map` : "Hole map");
   const distance = map.distanceFt ? `, ${map.distanceFt} ft` : "";
   const wind = map.windFromDeg == null ? "" : `, wind from ${Math.round(map.windFromDeg)} degrees`;
   return `${hole}${distance}${wind}`;

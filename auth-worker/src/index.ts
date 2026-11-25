@@ -48,6 +48,7 @@ import { runKarmaWatch } from "./karma-watch.js";
 import { purgePdgaCaches } from "./pdga-api.js";
 import { refreshClubPdgaEventCopies } from "./pdga-event-cache.js";
 import { isUdiscLayoutCron, runUdiscLayoutImportTick } from "./udisc-layout-import.js";
+import { OSM_MAPS_D1KV_NS, runOsmPinEnrichmentTick } from "./osm-course-map.js";
 import { handleMemberPush } from "./member-push.js";
 import { handleMemberMessages } from "./member-messages.js";
 import { isUdiscLeagueRefreshCron, refreshImportedUdiscLeagues } from "./udisc-league-refresh.js";
@@ -254,8 +255,9 @@ export default {
               const rosterPurged = await purgeExpired(env.DB, ROSTER_RECENT_NS);
               const peoplePurged = await purgeExpired(env.DB, "people_cache");
               const regionsPurged = await purgeExpired(env.DB, "dgc_regions");
-              if (purged || rosterPurged || peoplePurged || regionsPurged) {
-                console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged, peopleCache: peoplePurged, dgcRegions: regionsPurged }));
+              const osmPurged = await purgeExpired(env.DB, OSM_MAPS_D1KV_NS);
+              if (purged || rosterPurged || peoplePurged || regionsPurged || osmPurged) {
+                console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged, peopleCache: peoplePurged, dgcRegions: regionsPurged, osmMaps: osmPurged }));
               }
             } catch (error) {
               console.error(JSON.stringify({ message: "ratelimit_purge_failed", error: error instanceof Error ? error.message : String(error) }));
@@ -280,6 +282,14 @@ export default {
               console.log(JSON.stringify({ message: "udisc_layout_import_tick", cron: controller.cron, ...result }));
             } catch (error) {
               importError = error;
+            }
+            try {
+              const osm = await runOsmPinEnrichmentTick(env);
+              if (osm.action !== "done") {
+                console.log(JSON.stringify({ message: "osm_pin_enrichment_tick", cron: controller.cron, ...osm }));
+              }
+            } catch (error) {
+              console.error(JSON.stringify({ message: "osm_pin_enrichment_failed", error: error instanceof Error ? error.stack : String(error) }));
             }
             // Lost & Found runs LAST in this branch, so however long its Gemini waits take it can never starve the
             // market sweep or the UDisc import above. It does I/O only (no image work); expiry and purges first.
