@@ -26,6 +26,7 @@ export interface UdiscHole {
   hole: number;
   par: number;
   par_source?: "placeholder" | "udisc";
+  distance_ft?: number | null;
   tee: { label: string; lat: number | null; lng: number | null } | null;
   target: { label: string; lat: number | null; lng: number | null } | null;
 }
@@ -178,6 +179,26 @@ function collectLayouts(root: unknown): { name?: unknown; layoutId?: unknown; ho
   return out;
 }
 
+function validDistanceFeet(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 30_000
+    ? Math.round(value)
+    : null;
+}
+
+function holeDistanceFeetOf(raw: Record<string, unknown>): number | null {
+  const hd = raw.holeDistance;
+  if (hd && typeof hd === "object") {
+    const o = hd as Record<string, unknown>;
+    const feet = validDistanceFeet(o.feet);
+    if (feet != null) return feet;
+    if (typeof o.meters === "number" && Number.isFinite(o.meters) && o.meters > 0) {
+      return validDistanceFeet(o.meters * 3.28084);
+    }
+    return null;
+  }
+  return validDistanceFeet(raw.distance_ft) ?? validDistanceFeet(raw.distanceFeet);
+}
+
 function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string): UdiscLayout {
   const positions: UdiscPosition[] = [];
   const holes: UdiscHole[] = layout.holes.map((raw, i) => {
@@ -190,9 +211,17 @@ function layoutToUdisc(layout: { name?: unknown; holes: unknown[] }, url: string
     const tgtC = coordOf(h.targetPosition) ?? coordOf(h.basket);
     const tee = teeC ? { label: `Hole ${hole} tee`, lat: teeC.lat, lng: teeC.lng } : null;
     const target = tgtC ? { label: `Hole ${hole} basket`, lat: tgtC.lat, lng: tgtC.lng } : null;
+    const distance_ft = holeDistanceFeetOf(h);
     if (tee) positions.push({ kind: "tee", ...tee });
     if (target) positions.push({ kind: "target", ...target });
-    return { hole, par, par_source: recordedPar == null ? "placeholder" : "udisc", tee, target };
+    return {
+      hole,
+      par,
+      par_source: recordedPar == null ? "placeholder" : "udisc",
+      ...(distance_ft != null ? { distance_ft } : {}),
+      tee,
+      target,
+    };
   });
   const name = typeof layout.name === "string" && layout.name.trim() ? layout.name.trim() : null;
   return {

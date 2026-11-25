@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, flightArc, flightPoint, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectLooseHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
+import { addThrow, CIRCLE1_M, CIRCLE2_M, circleEllipse, currentRangeHud, flightArc, flightPoint, GPS_REMAINING_MAX_FT, GPS_WATCH_OPTIONS, gpsErrorPolicy, gpsHudPrompt, headingDeg, holeMapCredit, holeMapLabel, holePoint, lastThrow, lastThrowHud, latLngFromMapPoint, mapFocusFromRemaining, nextTeeHud, OSM_CREDIT, playerMarksOnMap, playerPhotoSrc, projectHoleMap, projectLooseHoleMap, projectMapPoint, puttingCircle, rangeHud, readAllThrows, readThrows, remainingFt, resolveMapFocus, SATELLITE_CREDIT, satelliteImageUrl, scoreChipAnchor, teePadRotationDeg, throwSegments, throwsStorageKey, undoThrow, windBlowToDeg, withSelfLocation, writeThrows } from "../src/shared/hole-map-model.js";
 
 test("holePoint requires numeric lat/lng", () => {
   assert.equal(holePoint(null), null);
@@ -381,9 +381,32 @@ test("projectHoleMap stamps GPS and PDGA circles; map taps invert", () => {
 });
 
 test("playerPhotoSrc turns a member's signed photo link into the API address, and refuses anything else", () => {
-  const link = "/member-photos/m_80024/0123456789abcdef?v=abcdef012345";
-  assert.equal(playerPhotoSrc(link), "https://auth.gvdgclub.com" + link);
+  assert.equal(playerPhotoSrc("/member-photos/m_80024/0123456789abcdef?v=abcdef012345"), "https://auth.gvdgclub.com/member-photos/m_80024/0123456789abcdef?v=abcdef012345");
   for (const bad of ["/member-photos/m_80024/0123456789abcdef", "/member-photos/../x/0123456789abcdef?v=abcdef012345", "//evil.example/member-photos/m_a/0123456789abcdef?v=abcdef012345", "javascript:alert(1)"]) {
     assert.equal(playerPhotoSrc(bad), "", bad);
   }
+});
+
+test("projectLooseHoleMap falls back to courseAnchor area map without letting GPS chase the frame, and holeMapCredit attributes OSM", () => {
+  const area = projectLooseHoleMap({}, { courseAnchor: { lat: 40.0755, lng: -76.8959 } });
+  assert.ok(area);
+  assert.equal(area.loose, true);
+  assert.equal(area.areaOnly, true);
+  assert.equal(area.tee, null);
+  assert.equal(area.basket, null);
+  assert.ok(area.satelliteUrl);
+  assert.match(holeMapLabel(area, 3), /course area map/i);
+
+  assert.equal(projectLooseHoleMap({}, { courseAnchor: { lat: 0, lng: 0 } }), null);
+  assert.equal(projectLooseHoleMap({}, { here: { lat: 40.0755, lng: -76.8959 } }), null);
+
+  assert.equal(holeMapCredit({ tee: { lat: 1, lng: 2 }, target: { lat: 3, lng: 4 } }), SATELLITE_CREDIT);
+  assert.equal(
+    holeMapCredit({ tee: { lat: 1, lng: 2, source: "osm" }, target: { lat: 3, lng: 4 } }),
+    `${SATELLITE_CREDIT} · ${OSM_CREDIT}`,
+  );
+  assert.equal(
+    holeMapCredit({ tee: { lat: 1, lng: 2 }, target: { lat: 3, lng: 4, source: "osm" } }),
+    `${SATELLITE_CREDIT} · ${OSM_CREDIT}`,
+  );
 });

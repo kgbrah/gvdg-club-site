@@ -3,7 +3,9 @@ import * as db from "./db.js";
 import { D1KV } from "./d1kv.js";
 import { readD1OrFallback } from "./d1-retry.js";
 import { haversineMiles } from "./distance.js";
+import { bustCourseCatalogCache } from "./course-catalog-cache.js";
 import { safeFetch } from "./imports/fetch.js";
+import { hydrateCourseFromUdiscOnDemand, isPlaceholderLayout } from "./udisc-layout-import.js";
 import {
   DISCGOLFAPI_HOST,
   DISCGOLFAPI_PAGE,
@@ -352,6 +354,52 @@ async function ensureCourseLayouts(
   return listed.results;
 }
 
+async function hydrateAndReloadCourse(
+  env: Env,
+  courseRow: Record<string, unknown>,
+  expectedHoles: number,
+  created: boolean,
+): Promise<{ created: boolean; course: Record<string, unknown>; layouts: Record<string, unknown>[] }> {
+  const courseId = Number(courseRow.id);
+  let currentCourse = courseRow;
+  let layouts = await ensureCourseLayouts(env, courseId, expectedHoles);
+  let hydrated = false;
+  if (layouts.length === 0 || layouts.every((layout) => isPlaceholderLayout(layout))) {
+    try {
+      const result = await hydrateCourseFromUdiscOnDemand(env, {
+        id: courseId,
+        name: String(currentCourse.name || ""),
+        location: typeof currentCourse.location === "string" ? currentCourse.location : null,
+        udisc_url: typeof currentCourse.udisc_url === "string" ? currentCourse.udisc_url : null,
+        udisc_course_id: typeof currentCourse.udisc_course_id === "string" ? currentCourse.udisc_course_id : null,
+        lat: typeof currentCourse.lat === "number" ? currentCourse.lat : null,
+        lng: typeof currentCourse.lng === "number" ? currentCourse.lng : null,
+        mapped: 0,
+      });
+      if (result.action === "imported") {
+        hydrated = true;
+        const refreshed = (await db.getCourse(env.DB, courseId)) as Record<string, unknown> | null;
+        if (refreshed) currentCourse = refreshed;
+        layouts = (await db.listPublicLayoutsCatalog(env.DB, courseId)).results;
+      }
+    } catch {
+      /* placeholder layout stays scorable and the 15-minute cron retries later */
+    }
+  }
+  if (created || hydrated) {
+    try {
+      await bustCourseCatalogCache();
+    } catch {
+      /* bounded by the catalog's freshness window */
+    }
+  }
+  return {
+    created,
+    course: summarizeDiscoveredCourse(currentCourse, layouts),
+    layouts,
+  };
+}
+
 export async function materializeDiscoveredCourse(
   env: Env,
   input: { source: string; sourceId: string; region: string },
@@ -382,12 +430,7 @@ export async function materializeDiscoveredCourse(
     }),
   );
   if (existingMatch) {
-    const layouts = await ensureCourseLayouts(env, Number(existingMatch.id), cand.holes);
-    return {
-      created: false,
-      course: summarizeDiscoveredCourse(existingMatch, layouts),
-      layouts,
-    };
+    return hydrateAndReloadCourse(env, existingMatch, cand.holes, false);
   }
 
   const takenNames = new Set(existingRows.map((row) => String(row.name || "")).filter(Boolean));
@@ -422,10 +465,5 @@ export async function materializeDiscoveredCourse(
   }
   if (!courseRow) return { error: "not_found" };
 
-  const layouts = await ensureCourseLayouts(env, Number(courseRow.id), cand.holes);
-  return {
-    created,
-    course: summarizeDiscoveredCourse(courseRow, layouts),
-    layouts,
-  };
+  return hydrateAndReloadCourse(env, courseRow, cand.holes, created);
 }

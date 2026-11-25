@@ -704,7 +704,9 @@ function HoleMedia(props) {
   const [signOpen, setSignOpen] = React.useState(false);
   const [size, setSize] = React.useState(null);
   const mapRef = React.useRef(null);
-  const hasMap = holeHasMap(props.hole) || pointReady(props.hole?.tee) || pointReady(props.hole?.target);
+  const loc = props.weather?.location;
+  const courseAnchor = !props.offline && pointReady(loc) && !(Number(loc.lat) === 0 && Number(loc.lng) === 0) ? loc : null;
+  const hasMap = holeHasMap(props.hole) || pointReady(props.hole?.tee) || pointReady(props.hole?.target) || Boolean(courseAnchor);
   const hasSign = Boolean(props.teeSign);
   const signId = React.useId();
   const signDialog = useAccessibleDialog({ open: signOpen && hasSign, onClose: () => setSignOpen(false), labelledBy: signId });
@@ -744,6 +746,7 @@ function HoleMedia(props) {
       ? h("div", { className: "hole-media-map-wrap", key: "map-wrap", ref: mapRef }, [
         size && h(HoleMap, {
           compact: true,
+          courseAnchor,
           size,
           fitted: true,
           controlAccessory: signButton,

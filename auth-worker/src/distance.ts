@@ -1,14 +1,14 @@
 // Distance estimation for course layouts (incl. SAFARI holes) — pure, unit-testable.
 // Precedence: a VERIFIED tee-sign distance wins (admin-confirmed from a real sign photo); else an
 // admin's manual override; else a geodesic distance between the tee pad and target when both have
-// GPS coords; else a par-based heuristic; else unknown.
+// GPS coords; else an imported UDisc hole distance; else a par-based heuristic; else unknown.
 
 export interface LatLng {
   lat?: number | null;
   lng?: number | null;
 }
 
-export type DistanceSource = "tee_sign" | "manual" | "geo" | "par_estimate";
+export type DistanceSource = "tee_sign" | "manual" | "geo" | "udisc" | "par_estimate";
 
 export interface DistanceResult {
   distance_ft: number | null;
@@ -55,6 +55,7 @@ export function estimateDistance(opts: {
   manual?: number | null;
   tee?: LatLng | null;
   target?: LatLng | null;
+  udisc?: number | null;
   par?: number | null;
 }): DistanceResult {
   if (typeof opts.verified === "number" && opts.verified > 0) {
@@ -65,6 +66,9 @@ export function estimateDistance(opts: {
   }
   if (hasCoords(opts.tee) && hasCoords(opts.target)) {
     return { distance_ft: haversineFeet(opts.tee, opts.target), source: "geo" };
+  }
+  if (typeof opts.udisc === "number" && Number.isFinite(opts.udisc) && opts.udisc > 0) {
+    return { distance_ft: Math.round(opts.udisc), source: "udisc" };
   }
   if (typeof opts.par === "number" && opts.par > 0) {
     return { distance_ft: parEstimateFeet(opts.par), source: "par_estimate" };

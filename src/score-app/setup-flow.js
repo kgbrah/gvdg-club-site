@@ -691,12 +691,22 @@ function SetupPickView({ layout, defaultConfig, notice, onBack, onCreate }) {
 
 function CourseMapView({ course, holes, holeIndex, layout, missing, onBack, onHole, onStart }) {
   const hole = holes[holeIndex] || null;
+  const lat = Number(course && course.lat);
+  const lng = Number(course && course.lng);
+  const areaAnchor = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
+    ? { lat, lng, label: (course && course.name) || "" }
+    : null;
   return h("div", { className: "stack" }, [
     h(BackButton, { onBack, key: "back" }),
     h("h2", { className: "section", key: "title" }, course && course.name ? course.name : "Course map"),
     h("p", { className: "muted", key: "layout" }, layout && layout.name ? layout.name : "Club hole map"),
+    missing && areaAnchor
+      ? h(HoleMap, { courseAnchor: areaAnchor, hole: { hole: 1 }, key: "area-map" })
+      : null,
     missing
-      ? h("p", { className: "muted", key: "missing" }, "This course has no hole map in the club app yet. You can still start a round.")
+      ? h("p", { className: "muted", key: "missing" }, areaAnchor
+        ? "No hole pins in the club app yet — showing the course area. You can still start a round."
+        : "This course has no hole map in the club app yet. You can still start a round.")
       : h(HoleMap, { hole, key: "map", layoutId: layout && (layout.id || layout.layout_id) }),
     holes.length
       ? h("div", { className: "course-map-holes", key: "holes" }, holes.map((row, index) => h("button", {

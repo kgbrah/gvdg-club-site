@@ -140,11 +140,13 @@ export function sanitizeHoles(raw: unknown[]): LayoutHole[] | null {
     const par = asInt(o.par);
     if (hole == null || par == null || par < 1 || par > 15) return null;
     const md = asNum(o.manual_distance);
+    const ud = asNum(o.udisc_distance_ft);
     const parSource = o.par_source === "placeholder" || o.par_source === "udisc" || o.par_source === "recorded" ? o.par_source : null;
     out.push({
       hole,
       par,
       ...(parSource ? { par_source: parSource } : {}),
+      ...(ud != null && ud > 0 && ud <= 30_000 ? { udisc_distance_ft: Math.round(ud) } : {}),
       tee: cleanPosition(o.tee),
       target: cleanPosition(o.target),
       manual_distance: md != null && md > 0 ? md : null,
