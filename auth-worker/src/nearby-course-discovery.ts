@@ -388,7 +388,7 @@ async function hydrateAndReloadCourse(
   }
   if (created || hydrated) {
     try {
-      await bustCourseCatalogCache();
+      await bustCourseCatalogCache(courseId);
     } catch {
       /* bounded by the catalog's freshness window */
     }

@@ -18,7 +18,9 @@ import {
 } from "../src/udisc-layout-import.js";
 import {
   COURSE_CATALOG_CACHE_NAME,
+  COURSE_CATALOG_CACHE_ORIGIN,
   COURSE_CATALOG_CACHE_URL,
+  COURSE_CATALOG_CACHE_VERSION,
   bustCourseCatalogCache,
   courseCatalogCacheKey,
 } from "../src/course-catalog-cache.js";
@@ -541,13 +543,26 @@ describe("udiscIndexUrl", () => {
 });
 
 describe("bustCourseCatalogCache & udisc distance apply", () => {
-  it("deletes the canonical catalog key via caches.open + cache.delete (Cloudflare Workers API)", async () => {
+  it("deletes the canonical catalog and course layout/position keys via caches.open + cache.delete (Cloudflare Workers API)", async () => {
     const store = new Map<string, Response>();
+    const layoutsKey = `${COURSE_CATALOG_CACHE_ORIGIN}/courses/59/layouts?__gvdg_cache=${COURSE_CATALOG_CACHE_VERSION}`;
+    const positionsKey = `${COURSE_CATALOG_CACHE_ORIGIN}/courses/59/positions?__gvdg_cache=${COURSE_CATALOG_CACHE_VERSION}`;
     store.set(COURSE_CATALOG_CACHE_URL, new Response("{}"));
+    store.set(layoutsKey, new Response("{}"));
+    store.set(positionsKey, new Response("{}"));
+
     const key1 = courseCatalogCacheKey(new Request("https://auth.gvdgclub.com/courses"));
     const key2 = courseCatalogCacheKey(new Request("https://gvdgclub.com/api/courses"));
+    const layoutKey1 = courseCatalogCacheKey(new Request("https://auth.gvdgclub.com/courses/59/layouts"));
+    const layoutKey2 = courseCatalogCacheKey(new Request("https://gvdgclub.com/api/courses/59/layouts"));
+    const posKey = courseCatalogCacheKey(new Request("https://gvdgclub.com/api/courses/59/positions"));
+
     expect(key1.url).toBe(COURSE_CATALOG_CACHE_URL);
     expect(key2.url).toBe(COURSE_CATALOG_CACHE_URL);
+    expect(layoutKey1.url).toBe(layoutsKey);
+    expect(layoutKey2.url).toBe(layoutsKey);
+    expect(posKey.url).toBe(positionsKey);
+    expect(new Set([key1.url, layoutKey1.url, posKey.url]).size).toBe(3);
 
     vi.stubGlobal("caches", {
       open: async (name: string) => {
@@ -557,7 +572,7 @@ describe("bustCourseCatalogCache & udisc distance apply", () => {
         };
       },
     });
-    await expect(bustCourseCatalogCache()).resolves.toBe(true);
+    await expect(bustCourseCatalogCache(59)).resolves.toBe(true);
     expect(store.size).toBe(0);
     vi.unstubAllGlobals();
   });

@@ -187,6 +187,68 @@ describe("public course catalog cache", () => {
     expect(deleted).toEqual(["gvdg-course-catalog"]);
     expect(store.size).toBe(0);
   });
+
+  it("keeps /courses, /courses/:id/layouts, and /courses/:id/positions isolated in cache and busts per course via Cache.delete", async () => {
+    const store = new Map<string, Response>();
+    vi.stubGlobal("caches", {
+      open: async () => ({
+        match: async (req: Request) => store.get(req.url)?.clone(),
+        put: async (req: Request, res: Response) => {
+          const control = res.headers.get("Cache-Control") || "";
+          if (/private|no-store|no-cache/i.test(control) || !/max-age=\d+/.test(control)) return;
+          store.set(req.url, res.clone());
+        },
+        delete: async (req: Request) => store.delete(req.url),
+      }),
+    });
+
+    const db = {
+      prepare(sql: string) {
+        let bound: unknown[] = [];
+        return {
+          bind(...args: unknown[]) {
+            bound = args;
+            return this;
+          },
+          all: async () => {
+            if (/course_map_consensus/.test(sql)) return { results: [], success: true };
+            if (/FROM course_layouts WHERE course_id/.test(sql)) {
+              expect(bound).toEqual([1]);
+              return { results: [{ id: 101, course_id: 1, name: "Main", holes: "[]" }], success: true };
+            }
+            if (/FROM course_layouts/.test(sql)) {
+              return { results: [{ id: 101, course_id: 1, name: "Main", holes: "[]" }], success: true };
+            }
+            if (/FROM course_positions WHERE course_id/.test(sql)) {
+              expect(bound).toEqual([1]);
+              return { results: [{ id: 201, course_id: 1, kind: "tee", label: "Hole 1 tee" }], success: true };
+            }
+            return { results: FULL_CATALOG, success: true };
+          },
+          first: async () => null,
+          run: async () => ({ results: [], success: true }),
+        };
+      },
+    };
+
+    const coursesRes = await worker.fetch(new Request("https://auth.gvdgclub.com/courses", { headers: { Origin: "https://gvdgclub.com" } }), env(db));
+    expect(coursesRes.status).toBe(200);
+    expect((await coursesRes.json() as { courses: unknown[] }).courses).toHaveLength(2);
+
+    const layoutsRes = await worker.fetch(new Request("https://auth.gvdgclub.com/courses/1/layouts", { headers: { Origin: "https://gvdgclub.com" } }), env(db));
+    expect(layoutsRes.status).toBe(200);
+    expect((await layoutsRes.json() as { layouts: { name: string }[] }).layouts.map((l) => l.name)).toEqual(["Main"]);
+
+    const positionsRes = await worker.fetch(new Request("https://gvdgclub.com/api/courses/1/positions", { headers: { Origin: "https://gvdgclub.com" } }), env(db));
+    expect(positionsRes.status).toBe(200);
+    expect((await positionsRes.json() as { positions: { label: string }[] }).positions.map((p) => p.label)).toEqual(["Hole 1 tee"]);
+
+    expect(store.size).toBe(3);
+
+    const { bustCourseCatalogCache } = await import("../src/course-catalog-cache.js");
+    await expect(bustCourseCatalogCache(1)).resolves.toBe(true);
+    expect(store.size).toBe(0);
+  });
 });
 
 describe("course map-import status", () => {

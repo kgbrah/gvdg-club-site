@@ -249,7 +249,7 @@ export async function enrichCoursePinsFromOsm(
   await writeOsmCache(env, course.id, `applied:${holesApplied}`, OSM_CACHE_TTL_SEC);
   if (layoutsUpdated > 0 || positionsToAdd.length > 0) {
     try {
-      await bustCourseCatalogCache();
+      await bustCourseCatalogCache(course.id);
     } catch {
       /* bounded by the catalog's freshness window */
     }
