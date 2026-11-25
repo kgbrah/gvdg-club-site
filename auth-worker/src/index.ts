@@ -253,8 +253,9 @@ export default {
               const purged = await purgeExpired(env.DB, "ratelimit");
               const rosterPurged = await purgeExpired(env.DB, ROSTER_RECENT_NS);
               const peoplePurged = await purgeExpired(env.DB, "people_cache");
-              if (purged || rosterPurged || peoplePurged) {
-                console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged, peopleCache: peoplePurged }));
+              const regionsPurged = await purgeExpired(env.DB, "dgc_regions");
+              if (purged || rosterPurged || peoplePurged || regionsPurged) {
+                console.log(JSON.stringify({ message: "kv_store_purged", ratelimit: purged, rosterRecent: rosterPurged, peopleCache: peoplePurged, dgcRegions: regionsPurged }));
               }
             } catch (error) {
               console.error(JSON.stringify({ message: "ratelimit_purge_failed", error: error instanceof Error ? error.message : String(error) }));

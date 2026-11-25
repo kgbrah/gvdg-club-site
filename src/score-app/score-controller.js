@@ -1666,6 +1666,7 @@ export function startScoreApp(options) {
             if (!hasScoringIdentity()) { renderOpenPlay(function () { renderCoursePick(); }); return; }
             renderCoursePick();
         }
+        let lastDeviceOrigin = null;
         async function renderCoursePick() {
             renderLoading();
             const r = await api('/courses', { auth: false });
@@ -1673,14 +1674,48 @@ export function startScoreApp(options) {
             renderSetupFlow({
                 view: 'coursePick',
                 courses: courses,
+                initialOrigin: lastDeviceOrigin,
+                onOriginChange: function (origin) { lastDeviceOrigin = origin; },
                 onBack: renderHome,
                 onSelect: renderLayoutPick
             });
         }
+        async function discoverPickedCourse(course, retry) {
+            const discovered = await api('/courses/discover', {
+                method: 'POST',
+                body: { source: course.source, source_id: course.source_id, region: course.region }
+            });
+            if (discovered.status === 401 && !retry) {
+                if (memberToken()) {
+                    clearMemberSession();
+                    notifyScoreAuthChanged();
+                    if (readOpenPlayToken()) return discoverPickedCourse(course, true);
+                }
+                renderOpenPlay(function () { renderLayoutPick(course); });
+                return null;
+            }
+            if (!discovered.ok || !discovered.data || !discovered.data.course) {
+                toast('Could not load that course right now. Try again.');
+                renderCoursePick();
+                return null;
+            }
+            return {
+                course: discovered.data.course,
+                layouts: Array.isArray(discovered.data.layouts) ? discovered.data.layouts : []
+            };
+        }
         async function renderLayoutPick(course) {
             renderLoading();
-            const r = await api('/courses/' + encodeURIComponent(course.id) + '/layouts', { auth: false });
-            const layouts = (r.ok && r.data && r.data.layouts) || [];
+            let layouts = [];
+            if (course && course.external) {
+                const discovered = await discoverPickedCourse(course);
+                if (!discovered) return;
+                course = discovered.course;
+                layouts = discovered.layouts;
+            } else {
+                const r = await api('/courses/' + encodeURIComponent(course.id) + '/layouts', { auth: false });
+                layouts = (r.ok && r.data && r.data.layouts) || [];
+            }
             renderSetupFlow({
                 view: 'layoutPick',
                 course: course,

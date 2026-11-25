@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  BROWSE_NEARBY_LIMIT,
   courseHasMap,
   courseSub,
   coursesForPickScreen,
@@ -9,6 +10,7 @@ import {
   layoutHasMap,
   courseMapHref,
   matchCourseByName,
+  mergeDiscoveredCourses,
   milesFromOrigin,
   readLastCourse,
   rememberLastCourse,
@@ -144,4 +146,33 @@ test("last course and tee-sign links round-trip", () => {
   rememberLastCourse({ id: 12, name: "NC Wesleyan" }, storage);
   assert.deepEqual(readLastCourse(storage), { id: 12, name: "NC Wesleyan" });
   assert.equal(teeSignCaptureHref({ id: 12, name: "NC Wesleyan" }), "gvdg-members.html?course=12#tee");
+});
+
+test("sortByDistance puts nearby PA unmapped courses ahead of distant mapped MD courses and keeps unmapped PA courses visible", () => {
+  const harrisburg = { lat: 40.2732, lng: -76.8867 };
+  const distantMdMapped = course({ id: 50, name: "Distant MD", location: "Edgewood, MD", lat: 39.42, lng: -76.29, mapped: 1 });
+  const localPa = course({ id: "discgolfapi:crs_adv", external: true, name: "Adventure Park", location: "Mechanicsburg, PA", lat: 40.2767, lng: -77.009, mapped: 0, coverage: "scorable" });
+  const ncLast = course({ id: 1, name: "Greenville Local", location: "Greenville, NC", lat: 35.6127, lng: -77.3664, mapped: 1 });
+
+  const sorted = filterCoursesForPick([distantMdMapped, localPa, ncLast], "", "100", harrisburg, { sortByDistance: true });
+  assert.deepEqual(sorted.map((row) => row.name), ["Adventure Park", "Distant MD"]);
+
+  const visible = coursesForPickScreen([distantMdMapped, localPa, ncLast], "", "100", harrisburg, {
+    sortByDistance: true,
+    lastCourseId: 1,
+  });
+  assert.deepEqual(visible.map((row) => row.name), ["Adventure Park", "Distant MD"]);
+  assert.equal(BROWSE_NEARBY_LIMIT, 25);
+});
+
+test("mergeDiscoveredCourses deduplicates already-materialized courses by GPS or name", () => {
+  const catalog = [
+    course({ id: 901, name: "Tyler State Park - West", location: "Newtown, PA", lat: 40.231, lng: -74.959, coverage: "scorable" }),
+  ];
+  const nearby = [
+    { id: "discgolfapi:crs_tyler", external: true, name: "Tyler State Park - West", location: "Newtown, PA", lat: 40.231, lng: -74.9591 },
+    { id: "discgolfapi:crs_nock", external: true, name: "Nockamixon State Park", location: "Perkasie, PA", lat: 40.47, lng: -75.2 },
+  ];
+  const merged = mergeDiscoveredCourses(catalog, nearby);
+  assert.deepEqual(merged.map((row) => row.name), ["Tyler State Park - West", "Nockamixon State Park"]);
 });
